@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using DashboardReportApp.Models;
 public class PressMixBagChangeController : Controller
 {
-    private readonly PressLotChangeService _databaseService;
+    private readonly PressMixBagChangeService _databaseService;
 
-    public PressMixBagChangeController(PressLotChangeService databaseService)
+    public PressMixBagChangeController(PressMixBagChangeService databaseService)
     {
         _databaseService = databaseService;
     }

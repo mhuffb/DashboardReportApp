@@ -1,0 +1,122 @@
+﻿@model DashboardReportApp.Models.ScheduleViewModel
+
+<h2>Query Components</h2>
+
+<!-- Success and Error Messages -->
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["Success"]
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["Error"]
+    </div>
+}
+
+<!-- Query Form -->
+<form asp-action="Index" method="get">
+    <div class="form-group">
+        <label for="masterId">Part Number</label>
+        <input type="text" id="masterId" name="masterId" class="form-control" placeholder="Enter Part Number" />
+    </div>
+    <div class="form-group">
+        <label for="quantity">Quantity</label>
+        <input type="number" id="quantity" name="quantity" class="form-control" placeholder="Enter Quantity" />
+    </div>
+    <button type="submit" class="btn btn-primary">Query</button>
+</form>
+
+<!-- Query Results -->
+<h2>Query Components</h2>
+
+@if (Model.AllComponents != null && Model.AllComponents.Any())
+{
+    <form asp-action="ScheduleComponents" method="post">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Master ID</th>
+                    <th>Component</th>
+                    <th>Quantity to Make Master ID</th>
+                    <th>Quantity to Schedule</th>
+                    <th>Run</th>
+                    <th>Sinter Group</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.AllComponents.Count; i++)
+                {
+                    <tr>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].MasterId" value="@Model.AllComponents[i].MasterId" />
+                            @Model.AllComponents[i].MasterId
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].Component" value="@Model.AllComponents[i].Component" />
+                            @Model.AllComponents[i].Component
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].QtyToMakeMasterID" value="@Model.AllComponents[i].QtyToMakeMasterID" />
+                            @Model.AllComponents[i].QtyToMakeMasterID
+                        </td>
+                        <td>
+                            <input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
+                            @Model.AllComponents[i].Run
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].SinterGroup" value="@(Model.AllComponents[i].SinterGroup?.ToString() ?? "")" />
+                            @(Model.AllComponents[i].SinterGroup?.ToString() ?? "")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary">Schedule</button>
+    </form>
+}
+else
+{
+    <p>No components found for the given part number and quantity.</p>
+}
+
+
+
+<h3>Open Parts</h3>
+
+@if (Model.OpenParts == null || !Model.OpenParts.Any())
+{
+    <p>No open parts found.</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Part</th>
+                <th>Quantity</th>
+                <th>Run</th>
+                <th>Sinter Group</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var part in Model.OpenParts)
+            {
+                <tr>
+                    <td>@part.Date</td> <!-- Assuming Date is added to SintergyComponent -->
+                    <td>@part.MasterId</td>
+                    <td>@part.QtyToSchedule</td>
+                    <td>@part.Run</td> <!-- Assuming Run is added to SintergyComponent -->
+                    <td>@part.SinterGroup</td> <!-- Assuming SinterGroup is added to SintergyComponent -->
+                </tr>
+            }
+        </tbody>
+    </table>
+}

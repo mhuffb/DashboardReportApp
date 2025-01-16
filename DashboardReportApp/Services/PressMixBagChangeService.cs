@@ -1,15 +1,14 @@
 ﻿namespace DashboardReportApp.Services
 {
     using MySql.Data.MySqlClient;
-    public class PressLotChangeService
+    public class PressMixBagChangeService
     {
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringDataflex;
 
-        public PressLotChangeService(IConfiguration configuration)
+        public PressMixBagChangeService(IConfiguration configuration)
         {
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
-            _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
         }
 
         public async Task<List<string>> GetEquipmentAsync()

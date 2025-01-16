@@ -23,7 +23,7 @@ try
     // Add services to the container
     builder.Services.AddControllersWithViews();
     builder.Services.AddControllers();
-    builder.Services.AddScoped<PressLotChangeService>();
+    builder.Services.AddScoped<PressMixBagChangeService>();
     // Register the PressRunLogService
     builder.Services.AddScoped<PressRunLogService>();
     // Use Serilog for logging
