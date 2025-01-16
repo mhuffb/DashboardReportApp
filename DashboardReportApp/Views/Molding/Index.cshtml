@@ -1,0 +1,15 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+    ViewData["Title"] = "Molding Dashboard";
+}
+
+<h1>Molding Dashboard</h1>
+<ul>
+    <li><a href="/api/picodata/press">Set Press Count</a></li>
+    <li><a href="/PressSetup">Press Setup</a></li>
+    <li><a asp-controller="PressMixBagChange" asp-action="Index">Press Mix Bag Change</a></li>
+    <li><a asp-controller="PressRunLog" asp-action="Index">Press Run Log</a></li>
+</ul>
+

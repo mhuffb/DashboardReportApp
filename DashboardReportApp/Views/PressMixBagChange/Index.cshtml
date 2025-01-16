@@ -1,0 +1,59 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+    @model PressMixBagChangeViewModel
+
+    <h1>Press Mix Bag Change</h1>
+
+    <form asp-action="Submit" method="post">
+        <div>
+            <label for="Part">Part:</label>
+            <input type="text" id="Part" name="Part" required />
+        </div>
+
+        <div>
+            <label for="Operator">Operator:</label>
+            <select id="Operator" name="Operator">
+                @foreach (var op in Model.OperatorList)
+                {
+                    <option value="@op">@op</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label for="Machine">Machine:</label>
+            <select id="Machine" name="Machine">
+                @foreach (var machine in Model.EquipmentList)
+                {
+                    <option value="@machine">@machine</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label for="LotNumber">Lot Number:</label>
+            <input type="text" id="LotNumber" name="LotNumber" required />
+        </div>
+
+        <div>
+            <label for="MixNumber">Mix Number:</label>
+            <input type="text" id="MixNumber" name="MixNumber" required />
+        </div>
+
+        <div>
+            <label for="Note">Notes:</label>
+            <textarea id="Note" name="Note"></textarea>
+        </div>
+
+        <div>
+            <label for="SupplierItemNumber">Supplier Item Number:</label>
+            <input type="text" id="SupplierItemNumber" name="SupplierItemNumber" required />
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+
+
+}

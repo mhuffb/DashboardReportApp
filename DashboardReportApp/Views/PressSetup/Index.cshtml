@@ -1,0 +1,142 @@
+﻿@{
+    ViewData["Title"] = "Press Setup";
+    var operators = ViewData["Operators"] as List<string>;
+    var machines = ViewData["Machines"] as List<string>;
+    var trainers = ViewData["Trainers"] as List<string>;
+    var activeLogins = ViewData["ActiveLogins"] as List<dynamic>;
+}
+<h1>Press Setup</h1>
+
+@if (ViewData["Message"] != null)
+{
+    <div class="alert alert-success">@ViewData["Message"]</div>
+}
+
+@if (ViewData["Error"] != null)
+{
+    <div class="alert alert-danger">@ViewData["Error"]</div>
+}
+
+<h2>Login</h2>
+<form method="post" action="/PressSetup/Login">
+    <div class="form-group">
+        <label for="partNumber">Part Number</label>
+        <input type="text" id="partNumber" name="partNumber" class="form-control" required />
+    </div>
+    <div class="form-group">
+        <label for="operatorName">Operator</label>
+        <select id="operatorName" name="operatorName" class="form-control" required>
+            <option value="">-- Select Operator --</option>
+            @foreach (var op in operators)
+            {
+                <option value="@op">@op</option>
+            }
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="machine">Machine</label>
+        <select id="machine" name="machine" class="form-control" required>
+            <option value="">-- Select Machine --</option>
+            @foreach (var machine in machines)
+            {
+                <option value="@machine">@machine</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Login</button>
+</form>
+
+<h2>Active Logins</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Part</th>
+            <th>Operator</th>
+            <th>Machine</th>
+            <th>Start Time</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var login in activeLogins)
+        {
+            <tr>
+                <td>@login.Part</td>
+                <td>@login.Operator</td>
+                <td>@login.Machine</td>
+                <td>@login.StartDateTime</td>
+                <td>
+                    <form method="post" action="/PressSetup/Logout">
+                        <input type="hidden" name="partNumber" value="@login.Part" />
+                        <input type="hidden" name="startDateTime" value="@login.StartDateTime" />
+
+                        <div class="form-group">
+                            <label for="difficulty">Difficulty</label>
+                            <select name="difficulty" class="form-control" required>
+                                <option value="">-- Select Difficulty --</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="assistanceRequired">Assistance Required</label>
+                            <select name="assistanceRequired" class="form-control assistance-required" data-assisted-by="assistedByField-@login.Part" required>
+                                <option value="">-- Select Assistance --</option>
+                                <option value="Solo">Solo</option>
+                                <option value="Assisted">Assisted</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group assisted-by-field" id="assistedByField-@login.Part" style="display: none;">
+                            <label for="assistedBy">Assisted By</label>
+                            <select name="assistedBy" class="form-control">
+                                <option value="">-- Select Trainer --</option>
+                                @foreach (var trainer in trainers)
+                                {
+                                    <option value="@trainer">@trainer</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="setupComplete">Setup Complete</label>
+                            <select name="setupComplete" class="form-control" required>
+                                <option value="">-- Select Setup Status --</option>
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="notes">Notes</label>
+                            <textarea name="notes" class="form-control"></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-danger">Logout</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const assistanceRequiredFields = document.querySelectorAll(".assistance-required");
+
+        assistanceRequiredFields.forEach(field => {
+            field.addEventListener("change", function () {
+                const assistedByFieldId = this.dataset.assistedBy;
+                const assistedByField = document.getElementById(assistedByFieldId);
+
+                if (this.value === "Assisted") {
+                    assistedByField.style.display = "block";
+                } else {
+                    assistedByField.style.display = "none";
+                }
+            });
+        });
+    });
+</script>
