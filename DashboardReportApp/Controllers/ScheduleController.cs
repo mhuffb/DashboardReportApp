@@ -29,16 +29,16 @@ namespace DashboardReportApp.Controllers
             return View(viewModel);
         }
 
-
         private List<SintergyComponent> GetComponentsForMasterId(string masterId, int quantity)
         {
             var allComponents = new List<SintergyComponent>();
+            var processedPairs = new HashSet<(string Component, string SubComponent)>();
             var visitedMasterIds = new HashSet<string>();
             var queue = new Queue<string>();
             queue.Enqueue(masterId);
 
-            int nextRunNumber = GetNextRunNumber(); // Fetch the initial run number
-            int nextSinterGroup = GetNextSinterGroupNumber(); // Fetch the next sintergroup number
+            int nextRunNumber = GetNextRunNumber();
+            bool componentsFound = false;
 
             while (queue.Count > 0)
             {
@@ -51,13 +51,13 @@ namespace DashboardReportApp.Controllers
 
                 using (var connection = new OdbcConnection(connectionStringDataflex))
                 {
-                    string query = @"
-                SELECT masteras.master_id, masteras.cmaster_id, masteras.qty, masteras.line_no 
+                    string componentQuery = @"
+                SELECT masteras.master_id, masteras.cmaster_id, masteras.qty 
                 FROM masteras 
-                WHERE masteras.master_id = ? 
-                ORDER BY masteras.master_id, masteras.line_no";
+                WHERE masteras.master_id = ?
+                ORDER BY masteras.line_no";
 
-                    var command = new OdbcCommand(query, connection);
+                    var command = new OdbcCommand(componentQuery, connection);
                     command.Parameters.AddWithValue("?", currentMasterId);
 
                     connection.Open();
@@ -65,40 +65,81 @@ namespace DashboardReportApp.Controllers
                     {
                         while (reader.Read())
                         {
-                            string componentName = reader["cmaster_id"].ToString();
+                            componentsFound = true; // Mark that components were found
+                            string componentId = reader["cmaster_id"].ToString();
+                            int qty = Convert.ToInt32(reader["qty"]);
 
-                            var component = new SintergyComponent
+                            if (!processedPairs.Contains((currentMasterId, componentId)))
                             {
-                                MasterId = reader["master_id"].ToString(),
-                                Component = componentName,
-                                QtyToMakeMasterID = Convert.ToInt32(reader["qty"]),
-                                QtyToSchedule = quantity * Convert.ToInt32(reader["qty"]),
-                                Run = nextRunNumber++.ToString(), // Assign and increment run number
-                                SinterGroup = componentName.Contains("C") ? nextSinterGroup++ : (int?)null // Convert to nullable int
-                            };
+                                allComponents.Add(new SintergyComponent
+                                {
+                                    MasterId = masterId,
+                                    Component = componentId,
+                                    SubComponent = null,
+                                    QtyToMakeMasterID = qty, // This strictly comes from the database
+                                    QtyToSchedule = quantity * qty, // User-defined editable value
+                                    Run = nextRunNumber++.ToString()
+                                });
 
-                            allComponents.Add(component);
+                                processedPairs.Add((currentMasterId, componentId));
+                                queue.Enqueue(componentId); // Add component for further processing
+                            }
+                        }
+                    }
 
-                            if (!string.IsNullOrWhiteSpace(component.Component) && !visitedMasterIds.Contains(component.Component))
+                    // Process subcomponents for each component
+                    var componentsSnapshot = allComponents
+                        .Where(c => c.MasterId == masterId && c.SubComponent == null)
+                        .ToList();
+
+                    foreach (var component in componentsSnapshot)
+                    {
+                        string subComponentQuery = @"
+                    SELECT masteras.cmaster_id, masteras.qty 
+                    FROM masteras 
+                    WHERE masteras.master_id = ?";
+
+                        var subCommand = new OdbcCommand(subComponentQuery, connection);
+                        subCommand.Parameters.AddWithValue("?", component.Component);
+
+                        using (var subReader = subCommand.ExecuteReader())
+                        {
+                            while (subReader.Read())
                             {
-                                queue.Enqueue(component.Component);
+                                string subComponentId = subReader["cmaster_id"].ToString();
+                                int subQty = Convert.ToInt32(subReader["qty"]);
+
+                                if (!processedPairs.Contains((component.Component, subComponentId)))
+                                {
+                                    allComponents.Add(new SintergyComponent
+                                    {
+                                        MasterId = masterId,
+                                        Component = component.Component,
+                                        SubComponent = subComponentId,
+                                        QtyToMakeMasterID = subQty, // This strictly comes from the database
+                                        QtyToSchedule = component.QtyToSchedule * subQty, // User-defined editable value
+                                        Run = nextRunNumber++.ToString()
+                                    });
+
+                                    processedPairs.Add((component.Component, subComponentId));
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // If no components were found, add the master part itself
-            if (!allComponents.Any())
+            // If no components are found, return just the master part
+            if (!componentsFound)
             {
                 allComponents.Add(new SintergyComponent
                 {
                     MasterId = masterId,
-                    Component = string.Empty, // No sub-component
-                    QtyToMakeMasterID = 1, // Default quantity to make for the master part
-                    QtyToSchedule = quantity, // Use the provided quantity
-                    Run = nextRunNumber++.ToString(), // Assign and increment run number
-                    SinterGroup = null // No sintergroup since it's not a component
+                    Component = null,
+                    SubComponent = null,
+                    QtyToMakeMasterID = 1, // Default value
+                    QtyToSchedule = quantity, // User-defined value
+                    Run = nextRunNumber++.ToString()
                 });
             }
 
@@ -110,7 +151,7 @@ namespace DashboardReportApp.Controllers
         private List<SintergyComponent> GetOpenParts()
         {
             var openParts = new List<SintergyComponent>();
-            string query = "SELECT date, part, quantity, run, sintergroup FROM schedule WHERE open = 1";
+            string query = "SELECT date, part, component, subcomponent, quantity, run, open FROM schedule WHERE open = 1";
 
             using (var connection = new MySqlConnection(connectionStringMySQL))
             {
@@ -125,11 +166,11 @@ namespace DashboardReportApp.Controllers
                             {
                                 Date = reader["date"] as DateTime?, // Nullable DateTime
                                 MasterId = reader["part"].ToString(),
+                                Component = reader["component"]?.ToString(),
+                                SubComponent = reader["subcomponent"]?.ToString(),
                                 QtyToSchedule = Convert.ToInt32(reader["quantity"]),
                                 Run = reader["run"].ToString(),
-                                SinterGroup = reader["sintergroup"] == DBNull.Value
-                        ? (int?)null
-                        : Convert.ToInt32(reader["sintergroup"]) // Nullable int
+                                Open = Convert.ToInt32(reader["open"]) // Map the Open column
                             };
                             openParts.Add(component);
                         }
@@ -139,52 +180,54 @@ namespace DashboardReportApp.Controllers
 
             return openParts;
         }
+
         [HttpPost]
         public IActionResult ScheduleComponents(ScheduleViewModel viewModel)
         {
-            if (viewModel.AllComponents == null || !viewModel.AllComponents.Any())
-            {
-                TempData["Error"] = "No components to save.";
-                return RedirectToAction("Index");
-            }
+            string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open)";
+            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open) VALUES (@Part, @Quantity, @Run, @Date, @Open)";
 
-            using (var connection = new MySqlConnection(connectionStringMySQL))
+            try
             {
-                connection.Open();
-                foreach (var component in viewModel.AllComponents)
+                using (var connection = new MySqlConnection(connectionStringMySQL))
                 {
-                    string insertQuery = @"
-                INSERT INTO schedule (part, component, quantity, run, sintergroup, date)
-                VALUES (@part, @component, @quantity, @run, @sintergroup, @date)";
-
-                    using (var command = new MySqlCommand(insertQuery, connection))
+                    connection.Open();
+                    foreach (var component in viewModel.AllComponents)
                     {
-                        command.Parameters.AddWithValue("@part", component.MasterId);
-                        command.Parameters.AddWithValue("@component", component.Component);
-                        command.Parameters.AddWithValue("@quantity", component.QtyToSchedule);
-                        command.Parameters.AddWithValue("@run", component.Run);
+                        // Determine if the component and subcomponent are null or empty
+                        bool hasComponent = !string.IsNullOrWhiteSpace(component.Component);
+                        bool hasSubComponent = !string.IsNullOrWhiteSpace(component.SubComponent);
 
-                        // Handle null for SinterGroup
-                        if (component.SinterGroup.HasValue)
+                        using (var command = new MySqlCommand(hasComponent ? queryWithComponent : queryWithoutComponent, connection))
                         {
-                            command.Parameters.AddWithValue("@sintergroup", component.SinterGroup.Value);
-                        }
-                        else
-                        {
-                            command.Parameters.AddWithValue("@sintergroup", DBNull.Value);
-                        }
+                            // Add shared parameters
+                            command.Parameters.AddWithValue("@Part", component.MasterId);
+                            command.Parameters.AddWithValue("@Quantity", component.QtyToSchedule);
+                            command.Parameters.AddWithValue("@Run", component.Run);
+                            command.Parameters.AddWithValue("@Date", DateTime.Now); // Set the current DateTime
+                            command.Parameters.AddWithValue("@Open", 1); // Set open column to 1
 
-                        command.Parameters.AddWithValue("@date", DateTime.Now);
+                            // Add component and subcomponent parameters only if they exist
+                            if (hasComponent)
+                            {
+                                command.Parameters.AddWithValue("@Component", component.Component);
+                                command.Parameters.AddWithValue("@SubComponent", hasSubComponent ? component.SubComponent : (object)DBNull.Value);
+                            }
 
-                        command.ExecuteNonQuery();
+                            command.ExecuteNonQuery();
+                        }
                     }
                 }
+
+                TempData["Success"] = "Parts and components successfully scheduled!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"An error occurred while scheduling: {ex.Message}";
             }
 
-            TempData["Success"] = "Components scheduled successfully!";
             return RedirectToAction("Index");
         }
-
 
 
         private int GetNextRunNumber()
@@ -205,23 +248,46 @@ namespace DashboardReportApp.Controllers
 
             return nextRunNumber;
         }
-        private int GetNextSinterGroupNumber()
+
+        [HttpPost]
+        public IActionResult UpdateOpenParts(ScheduleViewModel viewModel)
         {
-            int nextSinterGroup = 0;
-
-            using (var connection = new MySqlConnection(connectionStringMySQL))
+            try
             {
-                string query = "SELECT MAX(sintergroup) + 1 AS NextSinterGroup FROM schedule";
-                connection.Open();
-
-                using (var command = new MySqlCommand(query, connection))
+                using (var connection = new MySqlConnection(connectionStringMySQL))
                 {
-                    var result = command.ExecuteScalar();
-                    nextSinterGroup = result != DBNull.Value ? Convert.ToInt32(result) : 1; // Default to 1 if no sintergroup exists
+                    connection.Open();
+                    foreach (var part in viewModel.OpenParts)
+                    {
+                        string query = @"
+                UPDATE schedule 
+                SET date = @Date, part = @Part, component = @Component, subcomponent = @SubComponent, 
+                    quantity = @Quantity, run = @Run, open = @Open 
+                WHERE part = @Part AND run = @Run";
+
+                        using (var command = new MySqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@Date", part.Date);
+                            command.Parameters.AddWithValue("@Part", part.MasterId);
+                            command.Parameters.AddWithValue("@Component", part.Component ?? (object)DBNull.Value);
+                            command.Parameters.AddWithValue("@SubComponent", part.SubComponent ?? (object)DBNull.Value);
+                            command.Parameters.AddWithValue("@Quantity", part.QtyToSchedule);
+                            command.Parameters.AddWithValue("@Run", part.Run);
+                            command.Parameters.AddWithValue("@Open", part.Open);
+
+                            command.ExecuteNonQuery();
+                        }
+                    }
                 }
+
+                TempData["Success"] = "Open parts updated successfully!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"An error occurred while updating open parts: {ex.Message}";
             }
 
-            return nextSinterGroup;
+            return RedirectToAction("Index");
         }
 
     }

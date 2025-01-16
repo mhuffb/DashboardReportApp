@@ -1,6 +1,6 @@
 ﻿@model DashboardReportApp.Models.ScheduleViewModel
 
-<h2>Query Components</h2>
+<h2>Schedule Parts</h2>
 
 <!-- Success and Error Messages -->
 @if (TempData["Success"] != null)
@@ -31,7 +31,7 @@
 </form>
 
 <!-- Query Results -->
-<h2>Query Components</h2>
+<h2>View Parts, Components and Subcomponents</h2>
 
 @if (Model.AllComponents != null && Model.AllComponents.Any())
 {
@@ -41,10 +41,10 @@
                 <tr>
                     <th>Master ID</th>
                     <th>Component</th>
+                    <th>Subcomponent</th>
                     <th>Quantity to Make Master ID</th>
                     <th>Quantity to Schedule</th>
                     <th>Run</th>
-                    <th>Sinter Group</th>
                 </tr>
             </thead>
             <tbody>
@@ -60,6 +60,10 @@
                             @Model.AllComponents[i].Component
                         </td>
                         <td>
+                            <input type="hidden" name="AllComponents[@i].SubComponent" value="@(Model.AllComponents[i].SubComponent ?? "")" />
+                            @(Model.AllComponents[i].SubComponent ?? "")
+                        </td>
+                        <td>
                             <input type="hidden" name="AllComponents[@i].QtyToMakeMasterID" value="@Model.AllComponents[i].QtyToMakeMasterID" />
                             @Model.AllComponents[i].QtyToMakeMasterID
                         </td>
@@ -70,25 +74,20 @@
                             <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
                             @Model.AllComponents[i].Run
                         </td>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].SinterGroup" value="@(Model.AllComponents[i].SinterGroup?.ToString() ?? "")" />
-                            @(Model.AllComponents[i].SinterGroup?.ToString() ?? "")
-                        </td>
                     </tr>
                 }
             </tbody>
         </table>
         <button type="submit" class="btn btn-primary">Schedule</button>
     </form>
+
 }
 else
 {
     <p>No components found for the given part number and quantity.</p>
 }
 
-
-
-<h3>Open Parts</h3>
+<h3>Parts Scheduled</h3>
 
 @if (Model.OpenParts == null || !Model.OpenParts.Any())
 {
@@ -96,27 +95,64 @@ else
 }
 else
 {
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Part</th>
-                <th>Quantity</th>
-                <th>Run</th>
-                <th>Sinter Group</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var part in Model.OpenParts)
-            {
+    <form asp-action="UpdateOpenParts" method="post">
+        <table class="table table-bordered">
+            <thead>
                 <tr>
-                    <td>@part.Date</td> <!-- Assuming Date is added to SintergyComponent -->
-                    <td>@part.MasterId</td>
-                    <td>@part.QtyToSchedule</td>
-                    <td>@part.Run</td> <!-- Assuming Run is added to SintergyComponent -->
-                    <td>@part.SinterGroup</td> <!-- Assuming SinterGroup is added to SintergyComponent -->
+                    <th>Date</th>
+                    <th>Part</th>
+                    <th>Component</th>
+                    <th>Subcomponent</th>
+                    <th>Quantity</th>
+                    <th>Run</th>
+                    <th>Open</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.OpenParts.Count; i++)
+                {
+                    <tr>
+                        <td>
+                            <input type="date" name="OpenParts[@i].Date" value="@Model.OpenParts[i].Date?.ToString("yyyy-MM-dd")" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="OpenParts[@i].MasterId" value="@Model.OpenParts[i].MasterId" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="OpenParts[@i].Component" value="@Model.OpenParts[i].Component" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="OpenParts[@i].SubComponent" value="@(Model.OpenParts[i].SubComponent ?? "")" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="number" name="OpenParts[@i].QtyToSchedule" value="@Model.OpenParts[i].QtyToSchedule" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="OpenParts[@i].Run" value="@Model.OpenParts[i].Run" class="form-control" />
+                        </td>
+                        <td>
+                            <select name="OpenParts[@i].Open" class="form-control">
+                                @if (Model.OpenParts[i].Open == 1)
+                                {
+                                    <option value="1" selected>Yes</option>
+                                    <option value="0">No</option>
+                                }
+                                else
+                                {
+                                    <option value="1">Yes</option>
+                                    <option value="0" selected>No</option>
+                                }
+                            </select>
+
+
+
+
+
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary">Update Open Parts</button>
+    </form>
 }

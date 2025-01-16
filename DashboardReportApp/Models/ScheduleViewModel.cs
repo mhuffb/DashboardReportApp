@@ -9,13 +9,14 @@
 
     public class SintergyComponent
     {
-        public string MasterId { get; set; } // Maps to 'part'
+        public DateTime? Date { get; set; }
+        public string MasterId { get; set; }
         public string Component { get; set; }
+        public string SubComponent { get; set; }
         public int QtyToMakeMasterID { get; set; }
         public int QtyToSchedule { get; set; }
-        public string Run { get; set; } // Next run number
-        public int? SinterGroup { get; set; }  // Next sintergroup number or null
-        public DateTime? Date { get; set; } // Nullable DateTime for 'date' column
+        public string Run { get; set; }
+        public int Open { get; set; } // Add this property
     }
 
 
