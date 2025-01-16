@@ -17,45 +17,59 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            // Get the ViewModel with equipment, operators, and logged-in runs
             var viewModel = await _pressRunLogService.GetPressRunLogViewModelAsync();
             return View(viewModel);
         }
 
+
+
         [HttpPost]
-        public async Task<IActionResult> Login(PressRunLogFormModel formModel)
+        public async Task<IActionResult> Login(string operatorName, string part, string machine)
         {
-            if (!ModelState.IsValid)
+            if (string.IsNullOrEmpty(operatorName) || string.IsNullOrEmpty(part) || string.IsNullOrEmpty(machine))
             {
-                // Reload the ViewModel to include dropdown data and show validation errors
-                var viewModel = await _pressRunLogService.GetPressRunLogViewModelAsync();
-                viewModel.FormModel = formModel;
-                return View("Index", viewModel);
+                ModelState.AddModelError("", "All fields are required for login.");
+                return RedirectToAction("Index");
             }
 
-            // Handle login logic
+            var formModel = new PressRunLogFormModel
+            {
+                Operator = operatorName,
+                Part = part,
+                Machine = machine,
+                StartDateTime = DateTime.Now // Automatically set the current time
+            };
+
             await _pressRunLogService.HandleLoginAsync(formModel);
-
-            // Redirect to Index to refresh the list of logged-in runs
             return RedirectToAction("Index");
         }
+
+
+
 
         [HttpPost]
-        public async Task<IActionResult> Logout(PressRunLogFormModel formModel)
+        public async Task<IActionResult> Logout(string part, DateTime startDateTime, int scrap, string notes, DateTime endDateTime)
         {
-            if (!ModelState.IsValid)
+            if (string.IsNullOrEmpty(part) || startDateTime == default || endDateTime == default)
             {
-                // Reload the ViewModel to include dropdown data and show validation errors
-                var viewModel = await _pressRunLogService.GetPressRunLogViewModelAsync();
-                viewModel.FormModel = formModel;
-                return View("Index", viewModel);
+                ModelState.AddModelError("", "Invalid logout data. Ensure all required fields are provided.");
+                return RedirectToAction("Index");
             }
 
-            // Handle logout logic
-            await _pressRunLogService.HandleLogoutAsync(formModel);
+            var formModel = new PressRunLogFormModel
+            {
+                Part = part,
+                StartDateTime = startDateTime,
+                Scrap = scrap,
+                Notes = notes,
+                EndDateTime = endDateTime
+            };
 
-            // Redirect to Index to refresh the list of logged-in runs
+            await _pressRunLogService.HandleLogoutAsync(formModel);
             return RedirectToAction("Index");
         }
+
+
+
     }
 }

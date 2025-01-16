@@ -5,11 +5,12 @@
 
     public class PressRunLogViewModel
     {
-        public List<string> OperatorList { get; set; }
-        public List<string> EquipmentList { get; set; }
         public List<LoggedInRunModel> LoggedInRuns { get; set; }
-        public PressRunLogFormModel FormModel { get; set; }
+        public List<string> OperatorList { get; set; }
+        public List<string> EquipmentList { get; set; } // Machines
     }
+
+
 
     public class LoggedInRunModel
     {

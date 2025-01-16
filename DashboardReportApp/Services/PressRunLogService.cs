@@ -9,19 +9,24 @@ using DashboardReportApp.Models;
 
 public class PressRunLogService
 {
-    private readonly string _connectionString = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
+    private readonly string _connectionStringMySQL;
+    private readonly string _connectionStringDataflex;
 
+    public PressRunLogService(IConfiguration configuration)
+    {
+        _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
+        _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
+    }
     public async Task<PressRunLogViewModel> GetPressRunLogViewModelAsync()
     {
-        var viewModel = new PressRunLogViewModel
+        return new PressRunLogViewModel
         {
+            LoggedInRuns = await GetLoggedInRunsAsync(),
             OperatorList = await GetOperatorsAsync(),
-            EquipmentList = await GetEquipmentAsync(),
-            LoggedInRuns = await GetLoggedInRunsAsync()
+            EquipmentList = await GetEquipmentAsync() // Machines
         };
-
-        return viewModel;
     }
+
 
     private async Task<List<LoggedInRunModel>> GetLoggedInRunsAsync()
     {
@@ -31,7 +36,7 @@ public class PressRunLogService
                            FROM pressrun 
                            WHERE endDateTime IS NULL";
 
-        await using var connection = new MySqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
         await using var reader = await command.ExecuteReaderAsync();
@@ -56,7 +61,7 @@ public class PressRunLogService
         var equipment = new List<string>();
         const string query = "SELECT equipment FROM equipment WHERE name = 'press' AND (department = 'molding' OR department = 'sizing') AND (status IS NULL OR status != 'obsolete') ORDER BY equipment";
 
-        await using var connection = new MySqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
         await using var reader = await command.ExecuteReaderAsync();
@@ -75,7 +80,7 @@ public class PressRunLogService
         var operators = new List<string>();
         const string query = "SELECT name FROM operators WHERE dept = 'molding' ORDER BY name";
 
-        await using var connection = new MySqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
         await using var reader = await command.ExecuteReaderAsync();
@@ -89,38 +94,43 @@ public class PressRunLogService
 
     public async Task HandleLoginAsync(PressRunLogFormModel formModel)
     {
-        const string query = @"INSERT INTO pressrun (operator, part, machine, run, startDateTime, pcsStart)
-                           VALUES (@operator, @part, @machine, @run, @startDateTime, @pcsStart)";
+        const string query = @"
+        INSERT INTO pressrun (operator, part, machine, startDateTime)
+        VALUES (@operator, @part, @machine, @startDateTime)";
 
-        await using var connection = new MySqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
+
         command.Parameters.AddWithValue("@operator", formModel.Operator);
         command.Parameters.AddWithValue("@part", formModel.Part);
         command.Parameters.AddWithValue("@machine", formModel.Machine);
-        command.Parameters.AddWithValue("@run", formModel.Run);
-        command.Parameters.AddWithValue("@startDateTime", DateTime.Now); // Capture login time
-        command.Parameters.AddWithValue("@pcsStart", formModel.PcsStart);
+        command.Parameters.AddWithValue("@startDateTime", formModel.StartDateTime);
+
         await command.ExecuteNonQueryAsync();
     }
+
 
 
     public async Task HandleLogoutAsync(PressRunLogFormModel formModel)
     {
-        const string query = @"UPDATE pressrun
-                           SET endDateTime = @endDateTime, pcsEnd = @pcsEnd, scrap = @scrap, notes = @notes
-                           WHERE part = @part AND startDateTime = @startDateTime";
+        const string query = @"
+        UPDATE pressrun
+        SET endDateTime = @endDateTime, scrap = @scrap, notes = @notes
+        WHERE part = @part AND startDateTime = @startDateTime";
 
-        await using var connection = new MySqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
-        command.Parameters.AddWithValue("@endDateTime", DateTime.Now); // Capture logout time
-        command.Parameters.AddWithValue("@pcsEnd", formModel.PcsEnd);
+
+        command.Parameters.AddWithValue("@endDateTime", formModel.EndDateTime);
         command.Parameters.AddWithValue("@scrap", formModel.Scrap);
-        command.Parameters.AddWithValue("@notes", formModel.Notes ?? string.Empty);
+        command.Parameters.AddWithValue("@notes", formModel.Notes ?? string.Empty); // Handle optional notes
         command.Parameters.AddWithValue("@part", formModel.Part);
         command.Parameters.AddWithValue("@startDateTime", formModel.StartDateTime);
+
         await command.ExecuteNonQueryAsync();
     }
+
 
 }

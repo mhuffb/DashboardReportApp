@@ -1,92 +1,71 @@
 ﻿@model DashboardReportApp.Models.PressRunLogViewModel
-@using System.Linq
 
-<h2>Logged-In Runs</h2>
-
-@if (Model.LoggedInRuns != null && Model.LoggedInRuns.Any())
-{
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Operator</th>
-                <th>Machine</th>
-                <th>Part</th>
-                <th>Start Time</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var runItem in Model.LoggedInRuns)
-            {
-                <tr>
-                    <td>@runItem.Operator</td>
-                    <td>@runItem.Machine</td>
-                    <td>@runItem.Part</td>
-                    <td>@runItem.StartDateTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                    <td>
-                        <form asp-action="Logout" method="post">
-                            <input type="hidden" name="Part" value="@runItem.Part" />
-                            <input type="hidden" name="StartDateTime" value="@runItem.StartDateTime.ToString("o")" />
-
-                            <div>
-                                <label for="PcsEnd">Pieces End</label>
-                                <input type="number" id="PcsEnd" name="PcsEnd" required />
-                            </div>
-
-                            <div>
-                                <label for="Scrap">Scrap</label>
-                                <input type="number" id="Scrap" name="Scrap" required />
-                            </div>
-
-                            <button type="submit" class="btn btn-danger">Logout</button>
-                        </form>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-else
-{
-    <p>No logged-in runs found.</p>
-}
-
-<hr />
-
+<h1>Press Run Log</h1>
+<!-- Login Form -->
 <h2>Login</h2>
+<form method="post" action="/PressRunLog/Login">
+    <label for="Operator">Operator</label>
+    <select id="Operator" name="operatorName" required>
+        <option value="">Select an Operator</option>
+        @foreach (var operatorName in Model.OperatorList)
+        {
+            <option value="@operatorName">@operatorName</option>
+        }
+    </select>
 
-<form asp-action="Login" method="post">
-    <div>
-        <label for="Operator">Operator</label>
-        <select id="Operator" name="Operator" required>
-            <option value="" disabled selected>Select an operator</option>
-            @foreach (var op in Model.OperatorList)
-            {
-                <option value="@op">@op</option>
-            }
-        </select>
-    </div>
+    <label for="Part">Part</label>
+    <input type="text" id="Part" name="part" required />
 
-    <div>
-        <label for="Machine">Machine</label>
-        <select id="Machine" name="Machine" required>
-            <option value="" disabled selected>Select a machine</option>
-            @foreach (var mach in Model.EquipmentList)
-            {
-                <option value="@mach">@mach</option>
-            }
-        </select>
-    </div>
+    <label for="Machine">Machine</label>
+    <select id="Machine" name="machine" required>
+        <option value="">Select a Machine</option>
+        @foreach (var machine in Model.EquipmentList)
+        {
+            <option value="@machine">@machine</option>
+        }
+    </select>
 
-    <div>
-        <label for="Part">Part</label>
-        <input type="text" id="Part" name="Part" required />
-    </div>
-
-    <div>
-        <label for="PcsStart">Pieces Start</label>
-        <input type="number" id="PcsStart" name="PcsStart" required />
-    </div>
-
-    <button type="submit" class="btn btn-primary">Login</button>
+    <button type="submit">Login</button>
 </form>
+
+<!-- Logged-In Runs -->
+<h2>Logged-In Runs</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Operator</th>
+            <th>Machine</th>
+            <th>Part</th>
+            <th>Start DateTime</th>
+            <th>Logout</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var run in Model.LoggedInRuns)
+        {
+            <tr>
+                <td>@run.Operator</td>
+                <td>@run.Machine</td>
+                <td>@run.Part</td>
+                <td>@run.StartDateTime</td>
+                <td>
+                    <form method="post" action="/PressRunLog/Logout">
+                        <input type="hidden" name="part" value="@run.Part" />
+                        <input type="hidden" name="startDateTime" value="@run.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss")" />
+                        <input type="hidden" name="endDateTime" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")" />
+
+                        <label for="scrap">Scrap:</label>
+                        <input type="number" id="scrap" name="scrap" required />
+
+                        <label for="notes">Notes:</label>
+                        <textarea id="notes" name="notes"></textarea>
+
+                        <button type="submit">Logout</button>
+                    </form>
+
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
