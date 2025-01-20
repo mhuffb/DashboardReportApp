@@ -4,7 +4,7 @@
     public class PressMixBagChangeService
     {
         private readonly string _connectionStringMySQL;
-        private readonly string _connectionStringDataflex;
+        //private readonly string _connectionStringDataflex;
 
         public PressMixBagChangeService(IConfiguration configuration)
         {

@@ -15,7 +15,7 @@ public class PressRunLogService
     public PressRunLogService(IConfiguration configuration)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
-        _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
+        //_connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
     }
     public async Task<PressRunLogViewModel> GetPressRunLogViewModelAsync()
     {

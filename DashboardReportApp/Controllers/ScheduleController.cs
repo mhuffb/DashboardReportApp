@@ -9,7 +9,9 @@ namespace DashboardReportApp.Controllers
     public class ScheduleController : Controller
     {
         private static string connectionStringMySQL = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
-        private static string connectionStringDataflex = @"Dsn=Dataflex;dbq=V:\VDF\Sintergy\Data;displayloginbox=No;yeardigits=4;displayrecnum=Yes;readonly=Yes;returnemptystringsasnulls=No;useodbccompatibility=Yes;usesimulatedtransactions=Yes;converttolongvarchar=No;server=FlexODBC";
+        private static string connectionStringDataflex = @"Dsn=Dataflex;dbq=\\SINTERGYDC2024\\Vol1\\VDF\\Sintergy\\Data;displayloginbox=no;yeardigits=4;displayrecnum=Yes;readonly=Yes;returnemptystringsasnulls=No;useodbccompatibility=Yes;usesimulatedtransactions=Yes;converttolongvarchar=No;";
+        
+
 
         public IActionResult Index(string masterId = null, int quantity = 0)
         {
