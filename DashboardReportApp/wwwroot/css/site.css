@@ -1,22 +1,32 @@
 html {
-  font-size: 14px;
+    position: relative;
+    min-height: 100%;
+    font-size: 14px; /* Existing */
 }
 
 @media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
+    html {
+        font-size: 16px; /* Existing */
+    }
 }
 
 body {
-  margin-bottom: 60px;
+    margin: 0; /* Remove any default body margin to prevent gaps */
+    padding-bottom: 60px; /* Add padding at the bottom for the footer, not margin */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Ensures the body covers the full viewport height */
+}
+
+main {
+    flex: 1; /* Ensures the main content takes up the remaining space */
+}
+
+footer {
+    text-align: center;
+    padding: 10px 0;
+    background-color: #f8f9fa; /* Optional: Footer background color */
+    border-top: 1px solid #dee2e6; /* Optional: Footer border */
+    position: relative; /* Keeps it at the bottom of the page */
+    margin-top: auto; /* Pushes footer to the bottom if content is short */
 }

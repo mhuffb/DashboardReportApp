@@ -26,6 +26,14 @@ try
     builder.Services.AddScoped<PressMixBagChangeService>();
     // Register the PressRunLogService
     builder.Services.AddScoped<PressRunLogService>();
+    // Register SinteringService
+    builder.Services.AddTransient<SinterRunLogService>();
+    builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+    builder.Services.AddTransient<ScheduleService>();
+
+
+
+
     // Use Serilog for logging
     builder.Host.UseSerilog();
 
