@@ -30,6 +30,8 @@ try
     builder.Services.AddTransient<SinterRunLogService>();
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
     builder.Services.AddTransient<ScheduleService>();
+    builder.Services.AddScoped<ISecondaryRunLogService, SecondaryRunLogService>();
+
 
 
 

@@ -1,0 +1,138 @@
+﻿@model DashboardReportApp.Models.SecondaryRunLogViewModel
+
+
+@section Scripts {
+    <script>
+                   function showCloseForm(id, run, operator, machine, startTime, notes) {
+            document.getElementById('closeRunId').value = id;
+            document.getElementById('closeRunRunNumber').innerText = run && run.trim() ? run : "Not Available"; // Fix for Run #
+            document.getElementById('closeRunOperator').innerText = operator && operator.trim() ? operator : "Not Available";
+            document.getElementById('closeRunMachine').innerText = machine && machine.trim() ? machine : "Not Available";
+            document.getElementById('closeRunStartTime').innerText = startTime && startTime.trim() ? startTime : "Not Available";
+            document.getElementById('closeRunNotes').innerText = notes && notes.trim() ? notes : "None";
+
+            document.getElementById('closeRunForm').style.display = 'block';
+            document.getElementById('closeRunForm').scrollIntoView({ behavior: "smooth" });
+        }
+
+
+        function hideCloseForm() {
+            document.getElementById('closeRunForm').style.display = 'none';
+        }
+    </script>
+}
+
+<div style="margin: 20px;">
+    <h1 style="text-align: center;">Secondary Run Log</h1>
+
+    <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 20px;">
+        <h2>Add New Run</h2>
+        <form asp-action="CreateRun" method="post">
+            <div style="margin-bottom: 10px;">
+                <label for="runNumber">Run #:</label>
+                <input type="text" id="runNumber" name="runNumber" required />
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="operatorName">Operator:</label>
+                <select id="operatorName" name="operatorName" required>
+                    <option value="" disabled selected>Select an operator</option>
+                    @foreach (var operatorName in Model.Operators)
+                    {
+                        <option value="@operatorName">@operatorName</option>
+                    }
+                </select>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="machine">Machine:</label>
+                <select id="machine" name="machine" required>
+                    <option value="" disabled selected>Select a machine</option>
+                    @foreach (var machine in Model.Machines)
+                    {
+                        <option value="@machine">@machine</option>
+                    }
+                </select>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="op">Op:</label>
+                <input type="text" id="op" name="op" />
+            </div>
+            <button type="submit">Add Run</button>
+        </form>
+    </div>
+
+
+
+
+    <div style="border: 1px solid #ddd; padding: 15px; margin-top: 20px;">
+        <h2>Open Runs</h2>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #f0f0f0; text-align: left;">
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Run #</th>
+                    <th>Part</th>
+                    <th>Op</th>
+                    <th>Operator</th>
+                    <th>Start Time</th>
+                    <th>Machine</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var run in Model.OpenRuns)
+                {
+                    <tr>
+                        <td>@run.Id</td>
+                        <td>@run.Timestamp</td>
+                        <td>@run.Run</td>
+                        <td>@run.Part</td>
+                        <td>@run.Op</td>
+                        <td>@run.Operator</td>
+                        <td>@run.StartDateTime</td>
+                        <td>@run.Machine</td>
+                        <td>@run.Notes</td>
+                        <td>
+                            <button onclick="showCloseForm(@run.Id, '@run.Run', '@run.Operator', '@run.Machine', '@run.StartDateTime', '@run.Notes')">
+                                Close
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+
+    <div id="closeRunForm" style="display: none; border: 1px solid #ddd; padding: 15px; margin-top: 20px;">
+        <h2>Close Run</h2>
+        <form asp-action="CloseRun" method="post">
+            <input type="hidden" id="closeRunId" name="id" />
+            <p><strong>Run #:</strong> <span id="closeRunRunNumber"></span></p>
+            <p><strong>Operator:</strong> <span id="closeRunOperator"></span></p>
+            <p><strong>Machine:</strong> <span id="closeRunMachine"></span></p>
+            <p><strong>Start Time:</strong> <span id="closeRunStartTime"></span></p>
+            <p><strong>Notes:</strong> <span id="closeRunNotes"></span></p>
+            <div style="margin-bottom: 10px;">
+                <label for="pcs">Pieces Ran:</label>
+                <input type="number" id="pcs" name="pcs" required />
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="scrapMach">Machined Scrap:</label>
+                <input type="number" id="scrapMach" name="scrapMach" required />
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="scrapNonMach">Non-Machined Scrap:</label>
+                <input type="number" id="scrapNonMach" name="scrapNonMach" required />
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="notes">Notes:</label>
+                <textarea id="notes" name="notes" rows="3"></textarea>
+            </div>
+            <button type="submit">Close Run</button>
+            <button type="button" onclick="hideCloseForm()">Cancel</button>
+        </form>
+    </div>
+
+</div>
