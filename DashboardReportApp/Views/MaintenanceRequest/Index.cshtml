@@ -1,0 +1,143 @@
+﻿@model IEnumerable<MaintenanceRequest>
+
+@{
+    ViewData["Title"] = "Maintenance Requests";
+    var requesters = ViewData["Requesters"] as List<string>; // Ensure this is set in the controller
+    var equipmentList = ViewData["EquipmentList"] as List<string>; // Ensure this is set in the controller
+}
+
+<h1>Open Maintenance Requests</h1>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Equipment</th>
+            <th>Requester</th>
+            <th>Problem</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var request in Model)
+        {
+            <tr>
+                <td>@request.Id</td>
+                <td>@request.Equipment</td>
+                <td>@request.Requester</td>
+                <td>@request.Problem</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(request.FileAddressImage))
+                    {
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#imageModal" data-image-url="/uploads/image0.jpeg">
+                            View Image
+                        </button>
+
+                    }
+                    else
+                    {
+                        <span>No Image</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="GenerateQRCode" asp-route-id="@request.Id" target="_blank" class="btn btn-primary">
+                        Generate QR Code
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h2>Add New Request</h2>
+<form asp-action="AddRequest" method="post">
+    <div class="form-group">
+        <label for="Equipment">Equipment</label>
+        <select id="Equipment" name="Equipment" class="form-control">
+            <option value="">Select Equipment</option>
+            @foreach (var equipment in (List<string>)ViewData["EquipmentList"])
+            {
+                <option value="@equipment">@equipment</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="Requester">Requester</label>
+        <select name="Requester" class="form-control" required>
+            <option value="">-- Select Requester --</option>
+            @foreach (var requester in requesters)
+            {
+                <option value="@requester">@requester</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="Problem">Problem</label>
+        <textarea name="Problem" class="form-control" required></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="DownStatus">Machine Down?</label>
+        <select name="DownStatus" class="form-control" required>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="HourMeter">Hour Meter</label>
+        <input type="number" name="HourMeter" class="form-control" min="0" />
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Submit</button>
+</form>
+
+<!-- Modal for Viewing Image -->
+<div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Order Image" class="img-fluid">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+           document.addEventListener('DOMContentLoaded', function () {
+        // Attach event listener for modal show
+        $('#imageModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget); // Button that triggered the modal
+            var imageUrl = button.data('image-url'); // Extract the image URL from the button
+
+            // Update the modal image's source
+            var modalImage = document.getElementById('modalImage');
+            modalImage.src = imageUrl;
+        });
+
+        // Clear the image source when modal is hidden
+        $('#imageModal').on('hidden.bs.modal', function () {
+            var modalImage = document.getElementById('modalImage');
+            modalImage.src = '';
+        });
+    });
+
+
+
+</script>

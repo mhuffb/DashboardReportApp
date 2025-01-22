@@ -56,7 +56,7 @@
                 <label for="op">Op:</label>
                 <input type="text" id="op" name="op" />
             </div>
-            <button type="submit">Add Run</button>
+            <button type="submit" class="btn btn-primary mt-3">Add Run</button>
         </form>
     </div>
 
@@ -94,7 +94,7 @@
                         <td>@run.Machine</td>
                         <td>@run.Notes</td>
                         <td>
-                            <button onclick="showCloseForm(@run.Id, '@run.Run', '@run.Operator', '@run.Machine', '@run.StartDateTime', '@run.Notes')">
+                            <button class="btn btn-warning" onclick="showCloseForm(@run.Id, '@run.Run', '@run.Operator', '@run.Machine', '@run.StartDateTime', '@run.Notes')">
                                 Close
                             </button>
                         </td>
@@ -130,8 +130,8 @@
                 <label for="notes">Notes:</label>
                 <textarea id="notes" name="notes" rows="3"></textarea>
             </div>
-            <button type="submit">Close Run</button>
-            <button type="button" onclick="hideCloseForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary mt-3">Close Run</button>
+            <button type="button" class="btn btn-primary mt-3" onclick="hideCloseForm()">Cancel</button>
         </form>
     </div>
 

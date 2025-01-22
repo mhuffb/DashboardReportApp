@@ -31,6 +31,11 @@ try
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
     builder.Services.AddTransient<ScheduleService>();
     builder.Services.AddScoped<ISecondaryRunLogService, SecondaryRunLogService>();
+    builder.Services.AddScoped<ISecondarySetupLogService, SecondarySetupLogService>();
+    builder.Services.AddScoped<MaintenanceRequestService>();
+    builder.Services.AddScoped<EmailAttachmentService>();
+    builder.Services.AddHostedService<EmailProcessingBackgroundService>();
+
 
 
 
