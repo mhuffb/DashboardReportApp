@@ -53,16 +53,28 @@ namespace DashboardReportApp.Controllers
         [HttpPost("AddRequest")]
         public async Task<IActionResult> AddRequest(MaintenanceRequest request)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                bool success = await _service.AddRequestAsync(request);
-                if (success)
-                    TempData["Success"] = "Request added successfully.";
-                else
-                    TempData["Error"] = "Failed to add the request. Please try again.";
+                foreach (var error in ModelState)
+                {
+                    Console.WriteLine($"Key: {error.Key}");
+                    foreach (var subError in error.Value.Errors)
+                    {
+                        Console.WriteLine($"Error: {subError.ErrorMessage}");
+                    }
+                }
+
+                TempData["Error"] = "Invalid input. Please correct the errors.";
+                return RedirectToAction(nameof(Index));
             }
+
+            bool success = await _service.AddRequestAsync(request);
+            TempData["Success"] = success ? "Request added successfully." : "Failed to add the request.";
+
             return RedirectToAction(nameof(Index));
         }
+
+
 
         [HttpGet("GenerateQRCode/{id}")]
         public IActionResult GenerateQRCode(int id)

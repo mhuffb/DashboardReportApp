@@ -5,8 +5,69 @@
     var requesters = ViewData["Requesters"] as List<string>; // Ensure this is set in the controller
     var equipmentList = ViewData["EquipmentList"] as List<string>; // Ensure this is set in the controller
 }
+<h1>Add New Request</h1>
+<form asp-action="AddRequest" method="post">
+    <div class="form-group">
+        <label for="Equipment">Equipment</label>
+        <select id="Equipment" name="Equipment" class="form-control" required>
+            <option value="">Select Equipment</option>
+            @foreach (var equipment in equipmentList)
+            {
+                var equipmentParts = equipment.Split(" - "); // Assuming format: "ID - Name"
+                var equipmentId = equipmentParts[0]; // Extract the ID
+                var equipmentName = equipmentParts.Length > 1 ? equipmentParts[1] : string.Empty;
 
-<h1>Open Maintenance Requests</h1>
+                <option value="@equipmentId">@equipmentId - @equipmentName</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="Requester">Requester</label>
+        <select name="Requester" class="form-control" required>
+            <option value="">-- Select Requester --</option>
+            @foreach (var requester in requesters)
+            {
+                <option value="@requester">@requester</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="Problem">Problem</label>
+        <textarea name="Problem" class="form-control" required></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="DownStatus">Machine Down?</label>
+        <input type="checkbox" id="DownStatus" name="DownStatus" value="true" />
+    </div>
+
+    <div class="form-group">
+        <label for="HourMeter">Hour Meter</label>
+        <input type="number" name="HourMeter" class="form-control" min="0" />
+    </div>
+
+    <div class="form-group">
+        <label for="Department">Department</label>
+        <select id="Department" name="Department" class="form-control" required>
+            <option value="">-- Select Department --</option>
+            <option value="Finishing">Finishing</option>
+            <option value="General">General</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Molding">Molding</option>
+            <option value="Packing">Packing</option>
+            <option value="Quality">Quality</option>
+            <option value="Secondary">Secondary</option>
+            <option value="Sintering">Sintering</option>
+            <option value="Tooling">Tooling</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Submit</button>
+</form>
+
+<h2>Open Maintenance Requests</h2>
 
 <!-- Button to Fetch Email Attachments -->
 <div class="mb-3">
@@ -58,7 +119,6 @@
                     {
                         <span>No Image</span>
                     }
-
                 </td>
                 <td>
                     <a asp-action="GenerateQRCode" asp-route-id="@request.Id" target="_blank" class="btn btn-primary">
@@ -70,50 +130,7 @@
     </tbody>
 </table>
 
-<h2>Add New Request</h2>
-<form asp-action="AddRequest" method="post">
-    <div class="form-group">
-        <label for="Equipment">Equipment</label>
-        <select id="Equipment" name="Equipment" class="form-control">
-            <option value="">Select Equipment</option>
-            @foreach (var equipment in (List<string>)ViewData["EquipmentList"])
-            {
-                <option value="@equipment">@equipment</option>
-            }
-        </select>
-    </div>
 
-    <div class="form-group">
-        <label for="Requester">Requester</label>
-        <select name="Requester" class="form-control" required>
-            <option value="">-- Select Requester --</option>
-            @foreach (var requester in requesters)
-            {
-                <option value="@requester">@requester</option>
-            }
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="Problem">Problem</label>
-        <textarea name="Problem" class="form-control" required></textarea>
-    </div>
-
-    <div class="form-group">
-        <label for="DownStatus">Machine Down?</label>
-        <select name="DownStatus" class="form-control" required>
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="HourMeter">Hour Meter</label>
-        <input type="number" name="HourMeter" class="form-control" min="0" />
-    </div>
-
-    <button type="submit" class="btn btn-primary mt-2">Submit</button>
-</form>
 
 <!-- Modal for Viewing Image -->
 <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
@@ -131,80 +148,31 @@
 </div>
 
 <script>
-           document.addEventListener('DOMContentLoaded', function () {
-        // Attach event listener for modal show
-        $('#imageModal').on('show.bs.modal', function (event) {
-            var button = $(event.relatedTarget); // Button that triggered the modal
-            var imageUrl = button.data('image-url'); // Extract the image URL from the button
-
-            // Update the modal image's source
-            var modalImage = document.getElementById('modalImage');
-            modalImage.src = imageUrl;
-        });
-
-        // Clear the image source when modal is hidden
-        $('#imageModal').on('hidden.bs.modal', function () {
-            var modalImage = document.getElementById('modalImage');
-            modalImage.src = '';
-        });
-    });
-
-
-
-</script>
-<script>
-           document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('.fetch-image-btn').forEach(button => {
-            button.addEventListener('click', function () {
-                const filePath = this.dataset.filePath;
-
-                if (!filePath) {
-                    console.error("File path is undefined. Check the button's data-file-path attribute.");
-                    alert("No file path provided.");
-                    return;
-                }
-
-                console.log("File Path:", filePath);
-
-                fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            const modalImage = document.getElementById('modalImage');
-                            modalImage.src = data.url;
-                        } else {
-                            alert(`Error: ${data.message}`);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching image:', error);
-                        alert('An error occurred while fetching the image.');
-                    });
-            });
-        });
-    });
-
-
-</script>
-<script>
     document.addEventListener('DOMContentLoaded', function () {
-        const fetchEmailAttachmentsBtn = document.getElementById('fetchEmailAttachmentsBtn');
+        // Modal logic
+        $('#imageModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var imageUrl = button.data('file-path');
+            document.getElementById('modalImage').src = imageUrl;
+        });
 
-        fetchEmailAttachmentsBtn.addEventListener('click', function () {
+        $('#imageModal').on('hidden.bs.modal', function () {
+            document.getElementById('modalImage').src = '';
+        });
+
+        // Fetch email attachments
+        document.getElementById('fetchEmailAttachmentsBtn').addEventListener('click', function () {
             fetch('/MaintenanceRequest/FetchEmailAttachments')
                 .then(response => {
-                    if (response.ok) {
-                        return response.text();
-                    }
+                    if (response.ok) return response.text();
                     throw new Error('Failed to fetch email attachments');
                 })
                 .then(data => {
                     alert('Email attachments processed successfully!');
-                    // Optionally, reload the page to reflect changes
                     location.reload();
                 })
                 .catch(error => {
-                    console.error('Error fetching email attachments:', error);
+                    console.error('Error:', error);
                     alert('An error occurred while processing email attachments.');
                 });
         });

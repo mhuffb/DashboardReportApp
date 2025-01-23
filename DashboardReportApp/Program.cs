@@ -36,6 +36,7 @@ try
     builder.Services.AddScoped<EmailAttachmentService>();
     builder.Services.AddHostedService<EmailProcessingBackgroundService>();
 
+    builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();
 
 
 
