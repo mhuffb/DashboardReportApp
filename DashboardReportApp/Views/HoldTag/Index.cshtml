@@ -2,32 +2,54 @@
 
 <h2>Hold Tag</h2>
 
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+
 <form asp-action="Submit" method="post">
+    @Html.AntiForgeryToken()
+
     <div>
         <label for="Part">Part</label>
-        <input type="text" id="Part" name="Part" required />
+        <input type="text" id="Part" name="Part" asp-for="Part" required />
+        <span asp-validation-for="Part" class="text-danger"></span>
     </div>
+
     <div>
         <label for="Discrepancy">Discrepancy</label>
-        <textarea id="Discrepancy" name="Discrepancy" required></textarea>
+        <textarea id="Discrepancy" name="Discrepancy" asp-for="Discrepancy" required></textarea>
+        <span asp-validation-for="Discrepancy" class="text-danger"></span>
     </div>
+
     <div>
         <label for="Quantity">Quantity</label>
-        <input type="text" id="Quantity" name="Quantity" required />
+        <input type="text" id="Quantity" name="Quantity" asp-for="Quantity" required />
+        <span asp-validation-for="Quantity" class="text-danger"></span>
     </div>
+
     <div>
         <label for="Unit">Unit</label>
-        <input type="text" id="Unit" name="Unit" required />
+        <input type="text" id="Unit" name="Unit" asp-for="Unit" required />
+        <span asp-validation-for="Unit" class="text-danger"></span>
     </div>
+
     <div>
         <label for="IssuedBy">Operator</label>
-        <select id="IssuedBy" name="IssuedBy" required>
+        <select id="IssuedBy" name="IssuedBy" asp-for="IssuedBy" required>
             <option value="">Select Operator</option>
-            @foreach (var operatorName in ViewData["Operators"] as List<string>)
+            @foreach (var operatorName in (ViewData["Operators"] as List<string>))
             {
                 <option value="@operatorName">@operatorName</option>
             }
         </select>
+        <span asp-validation-for="IssuedBy" class="text-danger"></span>
     </div>
+
     <button type="submit">Submit</button>
 </form>

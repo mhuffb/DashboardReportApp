@@ -57,7 +57,8 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
                     command.Parameters.AddWithValue("@date", record.Date);
                     command.Parameters.AddWithValue("@issuedBy", record.IssuedBy);
-                    command.Parameters.AddWithValue("@disposition", record.Disposition ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@disposition", (object)record.Disposition ?? DBNull.Value);
+
                     command.Parameters.AddWithValue("@dispositionBy", record.DispositionBy ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@reworkInstr", record.ReworkInstr ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@reworkInstrBy", record.ReworkInstrBy ?? (object)DBNull.Value);
@@ -83,9 +84,13 @@ namespace DashboardReportApp.Services
                     using (Document document = new Document(pdf))
                     {
                         document.Add(new Paragraph($"Part: {record.Part}"));
+                        document.Add(new Paragraph($"Date: {record.Date:yyyy-MM-dd HH:mm:ss}"));
                         document.Add(new Paragraph($"Discrepancy: {record.Discrepancy}"));
+                        document.Add(new Paragraph($"Disposition: {record.Disposition}"));
                         document.Add(new Paragraph($"Quantity: {record.Quantity} {record.Unit}"));
                         document.Add(new Paragraph($"Issued By: {record.IssuedBy}"));
+                        document.Add(new Paragraph($"Date Completed: {record.DateCompleted?.ToString("yyyy-MM-dd") ?? "N/A"}"));
+
                     }
                 }
             }

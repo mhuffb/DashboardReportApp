@@ -69,12 +69,6 @@
 
 <h2>Open Maintenance Requests</h2>
 
-<!-- Button to Fetch Email Attachments -->
-<div class="mb-3">
-    <button id="fetchEmailAttachmentsBtn" class="btn btn-success">
-        Fetch Email Attachments
-    </button>
-</div>
 
 @if (TempData["Success"] != null)
 {
@@ -109,9 +103,7 @@
                     @if (!string.IsNullOrEmpty(request.FileAddressImageLink))
                     {
                         <button class="btn btn-primary btn-sm fetch-image-btn"
-                                data-file-path="@request.FileAddressImageLink"
-                                data-bs-toggle="modal"
-                                data-bs-target="#imageModal">
+                                data-file-path="@request.FileAddressImageLink">
                             View Image
                         </button>
                     }
@@ -130,8 +122,6 @@
     </tbody>
 </table>
 
-
-
 <!-- Modal for Viewing Image -->
 <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
@@ -149,32 +139,53 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Modal logic
-        $('#imageModal').on('show.bs.modal', function (event) {
-            var button = $(event.relatedTarget);
-            var imageUrl = button.data('file-path');
-            document.getElementById('modalImage').src = imageUrl;
+        const modalElement = document.getElementById('imageModal');
+
+        // Fetch and display the image
+        document.querySelectorAll('.fetch-image-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const filePath = this.dataset.filePath;
+
+                if (!filePath) {
+                    console.error("File path is missing.");
+                    alert("No file path provided.");
+                    return;
+                }
+
+                fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error("Failed to fetch the image.");
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            const modalImage = document.getElementById('modalImage');
+                            modalImage.src = data.url;
+
+                            const bootstrapModal = new bootstrap.Modal(modalElement);
+                            bootstrapModal.show();
+                        } else {
+                            alert(`Error: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching image:', error);
+                        alert('An error occurred while fetching the image.');
+                    });
+            });
         });
 
-        $('#imageModal').on('hidden.bs.modal', function () {
-            document.getElementById('modalImage').src = '';
-        });
+        // Cleanup the modal when hidden
+        modalElement.addEventListener('hidden.bs.modal', function () {
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = '';
 
-        // Fetch email attachments
-        document.getElementById('fetchEmailAttachmentsBtn').addEventListener('click', function () {
-            fetch('/MaintenanceRequest/FetchEmailAttachments')
-                .then(response => {
-                    if (response.ok) return response.text();
-                    throw new Error('Failed to fetch email attachments');
-                })
-                .then(data => {
-                    alert('Email attachments processed successfully!');
-                    location.reload();
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while processing email attachments.');
-                });
+            // Ensure no lingering overlay
+            const modalBackdrop = document.querySelector('.modal-backdrop');
+            if (modalBackdrop) modalBackdrop.remove();
+
+            document.body.classList.remove('modal-open'); // Re-enable scrolling
+            document.body.style = ''; // Clear any inline styles
         });
     });
 </script>

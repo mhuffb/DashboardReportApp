@@ -23,8 +23,11 @@ namespace DashboardReportApp.Services
             _emailServer = configuration["Email:Server"];
             _emailAddress = configuration["Email:Address"];
             _emailPassword = configuration["Email:Password"];
-           // _attachmentSavePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
+            // _attachmentSavePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
         }
+
+
+
 
         public async Task ProcessIncomingEmailsAsync()
         {
@@ -96,24 +99,6 @@ namespace DashboardReportApp.Services
                 Console.WriteLine($"Error processing emails: {ex.Message}");
             }
         }
-
-
-        private async Task UpdateFileAddressImageInDatabase(string orderId, string filePath)
-        {
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                string query = "UPDATE maintenance SET FileAddressImage = @filePathimage WHERE Id = @orderId";
-
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@filePathimage", filePath);
-                    command.Parameters.AddWithValue("@orderId", orderId);
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
-        }
-
 
 
         private string ExtractOrderId(string subject)

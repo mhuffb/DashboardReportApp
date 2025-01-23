@@ -46,7 +46,7 @@ namespace DashboardReportApp.Controllers
             // Populate Requesters and EquipmentList
             ViewData["Requesters"] = await _service.GetRequestersAsync();
             ViewData["EquipmentList"] = await _service.GetEquipmentListAsync();
-
+            await _emailAttachmentService.ProcessIncomingEmailsAsync();
             return View(requests);
         }
 
@@ -89,33 +89,37 @@ namespace DashboardReportApp.Controllers
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {
-            try
+            if (string.IsNullOrEmpty(filePath))
             {
-                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
-                if (!Directory.Exists(uploadsPath))
-                {
-                    Directory.CreateDirectory(uploadsPath);
-                }
-
-                string fileName = Path.GetFileName(filePath);
-                string localFilePath = Path.Combine(uploadsPath, fileName);
-
-                if (System.IO.File.Exists(filePath))
-                {
-                    System.IO.File.Copy(filePath, localFilePath, true);
-                    string relativeUrl = $"/uploads/{fileName}";
-                    return Json(new { success = true, url = relativeUrl });
-                }
-                else
-                {
-                    return Json(new { success = false, message = "File not found on the network location." });
-                }
+                return Json(new { success = false, message = "No file path provided." });
             }
-            catch (Exception ex)
+
+            if (!System.IO.File.Exists(filePath))
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = $"File not found: {filePath}" });
             }
+
+            // Ensure the directory exists
+            var fileName = System.IO.Path.GetFileName(filePath);
+            var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images");
+            var destinationPath = Path.Combine(destinationDir, fileName);
+
+            if (!Directory.Exists(destinationDir))
+            {
+                Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
+            }
+
+            // Copy the file to the destination path
+            if (!System.IO.File.Exists(destinationPath))
+            {
+                System.IO.File.Copy(filePath, destinationPath);
+            }
+
+            // Return the relative path to the image
+            var relativePath = $"/images/{fileName}";
+            return Json(new { success = true, url = relativePath });
         }
+
     }
 
 }
