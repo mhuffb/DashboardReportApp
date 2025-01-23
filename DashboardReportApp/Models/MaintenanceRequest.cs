@@ -18,7 +18,6 @@
         public string HoldReason { get; set; }
         public string HoldResult { get; set; }
         public string HoldBy { get; set; }
-        public string FileAddressImage { get; set; }
         public string FileAddressImageLink { get; set; }
         public string StatusHistory { get; set; }
         public string CurrentStatusBy { get; set; }

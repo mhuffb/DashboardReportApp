@@ -64,6 +64,14 @@ try
         pattern: "{controller=Home}/{action=Index}/{id?}");
 
     Log.Information("Application startup completed successfully.");
+
+    app.UseEndpoints(endpoints =>
+    {
+        endpoints.MapControllerRoute(
+            name: "default",
+            pattern: "{controller=Home}/{action=Index}/{id?}");
+    });
+
     app.Run();
 }
 catch (Exception ex)

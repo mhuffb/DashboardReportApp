@@ -8,6 +8,13 @@
 
 <h1>Open Maintenance Requests</h1>
 
+<!-- Button to Fetch Email Attachments -->
+<div class="mb-3">
+    <button id="fetchEmailAttachmentsBtn" class="btn btn-success">
+        Fetch Email Attachments
+    </button>
+</div>
+
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success">@TempData["Success"]</div>
@@ -36,22 +43,26 @@
                 <td>@request.Equipment</td>
                 <td>@request.Requester</td>
                 <td>@request.Problem</td>
+
                 <td>
-                    @if (!string.IsNullOrEmpty(request.FileAddressImage))
+                    @if (!string.IsNullOrEmpty(request.FileAddressImageLink))
                     {
-                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#imageModal" data-image-url="/uploads/image0.jpeg">
+                        <button class="btn btn-primary btn-sm fetch-image-btn"
+                                data-file-path="@request.FileAddressImageLink"
+                                data-bs-toggle="modal"
+                                data-bs-target="#imageModal">
                             View Image
                         </button>
-
                     }
                     else
                     {
                         <span>No Image</span>
                     }
+
                 </td>
                 <td>
                     <a asp-action="GenerateQRCode" asp-route-id="@request.Id" target="_blank" class="btn btn-primary">
-                        Generate QR Code
+                        Generate QR Code For Sending Image
                     </a>
                 </td>
             </tr>
@@ -140,4 +151,62 @@
 
 
 
+</script>
+<script>
+           document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.fetch-image-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const filePath = this.dataset.filePath;
+
+                if (!filePath) {
+                    console.error("File path is undefined. Check the button's data-file-path attribute.");
+                    alert("No file path provided.");
+                    return;
+                }
+
+                console.log("File Path:", filePath);
+
+                fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const modalImage = document.getElementById('modalImage');
+                            modalImage.src = data.url;
+                        } else {
+                            alert(`Error: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching image:', error);
+                        alert('An error occurred while fetching the image.');
+                    });
+            });
+        });
+    });
+
+
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const fetchEmailAttachmentsBtn = document.getElementById('fetchEmailAttachmentsBtn');
+
+        fetchEmailAttachmentsBtn.addEventListener('click', function () {
+            fetch('/MaintenanceRequest/FetchEmailAttachments')
+                .then(response => {
+                    if (response.ok) {
+                        return response.text();
+                    }
+                    throw new Error('Failed to fetch email attachments');
+                })
+                .then(data => {
+                    alert('Email attachments processed successfully!');
+                    // Optionally, reload the page to reflect changes
+                    location.reload();
+                })
+                .catch(error => {
+                    console.error('Error fetching email attachments:', error);
+                    alert('An error occurred while processing email attachments.');
+                });
+        });
+    });
 </script>

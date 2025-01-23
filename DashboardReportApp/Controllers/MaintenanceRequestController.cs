@@ -6,7 +6,7 @@ namespace DashboardReportApp.Controllers
     using DashboardReportApp.Services;
     using Microsoft.AspNetCore.Mvc;
     using System.Threading.Tasks;
-
+    [Route("MaintenanceRequest")]
     public class MaintenanceRequestController : Controller
     {
         private readonly MaintenanceRequestService _service;
@@ -18,6 +18,7 @@ namespace DashboardReportApp.Controllers
             _service = service;
         }
 
+        [HttpGet("FetchEmailAttachments")]
         public async Task<IActionResult> FetchEmailAttachments()
         {
             await _emailAttachmentService.ProcessIncomingEmailsAsync();
@@ -25,6 +26,7 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost("SaveImagePath")]
         public async Task<IActionResult> SaveImagePath(int id, string imagePath)
         {
             bool success = await _service.UpdateImagePathAsync(id, imagePath);
@@ -35,6 +37,8 @@ namespace DashboardReportApp.Controllers
 
             return RedirectToAction(nameof(Index));
         }
+
+        [HttpGet("")]
         public async Task<IActionResult> Index()
         {
             var requests = await _service.GetOpenRequestsAsync();
@@ -46,8 +50,7 @@ namespace DashboardReportApp.Controllers
             return View(requests);
         }
 
-
-        [HttpPost]
+        [HttpPost("AddRequest")]
         public async Task<IActionResult> AddRequest(MaintenanceRequest request)
         {
             if (ModelState.IsValid)
@@ -60,7 +63,8 @@ namespace DashboardReportApp.Controllers
             }
             return RedirectToAction(nameof(Index));
         }
-        [Route("MaintenanceRequest/GenerateQRCode/{id}")]
+
+        [HttpGet("GenerateQRCode/{id}")]
         public IActionResult GenerateQRCode(int id)
         {
             var mailToLink = $"mailto:fixit@sintergy.net?subject=Maintenance Order #{id}";
@@ -70,6 +74,36 @@ namespace DashboardReportApp.Controllers
             return File(qrCodeImage, "image/png");
         }
 
+        [HttpGet("FetchImage")]
+        public IActionResult FetchImage(string filePath)
+        {
+            try
+            {
+                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
+                if (!Directory.Exists(uploadsPath))
+                {
+                    Directory.CreateDirectory(uploadsPath);
+                }
+
+                string fileName = Path.GetFileName(filePath);
+                string localFilePath = Path.Combine(uploadsPath, fileName);
+
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Copy(filePath, localFilePath, true);
+                    string relativeUrl = $"/uploads/{fileName}";
+                    return Json(new { success = true, url = relativeUrl });
+                }
+                else
+                {
+                    return Json(new { success = false, message = "File not found on the network location." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
     }
 
 }

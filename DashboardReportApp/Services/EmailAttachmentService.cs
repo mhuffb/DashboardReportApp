@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Configuration;
+using System;
 
 namespace DashboardReportApp.Services
 {
@@ -42,6 +43,7 @@ namespace DashboardReportApp.Services
                         Console.WriteLine($"Processing email: {message.Subject ?? "(No Subject)"}");
 
                         string orderId = ExtractOrderId(message.Subject);
+                        Console.WriteLine($"Extracted Order ID: {orderId}");
 
                         if (string.IsNullOrEmpty(orderId))
                         {
@@ -61,9 +63,11 @@ namespace DashboardReportApp.Services
                                 // Handle both attachments and inline images
                                 if (disposition == ContentDisposition.Attachment || disposition == ContentDisposition.Inline)
                                 {
-                                    string fileName = mimePart.FileName ?? $"embedded_{Guid.NewGuid()}.bin";
-                                    string attachmentSavePath = Path.Combine("wwwroot/uploads", fileName);
+                                    string fileName = "MaintenanceRequest" + orderId + "_" + (mimePart.FileName ?? $"embedded_{Guid.NewGuid()}.bin");
 
+                                    //string attachmentSavePath = Path.Combine("wwwroot/uploads", fileName);
+                                    string attachmentSavePath = Path.Combine(@"\\SINTERGYDC2024\\Vol1\\Visual Studio Programs\images", fileName);
+                                    
                                     using (var stream = File.Create(attachmentSavePath))
                                     {
                                         mimePart.Content.DecodeTo(stream);
@@ -98,12 +102,12 @@ namespace DashboardReportApp.Services
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
-                string query = "UPDATE maintenance SET FileAddressImage = @filePath WHERE Id = @orderId";
+                string query = "UPDATE maintenance SET FileAddressImage = @filePathimage WHERE Id = @orderId";
 
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@filePath", filePath);
+                    command.Parameters.AddWithValue("@filePathimage", filePath);
                     command.Parameters.AddWithValue("@orderId", orderId);
                     await command.ExecuteNonQueryAsync();
                 }
@@ -129,7 +133,7 @@ namespace DashboardReportApp.Services
             // Save the media file path in your database associated with the order
             using (var connection = new MySqlConnection(_connectionString))
             {
-                string query = "UPDATE maintenance SET fileAddress = @filePath WHERE id = @orderId";
+                string query = "UPDATE maintenance SET fileAddressimagelink = @filePath WHERE id = @orderId";
 
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))

@@ -20,7 +20,7 @@
         public async Task<IEnumerable<MaintenanceRequest>> GetOpenRequestsAsync()
         {
             var requests = new List<MaintenanceRequest>();
-            string query = @"SELECT id, timestamp, equipment, requester, problem, downStatus, hourMeter, fileAddress 
+            string query = @"SELECT id, timestamp, equipment, requester, problem, downStatus, hourMeter, fileAddressImageLink 
                      FROM maintenance 
                      WHERE closedDateTime IS NULL";
 
@@ -42,7 +42,7 @@
                             Problem = reader.GetString("problem"),
                             DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) && reader.GetBoolean("downStatus"),
                             HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetInt32("hourMeter") : (int?)null,
-                            FileAddressImage = !reader.IsDBNull(reader.GetOrdinal("fileAddress")) ? reader.GetString("fileAddress") : null,
+                            FileAddressImageLink = !reader.IsDBNull(reader.GetOrdinal("fileAddressImageLink")) ? reader.GetString("fileAddressImageLink") : null,
                         };
 
                         requests.Add(request);
@@ -57,7 +57,7 @@
 
         public async Task<bool> AddRequestAsync(MaintenanceRequest request)
         {
-            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddress) 
+            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddressImageLink) 
                          VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @fileAddress)";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -71,7 +71,7 @@
                     command.Parameters.AddWithValue("@problem", request.Problem);
                     command.Parameters.AddWithValue("@downStatus", request.DownStatus ? 1 : 0);
                     command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@fileAddress", request.FileAddressImage ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@fileAddress", request.FileAddressImageLink ?? (object)DBNull.Value);
 
                     return await command.ExecuteNonQueryAsync() > 0;
                 }
@@ -132,7 +132,7 @@
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
-                string query = "UPDATE maintenance SET FileAddressImage = @imagePath WHERE Id = @id";
+                string query = "UPDATE maintenance SET FileAddressImageLink = @imagePath WHERE Id = @id";
 
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
