@@ -29,6 +29,10 @@ namespace DashboardReportApp.Controllers
             if (ModelState.IsValid)
             {
                 _service.SaveDeviation(model);
+
+                // Generate the PDF
+                string pdfPath = _service.GenerateAndPrintDeviationPdf(model);
+
                 TempData["SuccessMessage"] = "Deviation successfully created!";
                 return RedirectToAction("Index");
             }

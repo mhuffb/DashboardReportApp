@@ -1,0 +1,55 @@
+﻿@model DashboardReportApp.Models.QCSecondaryHoldReturn
+
+<h1>QC Secondary Hold Return</h1>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+
+<form asp-action="Submit" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="form-group">
+        <label for="Operator">Operator</label>
+        <select id="Operator" name="Operator" asp-for="Operator" class="form-control" required>
+            <option value="">Select Operator</option>
+            @foreach (var operatorName in (ViewData["Operators"] as List<string>))
+            {
+                <option value="@operatorName">@operatorName</option>
+            }
+        </select>
+        <span asp-validation-for="Operator" class="text-danger"></span>
+    </div>
+
+    <div class="form-group">
+        <label for="Run">Run</label>
+        <input type="text" id="Run" name="Run" asp-for="Run" class="form-control" required />
+        <span asp-validation-for="Run" class="text-danger"></span>
+    </div>
+
+    <div class="form-group">
+        <label for="QtyReturnedMachined">Qty Returned Machined</label>
+        <input type="number" id="QtyReturnedMachined" name="QtyReturnedMachined" asp-for="QtyReturnedMachined" class="form-control" min="0" step="1" required />
+        <span asp-validation-for="QtyReturnedMachined" class="text-danger"></span>
+    </div>
+
+    <div class="form-group">
+        <label for="QtyReturnedNonMachined">Qty Returned Non-Machined</label>
+        <input type="number" id="QtyReturnedNonMachined" name="QtyReturnedNonMachined" asp-for="QtyReturnedNonMachined" class="form-control" min="0" step="1" required />
+        <span asp-validation-for="QtyReturnedNonMachined" class="text-danger"></span>
+    </div>
+
+    <div class="form-group">
+        <label for="Notes">Notes</label>
+        <textarea id="Notes" name="Notes" asp-for="Notes" class="form-control" rows="4"></textarea>
+        <span asp-validation-for="Notes" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>

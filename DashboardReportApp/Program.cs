@@ -38,6 +38,7 @@ try
 
     builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();
     builder.Services.AddScoped<DashboardReportApp.Services.DeviationService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.QCSecondaryHoldReturnService>();
 
 
 
