@@ -44,6 +44,17 @@ namespace DashboardReportApp.Controllers
                 // Save to the database
                 await _service.AddHoldRecordAsync(record);
 
+                // Print the PDF
+                try
+                {
+                    _service.PrintPdf(pdfPath);
+                    TempData["SuccessMessage"] = "Hold record submitted, email sent, and printed successfully!";
+                }
+                catch (Exception ex)
+                {
+                    TempData["ErrorMessage"] = $"Hold record submitted but failed to print: {ex.Message}";
+                }
+
                 // Send email with the generated PDF
                 try
                 {

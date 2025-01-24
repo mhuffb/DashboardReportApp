@@ -15,6 +15,8 @@ using iText.Layout.Properties;
 using iText.IO.Font.Constants;
 using System.Net.Mail;
 using System.Net;
+using System.Diagnostics;
+using System.Drawing.Printing;
 namespace DashboardReportApp.Services
 {
     public class HoldTagService
@@ -248,6 +250,59 @@ ORDER BY
                 mail.Dispose();
             }
         }
+        public void PrintPdf(string pdfPath)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
+            {
+                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
+            }
+
+            try
+            {
+                string printerName = "QAHoldTags"; // Set the specific printer name
+                string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
+
+                // Validate printer existence
+                if (!PrinterSettings.InstalledPrinters.Cast<string>().Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new Exception($"Printer '{printerName}' is not installed.");
+                }
+
+                // Validate SumatraPDF existence
+                if (!File.Exists(sumatraPath))
+                {
+                    throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
+                }
+
+                // Set up the SumatraPDF command-line arguments
+                string arguments = $"-print-to \"{printerName}\" \"{pdfPath}\"";
+
+                // Start the process
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = sumatraPath,
+                        Arguments = arguments,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"Printing process exited with code {process.ExitCode}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to print PDF: {ex.Message}");
+            }
+        }
+
 
     }
 }
