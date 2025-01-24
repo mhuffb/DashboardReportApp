@@ -37,6 +37,7 @@ try
     //builder.Services.AddHostedService<EmailProcessingBackgroundService>();
 
     builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.DeviationService>();
 
 
 

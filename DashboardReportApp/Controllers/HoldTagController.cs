@@ -18,9 +18,15 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            ViewData["Operators"] = await _service.GetOperatorsAsync();
+            var parts = await _service.GetPartsAsync();
+            var operators = await _service.GetOperatorsAsync();
+
+            ViewData["Parts"] = parts ?? new List<string>();
+            ViewData["Operators"] = operators;
+
             return View(new HoldRecord());
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -32,16 +38,35 @@ namespace DashboardReportApp.Controllers
                 record.Date = DateTime.Now;
 
                 // Generate and set the PDF path (if applicable)
-                string pdfPath = _service.GeneratePdf(record);
+                string pdfPath = _service.GenerateHoldTagPdf(record);
                 record.FileAddress = pdfPath;
 
                 // Save to the database
                 await _service.AddHoldRecordAsync(record);
 
+                // Send email with the generated PDF
+                try
+                {
+                    _service.SendEmailWithAttachment(
+                        "notifications@sintergy.net",
+                        "$inT15851",
+                        "holdtag@sintergy.net",
+                        "smtp.sintergy.net",
+                        pdfPath,
+                        record
+                    );
+                }
+                catch (Exception ex)
+                {
+                    TempData["ErrorMessage"] = $"Failed to send email: {ex.Message}";
+                    return RedirectToAction("Index");
+                }
+
                 // Provide success feedback and redirect
-                TempData["SuccessMessage"] = "Hold record submitted successfully!";
+                TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
             }
+
             if (!ModelState.IsValid)
             {
                 foreach (var error in ModelState)
@@ -62,6 +87,19 @@ namespace DashboardReportApp.Controllers
             ViewData["Operators"] = await _service.GetOperatorsAsync();
             TempData["ErrorMessage"] = "Please correct the errors and try again.";
             return View("Index", record);
+        }
+
+        public async Task<IActionResult> Create()
+        {
+            // Fetch parts and operators
+            var parts = await _service.GetPartsAsync();
+            var operators = await _service.GetOperatorsAsync();
+
+            // Pass data to the view
+            ViewData["Parts"] = parts;
+            ViewData["Operators"] = operators;
+
+            return View();
         }
 
     }
