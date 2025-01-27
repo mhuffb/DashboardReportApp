@@ -18,7 +18,7 @@ namespace DashboardReportApp.Services
         public List<ToolingHistory> GetToolingHistories()
         {
             var toolingHistories = new List<ToolingHistory>();
-            string query = "SELECT part, id, reason, toolvendor, dateinitiated, toolnumber, cost, revision, po, toolworkhours, tooldesc, groupid, datedue, accountingcode FROM toolinghistory";
+            string query = "SELECT part, id, reason, toolvendor, dateinitiated, toolnumber, cost, revision, po, toolworkhours, tooldesc, groupid, datedue, accountingcode FROM toolinghistory where part is not null";
 
             using (var connection = new MySqlConnection(_connectionString))
             {

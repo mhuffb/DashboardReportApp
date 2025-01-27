@@ -54,29 +54,20 @@
         <label>Tool Number</label>
         <input asp-for="NewToolItem.ToolNumber" class="form-control" />
     </div>
-    <!-- Action field with known options + "Other" -->
     <div class="form-group">
         <label>Action</label>
-        <select id="actionSelect" class="form-control">
+        <select asp-for="NewToolItem.Action" class="form-control">
             <option value="">-- Select Action --</option>
             <option value="Make New">Make New</option>
             <option value="Metalife Coat">Metalife Coat</option>
             <option value="Tinalox Coat">Tinalox Coat</option>
             <option value="Reface">Reface</option>
             <option value="Fitting">Fitting</option>
-            <option value="Other">Other</option>
         </select>
-        <!-- Text box for custom action (hidden by default) -->
-        <input id="actionOther" type="text" class="form-control mt-1" placeholder="Enter custom action"
-               style="display: none;" />
-        <!-- Hidden field bound to your model property -->
-        <input asp-for="NewToolItem.Action" type="hidden" id="actionHidden" />
     </div>
-
-    <!-- ToolItem field with known options + "Other" -->
     <div class="form-group">
         <label>Tool Item</label>
-        <select id="toolItemSelect" class="form-control">
+        <select asp-for="NewToolItem.ToolItem" class="form-control">
             <option value="">-- Select Tool Item --</option>
             <option value="Top Punch">Top Punch</option>
             <option value="Bottom Punch">Bottom Punch</option>
@@ -89,14 +80,9 @@
             <option value="Molding Pin Ext.">Molding Pin Ext.</option>
             <option value="Molding Die">Molding Die</option>
             <option value="Complete Set">Complete Set</option>
-            <option value="Other">Other</option>
         </select>
-        <!-- Text box for custom tool item (hidden by default) -->
-        <input id="toolItemOther" type="text" class="form-control mt-1" placeholder="Enter custom tool item"
-               style="display: none;" />
-        <!-- Hidden field bound to your model property -->
-        <input asp-for="NewToolItem.ToolItem" type="hidden" id="toolItemHidden" />
     </div>
+
 
     <div class="form-group">
         <label>Tool Description</label>
@@ -138,51 +124,4 @@
 
     <button type="submit" class="btn btn-success">Save</button>
 </form>
-@section Scripts {
-    <script>
-        const actionSelect = document.getElementById('actionSelect');
-        const actionOther = document.getElementById('actionOther');
-        const actionHidden = document.getElementById('actionHidden');
-
-        const toolItemSelect = document.getElementById('toolItemSelect');
-        const toolItemOther = document.getElementById('toolItemOther');
-        const toolItemHidden = document.getElementById('toolItemHidden');
-
-        // Show/hide text box if "Other" is chosen in Action
-        actionSelect.addEventListener('change', function () {
-            if (this.value === 'Other') {
-                actionOther.style.display = 'block';
-            } else {
-                actionOther.style.display = 'none';
-            }
-        });
-
-        // Show/hide text box if "Other" is chosen in ToolItem
-        toolItemSelect.addEventListener('change', function () {
-            if (this.value === 'Other') {
-                toolItemOther.style.display = 'block';
-            } else {
-                toolItemOther.style.display = 'none';
-            }
-        });
-
-        // On form submit, if "Other" is selected, override hidden field
-        const form = document.querySelector('form[asp-action="AddOrEditToolItem"]');
-        form.addEventListener('submit', function (event) {
-            // Action
-            if (actionSelect.value === 'Other') {
-                actionHidden.value = actionOther.value;
-            } else {
-                actionHidden.value = actionSelect.value;
-            }
-
-            // ToolItem
-            if (toolItemSelect.value === 'Other') {
-                toolItemHidden.value = toolItemOther.value;
-            } else {
-                toolItemHidden.value = toolItemSelect.value;
-            }
-        });
-    </script>
-}
 

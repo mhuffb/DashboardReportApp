@@ -96,6 +96,7 @@ namespace DashboardReportApp.Controllers
             var newToolItem = new ToolItemViewModel
             {
                 GroupID = groupID, // Ensure this is set
+
                // DateDue = DateTime.Today,
                // DateFitted = DateTime.Today
 
@@ -123,8 +124,9 @@ namespace DashboardReportApp.Controllers
             Console.WriteLine($"GroupID: {toolItem.GroupID}");
             Console.WriteLine($"ToolNumber: {toolItem.ToolNumber}");
             Console.WriteLine($"ToolDesc: {toolItem.ToolDesc}");
+            Console.WriteLine($"Action: {toolItem.Action}");
+            Console.WriteLine($"ToolItem: {toolItem.ToolItem}");
 
-           
 
             // Otherwise, call your service to add/update the item
             _service.AddOrUpdateToolItem(toolItem);
