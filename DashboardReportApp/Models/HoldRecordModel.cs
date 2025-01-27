@@ -2,7 +2,7 @@
 
 namespace DashboardReportApp.Models
 {
-    public class HoldRecord
+    public class HoldRecordModel
     {
         public int Id { get; set; } // Primary Key
 

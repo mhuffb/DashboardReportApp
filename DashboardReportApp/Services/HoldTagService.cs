@@ -51,7 +51,7 @@ namespace DashboardReportApp.Services
             return operators;
         }
 
-        public async Task AddHoldRecordAsync(HoldRecord record)
+        public async Task AddHoldRecordAsync(HoldRecordModel record)
         {
             string query = @"INSERT INTO holdrecords 
                 (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress)
@@ -82,7 +82,7 @@ namespace DashboardReportApp.Services
             }
         }
 
-        public string GenerateHoldTagPdf(HoldRecord record)
+        public string GenerateHoldTagPdf(HoldRecordModel record)
         {
             string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", $"HoldTag_{record.Part ?? "UnknownPart"}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
 
@@ -205,7 +205,7 @@ ORDER BY
 
             return sintergyPartNumber;
         }
-        public void SendEmailWithAttachment(string senderEmail, string senderPassword, string receiverEmail, string smtpServer, string attachmentPath, HoldRecord record)
+        public void SendEmailWithAttachment(string senderEmail, string senderPassword, string receiverEmail, string smtpServer, string attachmentPath, HoldRecordModel record)
         {
             int smtpPort = 587;
 

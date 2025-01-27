@@ -27,9 +27,9 @@
             _webHostEnvironment = webHostEnvironment;
         }
 
-        public async Task<IEnumerable<MaintenanceRequest>> GetOpenRequestsAsync()
+        public async Task<IEnumerable<MaintenanceRequestModel>> GetOpenRequestsAsync()
         {
-            var requests = new List<MaintenanceRequest>();
+            var requests = new List<MaintenanceRequestModel>();
             string query = @"SELECT id, timestamp, equipment, requester, problem, downStatus, hourMeter, fileAddressImageLink 
                      FROM maintenance 
                      WHERE closedDateTime IS NULL";
@@ -43,7 +43,7 @@
                 {
                     while (await reader.ReadAsync())
                     {
-                        var request = new MaintenanceRequest
+                        var request = new MaintenanceRequestModel
                         {
                             Id = reader.GetInt32("id"),
                             Timestamp = reader.GetDateTime("timestamp"),
@@ -64,7 +64,7 @@
         }
 
 
-        public async Task<bool> AddRequestAsync(MaintenanceRequest request)
+        public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
         {
             string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddressImageLink, department) 
                      VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @fileAddress, @department);
@@ -107,7 +107,7 @@
         }
 
 
-        public string GeneratePdf(MaintenanceRequest request)
+        public string GeneratePdf(MaintenanceRequestModel request)
         {
             // Path to the input PDF template in wwwroot
             string inputFilePath = Path.Combine(_webHostEnvironment.WebRootPath, "workorderinput.pdf");
@@ -187,7 +187,7 @@
         }
 
 
-        private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequest request)
+        private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
             // Define the mapping of departments to email recipients
             var departmentEmailRecipients = new Dictionary<string, List<string>>
@@ -230,7 +230,7 @@
             }
         }
 
-        private async Task SendIndividualEmailAsync(string pdfPath, string recipient, MaintenanceRequest request)
+        private async Task SendIndividualEmailAsync(string pdfPath, string recipient, MaintenanceRequestModel request)
         {
             var email = new MimeKit.MimeMessage();
             email.From.Add(new MimeKit.MailboxAddress("Dashboard Report", "notifications@sintergy.net"));

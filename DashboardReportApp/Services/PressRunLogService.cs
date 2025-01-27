@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using DashboardReportApp.Services;
-using DashboardReportApp.Models;
 
 public class PressRunLogService
 {

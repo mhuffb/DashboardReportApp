@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class MaintenanceRequest
+    public class MaintenanceRequestModel
     {
         public int Id { get; set; }
 

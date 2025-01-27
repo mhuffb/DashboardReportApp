@@ -51,7 +51,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost("AddRequest")]
-        public async Task<IActionResult> AddRequest(MaintenanceRequest request)
+        public async Task<IActionResult> AddRequest(MaintenanceRequestModel request)
         {
             if (!ModelState.IsValid)
             {
