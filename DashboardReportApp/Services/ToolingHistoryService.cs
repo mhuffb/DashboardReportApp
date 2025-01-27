@@ -18,7 +18,7 @@ namespace DashboardReportApp.Services
         public List<ToolingHistory> GetToolingHistories()
         {
             var toolingHistories = new List<ToolingHistory>();
-            string query = "SELECT * FROM toolinghistory";
+            string query = "SELECT part, id, reason, toolvendor, dateinitiated, toolnumber, cost, revision, po, toolworkhours, tooldesc, groupid, datedue, accountingcode FROM toolinghistory";
 
             using (var connection = new MySqlConnection(_connectionString))
             {

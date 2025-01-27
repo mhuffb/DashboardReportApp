@@ -7,6 +7,22 @@
     <h3>Add New Tool Order</h3>
     <form asp-action="Index" method="post">
         <div class="form-group">
+            <label>Assembly #</label>
+            <input asp-for="Part" class="form-control" />
+        </div>
+        <div class="form-group">
+            <label>Tool Number</label>
+            <input asp-for="ToolNumber" class="form-control" />
+        </div>
+        <div class="form-group">
+            <label>Revision</label>
+            <input asp-for="Revision" class="form-control" />
+        </div>
+        <div class="form-group">
+            <label>PO</label>
+            <input asp-for="PO" class="form-control" />
+        </div>
+        <div class="form-group">
             <label>Reason</label>
             <select asp-for="Reason" class="form-control">
                 <option value="">-- Select Reason --</option>
@@ -37,26 +53,14 @@
             <label>Date Due</label>
             <input asp-for="DateDue" type="date" class="form-control" />
         </div>
-        <div class="form-group">
-            <label>Part</label>
-            <input asp-for="Part" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Tool Number</label>
-            <input asp-for="ToolNumber" class="form-control" />
-        </div>
+        
+        
         <div class="form-group">
             <label>Cost</label>
             <input asp-for="Cost" type="number" step="0.01" class="form-control" />
         </div>
-        <div class="form-group">
-            <label>Revision</label>
-            <input asp-for="Revision" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>PO</label>
-            <input asp-for="PO" class="form-control" />
-        </div>
+        
+        
         <div class="form-group">
             <label>Tool Work Hours</label>
             <input asp-for="ToolWorkHours" type="number" class="form-control" />
@@ -78,15 +82,15 @@
         <thead>
             <tr>
                 <th>Tool Order</th>
+                <th>Assembly #</th>
+                <th>Tool Number</th>
+                <th>Revision</th>
+                <th>PO</th>
                 <th>Reason</th>
                 <th>Tool Vendor</th>
                 <th>Date Initiated</th>
                 <th>Date Due</th>
-                <th>Part</th>
-                <th>Tool Number</th>
                 <th>Cost</th>
-                <th>Revision</th>
-                <th>PO</th>
                 <th>Tool Work Hours</th>
                 <th>Tool Desc</th>
             </tr>
@@ -98,6 +102,10 @@
                 {
                     <tr>
                         <td>@item.GroupID</td>
+                        <td>@item.Part</td>
+                        <td>@item.ToolNumber</td>
+                        <td>@item.Revision</td>
+                        <td>@item.PO</td>
                         <td>
                             @{
                                 // Translate the reason to an accounting code
@@ -117,15 +125,10 @@
                                 <text> (@code)</text>
                             }
                         </td>
-
                         <td>@item.ToolVendor</td>
                         <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
                         <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
-                        <td>@item.Part</td>
-                        <td>@item.ToolNumber</td>
                         <td>@item.Cost</td>
-                        <td>@item.Revision</td>
-                        <td>@item.PO</td>
                         <td>@item.ToolWorkHours</td>
                         <td>@item.ToolDesc</td>
                         <td>
