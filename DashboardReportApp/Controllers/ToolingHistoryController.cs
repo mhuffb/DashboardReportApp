@@ -16,6 +16,12 @@ namespace DashboardReportApp.Controllers
 
         public IActionResult Index()
         {
+            // 1. The next group ID from your service
+            var nextGroupId = _service.GetNextGroupID();
+
+            // 2. Put it in ViewBag so the Razor can read it
+            ViewBag.NextGroupID = nextGroupId;
+
             // Provide default values for the form
             var toolingHistory = new ToolingHistory
             {
@@ -112,6 +118,29 @@ namespace DashboardReportApp.Controllers
             return View(model);
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult UpdateToolingHistory(ToolingHistory model)
+        {
+            // If your model is valid, update the existing record
+            if (ModelState.IsValid)
+            {
+                _service.UpdateToolingHistory(model);
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult AddToolingHistory(ToolingHistory model)
+        {
+            // If your model is valid, insert a new record
+            if (ModelState.IsValid)
+            {
+                _service.AddToolingHistory(model);
+            }
+            return RedirectToAction(nameof(Index));
+        }
 
         // AFTER (Fixed):
         [HttpPost]
@@ -129,11 +158,57 @@ namespace DashboardReportApp.Controllers
 
 
             // Otherwise, call your service to add/update the item
-            _service.AddOrUpdateToolItem(toolItem);
+            _service.AddToolItem(toolItem);
 
             // Redirect back to the same group details page
             return RedirectToAction(nameof(GroupDetails), new { groupID = toolItem.GroupID });
         }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult AddToolItem(ToolItemViewModel model)
+        {
+            // model.Id should be 0
+            // model.GroupID is the group
+            // The rest of the fields (ToolNumber, etc.) are from the new row
+
+            // Insert a new row in the DB:
+            if (ModelState.IsValid)
+            {
+                _service.AddToolItem(model); // a new Insert method
+            }
+
+            return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult UpdateToolItem(ToolItemViewModel model)
+        {
+            // Log the data you actually got from the form
+            Console.WriteLine($"UPDATE (Action) => ID: {model.Id}, ToolNumber: {model.ToolNumber}, Action={model.Action}");
+
+            if (ModelState.IsValid)
+            {
+                // In your service:
+                _service.UpdateToolItem(model);
+                return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+            }
+            if (!ModelState.IsValid)
+            {
+                foreach (var key in ModelState.Keys)
+                {
+                    var errors = ModelState[key].Errors;
+                    foreach (var error in errors)
+                    {
+                        Console.WriteLine($"Model error for {key}: {error.ErrorMessage}");
+                    }
+                }
+                return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+            }
+
+            return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+        }
+
 
     }
 }

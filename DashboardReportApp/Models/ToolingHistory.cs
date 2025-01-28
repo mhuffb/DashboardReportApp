@@ -7,10 +7,15 @@ namespace DashboardReportApp.Models
     {
         public int Id { get; set; }
         public int GroupID { get; set; } // New property for GroupID
-        public string Reason { get; set; }
-        public string ToolVendor { get; set; }
+        [Required(ErrorMessage = "Reason is required.")]
+        public string Reason { get; set; } = default!;
+        [Required(ErrorMessage = "Please select a Tool Vendor.")]
+        public string ToolVendor { get; set; } = default!;
+
         public DateTime? DateInitiated { get; set; }
         public DateTime? DateDue { get; set; }
+
+        [Required(ErrorMessage = "Assembly # is required.")]
         public string Part { get; set; }
         public string ToolNumber { get; set; }
         public decimal? Cost { get; set; } // Nullable
@@ -23,15 +28,13 @@ namespace DashboardReportApp.Models
     }
     public class ToolItemViewModel
     {
+        public int Id { get; set; }      // Unique identifier from DB
         [Required(ErrorMessage = "Group ID is required.")]
         public int GroupID { get; set; }
 
-        [Required(ErrorMessage = "Tool Number is required.")]
-        public string ToolNumber { get; set; }
+        public string? ToolNumber { get; set; }
 
-        [Required(ErrorMessage = "Tool Description is required.")]
-        public string ToolDesc { get; set; }
-        [Required(ErrorMessage = "Tool Item is required.")]
+        public string? ToolDesc { get; set; }
         public string ToolItem { get; set; }
         public decimal? Cost { get; set; }
         public string? Revision { get; set; }
@@ -41,7 +44,7 @@ namespace DashboardReportApp.Models
         public DateTime? DateFitted { get; set; }
         public string? ReceivedBy { get; set; }
         public string? FittedBy { get; set; }
-        public string? Action { get; set; }
+        public string Action { get; set; }
     }
 
     public class GroupDetailsViewModel

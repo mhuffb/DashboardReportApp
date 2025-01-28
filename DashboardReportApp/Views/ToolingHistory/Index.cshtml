@@ -2,144 +2,174 @@
 
 <h2>Tooling History</h2>
 
-<!-- Form for Adding a New Tooling History -->
-<div class="mb-4">
-    <h3>Add New Tool Order</h3>
-    <form asp-action="Index" method="post">
-        <div class="form-group">
-            <label>Assembly #</label>
-            <input asp-for="Part" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Tool Number</label>
-            <input asp-for="ToolNumber" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Revision</label>
-            <input asp-for="Revision" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>PO</label>
-            <input asp-for="PO" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Reason</label>
-            <select asp-for="Reason" class="form-control">
-                <option value="">-- Select Reason --</option>
-                <option value="New">New (5030)</option>
-                <option value="Repair">Repair (5045)</option>
-                <option value="Breakage">Breakage (5040)</option>
-                <option value="Fitting">Fitting</option>
-            </select>
-            <span asp-validation-for="Reason" class="text-danger"></span>
-        </div>
-
-        <div class="form-group">
-            <label>Tool Vendor</label>
-            <select asp-for="ToolVendor" class="form-control">
-                <option value="">-- Select Tool Vendor --</option>
-                <option value="J.I.T. Tool & Die">J.I.T. Tool & Die</option>
-                <option value="Gerg Tool & Die Inc.">Gerg Tool & Die Inc.</option>
-                <option value="Quala Die">Quala Die</option>
-                <option value="Internal">Internal</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label>Date Initiated</label>
-            <input asp-for="DateInitiated" type="date" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Date Due</label>
-            <input asp-for="DateDue" type="date" class="form-control" />
-        </div>
-        
-        
-        <div class="form-group">
-            <label>Cost</label>
-            <input asp-for="Cost" type="number" step="0.01" class="form-control" />
-        </div>
-        
-        
-        <div class="form-group">
-            <label>Tool Work Hours</label>
-            <input asp-for="ToolWorkHours" type="number" class="form-control" />
-        </div>
-        <div class="form-group">
-            <label>Tool Desc</label>
-            <textarea asp-for="ToolDesc" class="form-control"></textarea>
-        </div>
-        <button type="submit" class="btn btn-success">Add</button>
-    </form>
-</div>
-
-<hr />
-
-<!-- Table for Displaying Existing Tooling History Records -->
-<div>
+<div style="text-align: left !important;">
     <h3>Existing Tooling Orders</h3>
+    <!-- Single table for both editing existing rows and adding a new row -->
     <table class="table table-bordered">
         <thead>
             <tr>
-                <th>Tool Order</th>
-                <th>Assembly #</th>
+                <th>Tool Order (GroupID)</th>
+                <th style="min-width: 150px;">Assembly #</th>
                 <th>Tool Number</th>
                 <th>Revision</th>
                 <th>PO</th>
-                <th>Reason</th>
-                <th>Tool Vendor</th>
+                <th style="min-width: 150px;">Reason</th>
+                <th style="min-width: 150px;">Tool Vendor</th>
                 <th>Date Initiated</th>
                 <th>Date Due</th>
-                <th>Cost</th>
+                <th style="min-width: 150px;">Cost</th>
                 <th>Tool Work Hours</th>
-                <th>Tool Desc</th>
+                <th style="min-width: 150px;">Tool Desc</th>
+                <th>Update/Add</th>
+                <th>Edit Tool Items</th> <!-- NEW COLUMN -->
             </tr>
         </thead>
         <tbody>
             @if (ViewBag.ToolingHistories != null)
             {
+                @* (A) Existing Rows: Each row is a form for UPDATE *@
                 foreach (var item in ViewBag.ToolingHistories)
                 {
+                    <form asp-action="UpdateToolingHistory" method="post">
                     <tr>
-                        <td>@item.GroupID</td>
-                        <td>@item.Part</td>
-                        <td>@item.ToolNumber</td>
-                        <td>@item.Revision</td>
-                        <td>@item.PO</td>
-                        <td>
-                            @{
-                                // Translate the reason to an accounting code
-                                int? code = item.Reason switch
-                                {
-                                    "New" => 5030,
-                                    "Repair" => 5045,
-                                    "Breakage" => 5040,
-                                    "Fitting" => null, // or whatever code you want
-                                    _ => null
-                                };
-                            }
+                        <!-- Hidden input for the existing record's Id -->
+                        <input type="hidden" name="Id" value="@item.Id" />
 
-                            @item.Reason
-                            @if (code.HasValue)
-                            {
-                                <text> (@code)</text>
-                            }
-                        </td>
-                        <td>@item.ToolVendor</td>
-                        <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
-                        <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
-                        <td>@item.Cost</td>
-                        <td>@item.ToolWorkHours</td>
-                        <td>@item.ToolDesc</td>
                         <td>
-                            <a asp-action="GroupDetails" asp-route-groupID="@item.GroupID" class="btn btn-primary">Add Tool Items</a>
+                                @item.GroupID
+                                @* If you wanted to let them change GroupID, you'd do:
+                               <input type="number" name="GroupID" value="@item.GroupID" ...> *@
+                        </td>
+                        <td>
+                            <input type="text" name="Part" value="@item.Part" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="ToolNumber" value="@item.ToolNumber" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="Revision" value="@item.Revision" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="PO" value="@item.PO" class="form-control" />
+                        </td>
+                        <td>
+                            <select name="Reason" class="form-control">
+                                <option value="">-- Select Reason --</option>
+                                <option value="New" selected="@(item.Reason == "New")">New (5030)</option>
+                                <option value="Repair" selected="@(item.Reason == "Repair")">Repair (5045)</option>
+                                <option value="Breakage" selected="@(item.Reason == "Breakage")">Breakage (5040)</option>
+                                <option value="Fitting" selected="@(item.Reason == "Fitting")">Fitting</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select name="ToolVendor" class="form-control">
+                                <option value="">-- Select Tool Vendor --</option>
+                                <option value="J.I.T. Tool & Die" selected="@(item.ToolVendor == "J.I.T. Tool & Die")">J.I.T. Tool & Die</option>
+                                <option value="Gerg Tool & Die Inc." selected="@(item.ToolVendor == "Gerg Tool & Die Inc.")">Gerg Tool & Die Inc.</option>
+                                <option value="Quala Die" selected="@(item.ToolVendor == "Quala Die")">Quala Die</option>
+                                <option value="Internal" selected="@(item.ToolVendor == "Internal")">Internal</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="date" name="DateInitiated" value="@item.DateInitiated?.ToString("yyyy-MM-dd")" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="date" name="DateDue" value="@item.DateDue?.ToString("yyyy-MM-dd")" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" name="Cost" value="@(item.Cost ?? 0)" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="number" name="ToolWorkHours" value="@(item.ToolWorkHours ?? 0)" class="form-control" />
+                        </td>
+                        <td>
+                            <input type="text" name="ToolDesc" value="@item.ToolDesc" class="form-control" />
+                        </td>
+                        <td>
+                            <button type="submit" class="btn btn-primary">Update</button>
+                        </td>
+                        <td>
+                            <!-- The link to open "GroupDetails" for editing tool items -->
+                            <a asp-action="GroupDetails" asp-route-groupID="@item.GroupID" class="btn btn-secondary">
+                                Edit Tool Items
+                            </a>
                         </td>
                     </tr>
+                    </form>
                 }
             }
+
+            @* (B) One blank row for ADDING a new item *@
+            <form asp-action="AddToolingHistory" method="post">
+            <tr>
+                    @* For a new record, Id is 0 or omitted; also GroupID is hidden from user if auto-assigned *@
+                <input type="hidden" name="Id" value="0" />
+
+                <td>
+                    <!-- If you automatically assign the next GroupID server-side,
+                         use a hidden input:  -->
+                    <input type="hidden" name="GroupID" value="@ViewBag.NextGroupID" />
+                    <span class="text-muted">Group @ViewBag.NextGroupID</span>
+                </td>
+                <td>
+                    <input type="text" name="Part" class="form-control" placeholder="Assembly #" />
+                </td>
+                <td>
+                    <input type="text" name="ToolNumber" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Revision" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="PO" class="form-control" />
+                </td>
+                <td>
+                    <select name="Reason" class="form-control">
+                        <option value="">-- Select Reason --</option>
+                        <option value="New">New (5030)</option>
+                        <option value="Repair">Repair (5045)</option>
+                        <option value="Breakage">Breakage (5040)</option>
+                        <option value="Fitting">Fitting</option>
+                    </select>
+                </td>
+                <td>
+                    <select name="ToolVendor" class="form-control">
+                        <option value="">-- Select Tool Vendor --</option>
+                        <option value="J.I.T. Tool & Die">J.I.T. Tool & Die</option>
+                        <option value="Gerg Tool & Die Inc.">Gerg Tool & Die Inc.</option>
+                        <option value="Quala Die">Quala Die</option>
+                        <option value="Internal">Internal</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="date" name="DateInitiated" class="form-control" />
+                </td>
+                <td>
+                    <input type="date" name="DateDue" class="form-control" />
+                </td>
+                <td>
+                    <input type="number" step="0.01" name="Cost" class="form-control" />
+                </td>
+                <td>
+                    <input type="number" name="ToolWorkHours" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="ToolDesc" class="form-control" />
+                </td>
+                <td>
+                    <button type="submit" class="btn btn-success">Add</button>
+                </td>
+                <td>
+                    <!-- No "Edit Tool Items" link here since it's a brand-new row.
+                         We won't have a real GroupID until after we add it (unless you used NextGroupID).
+                         Could show a disabled button if you want. -->
+                </td>
+            </tr>
+            </form>
         </tbody>
     </table>
 </div>
+
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.3/dist/jquery.validate.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery-validation-unobtrusive@3.2.12/dist/jquery.validate.unobtrusive.min.js"></script>

@@ -3,125 +3,145 @@
 
 <h2>Tool Order @Model.GroupID Details</h2>
 
-<!-- Display Existing Tool Items -->
+<!-- Editable Table of Existing Tool Items -->
 <table class="table table-bordered">
     <thead>
         <tr>
             <th>Tool Number</th>
-            <th>Action</th>
-            <th>ToolItem</th>
-            <th>Tool Description</th>
-            <th>Cost</th>
+                <th style="min-width: 150px;">Action</th>
+                <th style="min-width: 150px;">Tool Item</th>
+            <th >Tool Description</th>
+            <th style="min-width: 150px;">Cost</th>
             <th>Revision</th>
             <th>Quantity</th>
-            <th>Tool Work Hours</th>
+            <th style="min-width: 150px;">Tool Work Hours</th>
             <th>Date Due</th>
             <th>Date Fitted</th>
             <th>Received By</th>
             <th>Fitted By</th>
-            
+            <th></th> <!-- for the Update button -->
         </tr>
     </thead>
     <tbody>
         @foreach (var tool in Model.ToolItems)
         {
+            @* Each row is a separate form *@
+            <form asp-action="UpdateToolItem" method="post">
             <tr>
-                <td>@tool.ToolNumber</td>
-                <td>@tool.Action</td>
-                <td>@tool.ToolItem</td>
-                <td>@tool.ToolDesc</td>
-                <td>@tool.Cost</td>
-                <td>@tool.Revision</td>
-                <td>@tool.Quantity</td>
-                <td>@tool.ToolWorkHours</td>
-                <td>@tool.DateDue?.ToString("yyyy-MM-dd")</td>
-                <td>@tool.DateFitted?.ToString("yyyy-MM-dd")</td>
-                <td>@tool.ReceivedBy</td>
-                <td>@tool.FittedBy</td>
-                
+                <!-- Primary key, necessary for the update -->
+                <input type="hidden" name="Id" value="@tool.Id" />
+                <!-- GroupID also needed to return to the right page after update -->
+                <input type="hidden" name="GroupID" value="@tool.GroupID" />
+
+                <td>
+                    <input type="text" name="ToolNumber" value="@tool.ToolNumber" class="form-control" />
+                </td>
+
+                <td>
+                    <select name="Action" class="form-control">
+                        <option value="" selected="@(tool.Action == null)">-- Select Action --</option>
+                        <option value="Make New" selected="@(tool.Action == "Make New")">Make New</option>
+                        <option value="Metalife Coat" selected="@(tool.Action == "Metalife Coat")">Metalife Coat</option>
+                        <option value="Tinalox Coat" selected="@(tool.Action == "Tinalox Coat")">Tinalox Coat</option>
+                        <option value="Reface" selected="@(tool.Action == "Reface")">Reface</option>
+                        <option value="Fitting" selected="@(tool.Action == "Fitting")">Fitting</option>
+                    </select>
+                </td>
+
+                <td>
+                    <select name="ToolItem" class="form-control">
+                        <option value="" selected="@(tool.ToolItem == null)">-- Select Tool Item --</option>
+                        <option value="Top Punch" selected="@(tool.ToolItem == "Top Punch")">Top Punch</option>
+                        <option value="Bottom Punch" selected="@(tool.ToolItem == "Bottom Punch")">Bottom Punch</option>
+                        <option value="Top Outer Punch" selected="@(tool.ToolItem == "Top Outer Punch")">Top Outer Punch</option>
+                        <option value="Bottom Outer Punch" selected="@(tool.ToolItem == "Bottom Outer Punch")">Bottom Outer Punch</option>
+                        <option value="Top Inner Punch" selected="@(tool.ToolItem == "Top Inner Punch")">Top Inner Punch</option>
+                        <option value="Bottom Inner Punch" selected="@(tool.ToolItem == "Bottom Inner Punch")">Bottom Inner Punch</option>
+                        <option value="Punch Holder" selected="@(tool.ToolItem == "Punch Holder")">Punch Holder</option>
+                        <option value="Molding Pin" selected="@(tool.ToolItem == "Molding Pin")">Molding Pin</option>
+                        <option value="Molding Pin Ext." selected="@(tool.ToolItem == "Molding Pin Ext.")">Molding Pin Ext.</option>
+                        <option value="Molding Die" selected="@(tool.ToolItem == "Molding Die")">Molding Die</option>
+                        <option value="Complete Set" selected="@(tool.ToolItem == "Complete Set")">Complete Set</option>
+                    </select>
+                </td>
+
+                <td>
+                    <input type="text" name="ToolDesc" value="@tool.ToolDesc" class="form-control" />
+                </td>
+                <td>
+                    <input type="number" step="0.01" name="Cost" value="@(tool.Cost ?? 0)" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Revision" value="@tool.Revision" class="form-control" />
+                </td>
+                <td>
+                    <input type="number" name="Quantity" value="@(tool.Quantity ?? 0)" class="form-control" />
+                </td>
+                <td>
+                    <input type="number" name="ToolWorkHours" value="@(tool.ToolWorkHours ?? 0)" class="form-control" />
+                </td>
+                <td>
+                    <input type="date" name="DateDue"
+                           value="@((tool.DateDue.HasValue) ? tool.DateDue.Value.ToString("yyyy-MM-dd") : "")"
+                           class="form-control" />
+                </td>
+                <td>
+                    <input type="date" name="DateFitted"
+                           value="@((tool.DateFitted.HasValue) ? tool.DateFitted.Value.ToString("yyyy-MM-dd") : "")"
+                           class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="ReceivedBy" value="@tool.ReceivedBy" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="FittedBy" value="@tool.FittedBy" class="form-control" />
+                </td>
+                <td>
+                    <button type="submit" class="btn btn-primary">Update</button>
+                </td>
             </tr>
+            </form>
         }
+        <!-- NOW: Add a blank row for creating a NEW item -->
+        <form asp-action="AddToolItem" method="post">
+        <tr>
+            <!-- We pass GroupID from the main model or hidden input -->
+            <input type="hidden" name="GroupID" value="@Model.GroupID" />
+            <!-- 'Id' can be 0 or omitted since it's a new row -->
+            <input type="hidden" name="Id" value="0" />
+
+            <td>
+                <input type="text" name="ToolNumber" class="form-control" placeholder="New ToolNumber..." />
+            </td>
+            <td>
+                <select name="Action" class="form-control">
+                    <option value="" selected>-- Select Action --</option>
+                    <option value="Make New">Make New</option>
+                    <option value="Metalife Coat">Metalife Coat</option>
+                    <option value="Tinalox Coat">Tinalox Coat</option>
+                    <option value="Reface">Reface</option>
+                    <option value="Fitting">Fitting</option>
+                </select>
+            </td>
+            <td>
+                <select name="ToolItem" class="form-control">
+                    <option value="" selected>-- Select Tool Item --</option>
+                    <option value="Top Punch">Top Punch</option>
+                    <option value="Bottom Punch">Bottom Punch</option>
+                    <!-- etc. -->
+                </select>
+            </td>
+            <td>
+                <input type="text" name="ToolDesc" class="form-control" placeholder="Description..." />
+            </td>
+            <td>
+                <input type="number" step="0.01" name="Cost" class="form-control" />
+            </td>
+            <!-- ... more cells: Revision, Quantity, etc. ... -->
+            <td>
+                <button type="submit" class="btn btn-success">Add</button>
+            </td>
+        </tr>
+        </form>
     </tbody>
 </table>
-
-<!-- Form to Add/Edit Tool Items -->
-<h3>Add/Edit Tool Item</h3>
-<form asp-action="AddOrEditToolItem" method="post">
-    <!-- GroupID as a hidden field -->
-    <input type="hidden" asp-for="NewToolItem.GroupID" />
-
-    <div class="form-group">
-        <label>Tool Number</label>
-        <input asp-for="NewToolItem.ToolNumber" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Action</label>
-        <select asp-for="NewToolItem.Action" class="form-control">
-            <option value="">-- Select Action --</option>
-            <option value="Make New">Make New</option>
-            <option value="Metalife Coat">Metalife Coat</option>
-            <option value="Tinalox Coat">Tinalox Coat</option>
-            <option value="Reface">Reface</option>
-            <option value="Fitting">Fitting</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Tool Item</label>
-        <select asp-for="NewToolItem.ToolItem" class="form-control">
-            <option value="">-- Select Tool Item --</option>
-            <option value="Top Punch">Top Punch</option>
-            <option value="Bottom Punch">Bottom Punch</option>
-            <option value="Top Outer Punch">Top Outer Punch</option>
-            <option value="Bottom Outer Punch">Bottom Outer Punch</option>
-            <option value="Top Inner Punch">Top Inner Punch</option>
-            <option value="Bottom Inner Punch">Bottom Inner Punch</option>
-            <option value="Punch Holder">Punch Holder</option>
-            <option value="Molding Pin">Molding Pin</option>
-            <option value="Molding Pin Ext.">Molding Pin Ext.</option>
-            <option value="Molding Die">Molding Die</option>
-            <option value="Complete Set">Complete Set</option>
-        </select>
-    </div>
-
-
-    <div class="form-group">
-        <label>Tool Description</label>
-        <input asp-for="NewToolItem.ToolDesc" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Cost</label>
-        <input asp-for="NewToolItem.Cost" type="number" step="0.01" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Revision</label>
-        <input asp-for="NewToolItem.Revision" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Quantity</label>
-        <input asp-for="NewToolItem.Quantity" type="number" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Tool Work Hours</label>
-        <input asp-for="NewToolItem.ToolWorkHours" type="number" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Date Due</label>
-        <input asp-for="NewToolItem.DateDue" type="date" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Date Fitted</label>
-        <input asp-for="NewToolItem.DateFitted" type="date" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Received By</label>
-        <input asp-for="NewToolItem.ReceivedBy" class="form-control" />
-    </div>
-    <div class="form-group">
-        <label>Fitted By</label>
-        <input asp-for="NewToolItem.FittedBy" class="form-control" />
-    </div>
-    
-
-    <button type="submit" class="btn btn-success">Save</button>
-</form>
-

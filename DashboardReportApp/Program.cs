@@ -40,6 +40,7 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.DeviationService>();
     builder.Services.AddScoped<DashboardReportApp.Services.QCSecondaryHoldReturnService>();
     builder.Services.AddScoped<DashboardReportApp.Services.ToolingHistoryService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.ProcessChangeRequestService>();
 
 
 

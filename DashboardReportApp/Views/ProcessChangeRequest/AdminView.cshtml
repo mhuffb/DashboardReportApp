@@ -1,0 +1,53 @@
+﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequest>
+@{
+    ViewData["Title"] = "Admin View - Process Change Requests";
+}
+
+<h2>Admin View - Process Change Requests</h2>
+
+<form asp-action="UpdateRequest" method="post">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Timestamp</th>
+                <th>Part</th>
+                <th>Requester</th>
+                <th>ReqDate</th>
+                <th>Request</th>
+                <th>Updated By</th>
+                <th>Update Result</th>
+                <th>File Address</th>
+                <th>Test Requested</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td>@item.Id</td>
+                    <td>@item.Timestamp</td>
+                    <td><input type="text" name="Part" value="@item.Part" class="form-control" /></td>
+                    <td><input type="text" name="Requester" value="@item.Requester" class="form-control" /></td>
+                    <td>
+                        @item.ReqDate.HasValue ? item.ReqDate.Value.ToShortDateString() : ""
+                    </td>
+
+                    <td><input type="text" name="Request" value="@item.Request" class="form-control" /></td>
+                    <td><input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control" /></td>
+                    <td><input type="text" name="UpdateResult" value="@item.UpdateResult" class="form-control" /></td>
+                    <td>
+                        <input type="file" name="FileAddress" class="form-control" />
+                        @if (!string.IsNullOrEmpty(item.FileAddress))
+                        {
+                            <a href="@item.FileAddress" target="_blank">View File</a>
+                        }
+                    </td>
+                    <td><input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" /></td>
+                    <td><button type="submit" class="btn btn-success">Save</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</form>

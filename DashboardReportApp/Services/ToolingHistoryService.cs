@@ -76,7 +76,7 @@ namespace DashboardReportApp.Services
         public void AddToolingHistory(ToolingHistory model)
         {
             // Get the next GroupID
-            model.GroupID = GetNextGroupID();
+            //model.GroupID = GetNextGroupID();
             // 1. Determine the accountingCode from model.Reason
             int? accountingCode = null;
             if (model.Reason == "New")
@@ -162,7 +162,7 @@ namespace DashboardReportApp.Services
         public List<ToolItemViewModel> GetToolItemsByGroupID(int groupID)
         {
             var toolItems = new List<ToolItemViewModel>();
-            string query = "SELECT * FROM toolinghistory WHERE GroupID = @GroupID";
+            string query = "SELECT * FROM toolinghistory WHERE GroupID = @GroupID and action is not null";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -177,12 +177,11 @@ namespace DashboardReportApp.Services
                         {
                             var toolItem = new ToolItemViewModel
                             {
+                                // You have this:
                                 GroupID = groupID,
-                                ToolItem = reader["toolItem"] != DBNull.Value
-                            ? reader["toolItem"].ToString()
-                            : null,
-                                ToolNumber = reader["ToolNumber"].ToString(),
-                                ToolDesc = reader["ToolDesc"].ToString(),
+                                ToolItem = reader["toolItem"]?.ToString(),
+                                ToolNumber = reader["ToolNumber"]?.ToString(),
+                                ToolDesc = reader["ToolDesc"]?.ToString(),
                                 Cost = reader["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(reader["Cost"]) : null,
                                 Revision = reader["Revision"]?.ToString(),
                                 Quantity = reader["Quantity"] != DBNull.Value ? (int?)Convert.ToInt32(reader["Quantity"]) : null,
@@ -192,7 +191,12 @@ namespace DashboardReportApp.Services
                                 ReceivedBy = reader["ReceivedBy"]?.ToString(),
                                 FittedBy = reader["FittedBy"]?.ToString(),
                                 Action = reader["Action"]?.ToString()
+                                // MISSING: Id
                             };
+
+                            // You need to read "Id" so the update can work!
+                            toolItem.Id = Convert.ToInt32(reader["Id"]);
+                            Console.WriteLine($"Reading row: Id={toolItem.Id}, ToolNumber={toolItem.ToolNumber}");
 
                             toolItems.Add(toolItem);
                         }
@@ -203,15 +207,16 @@ namespace DashboardReportApp.Services
             return toolItems;
         }
 
-        public void AddOrUpdateToolItem(ToolItemViewModel toolItem)
+
+        public void AddToolItem(ToolItemViewModel toolItem)
         {
-            var query = @"
-        INSERT INTO toolinghistory 
-        (toolItem, GroupID, ToolNumber, ToolDesc, Cost, Revision, Quantity, ToolWorkHours, 
-         DateDue, DateFitted, ReceivedBy, FittedBy, Action)
+            string query = @"
+        INSERT INTO toolinghistory
+        (GroupID, ToolNumber, ToolDesc, Cost, Revision, Quantity, ToolWorkHours,
+         DateDue, DateFitted, ReceivedBy, FittedBy, Action, ToolItem)
         VALUES
-        (@ToolItem, @GroupID, @ToolNumber, @ToolDesc, @Cost, @Revision, @Quantity, @ToolWorkHours,
-         @DateDue, @DateFitted, @ReceivedBy, @FittedBy, @Action);
+        (@GroupID, @ToolNumber, @ToolDesc, @Cost, @Revision, @Quantity, @ToolWorkHours,
+         @DateDue, @DateFitted, @ReceivedBy, @FittedBy, @Action, @ToolItem);
     ";
 
             using (var conn = new MySqlConnection(_connectionString))
@@ -219,11 +224,9 @@ namespace DashboardReportApp.Services
                 conn.Open();
                 using (var cmd = new MySqlCommand(query, conn))
                 {
-                    cmd.Parameters.AddWithValue("@ToolItem", toolItem.ToolItem ?? (object)DBNull.Value);
-
                     cmd.Parameters.AddWithValue("@GroupID", toolItem.GroupID);
-                    cmd.Parameters.AddWithValue("@ToolNumber", toolItem.ToolNumber);
-                    cmd.Parameters.AddWithValue("@ToolDesc", toolItem.ToolDesc);
+                    cmd.Parameters.AddWithValue("@ToolNumber", toolItem.ToolNumber ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToolDesc", toolItem.ToolDesc ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Cost", toolItem.Cost ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Revision", toolItem.Revision ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Quantity", toolItem.Quantity ?? (object)DBNull.Value);
@@ -233,15 +236,62 @@ namespace DashboardReportApp.Services
                     cmd.Parameters.AddWithValue("@ReceivedBy", toolItem.ReceivedBy ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@FittedBy", toolItem.FittedBy ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Action", toolItem.Action ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToolItem", toolItem.ToolItem ?? (object)DBNull.Value);
 
                     cmd.ExecuteNonQuery();
-                    //var rowsAffected = cmd.ExecuteNonQuery();
-                    //Console.WriteLine($"Rows affected: {rowsAffected}");
-
                 }
             }
         }
 
+
+        public void UpdateToolItem(ToolItemViewModel item)
+        {
+            
+
+            // Adjust for your actual DB columns
+            string query = @"
+        UPDATE toolinghistory 
+        SET 
+            ToolNumber = @ToolNumber,
+            Action = @Action,
+            ToolItem = @ToolItem,
+            ToolDesc = @ToolDesc,
+            Cost = @Cost,
+            Revision = @Revision,
+            Quantity = @Quantity,
+            ToolWorkHours = @ToolWorkHours,
+            DateDue = @DateDue,
+            DateFitted = @DateFitted,
+            ReceivedBy = @ReceivedBy,
+            FittedBy = @FittedBy
+        WHERE Id = @Id
+    ";
+
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@Id", item.Id);
+                    cmd.Parameters.AddWithValue("@ToolNumber", item.ToolNumber ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Action", item.Action ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToolItem", item.ToolItem ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToolDesc", item.ToolDesc ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Cost", item.Cost ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Revision", item.Revision ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Quantity", item.Quantity ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToolWorkHours", item.ToolWorkHours ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@DateDue", item.DateDue ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@DateFitted", item.DateFitted ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ReceivedBy", item.ReceivedBy ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@FittedBy", item.FittedBy ?? (object)DBNull.Value);
+
+                    cmd.ExecuteNonQuery();
+                    var rowsAffected = cmd.ExecuteNonQuery();
+                    Console.WriteLine($"UpdateToolItem => Rows updated: {rowsAffected}");
+                }
+            }
+        }
 
     }
 }

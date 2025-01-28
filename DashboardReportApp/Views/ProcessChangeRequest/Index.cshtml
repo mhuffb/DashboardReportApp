@@ -1,0 +1,83 @@
+﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequest>
+@{
+    ViewData["Title"] = "Process Change Requests";
+}
+
+<h2>Process Change Requests</h2>
+
+<table class="table table-bordered" id="processChangeRequestTable">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Timestamp</th>
+            <th>Part</th>
+            <th>Requester</th>
+            <th>ReqDate</th>
+            <th>Request</th>
+            <th>Test Requested</th>
+            <th>File Media Link</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Blank row for creating a new record -->
+        <form asp-action="AddRequest" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+        <tr>
+            <td>Auto</td> <!-- ID will be auto-generated -->
+            <td>Auto</td> <!-- Timestamp will be auto-generated -->
+            <td>
+                <input type="text" name="Part" class="form-control" placeholder="Enter Part" required />
+            </td>
+            <td>
+                <input type="text" name="Requester" class="form-control" placeholder="Enter Requester" required />
+            </td>
+            <td>Auto</td> <!-- ReqDate will be auto-handled in the controller -->
+            <td>
+                <textarea name="Request" class="form-control" placeholder="Enter Request" required></textarea>
+            </td>
+            <td>
+                <input type="checkbox" name="TestRequested" />
+            </td>
+            <td>
+                <input type="file" name="file" class="form-control" />
+            </td>
+            <td>
+                <button type="submit" class="btn btn-success">Add Record</button>
+            </td>
+        </tr>
+        </form>
+
+        <!-- Existing records -->
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.Id</td>
+                <td>@item.Timestamp</td>
+                <td>@item.Part</td>
+                <td>@item.Requester</td>
+                <td>
+                    @(item.ReqDate?.ToShortDateString() ?? "")
+                </td>
+
+                <td>@item.Request</td>
+                <td>@item.TestRequested</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(item.FileAddressMediaLink))
+                    {
+                        <a href="@item.FileAddressMediaLink" target="_blank">View File</a>
+                    }
+                </td>
+                <td>
+                    <form asp-action="UpdateMediaLinkFile" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <div class="input-group">
+                            <input type="file" name="file" class="form-control" />
+                            <button type="submit" class="btn btn-primary">Upload File</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
