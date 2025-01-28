@@ -28,29 +28,96 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult AddRequest(ProcessChangeRequest model, IFormFile file)
+        public IActionResult AddRequest(ProcessChangeRequest model, IFormFile? file) // Allow null files
         {
+            if (!ModelState.IsValid)
+            {
+                foreach (var state in ModelState)
+                {
+                    foreach (var error in state.Value.Errors)
+                    {
+                        Console.WriteLine($"Key: {state.Key}, Error: {error.ErrorMessage}");
+                    }
+                }
 
-            if (ModelState.IsValid)
+                ViewData["Error"] = "Please fix the validation errors.";
+                return View("Index", _service.GetAllRequests());
+            }
+
+            try
             {
                 _service.AddRequest(model, file);
                 return RedirectToAction("Index");
             }
-
-            return View("Index", _service.GetAllRequests());
-        }
-
-       
-        [HttpPost]
-        public IActionResult UpdateRequest(ProcessChangeRequest request)
-        {
-            if (ModelState.IsValid)
+            catch (Exception ex)
             {
-                _service.UpdateRequest(request);
-                return RedirectToAction(nameof(AdminView));
+                ViewData["Error"] = $"An error occurred: {ex.Message}";
+                return View("Index", _service.GetAllRequests());
             }
-            return View("AdminView", _service.GetAllRequests());
         }
+
+        [HttpPost]
+        public IActionResult UpdateRequest(ProcessChangeRequest model, IFormFile FileAddress)
+        {
+            // Remove FileAddress from validation
+            ModelState.Remove("FileAddress");
+
+            if (!ModelState.IsValid)
+            {
+                foreach (var state in ModelState)
+                {
+                    foreach (var error in state.Value.Errors)
+                    {
+                        Console.WriteLine($"Key: {state.Key}, Error: {error.ErrorMessage}");
+                    }
+                }
+
+                return View("AdminView", _service.GetAllRequests());
+            }
+
+            try
+            {
+                if (FileAddress != null && FileAddress.Length > 0)
+                {
+                    // Ensure the uploads folder exists
+                    var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                    if (!Directory.Exists(uploadsFolder))
+                    {
+                        Directory.CreateDirectory(uploadsFolder);
+                    }
+
+                    // Create the file name and path
+                    var fileName = $"ProcessChangeRequest_{model.Id}{Path.GetExtension(FileAddress.FileName)}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    // Save the file to the server
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        FileAddress.CopyTo(stream);
+                    }
+
+                    // Save the relative path to the database
+                    model.FileAddress = $"/uploads/{fileName}"; // Save relative path for web access
+                    Console.WriteLine($"File uploaded and saved to: {model.FileAddress}");
+                }
+                else
+                {
+                    Console.WriteLine("No file was uploaded.");
+                }
+
+
+                _service.UpdateRequest(model);
+                return RedirectToAction("AdminView");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return View("AdminView", _service.GetAllRequests());
+            }
+        }
+
+
+
         [HttpPost]
         public IActionResult UpdateMediaLinkFile(int id, IFormFile file)
         {

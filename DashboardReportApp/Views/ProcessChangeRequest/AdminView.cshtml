@@ -5,6 +5,23 @@
 
 <h2>Admin View - Process Change Requests</h2>
 
+<!-- Global Validation Errors -->
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        <strong>Validation Errors:</strong>
+        <ul>
+            @foreach (var state in ViewData.ModelState)
+            {
+                foreach (var error in state.Value.Errors)
+                {
+                    <li><strong>@state.Key:</strong> @error.ErrorMessage</li>
+                }
+            }
+        </ul>
+    </div>
+}
+
 <form asp-action="UpdateRequest" method="post">
     <table class="table table-bordered">
         <thead>
@@ -26,17 +43,35 @@
             @foreach (var item in Model)
             {
                 <tr>
-                    <td>@item.Id</td>
-                    <td>@item.Timestamp</td>
-                    <td><input type="text" name="Part" value="@item.Part" class="form-control" /></td>
-                    <td><input type="text" name="Requester" value="@item.Requester" class="form-control" /></td>
                     <td>
-                        @item.ReqDate.HasValue ? item.ReqDate.Value.ToShortDateString() : ""
+                        <input type="hidden" name="Id" value="@item.Id" />
+                        @item.Id
                     </td>
 
-                    <td><input type="text" name="Request" value="@item.Request" class="form-control" /></td>
-                    <td><input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control" /></td>
-                    <td><input type="text" name="UpdateResult" value="@item.UpdateResult" class="form-control" /></td>
+                    <td>@item.Timestamp</td>
+                    <td>
+                        <input type="text" name="Part" value="@item.Part" class="form-control" />
+                        @Html.ValidationMessage("Part", "", new { @class = "text-danger" })
+                    </td>
+                    <td>
+                        <input type="text" name="Requester" value="@item.Requester" class="form-control" />
+                        @Html.ValidationMessage("Requester", "", new { @class = "text-danger" })
+                    </td>
+                    <td>
+                        @(item.ReqDate.HasValue ? item.ReqDate.Value.ToShortDateString() : "")
+                    </td>
+                    <td>
+                        <input type="text" name="Request" value="@item.Request" class="form-control" />
+                        @Html.ValidationMessage("Request", "", new { @class = "text-danger" })
+                    </td>
+                    <td>
+                        <input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control" />
+                        @Html.ValidationMessage("UpdatedBy", "", new { @class = "text-danger" })
+                    </td>
+                    <td>
+                        <input type="text" name="UpdateResult" value="@item.UpdateResult" class="form-control" />
+                        @Html.ValidationMessage("UpdateResult", "", new { @class = "text-danger" })
+                    </td>
                     <td>
                         <input type="file" name="FileAddress" class="form-control" />
                         @if (!string.IsNullOrEmpty(item.FileAddress))
@@ -44,8 +79,16 @@
                             <a href="@item.FileAddress" target="_blank">View File</a>
                         }
                     </td>
-                    <td><input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" /></td>
-                    <td><button type="submit" class="btn btn-success">Save</button></td>
+
+
+
+                    <td>
+                        <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" />
+                        @Html.ValidationMessage("TestRequested", "", new { @class = "text-danger" })
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-success">Save</button>
+                    </td>
                 </tr>
             }
         </tbody>

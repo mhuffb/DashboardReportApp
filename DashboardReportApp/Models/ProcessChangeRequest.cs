@@ -11,26 +11,25 @@ namespace DashboardReportApp.Models
         public DateTime Timestamp { get; set; }
 
         [Required(ErrorMessage = "Part is required.")]
-        public string Part { get; set; }
+        public string? Part { get; set; }
 
         [Required(ErrorMessage = "Requester is required.")]
-        public string Requester { get; set; }
+        public string? Requester { get; set; }
 
         public DateTime? ReqDate { get; set; } = DateTime.Today;
 
         [Required(ErrorMessage = "Request details are required.")]
-        public string Request { get; set; }
+        public string? Request { get; set; }
 
         public DateTime? UpdateDateTime { get; set; }
-        public string UpdatedBy { get; set; }
-        public string UpdateResult { get; set; }
+        public string? UpdatedBy { get; set; }
+        public string? UpdateResult { get; set; }
 
-        [Display(Name = "File Address")]
-        public string FileAddress { get; set; }
+        public string? FileAddress { get; set; }
 
         [Display(Name = "Media Link")]
-        public string FileAddressMediaLink { get; set; }
+        public string? FileAddressMediaLink { get; set; }
 
-        public string TestRequested { get; set; }
+        public string? TestRequested { get; set; }
     }
 }
