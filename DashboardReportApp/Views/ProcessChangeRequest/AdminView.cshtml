@@ -1,4 +1,5 @@
 ﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequest>
+
 @{
     ViewData["Title"] = "Admin View - Process Change Requests";
 }
@@ -50,47 +51,67 @@
                     </td>
 
                     <td>
+                        <!-- Keep original timestamp as hidden -->
                         <input type="hidden" name="Timestamp" value="@item.Timestamp.ToString("o")" />
+                        @item.Timestamp
                     </td>
+
                     <td>
                         <input type="text" name="Part" value="@item.Part" class="form-control" />
                         @Html.ValidationMessage("Part", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
                         <input type="text" name="Requester" value="@item.Requester" class="form-control" />
                         @Html.ValidationMessage("Requester", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
                         @(item.ReqDate.HasValue ? item.ReqDate.Value.ToShortDateString() : "")
                     </td>
+
                     <td>
                         <input type="text" name="Request" value="@item.Request" class="form-control" />
                         @Html.ValidationMessage("Request", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
                         <input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control" />
                         @Html.ValidationMessage("UpdatedBy", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
                         <input type="text" name="UpdateResult" value="@item.UpdateResult" class="form-control" />
                         @Html.ValidationMessage("UpdateResult", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
+                        <!-- Hidden field to keep existing FileAddress -->
                         <input type="hidden" name="FileAddress" value="@item.FileAddress" />
+
+                        <!-- File upload control to replace/overwrite the file -->
                         <input type="file" name="FileUpload" />
+
                         @if (!string.IsNullOrEmpty(item.FileAddress))
                         {
-                            <a href="@item.FileAddress" target="_blank">View File</a>
+                            <div class="mt-2">
+
+                                <!-- Preview Image Button (Bootstrap) -->
+                                <button type="button"
+                                        class="btn btn-info fetch-image-btn"
+                                        data-file-path="@item.FileAddress"
+                                        style="margin-left: 10px;">
+                                    Preview Image
+                                </button>
+                            </div>
                         }
                     </td>
-
-
-
 
                     <td>
                         <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" />
                         @Html.ValidationMessage("TestRequested", "", new { @class = "text-danger" })
                     </td>
+
                     <td>
                         <button type="submit" class="btn btn-primary">Save</button>
                     </td>
@@ -99,3 +120,76 @@
         </tbody>
     </table>
 </form>
+
+<!-- Bootstrap Modal for Image Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalElement = document.getElementById('imageModal');
+
+            // For each "Preview Image" button
+            document.querySelectorAll('.fetch-image-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const filePath = this.dataset.filePath;
+
+                    if (!filePath) {
+                        console.error("File path is missing.");
+                        alert("No file path provided.");
+                        return;
+                    }
+
+                    // Fetch image data from your endpoint
+                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error("Failed to fetch the image.");
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                // Set the modal image source to the returned URL
+                                const modalImage = document.getElementById('modalImage');
+                                modalImage.src = data.url;
+
+                                // Show the modal (using Bootstrap 5)
+                                const bootstrapModal = new bootstrap.Modal(modalElement);
+                                bootstrapModal.show();
+                            } else {
+                                alert(`Error: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching image:', error);
+                            alert('An error occurred while fetching the image.');
+                        });
+                });
+            });
+
+            // Cleanup the modal when hidden
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                const modalImage = document.getElementById('modalImage');
+                modalImage.src = '';
+
+                // Remove any leftover backdrop (rare, but just in case)
+                const modalBackdrop = document.querySelector('.modal-backdrop');
+                if (modalBackdrop) modalBackdrop.remove();
+
+                document.body.classList.remove('modal-open');
+                document.body.style = ''; // Clear any inline styles
+            });
+        });
+    </script>
+}

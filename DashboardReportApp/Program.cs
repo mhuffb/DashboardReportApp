@@ -41,7 +41,7 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.QCSecondaryHoldReturnService>();
     builder.Services.AddScoped<DashboardReportApp.Services.ToolingHistoryService>();
     builder.Services.AddScoped<DashboardReportApp.Services.ProcessChangeRequestService>();
-
+    builder.Services.AddScoped<DashboardReportApp.Services.UploadFileService>();
 
 
 

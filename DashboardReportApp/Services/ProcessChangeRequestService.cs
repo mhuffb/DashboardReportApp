@@ -14,7 +14,7 @@ namespace DashboardReportApp.Services
         public ProcessChangeRequestService(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
 
         }
 
@@ -57,12 +57,12 @@ namespace DashboardReportApp.Services
         {
             // Initialize file path
             string fileAddressMediaLink = null;
-
+            string filePath = null;
             // Handle file upload
             if (file != null && file.Length > 0)
             {
                 var fileName = Path.GetFileName(file.FileName);
-                var filePath = Path.Combine(_uploadFolder, $"ProcessChangeRequestMedia_{fileName}");
+                 filePath = Path.Combine(_uploadFolder, $"ProcessChangeRequestMedia_{request.Id}");
 
                 try
                 {
@@ -73,7 +73,7 @@ namespace DashboardReportApp.Services
                     }
 
                     // Save relative file path for database
-                    fileAddressMediaLink = $"/uploads/ProcessChangeRequestMedia_{fileName}";
+                    //fileAddressMediaLink = $"/uploads/ProcessChangeRequestMedia_{fileName}";
                 }
                 catch (Exception ex)
                 {
@@ -98,7 +98,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@Requester", request.Requester);
                     command.Parameters.AddWithValue("@ReqDate", request.ReqDate ?? DateTime.Today);
                     command.Parameters.AddWithValue("@Request", request.Request);
-                    command.Parameters.AddWithValue("@FileAddressMediaLink", string.IsNullOrEmpty(fileAddressMediaLink) ? DBNull.Value : fileAddressMediaLink);
+                    command.Parameters.AddWithValue("@FileAddressMediaLink", string.IsNullOrEmpty(filePath) ? DBNull.Value : fileAddressMediaLink);
                     command.Parameters.AddWithValue("@TestRequested",
     string.IsNullOrWhiteSpace(request.TestRequested) ? DBNull.Value : int.Parse(request.TestRequested));
 
@@ -127,16 +127,14 @@ namespace DashboardReportApp.Services
 
         public void UpdateRequest(ProcessChangeRequest model, IFormFile? file)
         {
-            string fileAddress = model.FileAddress; // Use the existing address if no new file is uploaded
+            string filePath = model.FileAddress; // Use the existing address if no new file is uploaded
             Console.WriteLine("Previous File Address: " + model.FileAddress);
 
             if (file != null && file.Length > 0)
             {
-                // Physical path for saving the file
-                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                if (!Directory.Exists(uploadsFolder))
+                if (!Directory.Exists(_uploadFolder))
                 {
-                    Directory.CreateDirectory(uploadsFolder); // Ensure the folder exists
+                    Directory.CreateDirectory(_uploadFolder); // Ensure the folder exists
                 }
 
                 // Generate the file name with extension
@@ -144,13 +142,10 @@ namespace DashboardReportApp.Services
                 var fileName = $"ProcessChangeRequest_{model.Id}{fileExtension}";
 
                 // Full physical path for saving the file
-                var filePath = Path.Combine(uploadsFolder, fileName);
+                filePath = Path.Combine(_uploadFolder, fileName);
 
-                // Relative path to save in the database
-                fileAddress = $"/uploads/{fileName}";
 
                 Console.WriteLine("Physical Path (for saving): " + filePath);
-                Console.WriteLine("Relative Path (for database): " + fileAddress);
 
                 try
                 {
@@ -195,7 +190,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@UpdateResult", model.UpdateResult);
 
                     // Save the relative path in the database
-                    command.Parameters.AddWithValue("@FileAddress", string.IsNullOrEmpty(fileAddress) ? DBNull.Value : fileAddress);
+                    command.Parameters.AddWithValue("@FileAddress", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
 
                     command.Parameters.AddWithValue("@TestRequested",
                         string.IsNullOrWhiteSpace(model.TestRequested) ? DBNull.Value : int.Parse(model.TestRequested));
@@ -204,18 +199,14 @@ namespace DashboardReportApp.Services
                 }
             }
 
-            Console.WriteLine("Database updated with relative path: " + fileAddress);
+            Console.WriteLine("Database updated with relative path: " + filePath);
         }
 
 
 
         public void UpdateMediaLinkFile(int id, string fileAddressMediaLink)
         {
-            // Save only relative paths
-            if (fileAddressMediaLink.StartsWith("wwwroot"))
-            {
-                fileAddressMediaLink = fileAddressMediaLink.Replace("wwwroot", "").Replace("\\", "/");
-            }
+            
             Console.WriteLine($"Updating Request ID = {id}, FileAddressMediaLink = {fileAddressMediaLink}");
 
             string query = @"UPDATE ProcessChangeRequest SET FileAddressMediaLink = @FileAddressMediaLink WHERE Id = @Id";

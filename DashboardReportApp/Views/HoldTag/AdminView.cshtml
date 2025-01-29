@@ -1,0 +1,200 @@
+﻿@model List<DashboardReportApp.Models.HoldRecordModel>
+
+@{
+    ViewData["Title"] = "Admin View - Hold Records";
+}
+
+<h2>Admin Panel - Edit Hold Records</h2>
+
+<!-- Display TempData Messages -->
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Part</th>
+            <th>Discrepancy</th>
+            <th>Date</th>
+            <th>Issued By</th>
+            <th>Disposition</th>
+            <th>Disposition By</th>
+            <th>Rework Instr</th>
+            <th>Rework Instr By</th>
+            <th>Quantity</th>
+            <th>Unit</th>
+            <th>Pcs Scrapped</th>
+            <th>Date Completed</th>
+            <th>File Address</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var record in Model)
+        {
+            <form asp-controller="HoldTag"
+                  asp-action="UpdateRequest"
+                  method="post"
+                  enctype="multipart/form-data">
+            <tr>
+                <!-- Hidden field for Id (primary key) -->
+                <td>
+                    <input type="hidden" name="Id" value="@record.Id" />
+                        @record.Id
+                </td>
+
+                <td>
+                    <input type="text" name="Part" value="@record.Part" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Discrepancy" value="@record.Discrepancy" class="form-control" />
+                </td>
+                <td>
+                    <input type="datetime-local"
+                           name="Date"
+                           value="@(record.Date?.ToString("yyyy-MM-ddTHH:mm") ?? "")"
+                           class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="IssuedBy" value="@record.IssuedBy" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Disposition" value="@record.Disposition" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="DispositionBy" value="@record.DispositionBy" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="ReworkInstr" value="@record.ReworkInstr" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="ReworkInstrBy" value="@record.ReworkInstrBy" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Quantity" value="@record.Quantity" class="form-control" />
+                </td>
+                <td>
+                    <input type="text" name="Unit" value="@record.Unit" class="form-control" />
+                </td>
+                <td>
+                    <input type="number"
+                           name="PcsScrapped"
+                           value="@(record.PcsScrapped?.ToString() ?? "")"
+                           class="form-control" />
+                </td>
+                <td>
+                    <input type="datetime-local"
+                           name="DateCompleted"
+                           value="@(record.DateCompleted?.ToString("yyyy-MM-ddTHH:mm") ?? "")"
+                           class="form-control" />
+                </td>
+
+                <!-- FILE UPLOAD FUNCTIONALITY -->
+                <td>
+                    <input type="hidden" name="FileAddress" value="@record.FileAddress" />
+
+                    <!-- File Upload -->
+                    <input type="file" name="FileUpload" class="form-control" accept="image/*,.pdf,.doc,.docx" />
+
+                    <!-- File Preview Button (if a file exists) -->
+                        @if (!string.IsNullOrEmpty(record.FileAddress))
+                        {
+                        <div class="mt-2">
+                            <button type="button"
+                                    class="btn btn-info fetch-image-btn"
+                                    data-file-path="@record.FileAddress">
+                                Preview File
+                            </button>
+                        </div>
+                        }
+                </td>
+
+                <td>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </td>
+            </tr>
+            </form>
+        }
+    </tbody>
+</table>
+
+<!-- Bootstrap Modal for File Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+                <iframe id="modalFile" class="w-100" style="height:500px; display:none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalElement = document.getElementById('imageModal');
+
+            document.querySelectorAll('.fetch-image-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const filePath = this.dataset.filePath;
+
+                    if (!filePath) {
+                        console.error("File path is missing.");
+                        alert("No file path provided.");
+                        return;
+                    }
+
+                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error("Failed to fetch the image.");
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                const modalImage = document.getElementById('modalImage');
+                                const modalFile = document.getElementById('modalFile');
+
+                                if (data.url.endsWith(".jpg") || data.url.endsWith(".png") || data.url.endsWith(".jpeg") || data.url.endsWith(".gif")) {
+                                    modalImage.src = data.url;
+                                    modalImage.style.display = "block";
+                                    modalFile.style.display = "none";
+                                } else {
+                                    modalFile.src = data.url;
+                                    modalFile.style.display = "block";
+                                    modalImage.style.display = "none";
+                                }
+
+                                const bootstrapModal = new bootstrap.Modal(modalElement);
+                                bootstrapModal.show();
+                            } else {
+                                alert(`Error: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching file:', error);
+                            alert('An error occurred while fetching the file.');
+                        });
+                });
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                document.getElementById('modalImage').src = '';
+                document.getElementById('modalFile').src = '';
+            });
+        });
+    </script>
+}

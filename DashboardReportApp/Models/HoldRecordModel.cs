@@ -24,7 +24,7 @@ namespace DashboardReportApp.Models
 
         public string? ReworkInstrBy { get; set; } // Nullable string
 
-        public string? Quantity { get; set; } // Nullable string
+        public int? Quantity { get; set; } // Nullable string
 
         public string? Unit { get; set; } // Nullable string
 

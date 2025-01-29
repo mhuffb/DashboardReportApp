@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DashboardReportApp.Controllers
 {
-    [Route("[controller]/[action]")]
+    [Route("HoldTag")]
     public class HoldTagController : Controller
     {
         private readonly HoldTagService _service;
@@ -15,7 +15,7 @@ namespace DashboardReportApp.Controllers
             _service = service;
         }
 
-        [HttpGet]
+        [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
             var parts = await _service.GetPartsAsync();
@@ -26,6 +26,16 @@ namespace DashboardReportApp.Controllers
 
             return View(new HoldRecordModel());
         }
+        [HttpGet("Admin")]
+        public async Task<IActionResult> AdminView()
+        {
+            // Fetch all hold records from your service
+            List<HoldRecordModel> records = await _service.GetAllHoldRecordsAsync();
+
+            // Return the "AdminView" (i.e., AdminView.cshtml) with the list
+            return View(records);
+        }
+
 
 
         [HttpPost]
@@ -37,9 +47,8 @@ namespace DashboardReportApp.Controllers
                 // Assign default values
                 record.Date = DateTime.Now;
 
-                // Generate and set the PDF path (if applicable)
+                // Generate the PDF 
                 string pdfPath = _service.GenerateHoldTagPdf(record);
-                record.FileAddress = pdfPath;
 
                 // Save to the database
                 await _service.AddHoldRecordAsync(record);
@@ -99,7 +108,7 @@ namespace DashboardReportApp.Controllers
             TempData["ErrorMessage"] = "Please correct the errors and try again.";
             return View("Index", record);
         }
-
+        [HttpGet("Create")]
         public async Task<IActionResult> Create()
         {
             // Fetch parts and operators
@@ -112,7 +121,37 @@ namespace DashboardReportApp.Controllers
 
             return View();
         }
+       
+        [HttpPost("UpdateRequest")]
+        public IActionResult UpdateRequest(HoldRecordModel model, IFormFile? FileUpload)
+        {
+            if (!ModelState.IsValid)
+            {
+                // Log validation errors for debugging
+                foreach (var state in ModelState)
+                {
+                    foreach (var error in state.Value.Errors)
+                    {
+                        Console.WriteLine($"Key: {state.Key}, Error: {error.ErrorMessage}");
+                    }
+                }
 
+                return View("AdminView", _service.GetAllHoldRecordsAsync());
+            }
+
+            try
+            {
+                // Call the service to update the request
+                _service.UpdateRequest(model, FileUpload);
+
+                return RedirectToAction("AdminView");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return View("AdminView", _service.GetAllHoldRecordsAsync());
+            }
+        }
     }
 
 }

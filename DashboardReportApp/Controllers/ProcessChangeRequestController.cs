@@ -100,7 +100,7 @@ namespace DashboardReportApp.Controllers
             try
             {
                 // Ensure the uploads folder exists
-                var uploadsFolder = Path.Combine("wwwroot", "uploads");
+                var uploadsFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
                 if (!Directory.Exists(uploadsFolder))
                 {
                     Directory.CreateDirectory(uploadsFolder);
@@ -111,11 +111,9 @@ namespace DashboardReportApp.Controllers
                 var fileExtension = Path.GetExtension(file.FileName);
                 var fileName = $"ProcessChangeRequestMedia_{id}{fileExtension}";
                 var filePath = Path.Combine(uploadsFolder, fileName); // Physical path
-                var relativePath = $"/uploads/{fileName}"; // Relative path for database
 
                 Console.WriteLine($"File details: Name = {fileName}, Extension = {fileExtension}");
                 Console.WriteLine($"Physical path: {filePath}");
-                Console.WriteLine($"Relative path to save: {relativePath}");
 
                 // Save the file to the physical path
                 using (var stream = new FileStream(filePath, FileMode.Create))
@@ -128,9 +126,9 @@ namespace DashboardReportApp.Controllers
                 var request = _service.GetAllRequests().FirstOrDefault(r => r.Id == id);
                 if (request != null)
                 {
-                    request.FileAddressMediaLink = relativePath; // Use relative path
-                    _service.UpdateMediaLinkFile(id, relativePath);
-                    Console.WriteLine($"Database updated for Request ID = {id}, FileAddressMediaLink = {relativePath}");
+                    request.FileAddressMediaLink = filePath; // Use relative path
+                    _service.UpdateMediaLinkFile(id, filePath);
+                    Console.WriteLine($"Database updated for Request ID = {id}, FileAddressMediaLink = {filePath}");
                 }
                 else
                 {

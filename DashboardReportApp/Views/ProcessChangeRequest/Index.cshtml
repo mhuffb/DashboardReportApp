@@ -1,9 +1,11 @@
 ﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequest>
+
 @{
     ViewData["Title"] = "Process Change Requests";
 }
 
 <h2>Process Change Requests</h2>
+
 <!-- Display Error Messages -->
 @if (!ViewData.ModelState.IsValid)
 {
@@ -64,7 +66,6 @@
         </tr>
         </form>
 
-
         <!-- Existing records -->
         @foreach (var item in Model)
         {
@@ -73,27 +74,104 @@
                 <td>@item.Timestamp</td>
                 <td>@item.Part</td>
                 <td>@item.Requester</td>
-                <td>
-                    @(item.ReqDate?.ToShortDateString() ?? "")
-                </td>
-
+                <td>@(item.ReqDate?.ToShortDateString() ?? "")</td>
                 <td>@item.Request</td>
                 <td>@item.TestRequested</td>
                 <td>
                     @if (!string.IsNullOrEmpty(item.FileAddressMediaLink))
                     {
-                        <a href="@item.FileAddressMediaLink" target="_blank">View File</a>
+
+                        <!-- Button to preview inside Bootstrap modal -->
+                        <!-- Only show the preview button if it's an image.
+                             (Optional) You can do extension checks here. -->
+                        <button type="button"
+                                class="btn btn-info fetch-image-btn"
+                                data-file-path="@item.FileAddressMediaLink">
+                            Preview Image
+                        </button>
                     }
                 </td>
                 <td>
+                    <!-- File Upload Form to Update File -->
                     <form action="/ProcessChangeRequest/UpdateMediaLinkFile" method="post" enctype="multipart/form-data">
                         <input type="hidden" name="id" value="@item.Id" />
                         <input type="file" name="file" />
                         <button type="submit" class="btn btn-primary">Upload File</button>
                     </form>
-
                 </td>
             </tr>
         }
     </tbody>
 </table>
+
+<!-- Bootstrap Modal for Image Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Your JavaScript to Fetch & Display the Image -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalElement = document.getElementById('imageModal');
+
+        // For each "Preview Image" button
+        document.querySelectorAll('.fetch-image-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const filePath = this.dataset.filePath;
+
+                if (!filePath) {
+                    console.error("File path is missing.");
+                    alert("No file path provided.");
+                    return;
+                }
+
+                // Fetch image data from your endpoint
+                fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error("Failed to fetch the image.");
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            // Set the modal image source to the returned URL
+                            const modalImage = document.getElementById('modalImage');
+                            modalImage.src = data.url;
+
+                            // Show the modal (using Bootstrap 5)
+                            const bootstrapModal = new bootstrap.Modal(modalElement);
+                            bootstrapModal.show();
+                        } else {
+                            alert(`Error: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching image:', error);
+                        alert('An error occurred while fetching the image.');
+                    });
+            });
+        });
+
+        // Cleanup the modal when hidden
+        modalElement.addEventListener('hidden.bs.modal', function () {
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = '';
+
+            // Remove any leftover backdrop (rare, but just in case)
+            const modalBackdrop = document.querySelector('.modal-backdrop');
+            if (modalBackdrop) modalBackdrop.remove();
+
+            document.body.classList.remove('modal-open');
+            document.body.style = ''; // Clear any inline styles
+        });
+    });
+</script>
