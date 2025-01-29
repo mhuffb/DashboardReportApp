@@ -21,7 +21,7 @@
 <table class="table table-bordered">
     <thead>
         <tr>
-            <th>ID</th>
+            <th style="width: 50px;">ID</th> <!-- Smaller width for ID column -->
             <th>Part</th>
             <th>Discrepancy</th>
             <th>Date</th>
@@ -56,7 +56,7 @@
                     <input type="text" name="Part" value="@record.Part" class="form-control" />
                 </td>
                 <td>
-                    <input type="text" name="Discrepancy" value="@record.Discrepancy" class="form-control" />
+                    <textarea name="Discrepancy" class="form-control">@record.Discrepancy</textarea>
                 </td>
                 <td>
                     <input type="datetime-local"
@@ -68,13 +68,13 @@
                     <input type="text" name="IssuedBy" value="@record.IssuedBy" class="form-control" />
                 </td>
                 <td>
-                    <input type="text" name="Disposition" value="@record.Disposition" class="form-control" />
+                    <textarea name="Disposition" class="form-control">@record.Disposition</textarea> <!-- Textarea for Disposition -->
                 </td>
                 <td>
                     <input type="text" name="DispositionBy" value="@record.DispositionBy" class="form-control" />
                 </td>
                 <td>
-                    <input type="text" name="ReworkInstr" value="@record.ReworkInstr" class="form-control" />
+                    <textarea name="ReworkInstr" class="form-control">@record.ReworkInstr</textarea> <!-- Textarea for Rework Instructions -->
                 </td>
                 <td>
                     <input type="text" name="ReworkInstrBy" value="@record.ReworkInstrBy" class="form-control" />
@@ -142,6 +142,31 @@
         </div>
     </div>
 </div>
+
+<!-- CSS for Proper Word Wrapping and Readability -->
+<style>
+    .table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+        .table th, .table td {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal !important;
+        }
+
+    /* Smaller width for ID column */
+    th:nth-child(1), td:nth-child(1) {
+        width: 50px;
+    }
+
+    /* Ensure textareas resize properly */
+    textarea.form-control {
+        resize: vertical; /* Allow vertical resizing */
+        min-height: 100px; /* Set a minimum height for textareas */
+    }
+</style>
 
 @section Scripts {
     <script>
