@@ -57,13 +57,11 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateRequest(ProcessChangeRequest model, IFormFile FileAddress)
+        public IActionResult UpdateRequest(ProcessChangeRequest model, IFormFile? FileUpload)
         {
-            // Remove FileAddress from validation
-            ModelState.Remove("FileAddress");
-
             if (!ModelState.IsValid)
             {
+                // Log validation errors for debugging
                 foreach (var state in ModelState)
                 {
                     foreach (var error in state.Value.Errors)
@@ -77,36 +75,9 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                if (FileAddress != null && FileAddress.Length > 0)
-                {
-                    // Ensure the uploads folder exists
-                    var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    if (!Directory.Exists(uploadsFolder))
-                    {
-                        Directory.CreateDirectory(uploadsFolder);
-                    }
+                // Call the service to update the request
+                _service.UpdateRequest(model, FileUpload);
 
-                    // Create the file name and path
-                    var fileName = $"ProcessChangeRequest_{model.Id}{Path.GetExtension(FileAddress.FileName)}";
-                    var filePath = Path.Combine(uploadsFolder, fileName);
-
-                    // Save the file to the server
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        FileAddress.CopyTo(stream);
-                    }
-
-                    // Save the relative path to the database
-                    model.FileAddress = $"/uploads/{fileName}"; // Save relative path for web access
-                    Console.WriteLine($"File uploaded and saved to: {model.FileAddress}");
-                }
-                else
-                {
-                    Console.WriteLine("No file was uploaded.");
-                }
-
-
-                _service.UpdateRequest(model);
                 return RedirectToAction("AdminView");
             }
             catch (Exception ex)
@@ -116,46 +87,67 @@ namespace DashboardReportApp.Controllers
             }
         }
 
-
-
         [HttpPost]
         public IActionResult UpdateMediaLinkFile(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
             {
                 TempData["Error"] = "Please select a valid file.";
+                Console.WriteLine("Error: No file selected or file is empty.");
                 return RedirectToAction(nameof(Index));
             }
 
-            // Define the folder to save the uploaded files
-            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
-            if (!Directory.Exists(uploadsFolder))
+            try
             {
-                Directory.CreateDirectory(uploadsFolder);
+                // Ensure the uploads folder exists
+                var uploadsFolder = Path.Combine("wwwroot", "uploads");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                    Console.WriteLine($"Created uploads folder at: {uploadsFolder}");
+                }
+
+                // Construct the file name and paths
+                var fileExtension = Path.GetExtension(file.FileName);
+                var fileName = $"ProcessChangeRequestMedia_{id}{fileExtension}";
+                var filePath = Path.Combine(uploadsFolder, fileName); // Physical path
+                var relativePath = $"/uploads/{fileName}"; // Relative path for database
+
+                Console.WriteLine($"File details: Name = {fileName}, Extension = {fileExtension}");
+                Console.WriteLine($"Physical path: {filePath}");
+                Console.WriteLine($"Relative path to save: {relativePath}");
+
+                // Save the file to the physical path
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    file.CopyTo(stream);
+                }
+                Console.WriteLine($"File successfully saved at: {filePath}");
+
+                // Update the database with the relative path
+                var request = _service.GetAllRequests().FirstOrDefault(r => r.Id == id);
+                if (request != null)
+                {
+                    request.FileAddressMediaLink = relativePath; // Use relative path
+                    _service.UpdateMediaLinkFile(id, relativePath);
+                    Console.WriteLine($"Database updated for Request ID = {id}, FileAddressMediaLink = {relativePath}");
+                }
+                else
+                {
+                    Console.WriteLine($"Request with ID = {id} not found.");
+                }
+
+                TempData["Success"] = "File uploaded and link updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                TempData["Error"] = $"An error occurred: {ex.Message}";
             }
 
-            // Create the file name: ProcessChangeRequest<ID>.<extension>
-            var fileExtension = Path.GetExtension(file.FileName);
-            var fileName = $"ProcessChangeRequest{id}{fileExtension}";
-            var filePath = Path.Combine(uploadsFolder, fileName);
-
-            // Save the file
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                file.CopyTo(stream);
-            }
-
-            // Save the file path to the database
-            var request = _service.GetAllRequests().FirstOrDefault(r => r.Id == id);
-            if (request != null)
-            {
-                request.FileAddressMediaLink = "/uploads/" + fileName; // Save relative path for web access
-                _service.UpdateRequest(request);
-            }
-
-            TempData["Success"] = "File uploaded and link updated successfully.";
             return RedirectToAction(nameof(Index));
         }
-        
+
+
     }
 }

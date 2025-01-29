@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Admin View - Process Change Requests";
 }
+<li><a asp-controller="ProcessChangeRequest" asp-action="Index">Process Change Request</a></li>
 
 <h2>Admin View - Process Change Requests</h2>
 
@@ -22,7 +23,7 @@
     </div>
 }
 
-<form asp-action="UpdateRequest" method="post">
+<form asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -48,7 +49,9 @@
                         @item.Id
                     </td>
 
-                    <td>@item.Timestamp</td>
+                    <td>
+                        <input type="hidden" name="Timestamp" value="@item.Timestamp.ToString("o")" />
+                    </td>
                     <td>
                         <input type="text" name="Part" value="@item.Part" class="form-control" />
                         @Html.ValidationMessage("Part", "", new { @class = "text-danger" })
@@ -73,7 +76,8 @@
                         @Html.ValidationMessage("UpdateResult", "", new { @class = "text-danger" })
                     </td>
                     <td>
-                        <input type="file" name="FileAddress" class="form-control" />
+                        <input type="hidden" name="FileAddress" value="@item.FileAddress" />
+                        <input type="file" name="FileUpload" />
                         @if (!string.IsNullOrEmpty(item.FileAddress))
                         {
                             <a href="@item.FileAddress" target="_blank">View File</a>
@@ -82,12 +86,13 @@
 
 
 
+
                     <td>
                         <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" />
                         @Html.ValidationMessage("TestRequested", "", new { @class = "text-danger" })
                     </td>
                     <td>
-                        <button type="submit" class="btn btn-success">Save</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
                     </td>
                 </tr>
             }

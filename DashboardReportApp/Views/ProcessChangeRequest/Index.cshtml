@@ -9,16 +9,17 @@
 {
     <div class="alert alert-danger">
         <ul>
-            @foreach (var state in ViewData.ModelState)
+            @foreach (var state in ViewData.ModelState.Values)
             {
-                foreach (var error in state.Value.Errors)
+                foreach (var error in state.Errors)
                 {
-                    <li><strong>@state.Key:</strong> @error.ErrorMessage</li>
+                    <li>@error.ErrorMessage</li>
                 }
             }
         </ul>
     </div>
 }
+
 <table class="table table-bordered" id="processChangeRequestTable">
     <thead>
         <tr>
@@ -54,7 +55,7 @@
                 <input type="checkbox" name="TestRequested" />
             </td>
             <td>
-                <input type="file" name="file" class="form-control" />
+                <input type="file" name="file" />
                     @Html.ValidationMessage("file", "", new { @class = "text-danger" })
             </td>
             <td>
@@ -85,13 +86,12 @@
                     }
                 </td>
                 <td>
-                    <form asp-action="UpdateMediaLinkFile" method="post" enctype="multipart/form-data">
+                    <form action="/ProcessChangeRequest/UpdateMediaLinkFile" method="post" enctype="multipart/form-data">
                         <input type="hidden" name="id" value="@item.Id" />
-                        <div class="input-group">
-                            <input type="file" name="file" class="form-control" />
-                            <button type="submit" class="btn btn-primary">Upload File</button>
-                        </div>
+                        <input type="file" name="file" />
+                        <button type="submit" class="btn btn-primary">Upload File</button>
                     </form>
+
                 </td>
             </tr>
         }

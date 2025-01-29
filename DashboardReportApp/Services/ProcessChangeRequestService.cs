@@ -2,6 +2,7 @@
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace DashboardReportApp.Services
 {
@@ -72,7 +73,7 @@ namespace DashboardReportApp.Services
                     }
 
                     // Save relative file path for database
-                    fileAddressMediaLink = $"/uploads/ProcessChangeRequest_{fileName}";
+                    fileAddressMediaLink = $"/uploads/ProcessChangeRequestMedia_{fileName}";
                 }
                 catch (Exception ex)
                 {
@@ -98,7 +99,9 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@ReqDate", request.ReqDate ?? DateTime.Today);
                     command.Parameters.AddWithValue("@Request", request.Request);
                     command.Parameters.AddWithValue("@FileAddressMediaLink", string.IsNullOrEmpty(fileAddressMediaLink) ? DBNull.Value : fileAddressMediaLink);
-                    command.Parameters.AddWithValue("@TestRequested", request.TestRequested ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@TestRequested",
+    string.IsNullOrWhiteSpace(request.TestRequested) ? DBNull.Value : int.Parse(request.TestRequested));
+
 
                     // Execute the query
                     command.ExecuteNonQuery();
@@ -122,8 +125,55 @@ namespace DashboardReportApp.Services
             }
         }
 
-        public void UpdateRequest(ProcessChangeRequest model)
+        public void UpdateRequest(ProcessChangeRequest model, IFormFile? file)
         {
+            string fileAddress = model.FileAddress; // Use the existing address if no new file is uploaded
+            Console.WriteLine("Previous File Address: " + model.FileAddress);
+
+            if (file != null && file.Length > 0)
+            {
+                // Physical path for saving the file
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder); // Ensure the folder exists
+                }
+
+                // Generate the file name with extension
+                var fileExtension = Path.GetExtension(file.FileName);
+                var fileName = $"ProcessChangeRequest_{model.Id}{fileExtension}";
+
+                // Full physical path for saving the file
+                var filePath = Path.Combine(uploadsFolder, fileName);
+
+                // Relative path to save in the database
+                fileAddress = $"/uploads/{fileName}";
+
+                Console.WriteLine("Physical Path (for saving): " + filePath);
+                Console.WriteLine("Relative Path (for database): " + fileAddress);
+
+                try
+                {
+                    // Save the file to the physical location
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        file.CopyTo(stream);
+                    }
+
+                    Console.WriteLine("File saved successfully at: " + filePath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving file: {ex.Message}");
+                    throw new Exception("File upload failed.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("No new file uploaded.");
+            }
+
+            // Update the database with the relative file path
             string query = @"UPDATE ProcessChangeRequest 
                      SET Part = @Part, Requester = @Requester, ReqDate = @ReqDate, 
                          Request = @Request, UpdatedBy = @UpdatedBy, 
@@ -143,16 +193,31 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@Request", model.Request);
                     command.Parameters.AddWithValue("@UpdatedBy", model.UpdatedBy);
                     command.Parameters.AddWithValue("@UpdateResult", model.UpdateResult);
-                    command.Parameters.AddWithValue("@FileAddress", model.FileAddress ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@TestRequested", model.TestRequested ?? (object)DBNull.Value);
+
+                    // Save the relative path in the database
+                    command.Parameters.AddWithValue("@FileAddress", string.IsNullOrEmpty(fileAddress) ? DBNull.Value : fileAddress);
+
+                    command.Parameters.AddWithValue("@TestRequested",
+                        string.IsNullOrWhiteSpace(model.TestRequested) ? DBNull.Value : int.Parse(model.TestRequested));
 
                     command.ExecuteNonQuery();
                 }
             }
+
+            Console.WriteLine("Database updated with relative path: " + fileAddress);
         }
+
+
 
         public void UpdateMediaLinkFile(int id, string fileAddressMediaLink)
         {
+            // Save only relative paths
+            if (fileAddressMediaLink.StartsWith("wwwroot"))
+            {
+                fileAddressMediaLink = fileAddressMediaLink.Replace("wwwroot", "").Replace("\\", "/");
+            }
+            Console.WriteLine($"Updating Request ID = {id}, FileAddressMediaLink = {fileAddressMediaLink}");
+
             string query = @"UPDATE ProcessChangeRequest SET FileAddressMediaLink = @FileAddressMediaLink WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -162,10 +227,14 @@ namespace DashboardReportApp.Services
                 {
                     command.Parameters.AddWithValue("@Id", id);
                     command.Parameters.AddWithValue("@FileAddressMediaLink", fileAddressMediaLink);
-                    command.ExecuteNonQuery();
+
+                    var rowsAffected = command.ExecuteNonQuery();
+                    Console.WriteLine($"Rows Affected: {rowsAffected}");
                 }
             }
         }
+
+
 
     }
 }
