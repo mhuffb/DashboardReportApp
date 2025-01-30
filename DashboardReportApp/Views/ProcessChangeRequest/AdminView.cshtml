@@ -71,7 +71,8 @@
                     </td>
 
                     <td>
-                        <input type="text" name="Request" value="@item.Request" class="form-control" />
+                        <!-- Replace input with textarea for Request -->
+                        <textarea name="Request" class="form-control" rows="3">@item.Request</textarea>
                         @Html.ValidationMessage("Request", "", new { @class = "text-danger" })
                     </td>
 
@@ -81,7 +82,8 @@
                     </td>
 
                     <td>
-                        <input type="text" name="UpdateResult" value="@item.UpdateResult" class="form-control" />
+                        <!-- Replace input with textarea for UpdateResult -->
+                        <textarea name="UpdateResult" class="form-control" rows="3">@item.UpdateResult</textarea>
                         @Html.ValidationMessage("UpdateResult", "", new { @class = "text-danger" })
                     </td>
 
@@ -108,7 +110,8 @@
                     </td>
 
                     <td>
-                        <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" />
+                        <!-- Make TestRequested field smaller by setting a smaller width -->
+                        <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" style="width: 100px;" />
                         @Html.ValidationMessage("TestRequested", "", new { @class = "text-danger" })
                     </td>
 

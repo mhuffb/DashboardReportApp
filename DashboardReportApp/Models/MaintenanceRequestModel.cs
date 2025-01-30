@@ -32,7 +32,7 @@ namespace DashboardReportApp.Models
         public string? HoldResult { get; set; }
         public string? HoldBy { get; set; }
         public string? FileAddress { get; set; }
-        public string? FileAddressImageLink { get; set; }
+        public string? FileAddressMediaLink { get; set; }
         public string? StatusHistory { get; set; }
         public string? CurrentStatusBy { get; set; }
         public string Department { get; set; }

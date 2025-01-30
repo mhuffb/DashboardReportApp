@@ -69,7 +69,7 @@ namespace DashboardReportApp.Services
                                     string fileName = "MaintenanceRequest" + orderId + "_" + (mimePart.FileName ?? $"embedded_{Guid.NewGuid()}.bin");
 
                                     //string attachmentSavePath = Path.Combine("wwwroot/uploads", fileName);
-                                    string attachmentSavePath = Path.Combine(@"\\SINTERGYDC2024\\Vol1\\Visual Studio Programs\images", fileName);
+                                    string attachmentSavePath = Path.Combine(@"\\SINTERGYDC2024\\Vol1\\VSP\Uploads", fileName);
                                     
                                     using (var stream = File.Create(attachmentSavePath))
                                     {
