@@ -26,7 +26,7 @@
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
             _webHostEnvironment = webHostEnvironment;
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
         }
 
         public async Task<IEnumerable<MaintenanceRequestModel>> GetOpenRequestsAsync()
@@ -39,23 +39,26 @@
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-
                 using (var command = new MySqlCommand(query, connection))
                 using (var reader = await command.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())
                     {
+                        Console.WriteLine($"[DEBUG] Reading Record ID: {reader["id"]}");
+
                         var request = new MaintenanceRequestModel
                         {
                             Id = reader.GetInt32("id"),
-                            Timestamp = reader.GetDateTime("timestamp"),
-                            Equipment = reader.GetString("equipment"),
-                            Requester = reader.GetString("requester"),
-                            Problem = reader.GetString("problem"),
+                            Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? (DateTime?)null : reader.GetDateTime("timestamp"),
+                            Equipment = reader.IsDBNull(reader.GetOrdinal("equipment")) ? null : reader.GetString("equipment"),
+                            Requester = reader.IsDBNull(reader.GetOrdinal("requester")) ? null : reader.GetString("requester"),
+                            Problem = reader.IsDBNull(reader.GetOrdinal("problem")) ? null : reader.GetString("problem"),
                             DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) && reader.GetBoolean("downStatus"),
-                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetInt32("hourMeter") : (int?)null,
-                            FileAddressMediaLink = !reader.IsDBNull(reader.GetOrdinal("fileAddressImageLink")) ? reader.GetString("fileAddressImageLink") : null,
+                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
+                            FileAddressMediaLink = reader.IsDBNull(reader.GetOrdinal("fileAddressImageLink")) ? null : reader.GetString("fileAddressImageLink"),
                         };
+
+                        Console.WriteLine($"[DEBUG] ID: {request.Id}, Equipment: {request.Equipment}, Requester: {request.Requester}, File Path: {request.FileAddressMediaLink}");
 
                         requests.Add(request);
                     }
@@ -64,6 +67,7 @@
 
             return requests;
         }
+
 
 
         public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
@@ -81,7 +85,7 @@
                     command.Parameters.AddWithValue("@requester", request.Requester);
                     command.Parameters.AddWithValue("@reqDate", request.RequestedDate ?? DateTime.Now);
                     command.Parameters.AddWithValue("@problem", request.Problem);
-                    command.Parameters.AddWithValue("@downStatus", request.DownStatus ? 1 : 0);
+                    command.Parameters.AddWithValue("@downStatus", (bool)request.DownStatus ? 1 : 0);
                     command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@fileAddress", request.FileAddressMediaLink ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
@@ -101,7 +105,7 @@
                     string pdfPath = GeneratePdf(request);
 
                     // Email the PDF
-                    await SendEmailWithPdfAsync(pdfPath, request);
+                   // await SendEmailWithPdfAsync(pdfPath, request);
 
                     return true;
                 }
@@ -349,26 +353,28 @@ Problem: {request.Problem}"
                 {
                     while (reader.Read())
                     {
+
                         requests.Add(new MaintenanceRequestModel
                         {
                             Id = Convert.ToInt32(reader["Id"]),
                             Timestamp = Convert.ToDateTime(reader["Timestamp"]),
                             Equipment = reader["Equipment"]?.ToString(),
                             Requester = reader["Requester"]?.ToString(),
-                            RequestedDate = reader["RequestedDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["RequestedDate"]),
+                            RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
                             Problem = reader["Problem"]?.ToString(),
                             DownStartDateTime = reader["DownStartDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["DownStartDateTime"]),
                             ClosedDateTime = reader["ClosedDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["ClosedDateTime"]),
                             CloseBy = reader["CloseBy"]?.ToString(),
                             CloseResult = reader["CloseResult"]?.ToString(),
-                            DownStatus = Convert.ToBoolean(reader["DownStatus"]),
-                            HourMeter = reader["HourMeter"] == DBNull.Value ? null : Convert.ToInt32(reader["HourMeter"]),
+                            DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) ? reader.GetBoolean("downStatus") : false,
+                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
+                            
                             HoldStatus = Convert.ToBoolean(reader["HoldStatus"]),
                             HoldReason = reader["HoldReason"]?.ToString(),
                             HoldResult = reader["HoldResult"]?.ToString(),
                             HoldBy = reader["HoldBy"]?.ToString(),
                             FileAddress = reader["FileAddress"]?.ToString(),
-                            FileAddressMediaLink = reader["FileAddressImageLink"]?.ToString(),
+                            FileAddressMediaLink = !reader.IsDBNull(reader.GetOrdinal("fileAddressImageLink")) ? reader.GetString("fileAddressImageLink") : null,
                             StatusHistory = reader["StatusHistory"]?.ToString(),
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString()
@@ -380,125 +386,98 @@ Problem: {request.Problem}"
             return requests;
         }
 
+        public async Task<bool> UpdateMediaLinkFile(int id, string imagePath)
+        {
+            try
+            {
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    string query = "UPDATE maintenance SET FileAddressImageLink = @imagePath WHERE Id = @id";
+
+                    await connection.OpenAsync();
+                    using (var command = new MySqlCommand(query, connection))
+                    {
+                        Console.WriteLine($"[DEBUG] Updating Media Link File for ID: {id}");
+                        Console.WriteLine($"[DEBUG] File Path: {imagePath}");
+
+                        // Ensure NULL safety
+                        command.Parameters.AddWithValue("@imagePath", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
+                        command.Parameters.AddWithValue("@id", id);
+
+                        int rowsAffected = await command.ExecuteNonQueryAsync();
+                        Console.WriteLine($"[DEBUG] Rows Affected: {rowsAffected}");
+
+                        return rowsAffected > 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] UpdateMediaLinkFile failed: {ex.Message}");
+                return false;
+            }
+        }
+
+
+
         public void UpdateRequest(MaintenanceRequestModel model, IFormFile? file)
         {
-            string filePath = model.FileAddress; // Use the existing address if no new file is uploaded
-            Console.WriteLine("Previous File Address: " + model.FileAddress);
+            string filePath = model.FileAddress; // Use existing file path if no new file
+            Console.WriteLine("[DEBUG] Previous File Address: " + model.FileAddress);
 
             if (file != null && file.Length > 0)
             {
                 if (!Directory.Exists(_uploadFolder))
                 {
-                    Directory.CreateDirectory(_uploadFolder); // Ensure the folder exists
+                    Directory.CreateDirectory(_uploadFolder); // Ensure folder exists
                 }
 
-                // Generate the file name with extension
                 var fileExtension = Path.GetExtension(file.FileName);
                 var fileName = $"MaintenanceRequest_{model.Id}{fileExtension}";
-
-                // Full physical path for saving the file
                 filePath = Path.Combine(_uploadFolder, fileName);
 
-
-                Console.WriteLine("Physical Path (for saving): " + filePath);
+                Console.WriteLine("[DEBUG] Saving file to: " + filePath);
 
                 try
                 {
-                    // Save the file to the physical location
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
                         file.CopyTo(stream);
                     }
-
-                    Console.WriteLine("File saved successfully at: " + filePath);
+                    Console.WriteLine("[DEBUG] File saved successfully.");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error saving file: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Error saving file: {ex.Message}");
                     throw new Exception("File upload failed.");
                 }
             }
-            else
-            {
-                Console.WriteLine("No new file uploaded.");
-            }
 
-            // Update the database with the relative file path
+            // Log values before updating the database
+            Console.WriteLine($"[DEBUG] Updating request for ID: {model.Id}");
+            Console.WriteLine($"[DEBUG] New File Path: {filePath}");
+
             string query = @"UPDATE maintenance 
-                 SET Equipment = @Equipment, 
-                     Requester = @Requester, 
-                     RequestedDate = @RequestedDate, 
-                     Problem = @Problem, 
-                     DownStartDateTime = @DownStartDateTime, 
-                     ClosedDateTime = @ClosedDateTime, 
-                     CloseBy = @CloseBy, 
-                     CloseResult = @CloseResult, 
-                     DownStatus = @DownStatus, 
-                     HourMeter = @HourMeter, 
-                     HoldStatus = @HoldStatus, 
-                     HoldReason = @HoldReason, 
-                     HoldResult = @HoldResult, 
-                     HoldBy = @HoldBy, 
-                     FileAddress = @FileAddress, 
-                     FileAddressImageLink = @FileAddressImageLink, 
-                     StatusHistory = @StatusHistory, 
-                     CurrentStatusBy = @CurrentStatusBy, 
-                     Department = @Department
-                 WHERE Id = @Id";
+                     SET FileAddressImageLink = @FileAddressImageLink 
+                     WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    // Bind parameters
+                    Console.WriteLine($"[DEBUG] Assigning Parameters...");
                     command.Parameters.AddWithValue("@Id", model.Id);
-                    command.Parameters.AddWithValue("@Equipment", model.Equipment);
-                    command.Parameters.AddWithValue("@Requester", model.Requester);
-                    command.Parameters.AddWithValue("@RequestedDate", model.RequestedDate);
-                    command.Parameters.AddWithValue("@Problem", model.Problem);
-                    command.Parameters.AddWithValue("@DownStartDateTime", model.DownStartDateTime);
-                    command.Parameters.AddWithValue("@ClosedDateTime", model.ClosedDateTime);
-                    command.Parameters.AddWithValue("@CloseBy", model.CloseBy);
-                    command.Parameters.AddWithValue("@CloseResult", model.CloseResult);
-                    command.Parameters.AddWithValue("@DownStatus", model.DownStatus);
-                    command.Parameters.AddWithValue("@HourMeter", model.HourMeter);
-                    command.Parameters.AddWithValue("@HoldStatus", model.HoldStatus);
-                    command.Parameters.AddWithValue("@HoldReason", model.HoldReason);
-                    command.Parameters.AddWithValue("@HoldResult", model.HoldResult);
-                    command.Parameters.AddWithValue("@HoldBy", model.HoldBy);
-                    command.Parameters.AddWithValue("@FileAddress", string.IsNullOrEmpty(model.FileAddress) ? DBNull.Value : model.FileAddress);
                     command.Parameters.AddWithValue("@FileAddressImageLink", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
-                    command.Parameters.AddWithValue("@StatusHistory", string.IsNullOrEmpty(model.StatusHistory) ? DBNull.Value : model.StatusHistory);
-                    command.Parameters.AddWithValue("@CurrentStatusBy", string.IsNullOrEmpty(model.CurrentStatusBy) ? DBNull.Value : model.CurrentStatusBy);
-                    command.Parameters.AddWithValue("@Department", model.Department);
 
-                    // Execute the query
-                    command.ExecuteNonQuery();
+                    int rowsAffected = command.ExecuteNonQuery();
+                    Console.WriteLine($"[DEBUG] Rows Affected: {rowsAffected}");
                 }
             }
 
-            Console.WriteLine("Database updated with relative path: " + model.FileAddress);
+            Console.WriteLine("[DEBUG] Database update completed.");
         }
 
-
-        public async Task<bool> UpdateMediaLinkFile(int id, string imagePath)
-        {
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                string query = "UPDATE maintenance SET FileAddressImageLink = @imagePath WHERE Id = @id";
-
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@imagePath", imagePath);
-                    command.Parameters.AddWithValue("@id", id);
-
-                    int rowsAffected = await command.ExecuteNonQueryAsync();
-                    return rowsAffected > 0;
-                }
-            }
-        }
 
     }
 

@@ -5,15 +5,15 @@ namespace DashboardReportApp.Models
 {
     public class MaintenanceRequestModel
     {
-        public int Id { get; set; }
+        public int? Id { get; set; }
 
-        public DateTime Timestamp { get; set; }
+        public DateTime? Timestamp { get; set; }
 
         [Required(ErrorMessage = "The Equipment field is required.")]
-        public string Equipment { get; set; }
+        public string? Equipment { get; set; }
 
         [Required(ErrorMessage = "The Requester field is required.")]
-        public string Requester { get; set; }
+        public string? Requester { get; set; }
 
         public DateTime? RequestedDate { get; set; }
         public string? Problem { get; set; }
@@ -22,12 +22,11 @@ namespace DashboardReportApp.Models
         public string? CloseBy { get; set; }
         public string? CloseResult { get; set; }
 
-        [Required(ErrorMessage = "DownStatus is required.")]
-        public bool DownStatus { get; set; }
+        public bool? DownStatus { get; set; }
 
-        public int? HourMeter { get; set; }
+        public decimal? HourMeter { get; set; }
 
-        public bool HoldStatus { get; set; }
+        public bool? HoldStatus { get; set; }
         public string? HoldReason { get; set; }
         public string? HoldResult { get; set; }
         public string? HoldBy { get; set; }
@@ -35,7 +34,7 @@ namespace DashboardReportApp.Models
         public string? FileAddressMediaLink { get; set; }
         public string? StatusHistory { get; set; }
         public string? CurrentStatusBy { get; set; }
-        public string Department { get; set; }
+        public string? Department { get; set; }
     }
 
 }

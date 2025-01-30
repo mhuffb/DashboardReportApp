@@ -2,73 +2,11 @@
 
 @{
     ViewData["Title"] = "Maintenance Requests";
-    var requesters = ViewData["Requesters"] as List<string>; // Ensure this is set in the controller
-    var equipmentList = ViewData["EquipmentList"] as List<string>; // Ensure this is set in the controller
+    var requesters = ViewData["Requesters"] as List<string>;
+    var equipmentList = ViewData["EquipmentList"] as List<string>;
 }
-<h1>Add New Request</h1>
-<form asp-action="AddRequest" method="post">
-    <div class="form-group">
-        <label for="Equipment">Equipment</label>
-        <select id="Equipment" name="Equipment" class="form-control" required>
-            <option value="">Select Equipment</option>
-            @foreach (var equipment in equipmentList)
-            {
-                var equipmentParts = equipment.Split(" - "); // Assuming format: "ID - Name"
-                var equipmentId = equipmentParts[0]; // Extract the ID
-                var equipmentName = equipmentParts.Length > 1 ? equipmentParts[1] : string.Empty;
 
-                <option value="@equipmentId">@equipmentId - @equipmentName</option>
-            }
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="Requester">Requester</label>
-        <select name="Requester" class="form-control" required>
-            <option value="">-- Select Requester --</option>
-            @foreach (var requester in requesters)
-            {
-                <option value="@requester">@requester</option>
-            }
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="Problem">Problem</label>
-        <textarea name="Problem" class="form-control" required></textarea>
-    </div>
-
-    <div class="form-group">
-        <label for="DownStatus">Machine Down?</label>
-        <input type="checkbox" id="DownStatus" name="DownStatus" value="true" />
-    </div>
-
-    <div class="form-group">
-        <label for="HourMeter">Hour Meter</label>
-        <input type="number" name="HourMeter" class="form-control" min="0" />
-    </div>
-
-    <div class="form-group">
-        <label for="Department">Department</label>
-        <select id="Department" name="Department" class="form-control" required>
-            <option value="">-- Select Department --</option>
-            <option value="Finishing">Finishing</option>
-            <option value="General">General</option>
-            <option value="Maintenance">Maintenance</option>
-            <option value="Molding">Molding</option>
-            <option value="Packing">Packing</option>
-            <option value="Quality">Quality</option>
-            <option value="Secondary">Secondary</option>
-            <option value="Sintering">Sintering</option>
-            <option value="Tooling">Tooling</option>
-        </select>
-    </div>
-
-    <button type="submit" class="btn btn-primary mt-2">Submit</button>
-</form>
-
-<h2>Open Maintenance Requests</h2>
-
+<h1>Maintenance Requests</h1>
 
 @if (TempData["Success"] != null)
 {
@@ -87,10 +25,63 @@
             <th>Equipment</th>
             <th>Requester</th>
             <th>Problem</th>
-            <th>Actions</th>
+            <th>Machine Down</th>
+            <th>Hour Meter</th>
+            <th>Department</th>
+            <th>File</th>
+            <th>Update File</th>
         </tr>
     </thead>
     <tbody>
+        <!-- Blank row for adding new requests -->
+        <tr>
+            <form asp-action="AddRequest" method="post" enctype="multipart/form-data">
+            <td>New</td>
+            <td>
+                <select name="Equipment" class="form-control" required>
+                    <option value="">Select Equipment</option>
+                        @foreach (var equipment in equipmentList)
+                        {
+                            var equipmentParts = equipment.Split(" - ");
+                            var equipmentId = equipmentParts[0];
+                            var equipmentName = equipmentParts.Length > 1 ? equipmentParts[1] : string.Empty;
+                        <option value="@equipmentId">@equipmentId - @equipmentName</option>
+                        }
+                </select>
+            </td>
+            <td>
+                <select name="Requester" class="form-control" required>
+                    <option value="">-- Select Requester --</option>
+                        @foreach (var requester in requesters)
+                        {
+                        <option value="@requester">@requester</option>
+                        }
+                </select>
+            </td>
+            <td><textarea name="Problem" class="form-control" required></textarea></td>
+            <td><input type="checkbox" name="DownStatus" value="true" /></td>
+            <td><input type="number" name="HourMeter" class="form-control" min="0" /></td>
+            <td>
+                <select name="Department" class="form-control" required>
+                    <option value="">-- Select Department --</option>
+                    <option value="Finishing">Finishing</option>
+                    <option value="General">General</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Molding">Molding</option>
+                    <option value="Packing">Packing</option>
+                    <option value="Quality">Quality</option>
+                    <option value="Secondary">Secondary</option>
+                    <option value="Sintering">Sintering</option>
+                    <option value="Tooling">Tooling</option>
+                </select>
+            </td>
+            <td>
+                <input type="file" name="file" class="form-control" accept="image/*" />
+            </td>
+            <td><button type="submit" class="btn btn-primary btn-sm">Submit</button></td>
+            </form>
+        </tr>
+
         @foreach (var request in Model)
         {
             <tr>
@@ -98,13 +89,16 @@
                 <td>@request.Equipment</td>
                 <td>@request.Requester</td>
                 <td>@request.Problem</td>
+                <td>@(request.DownStatus == true ? "Yes" : "No")</td>
+                <td>@(request.HourMeter.HasValue ? request.HourMeter.Value.ToString() : "N/A")</td>
+                <td>@request.Department</td>
 
                 <td>
                     @if (!string.IsNullOrEmpty(request.FileAddressMediaLink))
                     {
-                        <button class="btn btn-primary btn-sm fetch-image-btn"
+                        <button class="btn btn-info btn-sm fetch-image-btn"
                                 data-file-path="@request.FileAddressMediaLink">
-                            View Image
+                            Preview Image
                         </button>
                     }
                     else
@@ -112,26 +106,29 @@
                         <span>No Image</span>
                     }
                 </td>
+
                 <td>
-                    <a asp-action="GenerateQRCode" asp-route-id="@request.Id" target="_blank" class="btn btn-primary">
-                        Generate QR Code For Sending Image
-                    </a>
+                    <form action="/MaintenanceRequest/UpdateMediaLinkFile" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="id" value="@request.Id" />
+                        <input type="file" name="file" class="form-control" accept="image/*" required />
+                        <button type="submit" class="btn btn-primary btn-sm mt-2">Upload File</button>
+                    </form>
                 </td>
             </tr>
         }
     </tbody>
 </table>
 
-<!-- Modal for Viewing Image -->
-<div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" role="document">
+<!-- Modal for Image Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Order Image" class="img-fluid">
+                <img id="modalImage" src="" alt="Image Preview" class="img-fluid">
             </div>
         </div>
     </div>
@@ -141,51 +138,33 @@
     document.addEventListener('DOMContentLoaded', function () {
         const modalElement = document.getElementById('imageModal');
 
-        // Fetch and display the image
+        // Fetch and display the image preview
         document.querySelectorAll('.fetch-image-btn').forEach(button => {
             button.addEventListener('click', function () {
                 const filePath = this.dataset.filePath;
 
                 if (!filePath) {
-                    console.error("File path is missing.");
                     alert("No file path provided.");
                     return;
                 }
 
                 fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error("Failed to fetch the image.");
-                        return response.json();
-                    })
+                    .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            const modalImage = document.getElementById('modalImage');
-                            modalImage.src = data.url;
-
-                            const bootstrapModal = new bootstrap.Modal(modalElement);
-                            bootstrapModal.show();
+                            document.getElementById('modalImage').src = data.url;
+                            new bootstrap.Modal(modalElement).show();
                         } else {
                             alert(`Error: ${data.message}`);
                         }
                     })
-                    .catch(error => {
-                        console.error('Error fetching image:', error);
-                        alert('An error occurred while fetching the image.');
-                    });
+                    .catch(error => alert('An error occurred while fetching the image.'));
             });
         });
 
         // Cleanup the modal when hidden
         modalElement.addEventListener('hidden.bs.modal', function () {
-            const modalImage = document.getElementById('modalImage');
-            modalImage.src = '';
-
-            // Ensure no lingering overlay
-            const modalBackdrop = document.querySelector('.modal-backdrop');
-            if (modalBackdrop) modalBackdrop.remove();
-
-            document.body.classList.remove('modal-open'); // Re-enable scrolling
-            document.body.style = ''; // Clear any inline styles
+            document.getElementById('modalImage').src = '';
         });
     });
 </script>
