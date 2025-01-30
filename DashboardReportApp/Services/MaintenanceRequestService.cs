@@ -105,7 +105,7 @@
                     string pdfPath = GeneratePdf(request);
 
                     // Email the PDF
-                   // await SendEmailWithPdfAsync(pdfPath, request);
+                    await SendEmailWithPdfAsync(pdfPath, request);
 
                     return true;
                 }
