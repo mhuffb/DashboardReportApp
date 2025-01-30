@@ -1,7 +1,7 @@
 ﻿@model DashboardReportApp.Models.ScheduleViewModel
 
 <h2>Schedule Parts</h2>
-
+<a href="@Url.Action("Logout", "Admin")" class="btn btn-danger">Logout</a>
 <!-- Success and Error Messages -->
 @if (TempData["Success"] != null)
 {

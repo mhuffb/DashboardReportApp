@@ -5,7 +5,7 @@
 }
 
 <h2>Admin - Edit Maintenance Requests</h2>
-
+<a href="@Url.Action("Logout", "Admin")" class="btn btn-danger">Logout</a>
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success">@TempData["Success"]</div>
@@ -66,8 +66,10 @@
                         Expand
                     </button>
                 </td>
+                </form>
+            </tr>
 
-                <!-- Expandable Section for Additional Fields -->
+            <!-- Expandable Section for Additional Fields -->
             <tr class="extra-fields d-none" id="extraFields_@request.Id">
                 <td colspan="11">
                     <div class="card card-body">
@@ -90,20 +92,21 @@
                                 <textarea name="HoldResult" class="form-control">@request.HoldResult</textarea>
                             </div>
                             <div class="col-md-6">
-                                <label>Status History</label>
-                                <textarea name="StatusHistory" class="form-control">@request.StatusHistory</textarea>
-                            </div>
-                            <div class="col-md-6">
-                                <label>Current Status By</label>
-                                <textarea name="CurrentStatusBy" class="form-control">@request.CurrentStatusBy</textarea>
-                            </div>
-                            <div class="col-md-6">
                                 <label>File Address</label>
-                                <input type="text" name="FileAddress" class="form-control" value="@request.FileAddress" />
+                                <input type="text" name="FileAddress" class="form-control" value="@request.FileAddress" readonly />
 
                                 <!-- File Upload Input -->
                                 <label>Upload New File</label>
                                 <input type="file" name="FileUpload" class="form-control" accept="image/*,application/pdf" />
+
+                                <!-- Show Preview Button -->
+                                @if (!string.IsNullOrEmpty(request.FileAddress))
+                                {
+                                    <button type="button" class="btn btn-primary btn-sm mt-2 preview-btn"
+                                            data-file-path="@request.FileAddress">
+                                        Show Preview
+                                    </button>
+                                }
                             </div>
                         </div>
                         <button type="button" class="btn btn-danger btn-sm toggle-btn mt-2" data-target="#extraFields_@request.Id">
@@ -112,11 +115,168 @@
                     </div>
                 </td>
             </tr>
-            </form>
-            </tr>
         }
     </tbody>
 </table>
+
+<!-- Bootstrap Modal for File Preview -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewModalLabel">File Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="previewImage" src="" alt="Preview" class="img-fluid" style="display: none;" />
+                <iframe id="previewIframe" src="" style="display: none; width: 100%; height: 500px;"></iframe>
+                <p id="noPreviewText" style="display: none;">No preview available for this file type.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Your JavaScript to Fetch & Display the Image -->
+<script>
+       document.addEventListener('DOMContentLoaded', function () {
+        const modalElement = new bootstrap.Modal(document.getElementById('previewModal'));
+
+        document.querySelectorAll('.preview-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const filePath = this.dataset.filePath;
+                const previewImage = document.getElementById('previewImage');
+                const previewIframe = document.getElementById('previewIframe');
+                const noPreviewText = document.getElementById('noPreviewText');
+
+                if (!filePath) {
+                    noPreviewText.style.display = "block";
+                    previewImage.style.display = "none";
+                    previewIframe.style.display = "none";
+                    modalElement.show();
+                    return;
+                }
+
+                // Fetch the file URL from the server
+                fetch(`/MaintenanceAdmin/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const fileExtension = filePath.split('.').pop().toLowerCase();
+
+                            if (["jpg", "png", "jpeg"].includes(fileExtension)) {
+                                previewImage.src = data.url;
+                                previewImage.style.display = "block";
+                                previewIframe.style.display = "none";
+                                noPreviewText.style.display = "none";
+                            } else if (fileExtension === "pdf") {
+                                previewIframe.src = data.url;
+                                previewIframe.style.display = "block";
+                                previewImage.style.display = "none";
+                                noPreviewText.style.display = "none";
+                            } else {
+                                noPreviewText.style.display = "block";
+                                previewImage.style.display = "none";
+                                previewIframe.style.display = "none";
+                            }
+                        } else {
+                            alert(`Error: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching file:', error);
+                        alert('An error occurred while fetching the file.');
+                    });
+
+                modalElement.show();
+            });
+        });
+
+    });
+</script>
+
+
+<!-- JavaScript for File Preview -->
+<script>
+        document.addEventListener('DOMContentLoaded', function () {
+        const modalElement = new bootstrap.Modal(document.getElementById('previewModal'));
+
+        // For each "Preview" button
+        document.querySelectorAll('.preview-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const filePath = this.dataset.filePath;
+                const previewImage = document.getElementById('previewImage');
+                const previewIframe = document.getElementById('previewIframe');
+                const noPreviewText = document.getElementById('noPreviewText');
+
+                if (!filePath) {
+                    noPreviewText.style.display = "block";
+                    previewImage.style.display = "none";
+                    previewIframe.style.display = "none";
+                    modalElement.show();
+                    return;
+                }
+
+                // Fetch the file URL from the server
+                fetch(`/MaintenanceAdmin/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const fileExtension = filePath.split('.').pop().toLowerCase();
+
+                            if (["jpg", "png", "jpeg"].includes(fileExtension)) {
+                                previewImage.src = data.url;
+                                previewImage.style.display = "block";
+                                previewIframe.style.display = "none";
+                                noPreviewText.style.display = "none";
+                            } else if (fileExtension === "pdf") {
+                                previewIframe.src = data.url;
+                                previewIframe.style.display = "block";
+                                previewImage.style.display = "none";
+                                noPreviewText.style.display = "none";
+                            } else {
+                                noPreviewText.style.display = "block";
+                                previewImage.style.display = "none";
+                                previewIframe.style.display = "none";
+                            }
+                        } else {
+                            alert(`Error: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching file:', error);
+                        alert('An error occurred while fetching the file.');
+                    });
+
+                modalElement.show();
+            });
+        });
+
+        // Clean up the modal when it is hidden
+        document.getElementById('previewModal').addEventListener('hidden.bs.modal', function () {
+            const previewImage = document.getElementById('previewImage');
+            const previewIframe = document.getElementById('previewIframe');
+            const noPreviewText = document.getElementById('noPreviewText');
+
+            // Reset the modal content
+            previewImage.src = "";
+            previewImage.style.display = "none";
+            previewIframe.src = "";
+            previewIframe.style.display = "none";
+            noPreviewText.style.display = "none";
+
+            // Remove any leftover backdrop (rare, but just in case)
+            const modalBackdrop = document.querySelector('.modal-backdrop');
+            if (modalBackdrop) {
+                modalBackdrop.remove();
+            }
+
+            // Ensure the body is not in "modal-open" state
+            document.body.classList.remove('modal-open');
+            document.body.style = ''; // Clear any inline styles
+        });
+    });
+</script>
+
 
 
 <!-- JavaScript for Expand/Collapse -->

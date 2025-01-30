@@ -42,6 +42,13 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.ToolingHistoryService>();
     builder.Services.AddScoped<DashboardReportApp.Services.ProcessChangeRequestService>();
     builder.Services.AddScoped<DashboardReportApp.Services.MaintenanceAdminService>();
+    // Add session services
+    builder.Services.AddSession(options =>
+    {
+        options.IdleTimeout = TimeSpan.FromMinutes(20); // Set session timeout
+        options.Cookie.HttpOnly = true; // Make the session cookie HTTP-only
+        options.Cookie.IsEssential = true; // Mark the session cookie as essential
+    });
 
 
     // Use Serilog for logging
@@ -61,7 +68,7 @@ try
 
     app.UseRouting();
     app.UseAuthorization();
-
+    app.UseSession(); // Enable session middleware
     app.MapControllerRoute(
         name: "default",
         pattern: "{controller=Home}/{action=Index}/{id?}");

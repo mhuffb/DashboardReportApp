@@ -64,7 +64,38 @@ namespace DashboardReportApp.Controllers
                 return View("AdminView", _adminService.GetAllRequests());
             }
         }
+        [HttpGet("FetchImage")]
+        public IActionResult FetchImage(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+            {
+                return Json(new { success = false, message = "No file path provided." });
+            }
 
+            if (!System.IO.File.Exists(filePath))
+            {
+                return Json(new { success = false, message = $"File not found: {filePath}" });
+            }
 
+            // Ensure the directory exists
+            var fileName = Path.GetFileName(filePath);
+            var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
+            var destinationPath = Path.Combine(destinationDir, fileName);
+
+            if (!Directory.Exists(destinationDir))
+            {
+                Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
+            }
+
+            // Copy the file to the destination path if it doesn't already exist
+            if (!System.IO.File.Exists(destinationPath))
+            {
+                System.IO.File.Copy(filePath, destinationPath);
+            }
+
+            // Return the relative path to the image
+            var relativePath = $"/Uploads/{fileName}";
+            return Json(new { success = true, url = relativePath });
+        }
     }
 }
