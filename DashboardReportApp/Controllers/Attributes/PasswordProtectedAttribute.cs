@@ -15,29 +15,26 @@ namespace DashboardReportApp.Controllers.Attributes
         private const string PasswordSessionKey = "PasswordProtectedPageAccessGranted";
         public string Password { get; set; } // Set this to the required password
 
+
         public void OnAuthorization(AuthorizationFilterContext context)
         {
             var httpContext = context.HttpContext;
 
-            // Check if the user has already entered the correct password
+            // Check if the user is already authenticated
             if (httpContext.Session.GetString(PasswordSessionKey) == "true")
             {
                 return; // Allow access
             }
 
-            // Check if the user is submitting the password form
-            if (httpContext.Request.Method == "POST")
+            // 🚀 Store the originally requested URL before redirecting to login
+            if (httpContext.Request.Method == "GET")
             {
-                var enteredPassword = httpContext.Request.Form["password"].ToString();
-                if (enteredPassword == Password)
-                {
-                    httpContext.Session.SetString(PasswordSessionKey, "true");
-                    return; // Allow access
-                }
+                httpContext.Session.SetString("ReturnUrl", httpContext.Request.Path);
             }
 
-            // Redirect to the password entry page if unauthorized
-            context.Result = new Microsoft.AspNetCore.Mvc.ViewResult { ViewName = "PasswordEntry" };
+            // 🚀 Redirect to `/Admin/PasswordEntry` for authentication
+            context.Result = new RedirectToActionResult("PasswordEntry", "Admin", null);
         }
+
     }
 }

@@ -7,34 +7,48 @@ namespace DashboardReportApp.Controllers
     [Route("Admin")]
     public class AdminController : Controller
     {
+        private const string PasswordSessionKey = "PasswordProtectedPageAccessGranted";
+
         [Route("")]
         public IActionResult Index()
         {
             return View();
         }
-        [Route("PasswordEntry")]
-        public ActionResult PasswordEntry()
+        [HttpGet("PasswordEntry")]
+        public IActionResult PasswordEntry()
         {
             ViewBag.ErrorMessage = TempData["ErrorMessage"];
             return View();
         }
-        [Route("Logout")]
-        public ActionResult Logout()
+
+        [HttpPost("PasswordEntry")]
+        public IActionResult PasswordEntry(string password)
         {
-            // Remove all session keys
-            foreach (var key in HttpContext.Session.Keys)
+            if (password == "5intergy") // Replace with actual password
             {
-                HttpContext.Session.Remove(key);
+                HttpContext.Session.SetString(PasswordSessionKey, "true");
+
+                // 🚀 Redirect back to the original page if available
+                var returnUrl = HttpContext.Session.GetString("ReturnUrl");
+                if (!string.IsNullOrEmpty(returnUrl))
+                {
+                    HttpContext.Session.Remove("ReturnUrl");
+                    return Redirect(returnUrl);
+                }
+
+                return RedirectToAction("Index", "Home"); // Default fallback redirect
             }
 
-            // Optionally, you can also clear the session cookie
-            HttpContext.Session.Clear();
-            return RedirectToAction("Index", "Home"); // Redirect to the home page
+            TempData["ErrorMessage"] = "Invalid password.";
+            return RedirectToAction("PasswordEntry");
         }
-        [Route("ProtectedView")] // Define the route for this action
-        public IActionResult ProtectedView()
+
+        [HttpGet("Logout")]
+        public IActionResult Logout()
         {
-            return View();
+            HttpContext.Session.Clear();
+            return RedirectToAction("PasswordEntry");
         }
+
     }
 }

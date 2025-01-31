@@ -20,9 +20,17 @@ namespace DashboardReportApp.Controllers
         [HttpGet("AdminView")]
         public IActionResult AdminView()
         {
+            Console.WriteLine("AdminView was called");
+
             var requests = _adminService.GetAllRequests();
+            if (requests == null)
+            {
+                Console.WriteLine("Requests are null!");
+            }
+
             return View(requests);
         }
+
 
         [HttpPost]
         public async Task<IActionResult> UpdateRequest(MaintenanceRequestModel model, IFormFile? FileUpload)
