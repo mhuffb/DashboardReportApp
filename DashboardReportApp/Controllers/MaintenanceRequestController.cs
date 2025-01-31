@@ -151,12 +151,7 @@ namespace DashboardReportApp.Controllers
             return Json(new { success = true, url = relativePath });
         }
 
-        [HttpGet("AdminView")]
-        public async Task<IActionResult> AdminView()
-        {
-            var requests = _service.GetAllRequests();
-            return View(requests);
-        }
+       
 
 
         [HttpPost]
