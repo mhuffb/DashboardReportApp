@@ -1,10 +1,12 @@
-﻿using DashboardReportApp.Models;
+﻿using DashboardReportApp.Controllers.Attributes;
+using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 
 namespace DashboardReportApp.Controllers
 {
+    [PasswordProtected(Password = "5intergy")] // Set your password here
     public class ToolingHistoryController : Controller
     {
         private readonly ToolingHistoryService _service;

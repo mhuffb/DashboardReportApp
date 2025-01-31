@@ -6,30 +6,37 @@ using System.Linq;
 
 namespace DashboardReportApp.Controllers
 {
-    [Route("ProcessChangeRequest")]
-    public class ProcessChangeRequestController : Controller
+    [Route("AdminProcessChangeRequest")]
+    [PasswordProtected(Password = "5intergy")] // Set your password here
+    public class AdminProcessChangeRequestController : Controller
     {
         private readonly ProcessChangeRequestService _service;
 
-        public ProcessChangeRequestController(ProcessChangeRequestService service)
+        public AdminProcessChangeRequestController(ProcessChangeRequestService service)
         {
             _service = service;
         }
 
+        //  public IActionResult Index()
+        // {
+        //     var requests = _service.GetAllRequests();
+        //     return View(requests);
+        //  }
+        [Route("Index")]
         public IActionResult Index()
         {
             var requests = _service.GetAllRequests();
             return View(requests);
         }
-        
-       
+
+      
 
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult AddRequest(ProcessChangeRequest model, IFormFile? file) // Allow null files
+        public IActionResult UpdateRequest(ProcessChangeRequest model, IFormFile? FileUpload)
         {
             if (!ModelState.IsValid)
             {
+                // Log validation errors for debugging
                 foreach (var state in ModelState)
                 {
                     foreach (var error in state.Value.Errors)
@@ -38,23 +45,22 @@ namespace DashboardReportApp.Controllers
                     }
                 }
 
-                ViewData["Error"] = "Please fix the validation errors.";
-                return View("Index", _service.GetAllRequests());
+                return View("AdminView", _service.GetAllRequests());
             }
 
             try
             {
-                _service.AddRequest(model, file);
-                return RedirectToAction("Index");
+                // Call the service to update the request
+                _service.UpdateRequest(model, FileUpload);
+
+                return RedirectToAction("AdminView");
             }
             catch (Exception ex)
             {
-                ViewData["Error"] = $"An error occurred: {ex.Message}";
-                return View("Index", _service.GetAllRequests());
+                Console.WriteLine($"Error: {ex.Message}");
+                return View("AdminView", _service.GetAllRequests());
             }
         }
-
-      
 
         [HttpPost]
         public IActionResult UpdateMediaLinkFile(int id, IFormFile file)

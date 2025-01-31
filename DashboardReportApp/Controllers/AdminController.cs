@@ -31,7 +31,6 @@ namespace DashboardReportApp.Controllers
             HttpContext.Session.Clear();
             return RedirectToAction("Index", "Home"); // Redirect to the home page
         }
-        [PasswordProtected(Password = "5intergy")] // Set your password here
         [Route("ProtectedView")] // Define the route for this action
         public IActionResult ProtectedView()
         {

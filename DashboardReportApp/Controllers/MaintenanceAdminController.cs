@@ -2,9 +2,11 @@
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using System.Threading.Tasks;
+using DashboardReportApp.Controllers.Attributes;
 
 namespace DashboardReportApp.Controllers
 {
+    [PasswordProtected(Password = "5intergy")] // Set your password here
     [Route("MaintenanceAdmin")]
     public class MaintenanceAdminController : Controller
     {
