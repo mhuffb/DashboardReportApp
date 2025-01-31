@@ -63,7 +63,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet("press")]
         public IActionResult GetPressLink()
         {
-            string responseHtml = "<a href=\"http://192.168.1.254\">Press 102</a>";
+            string responseHtml = "<a href=\"http://192.168.1.17\">Press 102</a>";
             return Content(responseHtml, "text/html");
         }
     }
