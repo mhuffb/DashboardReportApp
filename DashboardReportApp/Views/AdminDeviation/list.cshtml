@@ -1,0 +1,58 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+@model List<DashboardReportApp.Models.AdminDeviationModel>
+
+@{
+    ViewData["Title"] = "Admin Deviation Management";
+}
+
+<h2>Admin Deviation Management</h2>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Timestamp</th>
+            <th>Part</th>
+            <th>Sent DateTime</th>
+            <th>Discrepancy</th>
+            <th>Operator</th>
+            <th>Comm Method</th>
+            <th>Disposition</th>
+            <th>Approved By</th>
+            <th>DateTime CAST Review</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var deviation in Model)
+        {
+            <tr>
+                <form method="post" action="@Url.Action("Update", "AdminDeviation")">
+                    <input type="hidden" name="Id" value="@deviation.Id" />
+                <td>@deviation.Id</td>
+                <td><input type="datetime-local" name="Timestamp" value="@deviation.Timestamp.ToString("yyyy-MM-ddTHH:mm")" class="form-control" required /></td>
+                <td><input type="text" name="Part" value="@deviation.Part" class="form-control" required /></td>
+                <td><input type="datetime-local" name="SentDateTime" value="@(deviation.SentDateTime?.ToString("yyyy-MM-ddTHH:mm") ?? "")" class="form-control" /></td>
+                <td><textarea name="Discrepancy" class="form-control">@deviation.Discrepancy</textarea></td>
+                <td><input type="text" name="Operator" value="@deviation.Operator" class="form-control" required /></td>
+                <td><input type="text" name="CommMethod" value="@deviation.CommMethod" class="form-control" required /></td>
+                <td><input type="text" name="Disposition" value="@deviation.Disposition" class="form-control" required /></td>
+                <td><input type="text" name="ApprovedBy" value="@deviation.ApprovedBy" class="form-control" required /></td>
+                <td><input type="datetime-local" name="DateTimeCASTReview" value="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-ddTHH:mm") ?? "")" class="form-control" /></td>
+                <td>
+                    <button type="submit" class="btn btn-success btn-sm">Save</button>
+                </td>
+                </form>
+            </tr>
+        }
+    </tbody>
+</table>
