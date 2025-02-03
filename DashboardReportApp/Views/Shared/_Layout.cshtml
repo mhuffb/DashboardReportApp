@@ -4,69 +4,135 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Sintergy Dashboard</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/DashboardReportApp.styles.css" asp-append-version="true" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
-    <!-- Bootstrap Bundle JS (includes Popper.js) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-
-
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="~/css/custom.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Sintergy Dashboard</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Molding" asp-action="Index">Molding</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Sintering" asp-action="Index">Sintering</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Secondary" asp-action="Index">Secondary</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Maintenance" asp-action="Index">Maintenance</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="QC" asp-action="Index">QC</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Admin" asp-action="Index">Admin</a>
-                        </li>
-                    </ul>
+<body class="d-flex flex-column min-vh-100">
+    <!-- Ensures full-height layout -->
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow">
+        <div class="container-fluid">
+            <a class="navbar-brand" asp-controller="Home" asp-action="Index">
+                <i class="bi bi-speedometer2"></i> Sintergy Dashboard
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+
+                    <!-- Molding Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="moldingDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-box-seam"></i> Molding
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="moldingDropdown">
+                            <li><a class="dropdown-item" href="/api/picodata/press"><i class="bi bi-bar-chart"></i> Counters</a></li>
+                            <li><a class="dropdown-item" href="/PressSetup"><i class="bi bi-tools"></i> Setup</a></li>
+                            <li><a class="dropdown-item" asp-controller="PressMixBagChange" asp-action="Index"><i class="bi bi-bag"></i> Bag Change</a></li>
+                            <li><a class="dropdown-item" asp-controller="PressRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
+                        </ul>
+                    </li>
+
+                    <!-- Sintering Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="sinteringDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-fire"></i> Sintering
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="sinteringDropdown">
+                            <li><a class="dropdown-item" asp-controller="SinterRunLog" asp-action="Index"><i class="bi bi-journal-text"></i> Run Logs</a></li>
+                        </ul>
+                    </li>
+
+                    <!-- Secondary Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="secondaryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-tools"></i> Secondary
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="secondaryDropdown">
+                            <li><a class="dropdown-item" asp-controller="SecondaryRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
+                            <li><a class="dropdown-item" asp-controller="SecondarySetupLog" asp-action="Index"><i class="bi bi-hammer"></i> Setup</a></li>
+                        </ul>
+                    </li>
+
+                    <!-- Maintenance Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="maintenanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-wrench"></i> Maintenance
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="maintenanceDropdown">
+                            <li><a class="dropdown-item" asp-controller="MaintenanceRequest" asp-action="Index"><i class="bi bi-clipboard-check"></i> Requests</a></li>
+                        </ul>
+                    </li>
+
+                    <!-- QC Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="qcDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-check-circle"></i> QC
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="qcDropdown">
+                            <li><a class="dropdown-item" asp-controller="HoldTag" asp-action="Index"><i class="bi bi-exclamation-triangle"></i> Holdtags</a></li>
+                            <li><a class="dropdown-item" asp-controller="Deviation" asp-action="Index"><i class="bi bi-journal-text"></i> Deviations</a></li>
+                            <li><a class="dropdown-item" asp-controller="QCSecondaryHoldReturn" asp-action="Index"><i class="bi bi-arrow-counterclockwise"></i> Secondary Hold Returns</a></li>
+                            <li><a class="dropdown-item" asp-controller="ProcessChangeRequest" asp-action="Index"><i class="bi bi-arrow-repeat"></i> Process Change Requests</a></li>
+                        </ul>
+                    </li>
+
+                    <!-- Admin Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="adminDropdown">
+                            <li><a class="dropdown-item" asp-controller="Schedule" asp-action="Index"><i class="bi bi-calendar"></i> Schedule Management</a></li>
+                            <li><a class="dropdown-item" asp-controller="ToolingHistory" asp-action="Index"><i class="bi bi-tools"></i> Tooling Transactions</a></li>
+                            <li><a class="dropdown-item" asp-controller="AdminProcessChangeRequest" asp-action="Index"><i class="bi bi-repeat"></i> Process Change Requests</a></li>
+                            <li><a class="dropdown-item" asp-controller="AdminHoldTag" asp-action="Index"><i class="bi bi-bookmarks"></i> Hold Records</a></li>
+                            <li><a class="dropdown-item" asp-controller="MaintenanceAdmin" asp-action="AdminView"><i class="bi bi-wrench-adjustable"></i> Maintenance Requests</a></li>
+                            <li><a class="dropdown-item" asp-controller="AdminDeviation" asp-action="List"><i class="bi bi-file-earmark-text"></i> Deviation Requests</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" asp-controller="Admin" asp-action="Logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+                        </ul>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+
+    <!-- Main Content -->
+    <div class="container flex-grow-1 mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="content-wrapper p-4 bg-white shadow rounded">
+                    @RenderBody()
                 </div>
             </div>
-        </nav>
-    </header>
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
+        </div>
+    </div>
 
-    <footer class="border-top footer text-muted">
+    <!-- Footer at Bottom -->
+    <footer class="footer bg-dark text-light text-center py-3 mt-auto">
         <div class="container">
-            &copy; 2025 - Sintergy Dashboard - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            <p class="mb-0">&copy; @DateTime.Now.Year - Sintergy Dashboard</p>
+            <small><a class="text-light" asp-controller="Home" asp-action="Privacy">Privacy Policy</a></small>
         </div>
     </footer>
+
+    <!-- Bootstrap JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+
 </body>
 </html>

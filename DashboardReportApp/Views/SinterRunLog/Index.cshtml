@@ -2,120 +2,174 @@
     ViewData["Title"] = "Sintering";
 }
 
-<h1>Sintering</h1>
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Sintering</h1>
 
-@if (ViewData["Error"] != null)
-{
-    <div class="alert alert-danger">@ViewData["Error"]</div>
-}
+    @if (ViewData["Error"] != null)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            @ViewData["Error"]
+        </div>
+    }
 
-@if (ViewData["Message"] != null)
-{
-    <div class="alert alert-success">@ViewData["Message"]</div>
-}
+    @if (ViewData["Message"] != null)
+    {
+        <div class="alert alert-success fade show" role="alert">
+            @ViewData["Message"]
+        </div>
+    }
 
-<h3>Open Skids</h3>
-<table class="table">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Timestamp</th>
-            <th>Operator</th>
-            <th>Part</th>
-            <th>Oven</th>
-            <th>Process</th>
-            <th>Start DateTime</th>
-            <th>End DateTime</th>
-            <th>Notes</th>
-            <th>Run</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var skid in (List<SinterRunSkid>)ViewData["OpenSkids"])
-        {
-            <tr>
-                <td>@skid.Id</td>
-                <td>@skid.Timestamp</td>
-                <td>@skid.Operator</td>
-                <td>@skid.Part</td>
-                <td>@skid.Furnace</td>
-                <td>@skid.Process</td>
-                <td>@skid.StartDateTime</td>
-                <td>@skid.EndDateTime</td>
-                <td>@skid.Notes</td>
-                <td>@skid.Run</td>
-                <td>
-                    <form method="post" asp-action="CloseSkid" class="d-inline">
-                        <input type="hidden" name="part" value="@skid.Part" />
-                        <input type="hidden" name="furnace" value="@skid.Furnace" />
-                        <button type="submit" class="btn btn-warning">Close Skid</button>
-                    </form>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
-
-<h3>Start a New Skid</h3>
-<form method="post" asp-action="StartSkid">
-    <div class="form-group">
-        <label for="operatorName">Operator:</label>
-        <select name="operatorName" id="operatorName" class="form-control">
-            @if (ViewData["Operators"] != null)
-            {
-                foreach (var operatorName in (List<string>)ViewData["Operators"])  // Renamed to operatorName
+    <h3 class="mt-4">Open Skids</h3>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm w-100">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Operator</th>
+                    <th>Part</th>
+                    <th>Oven</th>
+                    <th>Process</th>
+                    <th>Start DateTime</th>
+                    <th>End DateTime</th>
+                    <th>Notes</th>
+                    <th>Run</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var skid in (List<SinterRunSkid>)ViewData["OpenSkids"])
                 {
-                    <option value="@operatorName">@operatorName</option>
+                    <tr>
+                        <td>@skid.Id</td>
+                        <td>@skid.Timestamp</td>
+                        <td>@skid.Operator</td>
+                        <td>@skid.Part</td>
+                        <td>@skid.Furnace</td>
+                        <td>@skid.Process</td>
+                        <td>@skid.StartDateTime</td>
+                        <td>@skid.EndDateTime</td>
+                        <td>@skid.Notes</td>
+                        <td>@skid.Run</td>
+                        <td>
+                            <form method="post" asp-action="CloseSkid" class="d-inline">
+                                <input type="hidden" name="part" value="@skid.Part" />
+                                <input type="hidden" name="furnace" value="@skid.Furnace" />
+                                <button type="submit" class="btn btn-warning btn-sm w-100">
+                                    <i class="bi bi-x-circle"></i> Close Skid
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
                 }
-            }
-            else
-            {
-                <option>No operators available</option>
-            }
-        </select>
-    </div>    <div class="form-group">
-        <label for="part">Part:</label>
-        <input type="text" name="part" id="part" class="form-control" required />
+            </tbody>
+        </table>
     </div>
 
-    <div class="form-group">
-        <label for="furnace">Furnace:</label>
-        <select name="furnace" id="furnace" class="form-control">
-            @foreach (var furnace in (List<string>)ViewData["Furnaces"])
-            {
-                <option value="@furnace">@furnace</option>
-            }
-        </select>
+    <h3 class="mt-4">Start a New Skid</h3>
+    <div class="card shadow">
+        <div class="card-body">
+            <form method="post" asp-action="StartSkid">
+                <div class="mb-3">
+                    <label for="operatorName" class="form-label">Operator:</label>
+                    <select name="operatorName" id="operatorName" class="form-control">
+                        @if (ViewData["Operators"] != null)
+                        {
+                            foreach (var operatorName in (List<string>)ViewData["Operators"])
+                            {
+                                <option value="@operatorName">@operatorName</option>
+                            }
+                        }
+                        else
+                        {
+                            <option>No operators available</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="part" class="form-label">Part:</label>
+                    <input type="text" name="part" id="part" class="form-control" required />
+                </div>
+
+                <div class="mb-3">
+                    <label for="furnace" class="form-label">Furnace:</label>
+                    <select name="furnace" id="furnace" class="form-control">
+                        @foreach (var furnace in (List<string>)ViewData["Furnaces"])
+                        {
+                            <option value="@furnace">@furnace</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="process" class="form-label">Process:</label>
+                    <select name="process" id="process" class="form-control">
+                        <option value="Sinter">Sinter</option>
+                        <option value="Anneal">Anneal</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="notes" class="form-label">Notes:</label>
+                    <textarea name="notes" id="notes" class="form-control text-area-large"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-play-circle"></i> Start Skid</button>
+            </form>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="process">Process:</label>
-        <select name="process" id="process" class="form-control">
-            <option value="Sinter">Sinter</option>
-            <option value="Anneal">Anneal</option>
-        </select>
+    <h3 class="mt-4">Close All Skids by Furnace</h3>
+    <div class="card shadow">
+        <div class="card-body">
+            <form method="post" asp-action="CloseSkidByFurnace">
+                <div class="mb-3">
+                    <label for="furnace" class="form-label">Select Furnace to Close All Skids:</label>
+                    <select name="furnace" id="furnace" class="form-control">
+                        @foreach (var furnace in (List<string>)ViewData["Furnaces"])
+                        {
+                            <option value="@furnace">@furnace</option>
+                        }
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-danger w-100"><i class="bi bi-x-circle"></i> Close All Skids</button>
+            </form>
+        </div>
     </div>
+</div>
 
-    <div class="form-group">
-        <label for="notes">Notes:</label>
-        <textarea name="notes" id="notes" class="form-control"></textarea>
-    </div>
+<!-- Custom Styles -->
+<style>
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
 
-    <button type="submit" class="btn btn-primary mt-3">Start Skid</button>
-</form>
+        .btn:hover {
+            transform: scale(1.05);
+        }
 
-<h3>Close All Skids by Furnace</h3>
-<form method="post" asp-action="CloseSkidByFurnace">
-    <div class="form-group">
-        <label for="furnace">Select Furnace to Close All Skids:</label>
-        <select name="furnace" id="furnace" class="form-control">
-            @foreach (var furnace in (List<string>)ViewData["Furnaces"])
-            {
-                <option value="@furnace">@furnace</option>
-            }
-        </select>
-    </div>
+    /* Increase text area size */
+    .text-area-large {
+        min-height: 150px !important;
+    }
 
-    <button type="submit" class="btn btn-danger mt-3">Close All Skids</button>
-</form>
+    /* Ensures table takes full width */
+    .table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+    }
+
+    /* Makes tables scrollable if needed */
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
+
+    /* Add spacing and structure */
+    .mb-3 {
+        margin-bottom: 1rem;
+    }
+</style>

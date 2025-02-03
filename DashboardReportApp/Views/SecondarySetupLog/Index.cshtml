@@ -1,76 +1,108 @@
 ﻿@model DashboardReportApp.Models.SecondarySetupLogViewModel
-<div class="container mt-1">
-<h1>Secondary Setup Log</h1>
 
-@if (TempData["Message"] != null)
-{
-    <div class="alert alert-success">@TempData["Message"]</div>
-}
+<div class="container-fluid mt-4">
+    <h2 class="text-center mb-4">Secondary Setup Log</h2>
 
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
+    @if (TempData["Message"] != null)
+    {
+        <div class="alert alert-success fade show" role="alert">
+            @TempData["Message"]
+        </div>
+    }
 
-<h2>Add Setup</h2>
-<form asp-action="CreateSetup" method="post">
-    <div class="form-group">
-        <label for="Operator">Operator:</label>
-        <select id="Operator" name="Operator" class="form-control" required>
-            <option value="">-- Select Operator --</option>
-            @foreach (var op in Model.Operators)
-            {
-                <option value="@op">@op</option>
-            }
-        </select>
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    <!-- Add Setup Form -->
+    <div class="card shadow p-4 mb-4">
+        <h4>Add Setup</h4>
+        <form asp-action="CreateSetup" method="post">
+            <div class="mb-3">
+                <label for="Operator" class="form-label">Operator</label>
+                <select id="Operator" name="Operator" class="form-control" required>
+                    <option value="">-- Select Operator --</option>
+                    @foreach (var op in Model.Operators)
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="Machine" class="form-label">Machine</label>
+                <select id="Machine" name="Machine" class="form-control" required>
+                    <option value="">-- Select Machine --</option>
+                    @foreach (var machine in Model.Equipment)
+                    {
+                        <option value="@machine">@machine</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="Run" class="form-label">Run #</label>
+                <input type="text" id="Run" name="Run" class="form-control" required />
+            </div>
+
+            <div class="mb-3">
+                <label for="Op" class="form-label">Op</label>
+                <input type="text" id="Op" name="Op" class="form-control" required />
+            </div>
+
+            <div class="mb-3">
+                <label for="Pcs" class="form-label">Pieces</label>
+                <input type="number" id="Pcs" name="Pcs" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="ScrapMach" class="form-label">Machined Scrap</label>
+                <input type="number" id="ScrapMach" name="ScrapMach" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="ScrapNonMach" class="form-label">Non-Machined Scrap</label>
+                <input type="number" id="ScrapNonMach" name="ScrapNonMach" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="Notes" class="form-label">Notes</label>
+                <textarea id="Notes" name="Notes" class="form-control text-area-large"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="SetupHours" class="form-label">Setup Hours</label>
+                <input type="number" step="0.1" id="SetupHours" name="SetupHours" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-3">Add Setup</button>
+        </form>
     </div>
-
-    <div class="form-group">
-        <label for="Machine">Machine:</label>
-        <select id="Machine" name="Machine" class="form-control" required>
-            <option value="">-- Select Machine --</option>
-            @foreach (var machine in Model.Equipment)
-            {
-                <option value="@machine">@machine</option>
-            }
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="Run">Run #:</label>
-        <input type="text" id="Run" name="Run" class="form-control" required />
-    </div>
-
-    <div class="form-group">
-        <label for="Op">Op:</label>
-        <input type="text" id="Op" name="Op" class="form-control" required />
-    </div>
-
-    <div class="form-group">
-        <label for="Pcs">Pieces:</label>
-        <input type="number" id="Pcs" name="Pcs" class="form-control" />
-    </div>
-
-    <div class="form-group">
-        <label for="ScrapMach">Machined Scrap:</label>
-        <input type="number" id="ScrapMach" name="ScrapMach" class="form-control" />
-    </div>
-
-    <div class="form-group">
-        <label for="ScrapNonMach">Non-Machined Scrap:</label>
-        <input type="number" id="ScrapNonMach" name="ScrapNonMach" class="form-control" />
-    </div>
-
-    <div class="form-group">
-        <label for="Notes">Notes:</label>
-        <textarea id="Notes" name="Notes" class="form-control"></textarea>
-    </div>
-
-    <div class="form-group">
-        <label for="SetupHours">Setup Hours:</label>
-        <input type="number" step="0.1" id="SetupHours" name="SetupHours" class="form-control" />
-    </div>
-
-    <button type="submit" class="btn btn-primary mt-3">Add Setup</button>
-</form>
 </div>
+
+<!-- Custom Styles -->
+<style>
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
+
+    .w-100 {
+        width: 100% !important;
+    }
+</style>

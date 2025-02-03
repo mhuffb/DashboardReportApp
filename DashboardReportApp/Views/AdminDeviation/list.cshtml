@@ -1,58 +1,87 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
-@model List<DashboardReportApp.Models.AdminDeviationModel>
+﻿@model List<DashboardReportApp.Models.AdminDeviationModel>
 
-@{
-    ViewData["Title"] = "Admin Deviation Management";
-}
+<div class="container-fluid px-3">
+    <!-- Makes it full width -->
+    <h2 class="text-center mb-4">Admin Deviation Management</h2>
 
-<h2>Admin Deviation Management</h2>
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success fade show" role="alert">
+            @TempData["Success"]
+        </div>
+    }
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">@TempData["Success"]</div>
-}
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm w-100">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width: 5%;">ID</th>
+                    <th style="width: 15%;">Part</th>
+                    <th style="width: 10%;">Sent Date</th>
+                    <th style="width: 20%;">Discrepancy</th>
+                    <th style="width: 12%;">Operator</th>
+                    <th style="width: 12%;">Comm Method</th>
+                    <th style="width: 25%;">Disposition</th>
+                    <th style="width: 12%;">Approved By</th>
+                    <th style="width: 12%;">CAST Review Date</th>
+                    <th style="width: 8%;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var deviation in Model)
+                {
+                    <tr>
+                        <form method="post" action="@Url.Action("Update", "AdminDeviation")">
+                            <input type="hidden" name="Id" value="@deviation.Id" />
+                        <td>@deviation.Id</td>
+                        <td><input type="text" name="Part" value="@deviation.Part" class="form-control w-100" required /></td>
+                        <td><input type="date" name="SentDateTime" value="@(deviation.SentDateTime?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td><textarea name="Discrepancy" class="form-control w-100 text-area-large">@deviation.Discrepancy</textarea></td>
+                        <td><input type="text" name="Operator" value="@deviation.Operator" class="form-control w-100" required /></td>
+                        <td><input type="text" name="CommMethod" value="@deviation.CommMethod" class="form-control w-100" required /></td>
+                        <td><textarea name="Disposition" class="form-control w-100 text-area-large">@deviation.Disposition</textarea></td>
+                        <td><input type="text" name="ApprovedBy" value="@deviation.ApprovedBy" class="form-control w-100" required /></td>
+                        <td><input type="date" name="DateTimeCASTReview" value="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td>
+                            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-save"></i> Save</button>
+                        </td>
+                        </form>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Timestamp</th>
-            <th>Part</th>
-            <th>Sent DateTime</th>
-            <th>Discrepancy</th>
-            <th>Operator</th>
-            <th>Comm Method</th>
-            <th>Disposition</th>
-            <th>Approved By</th>
-            <th>DateTime CAST Review</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var deviation in Model)
-        {
-            <tr>
-                <form method="post" action="@Url.Action("Update", "AdminDeviation")">
-                    <input type="hidden" name="Id" value="@deviation.Id" />
-                <td>@deviation.Id</td>
-                <td><input type="datetime-local" name="Timestamp" value="@deviation.Timestamp.ToString("yyyy-MM-ddTHH:mm")" class="form-control" required /></td>
-                <td><input type="text" name="Part" value="@deviation.Part" class="form-control" required /></td>
-                <td><input type="datetime-local" name="SentDateTime" value="@(deviation.SentDateTime?.ToString("yyyy-MM-ddTHH:mm") ?? "")" class="form-control" /></td>
-                <td><textarea name="Discrepancy" class="form-control">@deviation.Discrepancy</textarea></td>
-                <td><input type="text" name="Operator" value="@deviation.Operator" class="form-control" required /></td>
-                <td><input type="text" name="CommMethod" value="@deviation.CommMethod" class="form-control" required /></td>
-                <td><input type="text" name="Disposition" value="@deviation.Disposition" class="form-control" required /></td>
-                <td><input type="text" name="ApprovedBy" value="@deviation.ApprovedBy" class="form-control" required /></td>
-                <td><input type="datetime-local" name="DateTimeCASTReview" value="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-ddTHH:mm") ?? "")" class="form-control" /></td>
-                <td>
-                    <button type="submit" class="btn btn-success btn-sm">Save</button>
-                </td>
-                </form>
-            </tr>
+<!-- Custom Styles -->
+<style>
+    /* Force full width */
+    .full-width-table {
+        width: 100% !important;
+    }
+
+    /* Ensures table doesn't shrink */
+    .table {
+        table-layout: fixed;
+    }
+
+    /* Keep table responsive with horizontal scrolling */
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
+
+    /* Increase text area size */
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
+    /* Improve button animations */
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
+
+        .btn:hover {
+            transform: scale(1.05);
         }
-    </tbody>
-</table>
+</style>

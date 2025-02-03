@@ -1,158 +1,156 @@
 ﻿@model DashboardReportApp.Models.ScheduleViewModel
 
-<h2>Schedule Parts</h2>
-<a href="@Url.Action("Logout", "Admin")" class="btn btn-danger">Logout</a>
-<!-- Success and Error Messages -->
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">
-        @TempData["Success"]
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Schedule Parts</h1>
+    <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
+
+    <!-- Success and Error Messages -->
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success fade show" role="alert">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    <!-- Query Form -->
+    <div class="card shadow">
+        <div class="card-body">
+            <h3 class="text-center">Search for Parts</h3>
+            <form asp-action="Index" method="get">
+                <div class="mb-3">
+                    <label for="masterId" class="form-label">Part Number</label>
+                    <input type="text" id="masterId" name="masterId" class="form-control" placeholder="Enter Part Number" />
+                </div>
+                <div class="mb-3">
+                    <label for="quantity" class="form-label">Quantity</label>
+                    <input type="number" id="quantity" name="quantity" class="form-control" placeholder="Enter Quantity" />
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Query</button>
+            </form>
+        </div>
     </div>
-}
 
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">
-        @TempData["Error"]
-    </div>
-}
+    <!-- Query Results -->
+    <h2 class="mt-4 text-center">View Parts, Components, and Subcomponents</h2>
 
-<!-- Query Form -->
-<form asp-action="Index" method="get">
-    <div class="form-group">
-        <label for="masterId">Part Number</label>
-        <input type="text" id="masterId" name="masterId" class="form-control" placeholder="Enter Part Number" />
-    </div>
-    <div class="form-group">
-        <label for="quantity">Quantity</label>
-        <input type="number" id="quantity" name="quantity" class="form-control" placeholder="Enter Quantity" />
-    </div>
-    <button type="submit" class="btn btn-primary">Query</button>
-</form>
+    @if (Model.AllComponents != null && Model.AllComponents.Any())
+    {
+        <div class="table-responsive">
+            <form asp-action="ScheduleComponents" method="post">
+                <table class="table table-striped table-bordered shadow-sm w-100">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Master ID</th>
+                            <th>Component</th>
+                            <th>Subcomponent</th>
+                            <th>Qty to Make Master ID</th>
+                            <th>Qty to Schedule</th>
+                            <th>Run</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.AllComponents.Count; i++)
+                        {
+                            <tr>
+                                <td>@Model.AllComponents[i].MasterId</td>
+                                <td>@Model.AllComponents[i].Component</td>
+                                <td>@(Model.AllComponents[i].SubComponent ?? "")</td>
+                                <td>@Model.AllComponents[i].QtyToMakeMasterID</td>
+                                <td><input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" /></td>
+                                <td>@Model.AllComponents[i].Run</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-calendar-check"></i> Schedule</button>
+            </form>
+        </div>
+    }
+    else
+    {
+        <p class="text-center text-muted">No components found for the given part number and quantity.</p>
+    }
 
-<!-- Query Results -->
-<h2>View Parts, Components and Subcomponents</h2>
+    <h3 class="mt-4 text-center">Parts Scheduled</h3>
 
-@if (Model.AllComponents != null && Model.AllComponents.Any())
-{
-    <form asp-action="ScheduleComponents" method="post">
-        <table class="table table-bordered">
-            <thead>
-                <tr>
-                    <th>Master ID</th>
-                    <th>Component</th>
-                    <th>Subcomponent</th>
-                    <th>Quantity to Make Master ID</th>
-                    <th>Quantity to Schedule</th>
-                    <th>Run</th>
-                </tr>
-            </thead>
-            <tbody>
-                @for (int i = 0; i < Model.AllComponents.Count; i++)
-                {
-                    <tr>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].MasterId" value="@Model.AllComponents[i].MasterId" />
-                            @Model.AllComponents[i].MasterId
-                        </td>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].Component" value="@Model.AllComponents[i].Component" />
-                            @Model.AllComponents[i].Component
-                        </td>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].SubComponent" value="@(Model.AllComponents[i].SubComponent ?? "")" />
-                            @(Model.AllComponents[i].SubComponent ?? "")
-                        </td>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].QtyToMakeMasterID" value="@Model.AllComponents[i].QtyToMakeMasterID" />
-                            @Model.AllComponents[i].QtyToMakeMasterID
-                        </td>
-                        <td>
-                            <input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
-                            @Model.AllComponents[i].Run
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        <button type="submit" class="btn btn-primary">Schedule</button>
-    </form>
+    @if (Model.OpenParts == null || !Model.OpenParts.Any())
+    {
+        <p class="text-center text-muted">No open parts found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <form asp-action="UpdateOpenParts" method="post">
+                <table class="table table-striped table-bordered shadow-sm w-100">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Date</th>
+                            <th>Part</th>
+                            <th>Component</th>
+                            <th>Subcomponent</th>
+                            <th>Quantity</th>
+                            <th>Run</th>
+                            <th>Open</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.OpenParts.Count; i++)
+                        {
+                            <tr>
+                                <td><input type="date" name="OpenParts[@i].Date" value="@Model.OpenParts[i].Date?.ToString("yyyy-MM-dd")" class="form-control" /></td>
+                                <td><input type="text" name="OpenParts[@i].MasterId" value="@Model.OpenParts[i].MasterId" class="form-control" /></td>
+                                <td><input type="text" name="OpenParts[@i].Component" value="@Model.OpenParts[i].Component" class="form-control" /></td>
+                                <td><input type="text" name="OpenParts[@i].SubComponent" value="@(Model.OpenParts[i].SubComponent ?? "")" class="form-control" /></td>
+                                <td><input type="number" name="OpenParts[@i].QtyToSchedule" value="@Model.OpenParts[i].QtyToSchedule" class="form-control" /></td>
+                                <td><input type="text" name="OpenParts[@i].Run" value="@Model.OpenParts[i].Run" class="form-control" /></td>
+                                <td>
+                                    <select name="OpenParts[@i].Open" class="form-control">
+                                        <option value="1" selected="@(Model.OpenParts[i].Open == 1 ? "selected" : null)">Yes</option>
+                                        <option value="0" selected="@(Model.OpenParts[i].Open == 0 ? "selected" : null)">No</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-pencil-square"></i> Update Open Parts</button>
+            </form>
+        </div>
+    }
+</div>
 
-}
-else
-{
-    <p>No components found for the given part number and quantity.</p>
-}
+<!-- Custom Styles -->
+<style>
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
 
-<h3>Parts Scheduled</h3>
+        .btn:hover {
+            transform: scale(1.05);
+        }
 
-@if (Model.OpenParts == null || !Model.OpenParts.Any())
-{
-    <p>No open parts found.</p>
-}
-else
-{
-    <form asp-action="UpdateOpenParts" method="post">
-        <table class="table table-bordered">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Part</th>
-                    <th>Component</th>
-                    <th>Subcomponent</th>
-                    <th>Quantity</th>
-                    <th>Run</th>
-                    <th>Open</th>
-                </tr>
-            </thead>
-            <tbody>
-                @for (int i = 0; i < Model.OpenParts.Count; i++)
-                {
-                    <tr>
-                        <td>
-                            <input type="date" name="OpenParts[@i].Date" value="@Model.OpenParts[i].Date?.ToString("yyyy-MM-dd")" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="text" name="OpenParts[@i].MasterId" value="@Model.OpenParts[i].MasterId" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="text" name="OpenParts[@i].Component" value="@Model.OpenParts[i].Component" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="text" name="OpenParts[@i].SubComponent" value="@(Model.OpenParts[i].SubComponent ?? "")" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="number" name="OpenParts[@i].QtyToSchedule" value="@Model.OpenParts[i].QtyToSchedule" class="form-control" />
-                        </td>
-                        <td>
-                            <input type="text" name="OpenParts[@i].Run" value="@Model.OpenParts[i].Run" class="form-control" />
-                        </td>
-                        <td>
-                            <select name="OpenParts[@i].Open" class="form-control">
-                                @if (Model.OpenParts[i].Open == 1)
-                                {
-                                    <option value="1" selected>Yes</option>
-                                    <option value="0">No</option>
-                                }
-                                else
-                                {
-                                    <option value="1">Yes</option>
-                                    <option value="0" selected>No</option>
-                                }
-                            </select>
+    /* Ensures table takes full width */
+    .table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+    }
 
+    /* Makes tables scrollable if needed */
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
 
-
-
-
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        <button type="submit" class="btn btn-primary">Update Open Parts</button>
-    </form>
-}
+    /* Add consistent spacing */
+    .mb-3 {
+        margin-bottom: 1rem;
+    }
+</style>

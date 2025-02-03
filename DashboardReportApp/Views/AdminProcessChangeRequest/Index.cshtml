@@ -1,129 +1,108 @@
 ﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequest>
 
-@{
-    ViewData["Title"] = "Admin View - Edit Process Change Requests";
-}
-<li><a asp-controller="AdminProcessChangeRequest" asp-action="AdminView">Process Change Request</a></li>
+<div class="container-fluid px-3">
+    <h2 class="text-center mb-4">Admin View - Process Change Requests</h2>
+    <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
 
-<h2>Admin View - Process Change Requests</h2>
-<a href="@Url.Action("Logout", "Admin")" class="btn btn-danger">Logout</a>
-<!-- Global Validation Errors -->
-@if (!ViewData.ModelState.IsValid)
-{
-    <div class="alert alert-danger">
-        <strong>Validation Errors:</strong>
-        <ul>
-            @foreach (var state in ViewData.ModelState)
-            {
-                foreach (var error in state.Value.Errors)
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            <strong>Validation Errors:</strong>
+            <ul>
+                @foreach (var state in ViewData.ModelState)
                 {
-                    <li><strong>@state.Key:</strong> @error.ErrorMessage</li>
+                    foreach (var error in state.Value.Errors)
+                    {
+                        <li><strong>@state.Key:</strong> @error.ErrorMessage</li>
+                    }
                 }
-            }
-        </ul>
-    </div>
-}
+            </ul>
+        </div>
+    }
 
-<form asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Timestamp</th>
-                <th>Part</th>
-                <th>Requester</th>
-                <th>ReqDate</th>
-                <th>Request</th>
-                <th>Updated By</th>
-                <th>Update Result</th>
-                <th>File Address</th>
-                <th>Test Requested</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model)
-            {
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm w-100">
+            <thead class="table-dark">
                 <tr>
-                    <td>
-                        <input type="hidden" name="Id" value="@item.Id" />
-                        @item.Id
-                    </td>
-
-                    <td>
-                        <!-- Keep original timestamp as hidden -->
-                        <input type="hidden" name="Timestamp" value="@item.Timestamp.ToString("o")" />
-                        @item.Timestamp
-                    </td>
-
-                    <td>
-                        <input type="text" name="Part" value="@item.Part" class="form-control" />
-                        @Html.ValidationMessage("Part", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        <input type="text" name="Requester" value="@item.Requester" class="form-control" />
-                        @Html.ValidationMessage("Requester", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        @(item.ReqDate.HasValue ? item.ReqDate.Value.ToShortDateString() : "")
-                    </td>
-
-                    <td>
-                        <!-- Replace input with textarea for Request -->
-                        <textarea name="Request" class="form-control" rows="3">@item.Request</textarea>
-                        @Html.ValidationMessage("Request", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        <input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control" />
-                        @Html.ValidationMessage("UpdatedBy", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        <!-- Replace input with textarea for UpdateResult -->
-                        <textarea name="UpdateResult" class="form-control" rows="3">@item.UpdateResult</textarea>
-                        @Html.ValidationMessage("UpdateResult", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        <!-- Hidden field to keep existing FileAddress -->
-                        <input type="hidden" name="FileAddress" value="@item.FileAddress" />
-
-                        <!-- File upload control to replace/overwrite the file -->
-                        <input type="file" name="FileUpload" />
-
-                        @if (!string.IsNullOrEmpty(item.FileAddress))
-                        {
-                            <div class="mt-2">
-
-                                <!-- Preview Image Button (Bootstrap) -->
-                                <button type="button"
-                                        class="btn btn-info fetch-image-btn"
-                                        data-file-path="@item.FileAddress"
-                                        style="margin-left: 10px;">
-                                    Preview Image
-                                </button>
-                            </div>
-                        }
-                    </td>
-
-                    <td>
-                        <!-- Make TestRequested field smaller by setting a smaller width -->
-                        <input type="text" name="TestRequested" value="@item.TestRequested" class="form-control" style="width: 100px;" />
-                        @Html.ValidationMessage("TestRequested", "", new { @class = "text-danger" })
-                    </td>
-
-                    <td>
-                        <button type="submit" class="btn btn-primary">Save</button>
-                    </td>
+                    <th style="width: 5%;">ID</th>
+                    <th style="width: 15%;">Part</th>
+                    <th style="width: 10%;">Requester</th>
+                    <th style="width: 10%;">Request Date</th>
+                    <th style="width: 20%;">Request</th>
+                    <th style="width: 10%;">Updated By</th>
+                    <th style="width: 20%;">Update Result</th>
+                    <th style="width: 12%;">File</th>
+                    <th style="width: 7%;">Test Requested</th>
+                    <th style="width: 10%;">Actions</th>
                 </tr>
-            }
-        </tbody>
-    </table>
-</form>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <form asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="Id" value="@item.Id" />
+                        <td>@item.Id</td>
+                        <td><input type="text" name="Part" value="@item.Part" class="form-control w-100" required /></td>
+                        <td><input type="text" name="Requester" value="@item.Requester" class="form-control w-100" required /></td>
+                        <td><input type="date" name="ReqDate" value="@(item.ReqDate?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td><textarea name="Request" class="form-control w-100 text-area-large">@item.Request</textarea></td>
+                        <td><input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control w-100" /></td>
+                        <td><textarea name="UpdateResult" class="form-control w-100 text-area-large">@item.UpdateResult</textarea></td>
+                        <td>
+                            <input type="hidden" name="FileAddress" value="@item.FileAddress" />
+                            <input type="file" name="FileUpload" class="form-control w-100" accept="image/*,.pdf,.doc,.docx" />
+                                @if (!string.IsNullOrEmpty(item.FileAddress))
+                                {
+                                <button type="button" class="btn btn-info btn-sm mt-2 fetch-image-btn w-100" data-file-path="@item.FileAddress">
+                                    Preview File
+                                </button>
+                                }
+                        </td>
+                        <td><input type="text" name="TestRequested" value="@item.TestRequested" class="form-control w-100" /></td>
+                        <td>
+                            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-save"></i> Save</button>
+                        </td>
+                        </form>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
 
+<!-- Custom Styles -->
+<style>
+    /* Force full width */
+    .full-width-table {
+        width: 100% !important;
+    }
+
+    /* Ensures table doesn't shrink */
+    .table {
+        table-layout: fixed;
+    }
+
+    /* Keep table responsive with horizontal scrolling */
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
+
+    /* Increase text area size */
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
+    /* Improve button animations */
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+</style>
 <!-- Bootstrap Modal for Image Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">

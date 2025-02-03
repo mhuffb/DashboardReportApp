@@ -1,132 +1,116 @@
 ﻿@model List<DashboardReportApp.Models.HoldRecordModel>
 
-@{
-    ViewData["Title"] = "Admin View - Hold Records";
-}
+<div class="container-fluid px-3">
+    <!-- Full-width container -->
+    <h2 class="text-center mb-4">Admin Panel - Edit Hold Records</h2>
+    <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
 
-<h2>Admin Panel - Edit Hold Records</h2>
-<a href="@Url.Action("Logout", "Admin")" class="btn btn-danger">Logout</a>
-<!-- Display TempData Messages -->
-@if (TempData["ErrorMessage"] != null)
-{
-    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
-}
-@if (TempData["SuccessMessage"] != null)
-{
-    <div class="alert alert-success">
-        @TempData["SuccessMessage"]
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            @TempData["ErrorMessage"]
+        </div>
+    }
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success fade show" role="alert">
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm w-100">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width: 3%;">ID</th>
+                    <th style="width: 7%;">Part</th>
+                    <th style="width: 10%;">Discrepancy</th>
+                    <th style="width: 7%;">Date</th>
+                    <th style="width: 7%;">Issued By</th>
+                    <th style="width: 10%;">Disposition</th>
+                    <th style="width: 6%;">Disposition By</th>
+                    <th style="width: 10%;">Rework Instructions</th>
+                    <th style="width: 7%;">Rework Instr By</th>
+                    <th style="width: 4%;">Quantity</th>
+                    <th style="width: 7%;">Unit</th>
+                    <th style="width: 4%;">Pcs Scrapped</th>
+                    <th style="width: 7%;">Date Completed</th>
+                    <th style="width: 4%;">File</th>
+                    <th style="width: 4%;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in Model)
+                {
+                    <tr>
+                        <form asp-controller="AdminHoldTag" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="Id" value="@record.Id" />
+                        <td>@record.Id</td>
+                        <td><input type="text" name="Part" value="@record.Part" class="form-control w-100" /></td>
+                        <td><textarea name="Discrepancy" class="form-control w-100 text-area-large">@record.Discrepancy</textarea></td>
+                        <td><input type="date" name="Date" value="@(record.Date?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td><input type="text" name="IssuedBy" value="@record.IssuedBy" class="form-control w-100" /></td>
+                        <td><textarea name="Disposition" class="form-control w-100 text-area-large">@record.Disposition</textarea></td>
+                        <td><input type="text" name="DispositionBy" value="@record.DispositionBy" class="form-control w-100" /></td>
+                        <td><textarea name="ReworkInstr" class="form-control w-100 text-area-large">@record.ReworkInstr</textarea></td>
+                        <td><input type="text" name="ReworkInstrBy" value="@record.ReworkInstrBy" class="form-control w-100" /></td>
+                        <td><input type="number" name="Quantity" value="@record.Quantity" class="form-control w-100" /></td>
+                        <td><input type="text" name="Unit" value="@record.Unit" class="form-control w-100" /></td>
+                        <td><input type="number" name="PcsScrapped" value="@(record.PcsScrapped?.ToString() ?? "")" class="form-control w-100" /></td>
+                        <td><input type="date" name="DateCompleted" value="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td>
+                            <input type="hidden" name="FileAddress" value="@record.FileAddress" />
+                            <input type="file" name="FileUpload" class="form-control w-100" accept="image/*,.pdf,.doc,.docx" />
+                                @if (!string.IsNullOrEmpty(record.FileAddress))
+                                {
+                                <button type="button" class="btn btn-info btn-sm mt-2 fetch-image-btn w-100" data-file-path="@record.FileAddress">
+                                    Preview File
+                                </button>
+                                }
+                        </td>
+                        <td>
+                            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-save"></i> Save</button>
+                        </td>
+                        </form>
+                    </tr>
+                }
+            </tbody>
+        </table>
     </div>
-}
+</div>
 
-<table class="table table-bordered">
-    <thead>
-        <tr>
-            <th style="width: 50px;">ID</th> <!-- Smaller width for ID column -->
-            <th>Part</th>
-            <th>Discrepancy</th>
-            <th>Date</th>
-            <th>Issued By</th>
-            <th>Disposition</th>
-            <th>Disposition By</th>
-            <th>Rework Instr</th>
-            <th>Rework Instr By</th>
-            <th>Quantity</th>
-            <th>Unit</th>
-            <th>Pcs Scrapped</th>
-            <th>Date Completed</th>
-            <th>File Address</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var record in Model)
-        {
-            <form asp-controller="AdminHoldTag"
-                  asp-action="UpdateRequest"
-                  method="post"
-                  enctype="multipart/form-data">
-            <tr>
-                <!-- Hidden field for Id (primary key) -->
-                <td>
-                    <input type="hidden" name="Id" value="@record.Id" />
-                        @record.Id
-                </td>
+<!-- Custom Styles -->
+<style>
+    /* Force full width */
+    .full-width-table {
+        width: 100% !important;
+    }
 
-                <td>
-                    <input type="text" name="Part" value="@record.Part" class="form-control" />
-                </td>
-                <td>
-                    <textarea name="Discrepancy" class="form-control">@record.Discrepancy</textarea>
-                </td>
-                <td>
-                    <input type="datetime-local"
-                           name="Date"
-                           value="@(record.Date?.ToString("yyyy-MM-ddTHH:mm") ?? "")"
-                           class="form-control" />
-                </td>
-                <td>
-                    <input type="text" name="IssuedBy" value="@record.IssuedBy" class="form-control" />
-                </td>
-                <td>
-                    <textarea name="Disposition" class="form-control">@record.Disposition</textarea> <!-- Textarea for Disposition -->
-                </td>
-                <td>
-                    <input type="text" name="DispositionBy" value="@record.DispositionBy" class="form-control" />
-                </td>
-                <td>
-                    <textarea name="ReworkInstr" class="form-control">@record.ReworkInstr</textarea> <!-- Textarea for Rework Instructions -->
-                </td>
-                <td>
-                    <input type="text" name="ReworkInstrBy" value="@record.ReworkInstrBy" class="form-control" />
-                </td>
-                <td>
-                    <input type="text" name="Quantity" value="@record.Quantity" class="form-control" />
-                </td>
-                <td>
-                    <input type="text" name="Unit" value="@record.Unit" class="form-control" />
-                </td>
-                <td>
-                    <input type="number"
-                           name="PcsScrapped"
-                           value="@(record.PcsScrapped?.ToString() ?? "")"
-                           class="form-control" />
-                </td>
-                <td>
-                    <input type="datetime-local"
-                           name="DateCompleted"
-                           value="@(record.DateCompleted?.ToString("yyyy-MM-ddTHH:mm") ?? "")"
-                           class="form-control" />
-                </td>
+    /* Ensures table doesn't shrink */
+    .table {
+        table-layout: fixed;
+    }
 
-                <!-- FILE UPLOAD FUNCTIONALITY -->
-                <td>
-                    <input type="hidden" name="FileAddress" value="@record.FileAddress" />
+    /* Keep table responsive with horizontal scrolling */
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
 
-                    <!-- File Upload -->
-                    <input type="file" name="FileUpload" class="form-control" accept="image/*,.pdf,.doc,.docx" />
+    /* Increase text area size */
+    .text-area-large {
+        min-height: 150px !important;
+    }
 
-                    <!-- File Preview Button (if a file exists) -->
-                        @if (!string.IsNullOrEmpty(record.FileAddress))
-                        {
-                        <div class="mt-2">
-                            <button type="button"
-                                    class="btn btn-info fetch-image-btn"
-                                    data-file-path="@record.FileAddress">
-                                Preview File
-                            </button>
-                        </div>
-                        }
-                </td>
+    /* Improve button animations */
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
 
-                <td>
-                    <button type="submit" class="btn btn-primary">Save</button>
-                </td>
-            </tr>
-            </form>
+        .btn:hover {
+            transform: scale(1.05);
         }
-    </tbody>
-</table>
-
+</style>
 <!-- Bootstrap Modal for File Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">

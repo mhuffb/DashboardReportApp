@@ -11,23 +11,74 @@ html {
 }
 
 body {
-    margin: 0; /* Remove any default body margin to prevent gaps */
-    padding-bottom: 60px; /* Add padding at the bottom for the footer, not margin */
+    margin: 0;
+    padding-bottom: 60px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh; /* Ensures the body covers the full viewport height */
+    min-height: 100vh;
+    background-color: #d6d8db !important; /* Corrected */
+    color: #333;
+}
+
+html, body {
+    width: 100% !important;
+    overflow-x: hidden; /* Prevents accidental side scrolling */
 }
 
 main {
-    flex: 1; /* Ensures the main content takes up the remaining space */
+    flex: 1;
+    width: 100% !important;
+    background-color: transparent !important;
+}
+
+.container {
+    background-color: transparent !important;
 }
 
 footer {
     text-align: center;
     padding: 10px 0;
-    background-color: #f8f9fa; /* Optional: Footer background color */
-    border-top: 1px solid #dee2e6; /* Optional: Footer border */
-    position: relative; /* Keeps it at the bottom of the page */
-    margin-top: auto; /* Pushes footer to the bottom if content is short */
+    border-top: 1px solid #dee2e6;
+    position: relative;
+    margin-top: auto;
+    background: #343a40 !important;
+    color: white;
+    width: 100% !important;
 }
 
+.navbar {
+    border-bottom: 3px solid #007bff;
+}
+
+.table {
+    background: white;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+.btn {
+    transition: 0.3s ease-in-out;
+}
+
+    .btn:hover {
+        transform: scale(1.05);
+    }
+/* Fix for .container limiting width */
+.container, .content-wrapper {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+}
+/* Responsive fix */
+.table-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto;
+    display: block;
+}

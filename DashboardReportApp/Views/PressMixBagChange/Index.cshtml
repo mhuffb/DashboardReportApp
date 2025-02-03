@@ -1,59 +1,75 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-    @model PressMixBagChangeViewModel
-    <div class="container mt-1">
-    <h1>Press Mix Bag Change</h1>
+﻿@model PressMixBagChangeViewModel
+
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Press Mix Bag Change</h1>
 
     <form asp-action="Submit" method="post">
-        <div>
-            <label for="Part">Part:</label>
-            <input type="text" id="Part" name="Part" required />
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="Part" class="form-label">Part:</label>
+                <input type="text" id="Part" name="Part" class="form-control" required />
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="Operator" class="form-label">Operator:</label>
+                <select id="Operator" name="Operator" class="form-control">
+                    <option value="">-- Select Operator --</option>
+                    @foreach (var op in Model.OperatorList)
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="Machine" class="form-label">Machine:</label>
+                <select id="Machine" name="Machine" class="form-control">
+                    <option value="">-- Select Machine --</option>
+                    @foreach (var machine in Model.EquipmentList)
+                    {
+                        <option value="@machine">@machine</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="LotNumber" class="form-label">Lot Number:</label>
+                <input type="text" id="LotNumber" name="LotNumber" class="form-control" required />
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="MixNumber" class="form-label">Mix Number:</label>
+                <input type="text" id="MixNumber" name="MixNumber" class="form-control" required />
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="SupplierItemNumber" class="form-label">Supplier Item Number:</label>
+                <input type="text" id="SupplierItemNumber" name="SupplierItemNumber" class="form-control" required />
+            </div>
+
+            <div class="col-md-12 mb-3">
+                <label for="Note" class="form-label">Notes:</label>
+                <textarea id="Note" name="Note" class="form-control text-area-large"></textarea>
+            </div>
         </div>
 
-        <div>
-            <label for="Operator">Operator:</label>
-            <select id="Operator" name="Operator">
-                @foreach (var op in Model.OperatorList)
-                {
-                    <option value="@op">@op</option>
-                }
-            </select>
-        </div>
-
-        <div>
-            <label for="Machine">Machine:</label>
-            <select id="Machine" name="Machine">
-                @foreach (var machine in Model.EquipmentList)
-                {
-                    <option value="@machine">@machine</option>
-                }
-            </select>
-        </div>
-
-        <div>
-            <label for="LotNumber">Lot Number:</label>
-            <input type="text" id="LotNumber" name="LotNumber" required />
-        </div>
-
-        <div>
-            <label for="MixNumber">Mix Number:</label>
-            <input type="text" id="MixNumber" name="MixNumber" required />
-        </div>
-
-        <div>
-            <label for="Note">Notes:</label>
-            <textarea id="Note" name="Note"></textarea>
-        </div>
-
-        <div>
-            <label for="SupplierItemNumber">Supplier Item Number:</label>
-            <input type="text" id="SupplierItemNumber" name="SupplierItemNumber" required />
-        </div>
-
-        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+        <button type="submit" class="btn btn-primary w-100 mt-3"><i class="bi bi-check-circle"></i> Submit</button>
     </form>
-    </div>
+</div>
 
-}
+<!-- Custom Styles -->
+<style>
+    /* Style for larger text areas */
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
+    /* Smooth button animations */
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+</style>

@@ -1,61 +1,103 @@
 ﻿@model DashboardReportApp.Models.DeviationViewModel
 
-<div class="container mt-1">
-    <h2>Manage Deviations</h2>
-    <form asp-action="Create" method="post">
-        <div class="form-group">
-            <label for="Part">Part</label>
-            <input type="text" class="form-control" id="Part" name="Part" asp-for="Part" />
-            <span asp-validation-for="Part" class="text-danger"></span>
-        </div>
+<div class="container-fluid px-3 mt-4">
+    <h2 class="text-center mb-4">Manage Deviations</h2>
 
-        <div class="form-group">
-            <label for="Discrepancy">Discrepancy</label>
-            <textarea class="form-control" id="Discrepancy" name="Discrepancy" asp-for="Discrepancy"></textarea>
-            <span asp-validation-for="Discrepancy" class="text-danger"></span>
-        </div>
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h4 class="text-center mb-3">Create a New Deviation</h4>
 
-        <div class="form-group">
-            <label for="Operator">Operator</label>
-            <select class="form-control" id="Operator" name="Operator" asp-for="Operator">
-                <option value="">-- Select an Operator --</option>
-                @if (ViewData["Operators"] != null)
-                {
-                    foreach (var operatorName in (List<string>)ViewData["Operators"])
-                    {
-                        <option value="@operatorName">@operatorName</option>
-                    }
-                }
-            </select>
-            <span asp-validation-for="Operator" class="text-danger"></span>
-        </div>
+                    <form asp-action="Create" method="post">
+                        <div class="mb-3">
+                            <label for="Part" class="form-label">Part</label>
+                            <input type="text" class="form-control" id="Part" name="Part" asp-for="Part" required />
+                            <span asp-validation-for="Part" class="text-danger"></span>
+                        </div>
 
-        <div class="form-group">
-            <label for="CommMethod">Communication Method</label>
-            <select class="form-control" id="CommMethod" name="CommMethod" asp-for="CommMethod">
-                <option value="">-- Select --</option>
-                <option value="Phone Call">Phone Call</option>
-                <option value="Text Message">Text Message</option>
-                <option value="Email">Email</option>
-                <option value="In Person">In Person</option>
-            </select>
-            <span asp-validation-for="CommMethod" class="text-danger"></span>
-        </div>
+                        <div class="mb-3">
+                            <label for="Discrepancy" class="form-label">Discrepancy</label>
+                            <textarea class="form-control text-area-large" id="Discrepancy" name="Discrepancy" asp-for="Discrepancy" required></textarea>
+                            <span asp-validation-for="Discrepancy" class="text-danger"></span>
+                        </div>
 
-        <button type="submit" class="btn btn-primary">Submit Deviation</button>
-    </form>
+                        <div class="mb-3">
+                            <label for="Operator" class="form-label">Operator</label>
+                            <select class="form-select" id="Operator" name="Operator" asp-for="Operator" required>
+                                <option value="">-- Select an Operator --</option>
+                                @if (ViewData["Operators"] != null)
+                                {
+                                    foreach (var operatorName in (List<string>)ViewData["Operators"])
+                                    {
+                                        <option value="@operatorName">@operatorName</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="Operator" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="CommMethod" class="form-label">Communication Method</label>
+                            <select class="form-select" id="CommMethod" name="CommMethod" asp-for="CommMethod" required>
+                                <option value="">-- Select --</option>
+                                <option value="Phone Call">Phone Call</option>
+                                <option value="Text Message">Text Message</option>
+                                <option value="Email">Email</option>
+                                <option value="In Person">In Person</option>
+                            </select>
+                            <span asp-validation-for="CommMethod" class="text-danger"></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send"></i> Submit Deviation</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success mt-3">
+        <div class="alert alert-success alert-dismissible fade show mt-3 text-center" role="alert">
             @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
     @if (TempData["ErrorMessage"] != null)
     {
-        <div class="alert alert-danger mt-3">
+        <div class="alert alert-danger alert-dismissible fade show mt-3 text-center" role="alert">
             @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 </div>
+
+<!-- Custom Styles -->
+<style>
+    /* Make text areas larger */
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
+    /* Improve button animations */
+    .btn {
+        transition: 0.3s ease-in-out;
+    }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+    /* Center the form for a clean layout */
+    .card {
+        border-radius: 10px;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive styling for alerts */
+    .alert {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+</style>

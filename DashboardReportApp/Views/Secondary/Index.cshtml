@@ -2,12 +2,13 @@
     For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 *@
 @{
-    ViewData["Title"] = "Secondary Dashboard";
+    ViewData["Title"] = "Secondary";
 }
 <div class="container mt-1">
-<h1>Secondary Dashboard</h1>
+<h1>Secondary</h1>
+<h2>Machine Details</h2>
 <ul>
-    <li><a asp-controller="SecondaryRunLog" asp-action="Index">SecondaryRunLog</a></li>
-    <li><a asp-controller="SecondarySetupLog" asp-action="Index">SecondarySetupLog</a></li>
+    <li><a asp-controller="SecondaryRunLog" asp-action="Index">Run Logs</a></li>
+    <li><a asp-controller="SecondarySetupLog" asp-action="Index">Setup</a></li>
 </ul>
 </div>
