@@ -1,9 +1,10 @@
-﻿@{
+﻿@model List<DashboardReportApp.Models.PressSetupModel>
+
+@{
     ViewData["Title"] = "Press Setup";
-    var operators = ViewData["Operators"] as List<string>;
-    var machines = ViewData["Machines"] as List<string>;
-    var trainers = ViewData["Trainers"] as List<string>;
-    var activeLogins = ViewData["ActiveLogins"] as List<dynamic>;
+    var operators = ViewData["Operators"] as List<string> ?? new List<string>();
+    var machines = ViewData["Machines"] as List<string> ?? new List<string>();
+    var trainers = ViewData["Trainers"] as List<string> ?? new List<string>();
 }
 
 <div class="container mt-4">
@@ -23,10 +24,11 @@
         </div>
     }
 
+    <!-- Login Form -->
     <div class="card shadow mb-4">
         <div class="card-body">
             <h2 class="text-center">Login</h2>
-            <form method="post" action="/PressSetup/Login">
+            <form method="post" asp-action="Login">
                 <div class="mb-3">
                     <label for="partNumber" class="form-label">Part Number</label>
                     <input type="text" id="partNumber" name="partNumber" class="form-control" required />
@@ -56,6 +58,7 @@
         </div>
     </div>
 
+    <!-- Active Logins with Logout -->
     <h2 class="text-center mb-4">Active Logins</h2>
 
     <div class="table-responsive">
@@ -70,15 +73,15 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var login in activeLogins)
+                @foreach (var login in Model.Where(x => x.EndDateTime == null))
                 {
                     <tr>
                         <td>@login.Part</td>
                         <td>@login.Operator</td>
                         <td>@login.Machine</td>
-                        <td>@login.StartDateTime</td>
+                        <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
                         <td>
-                            <form method="post" action="/PressSetup/Logout" class="p-3">
+                            <form method="post" asp-action="Logout" class="p-3">
                                 <input type="hidden" name="partNumber" value="@login.Part" />
                                 <input type="hidden" name="startDateTime" value="@login.StartDateTime" />
 
@@ -135,7 +138,53 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Full List of Records -->
+    <h2 class="text-center mt-4">All Press Setup Records</h2>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Part</th>
+                    <th>Operator</th>
+                    <th>Machine</th>
+                    <th>Press Type</th>
+                    <th>Difficulty</th>
+                    <th>Setup Complete</th>
+                    <th>Assistance Required</th>
+                    <th>Assisted By</th>
+                    <th>Start DateTime</th>
+                    <th>End DateTime</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in Model)
+                {
+                    <tr>
+                        <td>@record.Id</td>
+                        <td>@(record.Timestamp?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                        <td>@record.Part</td>
+                        <td>@record.Operator</td>
+                        <td>@record.Machine</td>
+                        <td>@record.PressType</td>
+                        <td>@record.Difficulty</td>
+                        <td>@record.SetupComp</td>
+                        <td>@record.AssistanceReq</td>
+                        <td>@record.AssistedBy</td>
+                        <td>@(record.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                        <td>@(record.EndDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                        <td>@record.Notes</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
+
 <style>
     .btn {
         transition: 0.3s ease-in-out;
@@ -154,21 +203,3 @@
         display: block;
     }
 </style>
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const assistanceRequiredFields = document.querySelectorAll(".assistance-required");
-
-        assistanceRequiredFields.forEach(field => {
-            field.addEventListener("change", function () {
-                const assistedByFieldId = this.dataset.assistedBy;
-                const assistedByField = document.getElementById(assistedByFieldId);
-
-                if (this.value === "Assisted") {
-                    assistedByField.style.display = "block";
-                } else {
-                    assistedByField.style.display = "none";
-                }
-            });
-        });
-    });
-</script>
