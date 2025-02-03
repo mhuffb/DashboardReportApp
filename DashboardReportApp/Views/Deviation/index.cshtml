@@ -74,30 +74,53 @@
 </div>
 
 <!-- Custom Styles -->
+<!-- Custom Styles -->
 <style>
-    /* Make text areas larger */
+    body {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .card {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod;
+    }
+
+    .table {
+        color: goldenrod !important;
+        background-color: black !important;
+    }
+
+        .table th, .table td {
+            border-color: goldenrod !important;
+        }
+
+    .table-dark {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .form-control {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod !important;
+    }
+
+        .form-control::placeholder {
+            color: goldenrod !important;
+        }
+
+    .btn:hover {
+        transform: scale(1.05);
+    }
+
     .text-area-large {
         min-height: 150px !important;
     }
 
-    /* Improve button animations */
-    .btn {
-        transition: 0.3s ease-in-out;
-    }
-
-        .btn:hover {
-            transform: scale(1.05);
-        }
-
-    /* Center the form for a clean layout */
-    .card {
-        border-radius: 10px;
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Responsive styling for alerts */
-    .alert {
-        max-width: 600px;
-        margin: 0 auto;
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
     }
 </style>

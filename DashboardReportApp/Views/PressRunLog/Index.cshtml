@@ -6,7 +6,7 @@
     <!-- Login Form -->
     <div class="card shadow mb-4">
         <div class="card-body">
-            <h3 class="text-center">Login</h3>
+            <h3 class="text-center">Start Molding</h3>
             <form method="post" action="/PressRunLog/Login">
                 <div class="mb-3">
                     <label for="Operator" class="form-label">Operator</label>
@@ -41,7 +41,7 @@
     </div>
 
     <!-- Logged-In Runs -->
-    <h2 class="text-center mb-4">Logged-In Runs</h2>
+    <h2 class="text-center mb-4">Molding Now</h2>
     <div class="table-responsive">
         <table class="table table-striped table-bordered shadow-sm wider-table">
             <thead class="table-dark">
@@ -88,20 +88,47 @@
 
 <!-- Custom Styles -->
 <style>
-    .btn {
-        transition: 0.3s ease-in-out;
+    body {
+        background-color: black !important;
+        color: goldenrod !important;
     }
 
-        .btn:hover {
-            transform: scale(1.05);
+    .card {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod;
+    }
+
+    .table {
+        color: goldenrod !important;
+        background-color: black !important;
+    }
+
+        .table th, .table td {
+            border-color: goldenrod !important;
         }
+
+    .table-dark {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .form-control {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod !important;
+    }
+
+        .form-control::placeholder {
+            color: goldenrod !important;
+        }
+
+    .btn:hover {
+        transform: scale(1.05);
+    }
 
     .text-area-large {
         min-height: 150px !important;
-    }
-
-    .wider-table {
-        width: 100% !important;
     }
 
     .table-responsive {

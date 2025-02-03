@@ -98,40 +98,56 @@
 </div>
 
     <!-- Custom Styles -->
-    <style>
-        /* Make text areas larger */
-        .text-area-large {
-            min-height: 150px !important;
+<!-- Custom Styles -->
+<style>
+    body {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .card {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod;
+    }
+
+    .table {
+        color: goldenrod !important;
+        background-color: black !important;
+    }
+
+        .table th, .table td {
+            border-color: goldenrod !important;
         }
 
-        /* Improve button animations */
-        .btn {
-            transition: 0.3s ease-in-out;
+    .table-dark {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .form-control {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod !important;
+    }
+
+        .form-control::placeholder {
+            color: goldenrod !important;
         }
 
-            .btn:hover {
-                transform: scale(1.05);
-            }
+    .btn:hover {
+        transform: scale(1.05);
+    }
 
-        /* Center the form for a clean layout */
-        .card {
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-        }
+    .text-area-large {
+        min-height: 150px !important;
+    }
 
-        /* Responsive styling for alerts */
-        .alert {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        /* List group styling */
-        .list-group-item {
-            font-size: 1rem;
-            font-weight: 500;
-            text-align: center;
-        }
-    </style>
+    .table-responsive {
+        overflow-x: auto;
+        display: block;
+    }
+</style>
 <script>
     // JavaScript to sync dropdown and input field
     document.getElementById("PartDropdown").addEventListener("change", function () {

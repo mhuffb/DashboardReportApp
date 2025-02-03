@@ -19,7 +19,9 @@
         </div>
     }
 
-    <h3 class="mt-4">Open Skids</h3>
+    <h3 class="mt-4">Sintering Now</h3>
+    <div class="card shadow">
+        <div class="card-body">
     <div class="table-responsive">
         <table class="table table-striped table-bordered shadow-sm w-100">
             <thead class="table-dark">
@@ -65,8 +67,10 @@
             </tbody>
         </table>
     </div>
+    </div>
+    </div>
 
-    <h3 class="mt-4">Start a New Skid</h3>
+    <h3 class="mt-4">Start Sintering</h3>
     <div class="card shadow">
         <div class="card-body">
             <form method="post" asp-action="StartSkid">
@@ -141,35 +145,53 @@
 </div>
 
 <!-- Custom Styles -->
+<!-- Custom Styles -->
 <style>
-    .btn {
-        transition: 0.3s ease-in-out;
+    body {
+        background-color: black !important;
+        color: goldenrod !important;
     }
 
-        .btn:hover {
-            transform: scale(1.05);
+    .card {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod;
+    }
+
+    .table {
+        color: goldenrod !important;
+        background-color: black !important;
+    }
+
+        .table th, .table td {
+            border-color: goldenrod !important;
         }
 
-    /* Increase text area size */
+    .table-dark {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .form-control {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod !important;
+    }
+
+        .form-control::placeholder {
+            color: goldenrod !important;
+        }
+
+    .btn:hover {
+        transform: scale(1.05);
+    }
+
     .text-area-large {
         min-height: 150px !important;
     }
 
-    /* Ensures table takes full width */
-    .table {
-        width: 100% !important;
-        max-width: 100% !important;
-        table-layout: auto !important;
-    }
-
-    /* Makes tables scrollable if needed */
     .table-responsive {
         overflow-x: auto;
         display: block;
-    }
-
-    /* Add spacing and structure */
-    .mb-3 {
-        margin-bottom: 1rem;
     }
 </style>

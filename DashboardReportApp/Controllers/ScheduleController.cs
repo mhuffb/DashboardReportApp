@@ -37,6 +37,18 @@ namespace DashboardReportApp.Controllers
         {
             try
             {
+                if (viewModel.AllComponents == null || !viewModel.AllComponents.Any())
+                {
+                    TempData["Error"] = "No components found to schedule.";
+                    return RedirectToAction("Index");
+                }
+
+                if (string.IsNullOrEmpty(viewModel.AllComponents.FirstOrDefault()?.MasterId))
+                {
+                    TempData["Error"] = "An error occurred while scheduling: Part number (MasterId) cannot be null.";
+                    return RedirectToAction("Index");
+                }
+
                 _scheduleService.ScheduleComponents(viewModel);
                 TempData["Success"] = "Parts and components successfully scheduled!";
             }
@@ -47,6 +59,7 @@ namespace DashboardReportApp.Controllers
 
             return RedirectToAction("Index");
         }
+
 
         [HttpPost]
         public IActionResult UpdateOpenParts(ScheduleViewModel viewModel)

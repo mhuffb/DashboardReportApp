@@ -2,11 +2,13 @@ html {
     position: relative;
     min-height: 100%;
     font-size: 14px; /* Existing */
+
 }
 
 @media (min-width: 768px) {
     html {
         font-size: 16px; /* Existing */
+        
     }
 }
 
@@ -16,8 +18,12 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    background-color: #d6d8db !important; /* Corrected */
-    color: #333;
+    background-color: black !important; /* Corrected */
+    color: white;
+}
+
+h1,h2,h3 {
+    background-color: transparent !important;
 }
 
 html, body {
@@ -45,17 +51,24 @@ footer {
     color: white;
     width: 100% !important;
 }
-
-.navbar {
+.navbar, .navbar-nav, .nav-link {
+    color: goldenrod !important;
     border-bottom: 3px solid #007bff;
 }
 
+.navbar, .navbar-brand {
+    color: white !important;
+}
+
+
 .table {
-    background: white;
+    background: #d6d8db;
     box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
     width: 100% !important;
     max-width: 100% !important;
     table-layout: auto !important;
+    color: darkgrey !important;
+
 }
 
 .btn-primary {
@@ -74,6 +87,7 @@ footer {
     max-width: 100% !important;
     width: 100% !important;
     padding: 0 !important;
+    background-color: transparent !important;
 }
 /* Responsive fix */
 .table-responsive {
@@ -81,4 +95,12 @@ footer {
     max-width: 100% !important;
     overflow-x: auto;
     display: block;
+    background-color: #d6d8db !important;
+}
+form {
+    background-color: transparent !important;
+}
+
+.card-body, .card shadow p-4 mb-4 {
+    background-color: black !important;
 }

@@ -86,29 +86,53 @@
 </div>
 
 <!-- Custom Styles -->
+<!-- Custom Styles -->
 <style>
-    /* Force full width */
-    .full-width-table {
-        width: 100% !important;
+    body {
+        background-color: black !important;
+        color: goldenrod !important;
     }
 
-    /* Ensures table doesn't shrink */
+    .card {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod;
+    }
+
     .table {
-        table-layout: fixed;
+        color: goldenrod !important;
+        background-color: black !important;
     }
 
-    /* Keep table responsive with horizontal scrolling */
+        .table th, .table td {
+            border-color: goldenrod !important;
+        }
+
+    .table-dark {
+        background-color: black !important;
+        color: goldenrod !important;
+    }
+
+    .form-control {
+        background-color: black !important;
+        color: goldenrod !important;
+        border: 1px solid goldenrod !important;
+    }
+
+        .form-control::placeholder {
+            color: goldenrod !important;
+        }
+
+    .btn:hover {
+        transform: scale(1.05);
+    }
+
+    .text-area-large {
+        min-height: 150px !important;
+    }
+
     .table-responsive {
         overflow-x: auto;
         display: block;
     }
-
-    /* Improve button animations */
-    .btn {
-        transition: 0.3s ease-in-out;
-    }
-
-        .btn:hover {
-            transform: scale(1.05);
-        }
 </style>

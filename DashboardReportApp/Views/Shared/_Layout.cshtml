@@ -35,10 +35,10 @@
                             <i class="bi bi-box-seam"></i> Molding
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="moldingDropdown">
-                            <li><a class="dropdown-item" href="/api/picodata/press"><i class="bi bi-bar-chart"></i> Counters</a></li>
                             <li><a class="dropdown-item" href="/PressSetup"><i class="bi bi-tools"></i> Setup</a></li>
-                            <li><a class="dropdown-item" asp-controller="PressMixBagChange" asp-action="Index"><i class="bi bi-bag"></i> Bag Change</a></li>
                             <li><a class="dropdown-item" asp-controller="PressRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
+                            <li><a class="dropdown-item" asp-controller="PressMixBagChange" asp-action="Index"><i class="bi bi-bag"></i> Bag Change</a></li>
+                            <li><a class="dropdown-item" href="/api/picodata/press"><i class="bi bi-bar-chart"></i> Counters</a></li>
                         </ul>
                     </li>
 
@@ -58,8 +58,9 @@
                             <i class="bi bi-tools"></i> Secondary
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="secondaryDropdown">
-                            <li><a class="dropdown-item" asp-controller="SecondaryRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
                             <li><a class="dropdown-item" asp-controller="SecondarySetupLog" asp-action="Index"><i class="bi bi-hammer"></i> Setup</a></li>
+                            <li><a class="dropdown-item" asp-controller="SecondaryRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
+                            
                         </ul>
                     </li>
 

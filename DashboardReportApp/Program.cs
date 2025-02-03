@@ -43,6 +43,7 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.ProcessChangeRequestService>();
     builder.Services.AddScoped<DashboardReportApp.Services.MaintenanceAdminService>();
     builder.Services.AddScoped<DashboardReportApp.Services.AdminDeviationService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.PressSetupService>();
 
     // Add session services
     builder.Services.AddSession(options =>

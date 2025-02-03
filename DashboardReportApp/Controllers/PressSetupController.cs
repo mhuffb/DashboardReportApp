@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using DashboardReportApp.Services;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using DashboardReportApp.Services;
 using DashboardReportApp.Models;
 
 namespace DashboardReportApp.Controllers
@@ -10,39 +12,56 @@ namespace DashboardReportApp.Controllers
     {
         private readonly PressSetupService _pressSetupService;
 
-        public PressSetupController()
+        public PressSetupController(PressSetupService pressSetupService)
         {
-            _pressSetupService = new PressSetupService();
+            _pressSetupService = pressSetupService;
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index()
+        public IActionResult Index(string part, string operatorName, string machine, string setupComplete,
+                                   string assistanceRequired, string search, string startDate, string endDate,
+                                   string sortBy, string sortOrder = "asc")
         {
             ViewData["Title"] = "Press Setup";
-            ViewData["Operators"] = GetOperators();
-            ViewData["Machines"] = GetEquipment();
-            ViewData["Trainers"] = GetTrainers();
+            ViewData["Operators"] = _pressSetupService.GetOperators();
+            ViewData["Machines"] = _pressSetupService.GetEquipment();
+            ViewData["Trainers"] = _pressSetupService.GetTrainers();
+            ViewData["SortOrder"] = sortOrder == "asc" ? "desc" : "asc";
 
-            var pressSetupRecords = await _pressSetupService.GetAllPressSetupRecordsAsync();
-            return View(pressSetupRecords);
+            var records = _pressSetupService.GetAllRecords(part, operatorName, machine, setupComplete, assistanceRequired, search, startDate, endDate, sortBy, sortOrder);
+
+            return View(records);
         }
 
-        private List<string> GetOperators()
+        [HttpPost]
+        public async Task<IActionResult> Login(string partNumber, string operatorName, string machine)
         {
-            // Fetch and return operators
-            return new List<string> { "Operator A", "Operator B", "Operator C" };
+            try
+            {
+                await _pressSetupService.LoginAsync(partNumber, operatorName, machine);
+                TempData["Message"] = "Login successfully recorded!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"An error occurred: {ex.Message}";
+            }
+            return RedirectToAction("Index");
         }
 
-        private List<string> GetEquipment()
+        [HttpPost]
+        public async Task<IActionResult> Logout(string partNumber, DateTime startDateTime, string difficulty,
+                                                string assistanceRequired, string assistedBy, string setupComplete, string notes)
         {
-            // Fetch and return equipment
-            return new List<string> { "Machine 1", "Machine 2", "Machine 3" };
-        }
-
-        private List<string> GetTrainers()
-        {
-            // Fetch and return trainers
-            return new List<string> { "Trainer A", "Trainer B" };
+            try
+            {
+                await _pressSetupService.LogoutAsync(partNumber, startDateTime, difficulty, assistanceRequired, assistedBy, setupComplete, notes);
+                TempData["Message"] = "Logout successfully recorded!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"An error occurred: {ex.Message}";
+            }
+            return RedirectToAction("Index");
         }
     }
 }
