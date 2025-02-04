@@ -20,7 +20,7 @@ namespace DashboardReportApp.Controllers
             var machines = await _secondaryRunLogService.GetMachinesAsync();
             var openRuns = await _secondaryRunLogService.GetActiveRunsAsync();
 
-            var viewModel = new SecondaryRunLogViewModel
+            var viewModel = new SecondaryRunLogModel
             {
                 Operators = operators,
                 Machines = machines,

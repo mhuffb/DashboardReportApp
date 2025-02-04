@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class ToolingHistory
+    public class ToolingHistoryModel
     {
         public int Id { get; set; }
         public int GroupID { get; set; } // New property for GroupID

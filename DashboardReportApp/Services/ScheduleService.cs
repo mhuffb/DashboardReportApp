@@ -167,7 +167,7 @@ namespace DashboardReportApp.Services
             return openParts;
         }
 
-        public void ScheduleComponents(ScheduleViewModel viewModel)
+        public void ScheduleComponents(ScheduleModel viewModel)
         {
             string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open)";
             string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open) VALUES (@Part, @Quantity, @Run, @Date, @Open)";
@@ -219,7 +219,7 @@ namespace DashboardReportApp.Services
             return nextRunNumber;
         }
 
-        public void UpdateOpenParts(ScheduleViewModel viewModel)
+        public void UpdateOpenParts(ScheduleModel viewModel)
         {
             try
             {

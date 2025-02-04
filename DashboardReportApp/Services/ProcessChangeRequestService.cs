@@ -18,9 +18,9 @@ namespace DashboardReportApp.Services
 
         }
 
-        public List<ProcessChangeRequest> GetAllRequests()
+        public List<ProcessChangeRequestModel> GetAllRequests()
         {
-            var requests = new List<ProcessChangeRequest>();
+            var requests = new List<ProcessChangeRequestModel>();
             string query = "SELECT * FROM ProcessChangeRequest ORDER BY id DESC";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -31,7 +31,7 @@ namespace DashboardReportApp.Services
                 {
                     while (reader.Read())
                     {
-                        requests.Add(new ProcessChangeRequest
+                        requests.Add(new ProcessChangeRequestModel
                         {
                             Id = Convert.ToInt32(reader["Id"]),
                             Timestamp = Convert.ToDateTime(reader["Timestamp"]),
@@ -53,7 +53,7 @@ namespace DashboardReportApp.Services
             return requests;
         }
 
-        public void AddRequest(ProcessChangeRequest request, IFormFile file)
+        public void AddRequest(ProcessChangeRequestModel request, IFormFile file)
         {
             // Initialize file path
             string fileAddressMediaLink = null;
@@ -125,7 +125,7 @@ namespace DashboardReportApp.Services
             }
         }
 
-        public void UpdateRequest(ProcessChangeRequest model, IFormFile? file)
+        public void UpdateRequest(ProcessChangeRequestModel model, IFormFile? file)
         {
             string filePath = model.FileAddress; // Use the existing address if no new file is uploaded
             Console.WriteLine("Previous File Address: " + model.FileAddress);

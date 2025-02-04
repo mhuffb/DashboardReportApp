@@ -1,6 +1,6 @@
 ﻿namespace DashboardReportApp.Models
 {
-    public class ScheduleViewModel
+    public class ScheduleModel
     {
         public List<SintergyComponent> AllComponents { get; set; } // For the query results
         public List<SintergyComponent> OpenParts { get; set; } // Existing Open Parts data

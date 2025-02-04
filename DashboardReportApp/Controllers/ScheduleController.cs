@@ -18,7 +18,7 @@ namespace DashboardReportApp.Controllers
 
         public IActionResult Index(string masterId = null, int quantity = 0)
         {
-            var viewModel = new ScheduleViewModel
+            var viewModel = new ScheduleModel
             {
                 AllComponents = new List<SintergyComponent>(),
                 OpenParts = _scheduleService.GetOpenParts()
@@ -33,7 +33,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public IActionResult ScheduleComponents(ScheduleViewModel viewModel)
+        public IActionResult ScheduleComponents(ScheduleModel viewModel)
         {
             try
             {
@@ -62,7 +62,7 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpPost]
-        public IActionResult UpdateOpenParts(ScheduleViewModel viewModel)
+        public IActionResult UpdateOpenParts(ScheduleModel viewModel)
         {
             try
             {

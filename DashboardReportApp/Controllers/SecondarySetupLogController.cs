@@ -15,7 +15,7 @@ namespace DashboardReportApp.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var model = new SecondarySetupLogViewModel
+            var model = new SecondarySetupLogModel
             {
                 Operators = await _service.GetOperatorsAsync(),
                 Equipment = await _service.GetEquipmentAsync()
@@ -25,7 +25,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateSetup(SecondarySetupLogViewModel model)
+        public async Task<IActionResult> CreateSetup(SecondarySetupLogModel model)
         {
             if (ModelState.IsValid)
             {

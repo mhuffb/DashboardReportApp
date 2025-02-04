@@ -36,7 +36,7 @@ namespace DashboardReportApp.Services
             return operators;
         }
 
-        public async Task AddHoldReturnAsync(QCSecondaryHoldReturn record)
+        public async Task AddHoldReturnAsync(QCSecondaryHoldReturnModel record)
         {
             string query = @"
         INSERT INTO qcsecondaryholdreturn (operator, run, qtyreturned_machined, qtyreturned_nonmachined, notes, timestamp)

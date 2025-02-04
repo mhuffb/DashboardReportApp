@@ -25,7 +25,7 @@ namespace DashboardReportApp.Controllers
             ViewBag.NextGroupID = nextGroupId;
 
             // Provide default values for the form
-            var toolingHistory = new ToolingHistory
+            var toolingHistory = new ToolingHistoryModel
             {
                 DateInitiated = DateTime.Today,
                 DateDue = DateTime.Today
@@ -37,7 +37,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Index(ToolingHistory toolingHistory)
+        public IActionResult Index(ToolingHistoryModel toolingHistory)
         {
             if (ModelState.IsValid)
             {
@@ -59,7 +59,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Create(ToolingHistory toolingHistory)
+        public IActionResult Create(ToolingHistoryModel toolingHistory)
         {
             if (ModelState.IsValid)
             {
@@ -84,7 +84,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Edit(ToolingHistory toolingHistory)
+        public IActionResult Edit(ToolingHistoryModel toolingHistory)
         {
             if (ModelState.IsValid)
             {
@@ -122,7 +122,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult UpdateToolingHistory(ToolingHistory model)
+        public IActionResult UpdateToolingHistory(ToolingHistoryModel model)
         {
             // If your model is valid, update the existing record
             if (ModelState.IsValid)
@@ -134,7 +134,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult AddToolingHistory(ToolingHistory model)
+        public IActionResult AddToolingHistory(ToolingHistoryModel model)
         {
             // If your model is valid, insert a new record
             if (ModelState.IsValid)

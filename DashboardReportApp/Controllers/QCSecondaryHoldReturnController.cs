@@ -21,12 +21,12 @@ namespace DashboardReportApp.Controllers
         {
             var operators = await _service.GetOperatorsAsync();
             ViewData["Operators"] = operators;
-            return View(new QCSecondaryHoldReturn());
+            return View(new QCSecondaryHoldReturnModel());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Submit(QCSecondaryHoldReturn model)
+        public async Task<IActionResult> Submit(QCSecondaryHoldReturnModel model)
         {
             if (ModelState.IsValid)
             {

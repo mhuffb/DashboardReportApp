@@ -26,7 +26,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult AddRequest(ProcessChangeRequest model, IFormFile? file) // Allow null files
+        public IActionResult AddRequest(ProcessChangeRequestModel model, IFormFile? file) // Allow null files
         {
             if (!ModelState.IsValid)
             {

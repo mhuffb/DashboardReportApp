@@ -2,7 +2,7 @@
 {
     using System.ComponentModel.DataAnnotations;
 
-    public class PressMixBagChangeForm
+    public class PressMixBagChangeModel
     {
         [Required]
         [Display(Name = "Part Number")]

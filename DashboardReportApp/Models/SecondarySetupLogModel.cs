@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class SecondarySetupLogViewModel
+    public class SecondarySetupLogModel
     {
         // Properties for adding a new setup
         [Required]

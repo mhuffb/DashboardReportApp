@@ -11,8 +11,8 @@ namespace DashboardReportApp.Services
         Task LoginAsync(string operatorName, string machine, string runNumber, string op); // For CreateRun
         Task LoginAsync(string operatorName, string machine, string runNumber); // For Login
         Task LogoutAsync(int pcs, int scrapMach, int scrapNonMach, string notes, int selectedRunId);
-        Task<IEnumerable<SecondaryRunLogViewModel>> GetActiveRunsAsync();
-        Task<SecondaryRunLogViewModel> GetRunByIdAsync(int id);
+        Task<IEnumerable<SecondaryRunLogModel>> GetActiveRunsAsync();
+        Task<SecondaryRunLogModel> GetRunByIdAsync(int id);
         Task<IEnumerable<string>> GetOperatorsAsync();
         Task<IEnumerable<string>> GetMachinesAsync();
     }
@@ -66,9 +66,9 @@ namespace DashboardReportApp.Services
 
             return machines;
         }
-        public async Task<IEnumerable<SecondaryRunLogViewModel>> GetActiveRunsAsync()
+        public async Task<IEnumerable<SecondaryRunLogModel>> GetActiveRunsAsync()
         {
-            var activeRuns = new List<SecondaryRunLogViewModel>();
+            var activeRuns = new List<SecondaryRunLogModel>();
             string query = $"SELECT id, timestamp, run, part, op, operator, startDateTime, machine, notes FROM secondaryrun WHERE endDateTime IS NULL";
 
             using (var connection = new MySqlConnection(ConnectionString))
@@ -80,7 +80,7 @@ namespace DashboardReportApp.Services
                     {
                         while (await reader.ReadAsync())
                         {
-                            activeRuns.Add(new SecondaryRunLogViewModel
+                            activeRuns.Add(new SecondaryRunLogModel
                             {
                                 Id = Convert.ToInt32(reader["id"]),
                                 Timestamp = Convert.ToDateTime(reader["timestamp"]),
@@ -190,10 +190,10 @@ namespace DashboardReportApp.Services
                 }
             }
         }
-        public async Task<SecondaryRunLogViewModel> GetRunByIdAsync(int id)
+        public async Task<SecondaryRunLogModel> GetRunByIdAsync(int id)
         {
             string query = $"SELECT * FROM secondaryrun WHERE id = @id";
-            SecondaryRunLogViewModel run = null;
+            SecondaryRunLogModel run = null;
 
             using (var connection = new MySqlConnection(ConnectionString))
             {
@@ -205,7 +205,7 @@ namespace DashboardReportApp.Services
                     {
                         if (await reader.ReadAsync())
                         {
-                            run = new SecondaryRunLogViewModel
+                            run = new SecondaryRunLogModel
                             {
                                 Id = id,
                                 Part = reader["part"].ToString(),

@@ -23,7 +23,7 @@ public class PressMixBagChangeController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> Submit(PressMixBagChangeForm form)
+    public async Task<IActionResult> Submit(PressMixBagChangeModel form)
     {
         if (!ModelState.IsValid)
         {

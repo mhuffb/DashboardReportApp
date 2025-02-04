@@ -1,6 +1,6 @@
 ﻿namespace DashboardReportApp.Models
 {
-    public class SecondaryRunLogViewModel
+    public class SecondaryRunLogModel
     {
         public int Id { get; set; }
         public DateTime Timestamp { get; set; }
@@ -14,6 +14,6 @@
         // Additional properties for dropdown lists
         public IEnumerable<string> Operators { get; set; }
         public IEnumerable<string> Machines { get; set; }
-        public IEnumerable<SecondaryRunLogViewModel> OpenRuns { get; set; }
+        public IEnumerable<SecondaryRunLogModel> OpenRuns { get; set; }
     }
 }

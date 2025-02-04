@@ -32,7 +32,7 @@ namespace DashboardReportApp.Controllers
       
 
         [HttpPost]
-        public IActionResult UpdateRequest(ProcessChangeRequest model, IFormFile? FileUpload)
+        public IActionResult UpdateRequest(ProcessChangeRequestModel model, IFormFile? FileUpload)
         {
             if (!ModelState.IsValid)
             {

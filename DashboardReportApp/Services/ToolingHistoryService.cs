@@ -15,9 +15,9 @@ namespace DashboardReportApp.Services
             _connectionString = configuration.GetConnectionString("MySQLConnection");
         }
 
-        public List<ToolingHistory> GetToolingHistories()
+        public List<ToolingHistoryModel> GetToolingHistories()
         {
-            var toolingHistories = new List<ToolingHistory>();
+            var toolingHistories = new List<ToolingHistoryModel>();
             string query = "SELECT part, id, reason, toolvendor, dateinitiated, toolnumber, cost, revision, po, toolworkhours, tooldesc, groupid, datedue, accountingcode FROM toolinghistory where part is not null";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -28,7 +28,7 @@ namespace DashboardReportApp.Services
                 {
                     while (reader.Read())
                     {
-                        var toolingHistory = new ToolingHistory
+                        var toolingHistory = new ToolingHistoryModel
                         {
                             Id = Convert.ToInt32(reader["Id"]),
                             Reason = reader["Reason"].ToString(),
@@ -73,7 +73,7 @@ namespace DashboardReportApp.Services
         }
 
 
-        public void AddToolingHistory(ToolingHistory model)
+        public void AddToolingHistory(ToolingHistoryModel model)
         {
             // Get the next GroupID
             //model.GroupID = GetNextGroupID();
@@ -121,7 +121,7 @@ namespace DashboardReportApp.Services
             }
         }
 
-        public void UpdateToolingHistory(ToolingHistory model)
+        public void UpdateToolingHistory(ToolingHistoryModel model)
         {
             string query = @"
                 UPDATE toolinghistory 

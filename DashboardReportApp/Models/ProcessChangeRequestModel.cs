@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class ProcessChangeRequest
+    public class ProcessChangeRequestModel
     {
         public int Id { get; set; }
 

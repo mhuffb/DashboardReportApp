@@ -1,6 +1,6 @@
 ﻿namespace DashboardReportApp.Models
 {
-    public class QCSecondaryHoldReturn
+    public class QCSecondaryHoldReturnModel
     {
         public int Id { get; set; }
         public string Operator { get; set; }
