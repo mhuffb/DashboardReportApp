@@ -5,18 +5,21 @@ namespace DashboardReportApp.Controllers
 {
     public class MoldingController : Controller
     {
-        private readonly MoldingService _pressDataService;
+        private readonly MoldingService _moldingService;
 
-        public MoldingController(MoldingService pressDataService)
+        public MoldingController(MoldingService MoldingService)
         {
-            _pressDataService = pressDataService;
+            _moldingService = MoldingService;
         }
 
         [HttpGet]
-        public IActionResult Index(string searchTerm)
+        public IActionResult Index(string searchTerm, string sortColumn = "Timestamp", bool sortDescending = false)
         {
-            var viewModel = _pressDataService.GetFilteredData(searchTerm, null, false);
+            var viewModel = _moldingService.GetFilteredData(searchTerm, sortColumn, sortDescending);
             return View(viewModel);
         }
+
+
+
     }
 }

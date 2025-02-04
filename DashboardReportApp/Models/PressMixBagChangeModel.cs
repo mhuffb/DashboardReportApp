@@ -11,7 +11,7 @@
         public string Machine { get; set; }
         public string LotNumber { get; set; }
         public string MixNumber { get; set; }
-        public string Note { get; set; }
+        public string Notes { get; set; }
         public string SupplierItemNumber { get; set; }
 
     }

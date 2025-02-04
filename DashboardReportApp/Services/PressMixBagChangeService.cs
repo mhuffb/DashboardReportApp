@@ -58,8 +58,8 @@
      string supplierItemNumber
  )
         {
-            const string query = @"INSERT INTO presslotchange (part, sentDateTime, operator, machine, lotNumber, mixNumber, note, supplierItemNumber) 
-                           VALUES (@part, @sentDateTime, @operator, @machine, @lotNumber, @mixNumber, @note, @supplierItemNumber)";
+            const string query = @"INSERT INTO presslotchange (part, sentDateTime, operator, machine, lotNumber, mixNumber, notes, supplierItemNumber) 
+                           VALUES (@part, @sentDateTime, @operator, @machine, @lotNumber, @mixNumber, @notes, @supplierItemNumber)";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -71,7 +71,7 @@
             command.Parameters.AddWithValue("@machine", machine);
             command.Parameters.AddWithValue("@lotNumber", lot);
             command.Parameters.AddWithValue("@mixNumber", mix);
-            command.Parameters.AddWithValue("@note", notes);
+            command.Parameters.AddWithValue("@notes", notes);
             command.Parameters.AddWithValue("@supplierItemNumber", supplierItemNumber);
 
             await command.ExecuteNonQueryAsync();

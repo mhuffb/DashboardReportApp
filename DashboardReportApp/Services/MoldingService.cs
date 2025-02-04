@@ -18,6 +18,14 @@ namespace DashboardReportApp.Services
             var pressSetups = GetPressSetups(searchTerm);
             var pressLotChanges = GetPressLotChanges(searchTerm);
 
+            // Apply sorting if a sort column is selected
+            if (!string.IsNullOrEmpty(sortColumn))
+            {
+                pressRuns = SortData(pressRuns, sortColumn, sortDescending).ToList();
+                pressSetups = SortData(pressSetups, sortColumn, sortDescending).ToList();
+                pressLotChanges = SortData(pressLotChanges, sortColumn, sortDescending).ToList();
+            }
+
             return new MoldingModel
             {
                 PressRuns = pressRuns,
@@ -27,6 +35,13 @@ namespace DashboardReportApp.Services
                 SortColumn = sortColumn,
                 SortDescending = sortDescending
             };
+        }
+        private IEnumerable<T> SortData<T>(IEnumerable<T> data, string sortColumn, bool sortDescending)
+        {
+            var prop = typeof(T).GetProperty(sortColumn);
+            if (prop == null) return data;
+
+            return sortDescending ? data.OrderByDescending(x => prop.GetValue(x)) : data.OrderBy(x => prop.GetValue(x));
         }
 
         private List<PressRunLogFormModel> GetPressRuns(string searchTerm)
@@ -49,8 +64,8 @@ namespace DashboardReportApp.Services
             var results = new List<T>();
             bool isDateSearch = DateTime.TryParse(searchTerm, out DateTime searchDate);
 
-            // Default query
-            string query = $"SELECT * FROM {tableName} WHERE operator LIKE @Search OR part LIKE @Search OR machine LIKE @Search";
+            // Default query (adds "notes" column to search)
+            string query = $"SELECT * FROM {tableName} WHERE operator LIKE @Search OR part LIKE @Search OR machine LIKE @Search OR notes LIKE @Search";
 
             // Handling Date Searches
             if (isDateSearch)
@@ -76,7 +91,7 @@ namespace DashboardReportApp.Services
                     if (isDateSearch)
                     {
                         command.Parameters.AddWithValue("@SearchDate", searchDate);
-                        command.Parameters.AddWithValue("@SearchDateEnd", searchDate.AddDays(1)); // Search for full day
+                        command.Parameters.AddWithValue("@SearchDateEnd", searchDate.AddDays(1)); // Search full day
                     }
 
                     using (var reader = command.ExecuteReader())
@@ -105,6 +120,7 @@ namespace DashboardReportApp.Services
             }
             return results;
         }
+
 
     }
 }

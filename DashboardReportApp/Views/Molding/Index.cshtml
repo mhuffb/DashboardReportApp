@@ -7,7 +7,7 @@
 @model DashboardReportApp.Models.MoldingModel
 
 <div class="container-fluid px-3 mt-4">
-    <h2 class="text-center">Molding Dashboard</h2>
+    <h2 class="text-center">Molding Data</h2>
 
     <form method="get">
         <input type="text" name="searchTerm" placeholder="Search Operator, Part, Machine..." value="@Model.SearchTerm" class="form-control my-2" />
@@ -20,7 +20,11 @@
             <tr>
                 @foreach (var prop in typeof(DashboardReportApp.Models.PressRunLogFormModel).GetProperties())
                 {
-                    <th>@prop.Name</th>
+                    <th>
+                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
+                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
+                        </a>
+                    </th>
                 }
             </tr>
         </thead>
@@ -43,7 +47,11 @@
             <tr>
                 @foreach (var prop in typeof(DashboardReportApp.Models.PressSetupModel).GetProperties())
                 {
-                    <th>@prop.Name</th>
+                    <th>
+                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
+                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
+                        </a>
+                    </th>
                 }
             </tr>
         </thead>
@@ -60,13 +68,17 @@
         </tbody>
     </table>
 
-    <h3>Mix Bag Changes</h3>
+    <h3>Press Lot Changes</h3>
     <table class="table table-striped">
         <thead>
             <tr>
                 @foreach (var prop in typeof(DashboardReportApp.Models.PressMixBagChangeModel).GetProperties())
                 {
-                    <th>@prop.Name</th>
+                    <th>
+                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
+                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
+                        </a>
+                    </th>
                 }
             </tr>
         </thead>

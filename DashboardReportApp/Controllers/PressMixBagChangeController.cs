@@ -44,7 +44,7 @@ public class PressMixBagChangeController : Controller
             form.Machine,
             form.LotNumber,
             form.MixNumber, // Include Mix Number
-            form.Note,
+            form.Notes,
             form.SupplierItemNumber
         );
 
