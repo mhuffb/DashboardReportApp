@@ -24,7 +24,7 @@ namespace DashboardReportApp.Controllers
             ViewData["Parts"] = parts ?? new List<string>();
             ViewData["Operators"] = operators;
 
-            return View(new HoldRecordModel());
+            return View(new HoldTagModel());
         }
         
 
@@ -32,7 +32,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Submit(HoldRecordModel record)
+        public async Task<IActionResult> Submit(HoldTagModel record)
         {
             if (ModelState.IsValid)
             {

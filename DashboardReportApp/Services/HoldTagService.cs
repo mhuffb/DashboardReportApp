@@ -54,7 +54,7 @@ namespace DashboardReportApp.Services
             return operators;
         }
 
-        public async Task AddHoldRecordAsync(HoldRecordModel record)
+        public async Task AddHoldRecordAsync(HoldTagModel record)
         {
             string query = @"INSERT INTO holdrecords 
                 (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress)
@@ -85,7 +85,7 @@ namespace DashboardReportApp.Services
             }
         }
 
-        public string GenerateHoldTagPdf(HoldRecordModel record)
+        public string GenerateHoldTagPdf(HoldTagModel record)
         {
             string filePath = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\reports\HoldTag_" + record.Id + ".pdf";
 
@@ -208,7 +208,7 @@ ORDER BY
 
             return sintergyPartNumber;
         }
-        public void SendEmailWithAttachment(string senderEmail, string senderPassword, string receiverEmail, string smtpServer, string attachmentPath, HoldRecordModel record)
+        public void SendEmailWithAttachment(string senderEmail, string senderPassword, string receiverEmail, string smtpServer, string attachmentPath, HoldTagModel record)
         {
             int smtpPort = 587;
 
@@ -307,9 +307,9 @@ ORDER BY
         }
 
         // 1. Get all HoldRecord rows
-        public async Task<List<HoldRecordModel>> GetAllHoldRecordsAsync()
+        public async Task<List<HoldTagModel>> GetAllHoldRecordsAsync()
         {
-            var records = new List<HoldRecordModel>();
+            var records = new List<HoldTagModel>();
 
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
@@ -322,7 +322,7 @@ ORDER BY
             while (await reader.ReadAsync())
             {
                 // Use 'IsDBNull' checks for nullable columns
-                var record = new HoldRecordModel
+                var record = new HoldTagModel
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp"))
@@ -381,95 +381,7 @@ ORDER BY
             return records;
         }
 
-        // 2. Update an existing HoldRecord row
-        public async Task<bool> UpdateRequest(HoldRecordModel model, IFormFile? file)
-        {
-            
-            string filePath = model.FileAddress; // Use the existing address if no new file is uploaded
-            Console.WriteLine("Previous File Address: " + model.FileAddress);
-
-            if (file != null && file.Length > 0)
-            {
-                if (!Directory.Exists(_uploadFolder))
-                {
-                    Directory.CreateDirectory(_uploadFolder); // Ensure the folder exists
-                }
-
-                // Generate the file name with extension
-                var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"HoldTag{model.Id}{fileExtension}";
-
-                // Full physical path for saving the file
-                filePath = Path.Combine(_uploadFolder, fileName);
-
-
-                Console.WriteLine("Physical Path (for saving): " + filePath);
-
-                try
-                {
-                    // Save the file to the physical location
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        file.CopyTo(stream);
-                    }
-
-                    Console.WriteLine("File saved successfully at: " + filePath);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving file: {ex.Message}");
-                    throw new Exception("File upload failed.");
-                }
-            }
-            else
-            {
-                Console.WriteLine("No new file uploaded.");
-            }
-
-
-            using var connection = new MySqlConnection(_connectionString);
-            await connection.OpenAsync();
-
-            string query = @"
-                UPDATE HoldRecords
-                SET 
-                    Part = @Part,
-                    Discrepancy = @Discrepancy,
-                    Date = @Date,
-                    IssuedBy = @IssuedBy,
-                    Disposition = @Disposition,
-                    DispositionBy = @DispositionBy,
-                    ReworkInstr = @ReworkInstr,
-                    ReworkInstrBy = @ReworkInstrBy,
-                    Quantity = @Quantity,
-                    Unit = @Unit,
-                    PcsScrapped = @PcsScrapped,
-                    DateCompleted = @DateCompleted,
-                    FileAddress = @FileAddress
-                WHERE Id = @Id";
-
-            using var command = new MySqlCommand(query, connection);
-
-            // Safely handle null vs DB null
-            command.Parameters.AddWithValue("@Id", model.Id);
-            command.Parameters.AddWithValue("@Part", model.Part ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Discrepancy", model.Discrepancy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Date", model.Date ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@IssuedBy", model.IssuedBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Disposition", model.Disposition ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@DispositionBy", model.DispositionBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@ReworkInstr", model.ReworkInstr ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@ReworkInstrBy", model.ReworkInstrBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Quantity", model.Quantity ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Unit", model.Unit ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@PcsScrapped", model.PcsScrapped ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@DateCompleted", model.DateCompleted ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@FileAddress", filePath ?? (object)DBNull.Value);
-
-            int rowsAffected = await command.ExecuteNonQueryAsync();
-            return rowsAffected > 0; // true if at least one row was updated
-        }
-
+      
 
     }
 }
