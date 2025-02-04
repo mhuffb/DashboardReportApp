@@ -45,6 +45,8 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.AdminDeviationService>();
     builder.Services.AddScoped<DashboardReportApp.Services.PressSetupService>();
     builder.Services.AddScoped<DashboardReportApp.Services.AdminHoldTagService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.MoldingService>();
+
     // Add session services
     builder.Services.AddSession(options =>
     {

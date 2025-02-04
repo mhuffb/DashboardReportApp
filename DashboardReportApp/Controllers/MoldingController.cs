@@ -1,12 +1,22 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DashboardReportApp.Controllers
 {
     public class MoldingController : Controller
     {
-        public IActionResult Index()
+        private readonly MoldingService _pressDataService;
+
+        public MoldingController(MoldingService pressDataService)
         {
-            return View();
+            _pressDataService = pressDataService;
+        }
+
+        [HttpGet]
+        public IActionResult Index(string searchTerm)
+        {
+            var viewModel = _pressDataService.GetFilteredData(searchTerm, null, false);
+            return View(viewModel);
         }
     }
 }

@@ -4,8 +4,82 @@
 @{
     ViewData["Title"] = "Molding Dashboard";
 }
-<div class="container mt-1">
-<h1>Molding Dashboard</h1>
-<ul>
-</ul>
+@model DashboardReportApp.Models.MoldingModel
+
+<div class="container-fluid px-3 mt-4">
+    <h2 class="text-center">Molding Dashboard</h2>
+
+    <form method="get">
+        <input type="text" name="searchTerm" placeholder="Search Operator, Part, Machine..." value="@Model.SearchTerm" class="form-control my-2" />
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <h3>Press Runs</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                @foreach (var prop in typeof(DashboardReportApp.Models.PressRunLogFormModel).GetProperties())
+                {
+                    <th>@prop.Name</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var run in Model.PressRuns)
+            {
+                <tr>
+                    @foreach (var prop in typeof(DashboardReportApp.Models.PressRunLogFormModel).GetProperties())
+                    {
+                        <td>@prop.GetValue(run)</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Press Setups</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                @foreach (var prop in typeof(DashboardReportApp.Models.PressSetupModel).GetProperties())
+                {
+                    <th>@prop.Name</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var setup in Model.PressSetups)
+            {
+                <tr>
+                    @foreach (var prop in typeof(DashboardReportApp.Models.PressSetupModel).GetProperties())
+                    {
+                        <td>@prop.GetValue(setup)</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Mix Bag Changes</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                @foreach (var prop in typeof(DashboardReportApp.Models.PressMixBagChangeModel).GetProperties())
+                {
+                    <th>@prop.Name</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var lotChange in Model.PressLotChanges)
+            {
+                <tr>
+                    @foreach (var prop in typeof(DashboardReportApp.Models.PressMixBagChangeModel).GetProperties())
+                    {
+                        <td>@prop.GetValue(lotChange)</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
 </div>

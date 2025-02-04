@@ -4,7 +4,7 @@ namespace DashboardReportApp.Models
 {
     public class PressSetupModel
     {
-        public int Id { get; set; }
+        public long Id { get; set; }
         public DateTime? Timestamp { get; set; }
         public string Part { get; set; }
         public string Operator { get; set; }
