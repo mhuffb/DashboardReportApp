@@ -16,13 +16,10 @@ public class PressMixBagChangeController : Controller
         var equipment = await _databaseService.GetEquipmentAsync();
         var operators = await _databaseService.GetOperatorsAsync();
 
-        var model = new PressMixBagChangeViewModel
-        {
-            EquipmentList = equipment,
-            OperatorList = operators
-        };
+        ViewData["EquipmentList"] = equipment;
+        ViewData["OperatorList"] = operators;
 
-        return View(model);
+        return View();
     }
 
     [HttpPost]
@@ -31,16 +28,10 @@ public class PressMixBagChangeController : Controller
         if (!ModelState.IsValid)
         {
             // Re-populate dropdowns if validation fails
-            var equipment = await _databaseService.GetEquipmentAsync();
-            var operators = await _databaseService.GetOperatorsAsync();
+            ViewData["EquipmentList"] = await _databaseService.GetEquipmentAsync();
+            ViewData["OperatorList"] = await _databaseService.GetOperatorsAsync();
 
-            var model = new PressMixBagChangeViewModel
-            {
-                EquipmentList = equipment,
-                OperatorList = operators
-            };
-
-            return View("Index", model);
+            return View("Index");
         }
 
         // Process the data (Insert into the database)

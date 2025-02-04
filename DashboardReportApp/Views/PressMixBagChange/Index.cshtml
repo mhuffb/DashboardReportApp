@@ -1,4 +1,8 @@
-﻿@model PressMixBagChangeViewModel
+﻿@{
+    ViewData["Title"] = "Press Mix Bag Change";
+    var operators = ViewData["OperatorList"] as List<string> ?? new List<string>();
+    var equipment = ViewData["EquipmentList"] as List<string> ?? new List<string>();
+}
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Mix Bag Change</h1>
@@ -14,7 +18,7 @@
                 <label for="Operator" class="form-label">Operator:</label>
                 <select id="Operator" name="Operator" class="form-control">
                     <option value="">-- Select Operator --</option>
-                    @foreach (var op in Model.OperatorList)
+                    @foreach (var op in operators)
                     {
                         <option value="@op">@op</option>
                     }
@@ -25,7 +29,7 @@
                 <label for="Machine" class="form-label">Machine:</label>
                 <select id="Machine" name="Machine" class="form-control">
                     <option value="">-- Select Machine --</option>
-                    @foreach (var machine in Model.EquipmentList)
+                    @foreach (var machine in equipment)
                     {
                         <option value="@machine">@machine</option>
                     }
@@ -57,8 +61,6 @@
     </form>
 </div>
 
-<!-- Custom Styles -->
-<!-- Custom Styles -->
 <style>
     body {
         background-color: black !important;
