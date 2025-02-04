@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class DeviationViewModel
+    public class DeviationModel
     {
         [Required(ErrorMessage = "Part is required.")]
         public string Part { get; set; }

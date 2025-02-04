@@ -44,7 +44,7 @@ namespace DashboardReportApp.Services
             return operators;
         }
 
-        public void SaveDeviation(DeviationViewModel model)
+        public void SaveDeviation(DeviationModel model)
         {
             string query = @"
                 INSERT INTO deviation (part, sentDateTime, discrepancy, operator, commMethod, disposition, approvedBy, dateTimeCASTReview)
@@ -68,7 +68,7 @@ namespace DashboardReportApp.Services
                 }
             }
         }
-public string GenerateAndPrintDeviationPdf(DeviationViewModel model)
+public string GenerateAndPrintDeviationPdf(DeviationModel model)
     {
         string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", $"Deviation_{model.Part}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
 

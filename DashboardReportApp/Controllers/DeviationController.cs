@@ -24,7 +24,7 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Create(DeviationViewModel model)
+        public IActionResult Create(DeviationModel model)
         {
             if (ModelState.IsValid)
             {
