@@ -39,10 +39,11 @@
             <tbody>
                 @foreach (var request in Model)
                 {
-                    <tr>
-                        <form asp-controller="MaintenanceAdmin" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
-                            <input type="hidden" name="Id" value="@request.Id" />
+                    <form asp-controller="MaintenanceAdmin" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="Id" value="@request.Id" />
 
+                        <!-- Main Row -->
+                    <tr>
                         <td>@request.Id</td>
                         <td><input type="text" name="Equipment" class="form-control" value="@request.Equipment" required /></td>
                         <td><input type="text" name="Requester" class="form-control" value="@request.Requester" required /></td>
@@ -69,7 +70,6 @@
                                 Expand
                             </button>
                         </td>
-                        </form>
                     </tr>
 
                     <!-- Expandable Section for Additional Fields -->
@@ -103,13 +103,13 @@
                                         <input type="file" name="FileUpload" class="form-control" accept="image/*,application/pdf" />
 
                                         <!-- Show Preview Button -->
-                                        @if (!string.IsNullOrEmpty(request.FileAddress))
-                                        {
+                                            @if (!string.IsNullOrEmpty(request.FileAddress))
+                                            {
                                             <button type="button" class="btn btn-primary btn-sm mt-2 preview-btn"
                                                     data-file-path="@request.FileAddress">
                                                 Show Preview
                                             </button>
-                                        }
+                                            }
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-danger btn-sm toggle-btn mt-2" data-target="#extraFields_@request.Id">
@@ -118,8 +118,10 @@
                             </div>
                         </td>
                     </tr>
+                    </form>
                 }
             </tbody>
+
         </table>
     </div>
 </div>

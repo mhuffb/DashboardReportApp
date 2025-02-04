@@ -19,7 +19,7 @@ body {
     flex-direction: column;
     min-height: 100vh;
     background-color: black !important; /* Corrected */
-    color: white;
+    color: goldenrod;
 }
 
 h1,h2,h3 {
@@ -41,23 +41,23 @@ main {
     background-color: transparent !important;
 }
 
-footer {
+.footer {
     text-align: center;
     padding: 10px 0;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid goldenrod;
     position: relative;
     margin-top: auto;
     background: #343a40 !important;
-    color: white;
+    color: goldenrod !important;
     width: 100% !important;
 }
 .navbar, .navbar-nav, .nav-link {
     color: goldenrod !important;
-    border-bottom: 3px solid #007bff;
+    border-bottom: 3px solid goldenrod;
 }
 
 .navbar, .navbar-brand {
-    color: white !important;
+    color: goldenrod !important;
 }
 
 
