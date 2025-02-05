@@ -72,8 +72,8 @@
 
         public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
         {
-            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddressImageLink, department) 
-                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @fileAddress, @department);
+            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddressImageLink, department, downStartDateTime, status) 
+                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @fileAddress, @department, @downStartDateTime, @status);
                      SELECT LAST_INSERT_ID();"; // Retrieve the last inserted ID
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -89,7 +89,8 @@
                     command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@fileAddress", request.FileAddressMediaLink ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
-
+                    command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@status", request.Status);
                     // Execute the query and retrieve the last inserted ID
                     object result = await command.ExecuteScalarAsync();
                     if (result != null && int.TryParse(result.ToString(), out int insertedId))

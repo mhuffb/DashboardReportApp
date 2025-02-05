@@ -92,6 +92,13 @@ namespace DashboardReportApp.Controllers
                     request.FileAddressMediaLink = null;
                 }
 
+                if (request.DownStatus == true)
+                {
+                    request.DownStartDateTime = DateTime.Now;
+                }
+
+                request.Status = "Open";
+
                 // Call the service to add the request
                 bool success = await _service.AddRequestAsync(request);
                 TempData["Success"] = success ? "Request added successfully." : "Failed to add the request.";
