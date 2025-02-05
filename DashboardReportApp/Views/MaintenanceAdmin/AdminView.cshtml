@@ -1,4 +1,5 @@
-﻿@model IEnumerable<DashboardReportApp.Models.MaintenanceRequestModel>
+﻿
+@model IEnumerable<DashboardReportApp.Models.MaintenanceRequestModel>
 
 <div class="container-fluid px-3 mt-4">
     <h1 class="text-center mb-4">Admin - Maintenance Requests</h1>
@@ -7,14 +8,6 @@
     {
         <div class="alert alert-success alert-dismissible fade show text-center" role="alert">
             @TempData["Success"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (TempData["Error"] != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show text-center" role="alert">
-            @TempData["Error"]
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
@@ -28,10 +21,7 @@
                     <th>Requester</th>
                     <th>Requested Date</th>
                     <th>Problem</th>
-                    <th>Closed Date</th>
-                    <th>Down Status</th>
                     <th>Hour Meter</th>
-                    <th>Hold Status</th>
                     <th>Department</th>
                     <th>Actions</th>
                 </tr>
@@ -42,89 +32,110 @@
                     <form asp-controller="MaintenanceAdmin" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
                         <input type="hidden" name="Id" value="@request.Id" />
 
-                        <!-- Main Row -->
                     <tr>
                         <td>@request.Id</td>
                         <td><input type="text" name="Equipment" class="form-control" value="@request.Equipment" required /></td>
                         <td><input type="text" name="Requester" class="form-control" value="@request.Requester" required /></td>
                         <td><input type="date" name="RequestedDate" class="form-control" value="@(request.RequestedDate?.ToString("yyyy-MM-dd") ?? "")" /></td>
-                        <td><textarea name="Problem" class="form-control text-area-large">@request.Problem</textarea></td>
-                        <td><input type="datetime-local" name="ClosedDateTime" class="form-control" value="@(request.ClosedDateTime?.ToString("yyyy-MM-ddTHH:mm") ?? "")" /></td>
-                        <td>
-                            <select name="DownStatus" class="form-select">
-                                <option value="true" selected="@(request.DownStatus == true ? "selected" : null)">Yes</option>
-                                <option value="false" selected="@(request.DownStatus == false ? "selected" : null)">No</option>
-                            </select>
-                        </td>
+                        <td><textarea name="Problem" class="form-control">@request.Problem</textarea></td>
                         <td><input type="number" name="HourMeter" class="form-control" step="0.01" value="@request.HourMeter" /></td>
-                        <td>
-                            <select name="HoldStatus" class="form-select">
-                                <option value="true" selected="@(request.HoldStatus == true ? "selected" : null)">Yes</option>
-                                <option value="false" selected="@(request.HoldStatus == false ? "selected" : null)">No</option>
-                            </select>
-                        </td>
                         <td><input type="text" name="Department" class="form-control" value="@request.Department" /></td>
                         <td>
-                            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> Save</button>
-                            <button type="button" class="btn btn-info btn-sm toggle-btn" data-target="#extraFields_@request.Id">
-                                Expand
-                            </button>
+                            <button type="submit" class="btn btn-success btn-sm">Save</button>
+                            <button type="button" class="btn btn-info btn-sm toggle-btn" data-target="#extraFields_@request.Id">Expand</button>
                         </td>
                     </tr>
 
-                    <!-- Expandable Section for Additional Fields -->
-                    <tr class="extra-fields d-none" id="extraFields_@request.Id">
-                        <td colspan="11">
-                            <div class="card card-body">
-                                <h5>Additional Details</h5>
-                                <div class="row">
+                    <!-- Expandable Section -->
+                    <!-- Expandable Section -->
+<tr class="extra-fields d-none" id="extraFields_@request.Id">
+    <td colspan="8">
+        <div class="card card-body">
+            <h5>Additional Details</h5>
+            <div class="row">
                                     <div class="col-md-6">
-                                        <label>Close By</label>
-                                        <textarea name="CloseBy" class="form-control">@request.CloseBy</textarea>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label>Close Result</label>
-                                        <textarea name="CloseResult" class="form-control">@request.CloseResult</textarea>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label>Hold Reason</label>
-                                        <textarea name="HoldReason" class="form-control">@request.HoldReason</textarea>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label>Hold Result</label>
-                                        <textarea name="HoldResult" class="form-control">@request.HoldResult</textarea>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label>File Address</label>
-                                        <input type="text" name="FileAddress" class="form-control" value="@request.FileAddress" readonly />
+                                        <label>Status</label>
+                                        <select name="Status" class="form-select">
+                                                @if (request.Status == "Open")
+                                                {
+                                                <option value="Open" selected>Open</option>
+                                                }
+                                                else
+                                                {
+                                                <option value="Open">Open</option>
+                                                }
 
-                                        <!-- File Upload Input -->
-                                        <label>Upload New File</label>
-                                        <input type="file" name="FileUpload" class="form-control" accept="image/*,application/pdf" />
+                                                @if (request.Status == "Closed")
+                                                {
+                                                <option value="Closed" selected>Closed</option>
+                                                }
+                                                else
+                                                {
+                                                <option value="Closed">Closed</option>
+                                                }
 
-                                        <!-- Show Preview Button -->
-                                            @if (!string.IsNullOrEmpty(request.FileAddress))
-                                            {
-                                            <button type="button" class="btn btn-primary btn-sm mt-2 preview-btn"
-                                                    data-file-path="@request.FileAddress">
-                                                Show Preview
-                                            </button>
-                                            }
+                                                @if (request.Status == "On Hold")
+                                                {
+                                                <option value="On Hold" selected>On Hold</option>
+                                                }
+                                                else
+                                                {
+                                                <option value="On Hold">On Hold</option>
+                                                }
+                                        </select>
                                     </div>
-                                </div>
-                                <button type="button" class="btn btn-danger btn-sm toggle-btn mt-2" data-target="#extraFields_@request.Id">
-                                    Collapse
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
+
+                                    <div class="col-md-6">
+                                        <label>Status Updated By</label>
+                                        <select name="StatusUpdatedBy" class="form-select">
+                                            <option value="">-- Select Operator --</option>
+                                                @foreach (var opName in (List<string>)ViewBag.OperatorNames)
+                                                {
+                                                    // If the request already has a StatusUpdatedBy value matching this opName, pre-select it.
+                                                    if (request.StatusUpdatedBy == opName)
+                                                    {
+                                                    <option value="@opName" selected>@opName</option>
+                                                    }
+                                                    else
+                                                    {
+                                                    <option value="@opName">@opName</option>
+                                                    }
+                                                }
+                                        </select>
+                                    </div>
+
+                <div class="col-md-6">
+                    <label>File Address</label>
+                    <input type="text" name="FileAddress" class="form-control" value="@request.FileAddress" readonly />
+                    <label>Upload New File</label>
+                    <input type="file" name="FileUpload" class="form-control" accept="image/*,application/pdf" />
+                </div>
+                                    <div class="col-md-12">
+                                        <label>Current Status Description</label>
+                                        <!-- You can keep it read-only or not, depending on your needs. -->
+                                        <textarea class="form-control" readonly>@request.StatusDesc</textarea>
+                                    </div>
+                                    <input type="hidden" name="StatusDesc" value="@request.StatusDesc" />
+
+                                    <div class="col-md-12">
+                                        <label>New Status Description</label>
+                                        <textarea name="NewStatusDesc" class="form-control"></textarea>
+                                    </div>
+
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm mt-2">Update Status</button>
+        </div>
+    </td>
+</tr>
+
                     </form>
                 }
             </tbody>
-
         </table>
     </div>
 </div>
+
+
 
 <!-- Custom Styles -->
 <style>

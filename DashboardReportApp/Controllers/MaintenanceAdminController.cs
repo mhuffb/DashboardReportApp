@@ -23,11 +23,12 @@ namespace DashboardReportApp.Controllers
             Console.WriteLine("AdminView was called");
 
             var requests = _adminService.GetAllRequests();
+            var operatorNames = _adminService.GetAllOperatorNames(); // from step #2
             if (requests == null)
             {
                 Console.WriteLine("Requests are null!");
             }
-
+            ViewBag.OperatorNames = operatorNames;
             return View(requests);
         }
 
@@ -37,7 +38,10 @@ namespace DashboardReportApp.Controllers
         {
             if (!ModelState.IsValid)
             {
-                return View("AdminView", _adminService.GetAllRequests());
+                // If invalid, re-fetch data for the view
+                var requests = _adminService.GetAllRequests();
+                ViewBag.OperatorNames = _adminService.GetAllOperatorNames();
+                return View("AdminView", requests);
             }
 
             try
@@ -62,6 +66,27 @@ namespace DashboardReportApp.Controllers
                     model.FileAddress = filePath; // Save new file path in database
                 }
 
+                // 1) Grab the old StatusDesc (already in model from form post, or re-fetch from DB if needed)
+                string oldDesc = model.StatusDesc ?? "";
+                string nowString = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                // e.g. "Closed 2025-02-05 14:32:55 Bob This is new text"
+                string newLine = $"{model.Status} {nowString} {model.StatusUpdatedBy} {model.NewStatusDesc}".Trim();
+
+                // If we want a newline in between old and new
+                model.StatusDesc = string.IsNullOrEmpty(oldDesc)
+                    ? newLine
+                    : (oldDesc + "\n" + newLine);
+
+
+                // 1) Automatically set ClosedDateTime when status is "Closed"
+                if (model.Status == "Closed")
+                {
+                    model.ClosedDateTime = DateTime.Now;
+                }
+
+
+                // Now update in the DB
                 _adminService.UpdateRequest(model, FileUpload);
 
                 TempData["Success"] = "Request updated successfully.";
@@ -71,7 +96,15 @@ namespace DashboardReportApp.Controllers
             {
                 Console.WriteLine($"Error: {ex.Message}");
                 TempData["Error"] = "Failed to update the request.";
-                return View("AdminView", _adminService.GetAllRequests());
+
+                // Re-fetch requests...
+                var requests = _adminService.GetAllRequests();
+
+                // MISSING: We must also re-fetch operator names
+                ViewBag.OperatorNames = _adminService.GetAllOperatorNames();
+
+                // Then return the same view
+                return View("AdminView", requests);
             }
         }
         [HttpGet("FetchImage")]

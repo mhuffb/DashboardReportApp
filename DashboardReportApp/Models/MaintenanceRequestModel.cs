@@ -35,6 +35,12 @@ namespace DashboardReportApp.Models
         public string? StatusHistory { get; set; }
         public string? CurrentStatusBy { get; set; }
         public string? Department { get; set; }
+        public string? Status { get; set; }
+        public string? StatusDesc { get; set; }
+        public string? NewStatusDesc { get; set; }
+        public string? StatusUpdatedBy { get; set; }
+
     }
+   
 
 }

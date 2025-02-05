@@ -15,6 +15,25 @@ namespace DashboardReportApp.Services
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
         }
+        public List<string> GetAllOperatorNames()
+        {
+            var operatorNames = new List<string>();
+            string query = "SELECT name FROM operators"; // Adjust column/table as needed
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new MySqlCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        operatorNames.Add(reader["name"].ToString());
+                    }
+                }
+            }
+            return operatorNames;
+        }
 
         public List<MaintenanceRequestModel> GetAllRequests()
         {
@@ -51,7 +70,9 @@ namespace DashboardReportApp.Services
                             FileAddressMediaLink = reader["fileAddressImageLink"] == DBNull.Value ? null : reader["fileAddressImageLink"].ToString(),
                             StatusHistory = reader["StatusHistory"]?.ToString(),
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
-                            Department = reader["Department"]?.ToString()
+                            Department = reader["Department"]?.ToString(),
+                            Status = reader["Status"]?.ToString(),
+                            StatusDesc = reader["StatusDesc"]?.ToString()
                         });
                     }
                 }
@@ -73,18 +94,11 @@ namespace DashboardReportApp.Services
             ReqDate = @RequestedDate,
             Problem = @Problem,
             ClosedDateTime = @ClosedDateTime,
-            CloseBy = @CloseBy,
-            CloseResult = @CloseResult,
-            DownStatus = @DownStatus,
             HourMeter = @HourMeter,
-            HoldStatus = @HoldStatus,
-            HoldReason = @HoldReason,
-            HoldResult = @HoldResult,
-            HoldBy = @HoldBy,
             FileAddress = @FileAddress,
-            StatusHistory = @StatusHistory,
-            CurrentStatusBy = @CurrentStatusBy,
-            Department = @Department
+            Department = @Department,
+            StatusDesc = @StatusDesc, 
+            Status = @Status
         WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -98,18 +112,11 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@RequestedDate", model.RequestedDate ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Problem", model.Problem);
                     command.Parameters.AddWithValue("@ClosedDateTime", model.ClosedDateTime ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@CloseBy", model.CloseBy ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@CloseResult", model.CloseResult ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@DownStatus", model.DownStatus ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HoldStatus", model.HoldStatus ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HoldReason", model.HoldReason ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HoldResult", model.HoldResult ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HoldBy", model.HoldBy ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@FileAddress", model.FileAddress ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@StatusHistory", model.StatusHistory ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@CurrentStatusBy", model.CurrentStatusBy ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@StatusDesc", model.StatusDesc);
+                    command.Parameters.AddWithValue("@Status", model.Status);
+                    command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
 
                     int rowsAffected = command.ExecuteNonQuery();
                     Console.WriteLine($"[DEBUG] Rows affected: {rowsAffected}");
