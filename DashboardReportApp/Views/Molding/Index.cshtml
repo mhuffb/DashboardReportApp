@@ -5,93 +5,119 @@
     ViewData["Title"] = "Molding Dashboard";
 }
 @model DashboardReportApp.Models.MoldingModel
+@using System.Text.Json;
 
 <div class="container-fluid px-3 mt-4">
     <h2 class="text-center">Molding Data</h2>
 
-    <form method="get">
-        <input type="text" name="searchTerm" placeholder="Search Operator, Part, Machine..." value="@Model.SearchTerm" class="form-control my-2" />
-        <button type="submit" class="btn btn-primary">Search</button>
-    </form>
+    <!-- 1) Global Search Input -->
+    <input type="text" id="globalSearch" placeholder="Search all 3 tables..."
+           class="form-control my-2" />
 
     <h3>Press Runs</h3>
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                @foreach (var prop in typeof(DashboardReportApp.Models.PressRunLogFormModel).GetProperties())
-                {
-                    <th>
-                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
-                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
-                        </a>
-                    </th>
-                }
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var run in Model.PressRuns)
-            {
-                <tr>
-                    @foreach (var prop in typeof(DashboardReportApp.Models.PressRunLogFormModel).GetProperties())
-                    {
-                        <td>@prop.GetValue(run)</td>
-                    }
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div id="pressRunsReactRoot"
+         data-pressruns='@Html.Raw(JsonSerializer.Serialize(Model.PressRuns))'>
+    </div>
 
     <h3>Press Setups</h3>
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                @foreach (var prop in typeof(DashboardReportApp.Models.PressSetupModel).GetProperties())
-                {
-                    <th>
-                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
-                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
-                        </a>
-                    </th>
-                }
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var setup in Model.PressSetups)
-            {
-                <tr>
-                    @foreach (var prop in typeof(DashboardReportApp.Models.PressSetupModel).GetProperties())
-                    {
-                        <td>@prop.GetValue(setup)</td>
-                    }
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div id="pressSetupsReactRoot"
+         data-presssetups='@Html.Raw(JsonSerializer.Serialize(Model.PressSetups))'>
+    </div>
 
     <h3>Press Lot Changes</h3>
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                @foreach (var prop in typeof(DashboardReportApp.Models.PressMixBagChangeModel).GetProperties())
-                {
-                    <th>
-                        <a href="?searchTerm=@Model.SearchTerm&sortColumn=@prop.Name&sortDescending=@(!Model.SortDescending)">
-                            @prop.Name @(Model.SortColumn == prop.Name ? (Model.SortDescending ? "🔽" : "🔼") : "")
-                        </a>
-                    </th>
-                }
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var lotChange in Model.PressLotChanges)
-            {
-                <tr>
-                    @foreach (var prop in typeof(DashboardReportApp.Models.PressMixBagChangeModel).GetProperties())
-                    {
-                        <td>@prop.GetValue(lotChange)</td>
-                    }
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div id="pressLotChangesReactRoot"
+         data-presslots='@Html.Raw(JsonSerializer.Serialize(Model.PressLotChanges))'>
+    </div>
 </div>
+
+<!-- 2) Reference your React bundle that defines 'renderMyDataTable' -->
+<script src="/js/mydatatable.bundle.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // A) Grab container elements
+      const pressRunsEl = document.getElementById('pressRunsReactRoot');
+      const pressSetupsEl = document.getElementById('pressSetupsReactRoot');
+      const pressLotsEl = document.getElementById('pressLotChangesReactRoot');
+
+      // B) Parse the original data arrays (store them so we can re-filter)
+      const originalPressRuns = JSON.parse(pressRunsEl.getAttribute('data-pressruns'));
+      const originalPressSetups = JSON.parse(pressSetupsEl.getAttribute('data-presssetups'));
+      const originalPressLots = JSON.parse(pressLotsEl.getAttribute('data-presslots'));
+
+      // C) Define columns for each table (same as before)
+      const pressRunsColumns = [
+        { key: 'Id', label: 'ID' },
+        { key: 'Timestamp', label: 'Timestamp' },
+        { key: 'Run', label: 'Run' },
+        { key: 'Part', label: 'Part' },
+        { key: 'StartDateTime', label: 'Start Time' },
+        { key: 'EndDateTime', label: 'End Time' },
+        { key: 'Operator', label: 'Operator' },
+        { key: 'Machine', label: 'Machine' },
+        { key: 'PcsStart', label: 'Pcs Start' },
+        { key: 'PcsEnd', label: 'Pcs End' },
+        { key: 'Scrap', label: 'Scrap' },
+        { key: 'Notes', label: 'Notes' }
+      ];
+      const pressSetupsColumns = [
+        { key: 'Id', label: 'ID' },
+        { key: 'Timestamp', label: 'Timestamp' },
+        { key: 'Part', label: 'Part' },
+        { key: 'Operator', label: 'Operator' },
+        { key: 'StartDateTime', label: 'Start Time' },
+        { key: 'EndDateTime', label: 'End Time' },
+        { key: 'Machine', label: 'Machine' },
+        { key: 'PressType', label: 'Press Type' },
+        { key: 'Difficulty', label: 'Difficulty' },
+        { key: 'SetupComp', label: 'Setup Complete' },
+        { key: 'AssistanceReq', label: 'Assistance Required' },
+        { key: 'AssistedBy', label: 'Assisted By' },
+        { key: 'Notes', label: 'Notes' }
+      ];
+      const pressLotsColumns = [
+        { key: 'Id', label: 'ID' },
+        { key: 'Part', label: 'Part' },
+        { key: 'SentDateTime', label: 'Sent Date/Time' },
+        { key: 'Operator', label: 'Operator' },
+        { key: 'Machine', label: 'Machine' },
+        { key: 'LotNumber', label: 'Lot Number' },
+        { key: 'MixNumber', label: 'Mix Number' },
+        { key: 'Notes', label: 'Notes' },
+        { key: 'SupplierItemNumber', label: 'Supplier Item #' }
+      ];
+
+      // D) Render the initial tables (with no filter)
+      window.renderMyDataTable('pressRunsReactRoot', originalPressRuns, pressRunsColumns, false);
+      window.renderMyDataTable('pressSetupsReactRoot', originalPressSetups, pressSetupsColumns, false);
+      window.renderMyDataTable('pressLotChangesReactRoot', originalPressLots, pressLotsColumns, false);
+
+      // E) Listen for changes in the global search input
+      const globalSearchInput = document.getElementById('globalSearch');
+      globalSearchInput.addEventListener('input', function(e) {
+        const term = e.target.value.toLowerCase().trim();
+
+        // Filter each data set with the same logic
+        const runsFiltered = filterRows(originalPressRuns, term);
+        const setupsFiltered = filterRows(originalPressSetups, term);
+        const lotsFiltered = filterRows(originalPressLots, term);
+
+        // Re-render each table with filtered data
+        window.renderMyDataTable('pressRunsReactRoot', runsFiltered, pressRunsColumns, false);
+        window.renderMyDataTable('pressSetupsReactRoot', setupsFiltered, pressSetupsColumns, false);
+        window.renderMyDataTable('pressLotChangesReactRoot', lotsFiltered, pressLotsColumns, false);
+      });
+
+      // F) A helper function to filter rows. We'll search across all property values
+      function filterRows(dataArray, searchTerm) {
+        if (!searchTerm) return dataArray; // if blank, return all
+        return dataArray.filter(row => {
+          // Check ANY property for a substring match
+          return Object.values(row).some(val => {
+            if (!val) return false; // skip null or undefined
+            return val.toString().toLowerCase().includes(searchTerm);
+          });
+        });
+      }
+    });
+</script>

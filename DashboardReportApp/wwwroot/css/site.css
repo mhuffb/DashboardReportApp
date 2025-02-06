@@ -62,7 +62,6 @@ main {
 
 
 .table {
-    background: #d6d8db;
     box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
     width: 100% !important;
     max-width: 100% !important;
@@ -95,7 +94,6 @@ main {
     max-width: 100% !important;
     overflow-x: auto;
     display: block;
-    background-color: #d6d8db !important;
 }
 form {
     background-color: transparent !important;

@@ -20,7 +20,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public IActionResult Index(string part, string operatorName, string machine, string setupComplete,
                                    string assistanceRequired, string search, string startDate, string endDate,
-                                   string sortBy, string sortOrder = "asc")
+                                   string sortBy, string sortOrder = "desc")
         {
             ViewData["Title"] = "Press Setup";
             ViewData["Operators"] = _pressSetupService.GetOperators();

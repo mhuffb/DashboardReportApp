@@ -13,7 +13,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpGet]
-        public IActionResult Index(string searchTerm, string sortColumn = "Timestamp", bool sortDescending = false)
+        public IActionResult Index(string searchTerm, string sortColumn = "Id", bool sortDescending = true)
         {
             var viewModel = _moldingService.GetFilteredData(searchTerm, sortColumn, sortDescending);
             return View(viewModel);

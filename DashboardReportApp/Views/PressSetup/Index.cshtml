@@ -62,9 +62,9 @@
     <div class="card shadow mb-4">
         <div class="card-body">
             <h2 class="text-center mb-4">Active Setups</h2>
-            <div class="table-responsive">
+            <div class="container-fluid px-3 mt-4">
                 <table class="table table-striped table-bordered shadow-sm">
-                    <thead class="table-dark">
+                    <thead class="table-dark" >
                         <tr>
                             <th>Part</th>
                             <th>Operator</th>
@@ -145,39 +145,13 @@
     <!-- Full List of Records -->
     <h2 class="text-center mt-4">All Setup Records</h2>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm">
-            <thead class="table-dark">
-                <tr>
-                    <th>Part</th>
-                    <th>Operator</th>
-                    <th>Machine</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Setup Complete</th>
-                    <th>Assistance Required</th>
-                    <th>Assisted By</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var record in Model)
-                {
-                    <tr>
-                        <td>@record.Part</td>
-                        <td>@record.Operator</td>
-                        <td>@record.Machine</td>
-                        <td>@record.StartDateTime</td>
-                        <td>@record.EndDateTime</td>
-                        <td>@record.SetupComp</td>
-                        <td>@record.AssistanceReq</td>
-                        <td>@record.AssistedBy</td>
-                        <td>@record.Notes</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <div class="container-fluid px-3 mt-4">
+        <!-- REPLACE the old table with a div for React: -->
+        <div id="myReactTableRoot"
+             data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model))'>
+        </div>
     </div>
+
 </div>
 
 <!-- Custom Styles -->
@@ -200,6 +174,7 @@
 
         .table th, .table td {
             border-color: goldenrod !important;
+            color: goldenrod !important;
         }
 
     .table-dark {
@@ -228,5 +203,42 @@
     .table-responsive {
         overflow-x: auto;
         display: block;
+
+
     }
+    
 </style>
+<script src="/js/mydatatable.bundle.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 1) Find the container
+      const container = document.getElementById('myReactTableRoot');
+      if (!container) return;
+
+      // 2) Parse the JSON from data-records
+      const rawData = container.getAttribute('data-records');
+      const data = JSON.parse(rawData); // This is your List<PressSetupModel>
+
+      // 3) Define columns to match PressSetupModel's properties
+      const columns = [
+         {key: 'Id', label: 'Id' },
+        { key: 'Part', label: 'Part' },
+        { key: 'Operator', label: 'Operator' },
+        { key: 'Machine', label: 'Machine' },
+        { key: 'StartDateTime', label: 'Start Time' },
+        { key: 'EndDateTime', label: 'End Time' },
+        { key: 'SetupComp', label: 'Setup Complete' },
+        { key: 'AssistanceReq', label: 'Assist Required' },
+        { key: 'AssistedBy', label: 'Assisted By' },
+        { key: 'Notes', label: 'Notes' }
+      ];
+
+      // 4) Use the exposed function from the React bundle
+      window.renderMyDataTable(
+        'myReactTableRoot', // the container ID
+        data,
+        columns,
+        true  // enableSearch = true or false
+      );
+    });
+</script>
