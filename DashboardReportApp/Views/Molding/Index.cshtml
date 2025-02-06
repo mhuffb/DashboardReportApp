@@ -6,7 +6,7 @@
 }
 @model DashboardReportApp.Models.MoldingModel
 @using System.Text.Json;
-
+<h1> Molding Dashboard</h1>
 <div class="container-fluid px-3 mt-4">
     <h2 class="text-center">Molding Data</h2>
 
@@ -14,14 +14,14 @@
     <input type="text" id="globalSearch" placeholder="Search all 3 tables..."
            class="form-control my-2" />
 
-    <h3>Press Runs</h3>
-    <div id="pressRunsReactRoot"
-         data-pressruns='@Html.Raw(JsonSerializer.Serialize(Model.PressRuns))'>
-    </div>
-
     <h3>Press Setups</h3>
     <div id="pressSetupsReactRoot"
          data-presssetups='@Html.Raw(JsonSerializer.Serialize(Model.PressSetups))'>
+    </div>
+
+    <h3>Press Runs</h3>
+    <div id="pressRunsReactRoot"
+         data-pressruns='@Html.Raw(JsonSerializer.Serialize(Model.PressRuns))'>
     </div>
 
     <h3>Press Lot Changes</h3>
