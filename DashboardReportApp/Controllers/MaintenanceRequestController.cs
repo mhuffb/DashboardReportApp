@@ -146,11 +146,14 @@ namespace DashboardReportApp.Controllers
             {
                 Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
             }
-
+            if (System.IO.File.Exists(destinationPath))
+            {
+                System.IO.File.Delete(destinationPath);
+            }
             // Copy the file to the destination path
             if (!System.IO.File.Exists(destinationPath))
             {
-                System.IO.File.Copy(filePath, destinationPath);
+                System.IO.File.Copy(filePath, destinationPath, overwrite: true);
             }
 
             // Return the relative path to the image

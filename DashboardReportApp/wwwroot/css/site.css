@@ -102,3 +102,11 @@ form {
 .card-body, .card shadow p-4 mb-4 {
     background-color: black !important;
 }
+th {
+    cursor: pointer; /* ?? This makes headers clickable */
+    user-select: none; /* ?? Prevents text selection */
+}
+
+    th:hover {
+        background-color: rgba(255, 215, 0, 0.3); /* ?? Light goldenrod highlight */
+    }

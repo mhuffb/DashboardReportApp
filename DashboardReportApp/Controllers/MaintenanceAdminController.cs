@@ -32,18 +32,18 @@ namespace DashboardReportApp.Controllers
             return View(requests);
         }
 
+        [HttpGet("AllRequestsApi")]
+        public IActionResult GetAllRequestsApi()
+        {
+            var requests = _adminService.GetAllRequests();
+            return Ok(requests); // JSON
+        }
 
+        [Route("UpdateRequest")]
         [HttpPost]
         public async Task<IActionResult> UpdateRequest(MaintenanceRequestModel model, IFormFile? FileUpload)
         {
-            if (!ModelState.IsValid)
-            {
-                // If invalid, re-fetch data for the view
-                var requests = _adminService.GetAllRequests();
-                ViewBag.OperatorNames = _adminService.GetAllOperatorNames();
-                return View("AdminView", requests);
-            }
-
+         
             try
             {
                 if (FileUpload != null && FileUpload.Length > 0)
@@ -57,6 +57,12 @@ namespace DashboardReportApp.Controllers
                     var fileExtension = Path.GetExtension(FileUpload.FileName);
                     var fileName = $"MaintenanceRequest_{model.Id}{fileExtension}";
                     var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    // 🔥 Check if the file already exists and delete it
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        System.IO.File.Delete(filePath);
+                    }
 
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
@@ -129,11 +135,14 @@ namespace DashboardReportApp.Controllers
             {
                 Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
             }
-
+             if (System.IO.File.Exists(destinationPath))
+                    {
+                        System.IO.File.Delete(destinationPath);
+                    }
             // Copy the file to the destination path if it doesn't already exist
             if (!System.IO.File.Exists(destinationPath))
             {
-                System.IO.File.Copy(filePath, destinationPath);
+                System.IO.File.Copy(filePath, destinationPath, overwrite: true);
             }
 
             // Return the relative path to the image

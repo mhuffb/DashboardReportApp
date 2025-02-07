@@ -1,6 +1,6 @@
 ﻿
 @model IEnumerable<DashboardReportApp.Models.MaintenanceRequestModel>
-
+@using System.Text.Json;
 <div class="container-fluid px-3 mt-4">
     <h1 class="text-center mb-4">Admin - Maintenance Requests</h1>
 
@@ -12,127 +12,36 @@
         </div>
     }
 
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Equipment</th>
-                    <th>Requester</th>
-                    <th>Requested Date</th>
-                    <th>Problem</th>
-                    <th>Hour Meter</th>
-                    <th>Department</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var request in Model)
-                {
-                    <form asp-controller="MaintenanceAdmin" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
-                        <input type="hidden" name="Id" value="@request.Id" />
 
-                    <tr>
-                        <td>@request.Id</td>
-                        <td><input type="text" name="Equipment" class="form-control" value="@request.Equipment" required /></td>
-                        <td><input type="text" name="Requester" class="form-control" value="@request.Requester" required /></td>
-                        <td><input type="date" name="RequestedDate" class="form-control" value="@(request.RequestedDate?.ToString("yyyy-MM-dd") ?? "")" /></td>
-                        <td><textarea name="Problem" class="form-control">@request.Problem</textarea></td>
-                        <td><input type="number" name="HourMeter" class="form-control" step="0.01" value="@request.HourMeter" /></td>
-                        <td><input type="text" name="Department" class="form-control" value="@request.Department" /></td>
-                        <td>
-                            <button type="submit" class="btn btn-success btn-sm">Save</button>
-                            <button type="button" class="btn btn-info btn-sm toggle-btn" data-target="#extraFields_@request.Id">Expand</button>
-                        </td>
-                    </tr>
 
-                    <!-- Expandable Section -->
-                    <!-- Expandable Section -->
-<tr class="extra-fields d-none" id="extraFields_@request.Id">
-    <td colspan="8">
-        <div class="card card-body">
-            <h5>Additional Details</h5>
-            <div class="row">
-                                    <div class="col-md-6">
-                                        <label>Status</label>
-                                        <select name="Status" class="form-select">
-                                                @if (request.Status == "Open")
-                                                {
-                                                <option value="Open" selected>Open</option>
-                                                }
-                                                else
-                                                {
-                                                <option value="Open">Open</option>
-                                                }
+    @{
+        var operators = ViewBag.OperatorNames as List<string> ?? new List<string>();
+    }
 
-                                                @if (request.Status == "Closed")
-                                                {
-                                                <option value="Closed" selected>Closed</option>
-                                                }
-                                                else
-                                                {
-                                                <option value="Closed">Closed</option>
-                                                }
+    
 
-                                                @if (request.Status == "On Hold")
-                                                {
-                                                <option value="On Hold" selected>On Hold</option>
-                                                }
-                                                else
-                                                {
-                                                <option value="On Hold">On Hold</option>
-                                                }
-                                        </select>
-                                    </div>
+        <div id="maintenanceRequestsReactRoot"></div>
 
-                                    <div class="col-md-6">
-                                        <label>Status Updated By</label>
-                                        <select name="StatusUpdatedBy" class="form-select">
-                                            <option value="">-- Select Operator --</option>
-                                                @foreach (var opName in (List<string>)ViewBag.OperatorNames)
-                                                {
-                                                    // If the request already has a StatusUpdatedBy value matching this opName, pre-select it.
-                                                    if (request.StatusUpdatedBy == opName)
-                                                    {
-                                                    <option value="@opName" selected>@opName</option>
-                                                    }
-                                                    else
-                                                    {
-                                                    <option value="@opName">@opName</option>
-                                                    }
-                                                }
-                                        </select>
-                                    </div>
+        <script>
+            window.maintenanceRequests = @Html.Raw(JsonSerializer.Serialize(Model));
+            window.operators = @Html.Raw(JsonSerializer.Serialize(ViewBag.OperatorNames));
+        </script>
 
-                <div class="col-md-6">
-                    <label>File Address</label>
-                    <input type="text" name="FileAddress" class="form-control" value="@request.FileAddress" readonly />
-                    <label>Upload New File</label>
-                    <input type="file" name="FileUpload" class="form-control" accept="image/*,application/pdf" />
-                </div>
-                                    <div class="col-md-12">
-                                        <label>Current Status Description</label>
-                                        <!-- You can keep it read-only or not, depending on your needs. -->
-                                        <textarea class="form-control" readonly>@request.StatusDesc</textarea>
-                                    </div>
-                                    <input type="hidden" name="StatusDesc" value="@request.StatusDesc" />
-
-                                    <div class="col-md-12">
-                                        <label>New Status Description</label>
-                                        <textarea name="NewStatusDesc" class="form-control"></textarea>
-                                    </div>
-
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm mt-2">Update Status</button>
-        </div>
-    </td>
-</tr>
-
-                    </form>
+        <script src="/js/mydatatable.bundle.js"></script>
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                if (window.renderMyMaintenanceTable) {
+                    window.renderMyMaintenanceTable("maintenanceRequestsReactRoot", window.maintenanceRequests, window.operators);
+                } else {
+                    console.error("window.renderMyMaintenanceTable is not defined!");
                 }
-            </tbody>
-        </table>
-    </div>
+            });
+        </script>
+    
+
+
+
+
 </div>
 
 
@@ -226,202 +135,3 @@
 </style>
 
 
-<!-- Bootstrap Modal for File Preview -->
-<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="previewModalLabel">File Preview</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-                <img id="previewImage" src="" alt="Preview" class="img-fluid" style="display: none;" />
-                <iframe id="previewIframe" src="" style="display: none; width: 100%; height: 500px;"></iframe>
-                <p id="noPreviewText" style="display: none;">No preview available for this file type.</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Your JavaScript to Fetch & Display the Image -->
-<script>
-       document.addEventListener('DOMContentLoaded', function () {
-        const modalElement = new bootstrap.Modal(document.getElementById('previewModal'));
-
-        document.querySelectorAll('.preview-btn').forEach(button => {
-            button.addEventListener('click', function () {
-                const filePath = this.dataset.filePath;
-                const previewImage = document.getElementById('previewImage');
-                const previewIframe = document.getElementById('previewIframe');
-                const noPreviewText = document.getElementById('noPreviewText');
-
-                if (!filePath) {
-                    noPreviewText.style.display = "block";
-                    previewImage.style.display = "none";
-                    previewIframe.style.display = "none";
-                    modalElement.show();
-                    return;
-                }
-
-                // Fetch the file URL from the server
-                fetch(`/MaintenanceAdmin/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            const fileExtension = filePath.split('.').pop().toLowerCase();
-
-                            if (["jpg", "png", "jpeg"].includes(fileExtension)) {
-                                previewImage.src = data.url;
-                                previewImage.style.display = "block";
-                                previewIframe.style.display = "none";
-                                noPreviewText.style.display = "none";
-                            } else if (fileExtension === "pdf") {
-                                previewIframe.src = data.url;
-                                previewIframe.style.display = "block";
-                                previewImage.style.display = "none";
-                                noPreviewText.style.display = "none";
-                            } else {
-                                noPreviewText.style.display = "block";
-                                previewImage.style.display = "none";
-                                previewIframe.style.display = "none";
-                            }
-                        } else {
-                            alert(`Error: ${data.message}`);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching file:', error);
-                        alert('An error occurred while fetching the file.');
-                    });
-
-                modalElement.show();
-            });
-        });
-
-    });
-</script>
-
-
-<!-- JavaScript for File Preview -->
-<script>
-        document.addEventListener('DOMContentLoaded', function () {
-        const modalElement = new bootstrap.Modal(document.getElementById('previewModal'));
-
-        // For each "Preview" button
-        document.querySelectorAll('.preview-btn').forEach(button => {
-            button.addEventListener('click', function () {
-                const filePath = this.dataset.filePath;
-                const previewImage = document.getElementById('previewImage');
-                const previewIframe = document.getElementById('previewIframe');
-                const noPreviewText = document.getElementById('noPreviewText');
-
-                if (!filePath) {
-                    noPreviewText.style.display = "block";
-                    previewImage.style.display = "none";
-                    previewIframe.style.display = "none";
-                    modalElement.show();
-                    return;
-                }
-
-                // Fetch the file URL from the server
-                fetch(`/MaintenanceAdmin/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            const fileExtension = filePath.split('.').pop().toLowerCase();
-
-                            if (["jpg", "png", "jpeg"].includes(fileExtension)) {
-                                previewImage.src = data.url;
-                                previewImage.style.display = "block";
-                                previewIframe.style.display = "none";
-                                noPreviewText.style.display = "none";
-                            } else if (fileExtension === "pdf") {
-                                previewIframe.src = data.url;
-                                previewIframe.style.display = "block";
-                                previewImage.style.display = "none";
-                                noPreviewText.style.display = "none";
-                            } else {
-                                noPreviewText.style.display = "block";
-                                previewImage.style.display = "none";
-                                previewIframe.style.display = "none";
-                            }
-                        } else {
-                            alert(`Error: ${data.message}`);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching file:', error);
-                        alert('An error occurred while fetching the file.');
-                    });
-
-                modalElement.show();
-            });
-        });
-
-        // Clean up the modal when it is hidden
-        document.getElementById('previewModal').addEventListener('hidden.bs.modal', function () {
-            const previewImage = document.getElementById('previewImage');
-            const previewIframe = document.getElementById('previewIframe');
-            const noPreviewText = document.getElementById('noPreviewText');
-
-            // Reset the modal content
-            previewImage.src = "";
-            previewImage.style.display = "none";
-            previewIframe.src = "";
-            previewIframe.style.display = "none";
-            noPreviewText.style.display = "none";
-
-            // Remove any leftover backdrop (rare, but just in case)
-            const modalBackdrop = document.querySelector('.modal-backdrop');
-            if (modalBackdrop) {
-                modalBackdrop.remove();
-            }
-
-            // Ensure the body is not in "modal-open" state
-            document.body.classList.remove('modal-open');
-            document.body.style = ''; // Clear any inline styles
-        });
-    });
-</script>
-
-
-
-<!-- JavaScript for Expand/Collapse -->
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('.toggle-btn').forEach(button => {
-            button.addEventListener('click', function () {
-                const targetId = this.getAttribute('data-target');
-                const targetRow = document.querySelector(targetId);
-
-                if (targetRow.classList.contains('d-none')) {
-                    targetRow.classList.remove('d-none');
-                    this.textContent = "Collapse";
-                    this.classList.remove('btn-info');
-                    this.classList.add('btn-danger');
-                } else {
-                    targetRow.classList.add('d-none');
-                    this.textContent = "Expand";
-                    this.classList.remove('btn-danger');
-                    this.classList.add('btn-info');
-                }
-
-                // Ensure all other rows remain correct when toggling
-                document.querySelectorAll('.toggle-btn').forEach(otherBtn => {
-                    const otherTargetId = otherBtn.getAttribute('data-target');
-                    const otherTargetRow = document.querySelector(otherTargetId);
-
-                    if (!otherTargetRow.classList.contains('d-none')) {
-                        otherBtn.textContent = "Collapse";
-                        otherBtn.classList.remove('btn-info');
-                        otherBtn.classList.add('btn-danger');
-                    } else {
-                        otherBtn.textContent = "Expand";
-                        otherBtn.classList.remove('btn-danger');
-                        otherBtn.classList.add('btn-info');
-                    }
-                });
-            });
-        });
-    });
-</script>
