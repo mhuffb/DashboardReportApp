@@ -1,13 +1,13 @@
 html {
     position: relative;
     min-height: 100%;
-    font-size: 14px; /* Existing */
+    font-size: 14px; 
 
 }
 
 @media (min-width: 768px) {
     html {
-        font-size: 16px; /* Existing */
+        font-size: 16px;
         
     }
 }
@@ -18,12 +18,13 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    background-color: black !important; /* Corrected */
+    background-color: black !important; 
     color: goldenrod;
 }
 
 h1,h2,h3 {
     background-color: transparent !important;
+    color: goldenrod !important;
 }
 
 html, body {
@@ -47,7 +48,7 @@ main {
     border-top: 1px solid goldenrod;
     position: relative;
     margin-top: auto;
-    background: #343a40 !important;
+    background: black !important;
     color: goldenrod !important;
     width: 100% !important;
 }
@@ -61,14 +62,7 @@ main {
 }
 
 
-.table {
-    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-    width: 100% !important;
-    max-width: 100% !important;
-    table-layout: auto !important;
-    color: darkgrey !important;
 
-}
 
 .btn-primary {
     background-color: #007bff;
@@ -94,7 +88,27 @@ main {
     max-width: 100% !important;
     overflow-x: auto;
     display: block;
+    
 }
+
+    .table-responsive th, .table-responsive td {
+        border-color: goldenrod !important;
+        color: black !important;
+        background-color: wheat !important;
+    }
+.table {
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+   
+}
+.table th, .table td {
+    border-color: goldenrod !important;
+    color: black !important;
+    background-color: wheat !important;
+}
+
 form {
     background-color: transparent !important;
 }
@@ -102,11 +116,66 @@ form {
 .card-body, .card shadow p-4 mb-4 {
     background-color: black !important;
 }
-th {
-    cursor: pointer; /* ?? This makes headers clickable */
-    user-select: none; /* ?? Prevents text selection */
+
+.form-control, .form-select {
+    background-color: wheat !important;
+    color: black !important;
+    border: 1px solid goldenrod !important;
+}
+.card {
+    background-color: black !important;
+    color: goldenrod !important;
+    border: 1px solid goldenrod;
+}
+.container-fluid px-3 mt-4{
+    background-color: wheat !important;
+    color: black !important;
 }
 
-    th:hover {
-        background-color: rgba(255, 215, 0, 0.3); /* ?? Light goldenrod highlight */
+
+/* Ensure table styling */
+.custom-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: black;
+    color: goldenrod;
+}
+
+    /* Table Header */
+    .custom-table thead {
+        background-color: black;
+        color: goldenrod;
+        border-bottom: 2px solid goldenrod;
+    }
+
+    /* Alternating Row Colors */
+    .custom-table tbody tr:nth-child(odd) {
+        background-color: #222; /* Darker Black */
+    }
+
+    .custom-table tbody tr:nth-child(even) {
+        background-color: #111; /* Slightly Lighter Black */
+    }
+
+    /* Full-Row Hover Effect */
+    .custom-table tbody tr:hover {
+        background-color: rgba(255, 215, 0, 0.6) !important; /* Light Goldenrod */
+        color: black !important;
+        cursor: pointer;
+    }
+
+    /* Table Borders */
+    .custom-table td,
+    .custom-table th {
+        padding: 10px;
+        text-align: center;
+        border: 1px solid goldenrod;
+    }
+    .custom-table th {
+        cursor: pointer; /* ?? This makes headers clickable */
+        user-select: none; /* ?? Prevents text selection */
+    }
+
+    .custom-table th:hover {
+        background-color: rgba(255, 215, 0, 0.3) !important; /* ?? Light goldenrod highlight */
     }
