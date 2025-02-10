@@ -4,9 +4,10 @@
     <h1 class="text-center mb-4">Press Run Log</h1>
 
     <!-- Login Form -->
+    <h2 class="text-center">Start Molding</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
-            <h3 class="text-center">Start Molding</h3>
+            
             <form method="post" action="/PressRunLog/Login">
                 <div class="mb-3">
                     <label for="Operator" class="form-label">Operator</label>
@@ -42,47 +43,51 @@
 
     <!-- Logged-In Runs -->
     <h2 class="text-center mb-4">Molding Now</h2>
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm wider-table">
-            <thead class="table-dark">
-                <tr>
-                    <th>Operator</th>
-                    <th>Machine</th>
-                    <th>Part</th>
-                    <th>Start DateTime</th>
-                    <th>Logout</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var run in Model.LoggedInRuns)
-                {
-                    <tr>
-                        <td>@run.Operator</td>
-                        <td>@run.Machine</td>
-                        <td>@run.Part</td>
-                        <td>@run.StartDateTime</td>
-                        <td>
-                            <form method="post" action="/PressRunLog/Logout">
-                                <input type="hidden" name="part" value="@run.Part" />
-                                <input type="hidden" name="startDateTime" value="@run.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss")" />
-                                <input type="hidden" name="endDateTime" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")" />
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                 <table class="table table-striped table-bordered shadow-sm wider-table">
+                    <thead class="table-dark">
+                       <tr>
+                          <th>Operator</th>
+                           <th>Machine</th>
+                           <th>Part</th>
+                           <th>Start DateTime</th>
+                           <th>Logout</th>
+                       </tr>
+                    </thead>
+                 <tbody>
+                      @foreach (var run in Model.LoggedInRuns)
+                      {
+                         <tr>
+                             <td>@run.Operator</td>
+                                <td>@run.Machine</td>
+                                <td>@run.Part</td>
+                               <td>@run.StartDateTime</td>
+                               <td>
+                                    <form method="post" action="/PressRunLog/Logout">
+                                     <input type="hidden" name="part" value="@run.Part" />
+                                        <input type="hidden" name="startDateTime" value="@run.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss")" />
+                                        <input type="hidden" name="endDateTime" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")" />
 
-                                <div class="mb-2">
-                                    <label for="scrap" class="form-label">Scrap:</label>
-                                    <input type="number" id="scrap" name="scrap" class="form-control" required />
-                                </div>
-                                <div class="mb-2">
-                                    <label for="notes" class="form-label">Notes:</label>
-                                    <textarea id="notes" name="notes" class="form-control text-area-large"></textarea>
-                                </div>
+                                       <div class="mb-2">
+                                          <label for="scrap" class="form-label">Scrap:</label>
+                                         <input type="number" id="scrap" name="scrap" class="form-control" required />
+                                       </div>
+                                      <div class="mb-2">
+                                          <label for="notes" class="form-label">Notes:</label>
+                                         <textarea id="notes" name="notes" class="form-control text-area-large"></textarea>
+                                        </div>
 
-                                <button type="submit" class="btn btn-primary w-100">Logout</button>
-                            </form>
-                        </td>
-                    </tr>
+                                        <button type="submit" class="btn btn-primary w-100">Logout</button>
+                                 </form>
+                             </td>
+                          </tr>
                 }
-            </tbody>
-        </table>
+                  </tbody>
+             </table>
+         </div>
     </div>
+ </div>
 </div>
 

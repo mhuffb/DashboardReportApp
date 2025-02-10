@@ -16,71 +16,12 @@ namespace DashboardReportApp.Services
                                                    string endDate, string sortBy, string sortOrder)
         {
             var records = new List<PressSetupModel>();
-            string query = "SELECT * FROM presssetup WHERE 1=1 ";
+            string query = "SELECT * FROM presssetup";
 
-            var parameters = new List<MySqlParameter>();
-
-            // Filters
-            if (!string.IsNullOrEmpty(part))
-            {
-                query += " AND part LIKE @part ";
-                parameters.Add(new MySqlParameter("@part", $"%{part}%"));
-            }
-            if (!string.IsNullOrEmpty(operatorName))
-            {
-                query += " AND operator = @operatorName ";
-                parameters.Add(new MySqlParameter("@operatorName", operatorName));
-            }
-            if (!string.IsNullOrEmpty(machine))
-            {
-                query += " AND machine = @machine ";
-                parameters.Add(new MySqlParameter("@machine", machine));
-            }
-            if (!string.IsNullOrEmpty(setupComplete))
-            {
-                query += " AND setupComp = @setupComplete ";
-                parameters.Add(new MySqlParameter("@setupComplete", setupComplete));
-            }
-            if (!string.IsNullOrEmpty(assistanceRequired))
-            {
-                query += " AND assistanceReq = @assistanceRequired ";
-                parameters.Add(new MySqlParameter("@assistanceRequired", assistanceRequired));
-            }
-            if (!string.IsNullOrEmpty(startDate))
-            {
-                query += " AND startDateTime >= @startDate ";
-                parameters.Add(new MySqlParameter("@startDate", DateTime.Parse(startDate)));
-            }
-            if (!string.IsNullOrEmpty(endDate))
-            {
-                query += " AND startDateTime <= @endDate ";
-                parameters.Add(new MySqlParameter("@endDate", DateTime.Parse(endDate)));
-            }
-
-            // Search across multiple fields
-            if (!string.IsNullOrEmpty(search))
-            {
-                query += " AND (part LIKE @search OR operator LIKE @search OR machine LIKE @search OR notes LIKE @search)";
-                parameters.Add(new MySqlParameter("@search", $"%{search}%"));
-            }
-
-            // Sorting
-            string orderByColumn = "startDateTime"; // Default sorting
-            switch (sortBy)
-            {
-                case "Part": orderByColumn = "part"; break;
-                case "Operator": orderByColumn = "operator"; break;
-                case "Machine": orderByColumn = "machine"; break;
-                case "StartDateTime": orderByColumn = "startDateTime"; break;
-                case "EndDateTime": orderByColumn = "endDateTime"; break;
-            }
-
-            query += $" ORDER BY {orderByColumn} {sortOrder}";
 
             using (var connection = new MySqlConnection(_connectionString))
             using (var command = new MySqlCommand(query, connection))
             {
-                command.Parameters.AddRange(parameters.ToArray());
 
                 connection.Open();
                 using (var reader = command.ExecuteReader())
@@ -114,8 +55,8 @@ namespace DashboardReportApp.Services
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime) 
-                         VALUES (@part, @run, @operator, @machine, @startDateTime)";
+                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime, open) 
+                         VALUES (@part, @run, @operator, @machine, @startDateTime, @open)";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
@@ -124,6 +65,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@operator", operatorName);
                     command.Parameters.AddWithValue("@machine", machine);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
+                    command.Parameters.AddWithValue("@open", 1);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -143,7 +85,8 @@ namespace DashboardReportApp.Services
                                      assistanceReq = @assistanceReq, 
                                      assistedBy = @assistedBy, 
                                      setupComp = @setupComp, 
-                                     notes = @notes 
+                                     notes = @notes,
+                                     open = @open
                                  WHERE part = @part AND startDateTime = @startDateTime";
 
                 using (var command = new MySqlCommand(query, connection))
@@ -156,6 +99,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@notes", notes);
                     command.Parameters.AddWithValue("@part", partNumber);
                     command.Parameters.AddWithValue("@startDateTime", startDateTime);
+                    command.Parameters.AddWithValue("@open", 0);
 
                     await command.ExecuteNonQueryAsync();
                 }
