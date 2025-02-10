@@ -171,8 +171,8 @@ namespace DashboardReportApp.Services
         public async Task HandleLoginAsync(PressRunLogModel formModel)
         {
             const string query = @"
-                INSERT INTO pressrun (operator, part, machine, startDateTime, open)
-                VALUES (@operator, @part, @machine, @startDateTime, 1)";
+        INSERT INTO pressrun (operator, part, machine, run, startDateTime, open)
+        VALUES (@operator, @part, @machine, @run, @startDateTime, 1)";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -181,10 +181,12 @@ namespace DashboardReportApp.Services
             command.Parameters.AddWithValue("@operator", formModel.Operator);
             command.Parameters.AddWithValue("@part", formModel.Part);
             command.Parameters.AddWithValue("@machine", formModel.Machine);
+            command.Parameters.AddWithValue("@run", formModel.Run);              // <-- Add run parameter
             command.Parameters.AddWithValue("@startDateTime", formModel.StartDateTime);
 
             await command.ExecuteNonQueryAsync();
         }
+
 
         public async Task HandleLogoutAsync(PressRunLogModel formModel)
         {

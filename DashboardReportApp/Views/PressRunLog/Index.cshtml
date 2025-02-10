@@ -41,15 +41,18 @@
                         <option value="">Select a Part</option>
                         @foreach (var entry in openParts)
                         {
-                            <!-- entry.Key = (Part, Run) ; entry.Value = Machine -->
                             <option value="@entry.Key.Item1"
                                     data-run="@entry.Key.Item2"
                                     data-machine="@entry.Value">
-                                <!-- We'll show part plus run in parentheses for clarity -->
                                 @entry.Key.Item1 (Run: @entry.Key.Item2)
                             </option>
                         }
                     </select>
+
+                    <input type="hidden" id="RunNumber" name="runNumber" />
+
+
+
                 </div>
 
                 @* 
@@ -71,25 +74,20 @@
 </div>
 
 <script>
-    function updateHiddenRunAndMachine() {
+        function updateHiddenRunAndMachine() {
         const partSelect = document.getElementById("Part");
         const runHidden = document.getElementById("RunNumber");
         const machineInput = document.getElementById("Machine");
-
-        // Grab the selected <option>
         const selectedOption = partSelect.options[partSelect.selectedIndex];
         if (!selectedOption) return;
 
-        // Extract data-run and data-machine from the <option>
         const selectedRun = selectedOption.getAttribute("data-run") || "";
         const selectedMachine = selectedOption.getAttribute("data-machine") || "";
 
-        // Populate the hidden runNumber field
-        runHidden.value = selectedRun;
-
-        // Populate the Machine field
-        machineInput.value = selectedMachine;
+        runHidden.value = selectedRun;             // <--- populates hidden field
+        machineInput.value = selectedMachine;      // <--- populates machine field
     }
+
 </script>
 
 <!-- Open Mold Runs -->

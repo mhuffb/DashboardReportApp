@@ -40,7 +40,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(string operatorName, string part, string machine)
+        public async Task<IActionResult> Login(string operatorName, string part, string machine, string runNumber)
         {
             if (string.IsNullOrEmpty(operatorName) || string.IsNullOrEmpty(part) || string.IsNullOrEmpty(machine))
             {
@@ -53,12 +53,14 @@ namespace DashboardReportApp.Controllers
                 Operator = operatorName,
                 Part = part,
                 Machine = machine,
+                Run = runNumber,     // <-- Set the Run property
                 StartDateTime = DateTime.Now
             };
 
             await _pressRunLogService.HandleLoginAsync(formModel);
             return RedirectToAction("Index");
         }
+
 
         [HttpPost]
         public async Task<IActionResult> Logout(string part, DateTime startDateTime, int scrap, string notes, DateTime endDateTime)

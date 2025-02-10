@@ -1,8 +1,12 @@
 ﻿@{
+
     ViewData["Title"] = "Press Mix Bag Change";
     var operators = ViewData["OperatorList"] as List<string> ?? new List<string>();
     var equipment = ViewData["EquipmentList"] as List<string> ?? new List<string>();
-    var openPartsWithRuns = ViewData["OpenPartsWithRuns"] as Dictionary<string, string> ?? new Dictionary<string, string>();
+
+    // Dictionary containing Part → (Run, Machine)
+    var openPartsWithRunsAndMachines = ViewData["OpenPartsWithRunsAndMachines"] as Dictionary<string, (string Run, string Machine)>
+                                       ?? new Dictionary<string, (string, string)>();
 }
 
 <div class="container mt-4">
@@ -10,22 +14,31 @@
 
     <form asp-action="Submit" method="post">
         <div class="row">
+            <!-- Part Selection -->
             <div class="col-md-6 mb-3">
                 <label for="Part" class="form-label">Part:</label>
-                <select id="Part" name="Part" class="form-control" required onchange="updateRunNumber()">
+                <select id="Part" name="Part" class="form-control" required onchange="updateHiddenRunAndMachine()">
                     <option value="">-- Select Part --</option>
-                    @foreach (var part in openPartsWithRuns.Keys)
+                    @foreach (var entry in openPartsWithRunsAndMachines)
                     {
-                        <option value="@part">@part</option>
+                        <!-- Key = Part, Value = (Run, Machine) -->
+                        var partNumber = entry.Key;
+                        var runNumber = entry.Value.Run;
+                        var machine = entry.Value.Machine;
+
+                        <option value="@partNumber"
+                                data-run="@runNumber"
+                                data-machine="@machine">
+                            @partNumber (Run: @runNumber)
+                        </option>
                     }
                 </select>
             </div>
 
-            <div class="col-md-6 mb-3">
-                <label for="RunNumber" class="form-label">Run Number:</label>
-                <input type="text" id="RunNumber" name="RunNumber" class="form-control" readonly />
-            </div>
+            <!-- HIDDEN Run Number -->
+            <input type="hidden" id="RunNumber" name="RunNumber" />
 
+            <!-- Operator Dropdown -->
             <div class="col-md-6 mb-3">
                 <label for="Operator" class="form-label">Operator:</label>
                 <select id="Operator" name="Operator" class="form-control">
@@ -37,15 +50,10 @@
                 </select>
             </div>
 
+            <!-- Machine (Now auto-populated) -->
             <div class="col-md-6 mb-3">
                 <label for="Machine" class="form-label">Machine:</label>
-                <select id="Machine" name="Machine" class="form-control">
-                    <option value="">-- Select Machine --</option>
-                    @foreach (var machine in equipment)
-                    {
-                        <option value="@machine">@machine</option>
-                    }
-                </select>
+                <input type="text" id="Machine" name="Machine" class="form-control" readonly />
             </div>
 
             <div class="col-md-6 mb-3">
@@ -69,13 +77,20 @@
 </div>
 
 <script>
-    const partRunMapping = @Html.Raw(Json.Serialize(ViewData["OpenPartsWithRuns"]));
-
-    function updateRunNumber() {
+    function updateHiddenRunAndMachine() {
         const partSelect = document.getElementById("Part");
-        const runInput = document.getElementById("RunNumber");
+        const runHidden = document.getElementById("RunNumber");
+        const machineInput = document.getElementById("Machine");
 
-        const selectedPart = partSelect.value;
-        runInput.value = partRunMapping[selectedPart] || "";
+        const selectedOption = partSelect.options[partSelect.selectedIndex];
+        if (!selectedOption) return;
+
+        // Get run number and machine from the selected option
+        const runValue = selectedOption.getAttribute("data-run") || "";
+        const machineValue = selectedOption.getAttribute("data-machine") || "";
+
+        // Update hidden fields
+        runHidden.value = runValue;
+        machineInput.value = machineValue;
     }
 </script>
