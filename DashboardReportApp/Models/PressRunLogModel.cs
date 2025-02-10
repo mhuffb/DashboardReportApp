@@ -1,11 +1,10 @@
 ﻿namespace DashboardReportApp.Models
 {
     using System;
+    using System.Collections.Generic;
 
-    public class PressRunLogFormModel
+    public class PressRunLogModel
     {
-        // Login properties
-
         public long Id { get; set; }
         public DateTime? Timestamp { get; set; }
         public string Run { get; set; }
@@ -18,8 +17,10 @@
         public int PcsEnd { get; set; }
         public int Scrap { get; set; }
         public string Notes { get; set; }
+        public sbyte Open { get; set; }
     }
 
 
 
+   
 }

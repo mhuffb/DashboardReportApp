@@ -18,6 +18,6 @@ namespace DashboardReportApp.Models
         public string AssistanceReq { get; set; }
         public string AssistedBy { get; set; }
         public string Notes { get; set; }
-        public string Open { get; set; }
+        public sbyte Open { get; set; }
     }
 }

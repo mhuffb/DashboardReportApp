@@ -43,7 +43,9 @@ namespace DashboardReportApp.Services
                             AssistanceReq = reader["assistanceReq"].ToString(),
                             AssistedBy = reader["assistedBy"].ToString(),
                             Notes = reader["notes"].ToString(),
-                            Open = reader["open"].ToString()
+                            Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0
+
+
                         });
                     }
                 }

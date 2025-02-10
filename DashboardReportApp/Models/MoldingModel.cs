@@ -5,7 +5,7 @@ namespace DashboardReportApp.Models
 {
     public class MoldingModel
     {
-        public List<PressRunLogFormModel> PressRuns { get; set; }
+        public List<PressRunLogModel> PressRuns { get; set; }
         public List<PressSetupModel> PressSetups { get; set; }
         public List<PressMixBagChangeModel> PressLotChanges { get; set; }
 

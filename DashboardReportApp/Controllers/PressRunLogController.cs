@@ -17,8 +17,14 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            var viewModel = await _pressRunLogService.GetPressRunLogViewModelAsync();
-            return View(viewModel);
+            ViewBag.Operators = await _pressRunLogService.GetOperatorsAsync();
+            ViewBag.Equipment = await _pressRunLogService.GetEquipmentAsync();
+            ViewBag.OpenPartsWithRuns = await _pressRunLogService.GetOpenPartsWithRunsAsync(); // Open parts
+
+            ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync(); // Open runs (ViewBag)
+            var allRuns = await _pressRunLogService.GetAllRunsAsync(); // All runs (Model)
+
+            return View(allRuns); // Use all runs as the main model
         }
 
 
@@ -32,7 +38,7 @@ namespace DashboardReportApp.Controllers
                 return RedirectToAction("Index");
             }
 
-            var formModel = new PressRunLogFormModel
+            var formModel = new PressRunLogModel
             {
                 Operator = operatorName,
                 Part = part,
@@ -56,7 +62,7 @@ namespace DashboardReportApp.Controllers
                 return RedirectToAction("Index");
             }
 
-            var formModel = new PressRunLogFormModel
+            var formModel = new PressRunLogModel
             {
                 Part = part,
                 StartDateTime = startDateTime,

@@ -44,9 +44,9 @@ namespace DashboardReportApp.Services
             return sortDescending ? data.OrderByDescending(x => prop.GetValue(x)) : data.OrderBy(x => prop.GetValue(x));
         }
 
-        private List<PressRunLogFormModel> GetPressRuns(string searchTerm)
+        private List<PressRunLogModel> GetPressRuns(string searchTerm)
         {
-            return QueryTable<PressRunLogFormModel>("pressrun", searchTerm);
+            return QueryTable<PressRunLogModel>("pressrun", searchTerm);
         }
 
         private List<PressSetupModel> GetPressSetups(string searchTerm)
