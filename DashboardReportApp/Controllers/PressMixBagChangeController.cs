@@ -1,6 +1,9 @@
 ﻿using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using DashboardReportApp.Models;
+
 public class PressMixBagChangeController : Controller
 {
     private readonly PressMixBagChangeService _databaseService;
@@ -15,9 +18,11 @@ public class PressMixBagChangeController : Controller
     {
         var equipment = await _databaseService.GetEquipmentAsync();
         var operators = await _databaseService.GetOperatorsAsync();
+        var openPartsWithRuns = await _databaseService.GetOpenPartsWithRunsAsync(); // ✅ Fetch parts & runs
 
         ViewData["EquipmentList"] = equipment;
         ViewData["OperatorList"] = operators;
+        ViewData["OpenPartsWithRuns"] = openPartsWithRuns;
 
         return View();
     }
@@ -30,6 +35,7 @@ public class PressMixBagChangeController : Controller
             // Re-populate dropdowns if validation fails
             ViewData["EquipmentList"] = await _databaseService.GetEquipmentAsync();
             ViewData["OperatorList"] = await _databaseService.GetOperatorsAsync();
+            ViewData["OpenPartsWithRuns"] = await _databaseService.GetOpenPartsWithRunsAsync();
 
             return View("Index");
         }
@@ -43,18 +49,10 @@ public class PressMixBagChangeController : Controller
             form.Operator,
             form.Machine,
             form.LotNumber,
-            form.MixNumber, // Include Mix Number
-            form.Notes,
-            form.SupplierItemNumber
+            form.MixNumber,
+            form.Notes
         );
 
         return RedirectToAction("Index");
-    }
-
-
-    private async Task<string> GetMixValueAsync(string supplierItemNumber)
-    {
-        // Add logic for fetching mix value from the database.
-        return "MixValue";
     }
 }

@@ -1,9 +1,25 @@
 ﻿@model List<DashboardReportApp.Models.PressRunLogModel>
+@using System.Text.Json;
+
+@{
+    ViewData["Title"] = "Press Run Log";
+
+    // 1) Operators from the DB
+    var operators = ViewData["Operators"] as List<string> ?? new List<string>();
+
+    // 2) Dictionary of (part, run) => machine from presssetup
+    var openParts = ViewData["OpenParts"] as Dictionary<(string, string), string>
+                    ?? new Dictionary<(string, string), string>();
+
+    // 3) The "open" runs from ViewBag (open=1)
+    var openRuns = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
+                   ?? new List<DashboardReportApp.Models.PressRunLogModel>();
+}
 
 <div class="container-fluid px-3">
     <h1 class="text-center mb-4">Press Run Log</h1>
 
-    <!-- Login Form -->
+    <!-- Start Molding Form -->
     <h2 class="text-center">Start Molding</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
@@ -12,7 +28,7 @@
                     <label for="Operator" class="form-label">Operator</label>
                     <select id="Operator" name="operatorName" class="form-control" required>
                         <option value="">Select an Operator</option>
-                        @foreach (var operatorName in ViewBag.Operators as List<string>)
+                        @foreach (var operatorName in operators)
                         {
                             <option value="@operatorName">@operatorName</option>
                         }
@@ -21,29 +37,31 @@
 
                 <div class="mb-3">
                     <label for="Part" class="form-label">Part</label>
-                    <select id="Part" name="part" class="form-control" required onchange="updateRunNumber()">
+                    <select id="Part" name="part" class="form-control" required onchange="updateHiddenRunAndMachine()">
                         <option value="">Select a Part</option>
-                        @foreach (var part in (ViewBag.OpenPartsWithRuns as Dictionary<string, string>).Keys)
+                        @foreach (var entry in openParts)
                         {
-                            <option value="@part">@part</option>
+                            <!-- entry.Key = (Part, Run) ; entry.Value = Machine -->
+                            <option value="@entry.Key.Item1"
+                                    data-run="@entry.Key.Item2"
+                                    data-machine="@entry.Value">
+                                <!-- We'll show part plus run in parentheses for clarity -->
+                                @entry.Key.Item1 (Run: @entry.Key.Item2)
+                            </option>
                         }
                     </select>
                 </div>
 
-                <div class="mb-3">
-                    <label for="RunNumber" class="form-label">Run Number</label>
-                    <input type="text" id="RunNumber" name="runNumber" class="form-control" readonly />
-                </div>
+                @* 
+                   HIDDEN input for runNumber. 
+                   This is populated by JavaScript so the server 
+                   still receives a "runNumber" on POST.
+                 *@
+                <input type="hidden" id="RunNumber" name="runNumber" />
 
                 <div class="mb-3">
                     <label for="Machine" class="form-label">Machine</label>
-                    <select id="Machine" name="machine" class="form-control" required>
-                        <option value="">Select a Machine</option>
-                        @foreach (var machine in ViewBag.Equipment as List<string>)
-                        {
-                            <option value="@machine">@machine</option>
-                        }
-                    </select>
+                    <input type="text" id="Machine" name="machine" class="form-control" readonly />
                 </div>
 
                 <button type="submit" class="btn btn-primary w-100">Login</button>
@@ -53,19 +71,28 @@
 </div>
 
 <script>
-    const partRunMapping = @Html.Raw(Json.Serialize(ViewBag.OpenPartsWithRuns));
-
-    function updateRunNumber() {
+    function updateHiddenRunAndMachine() {
         const partSelect = document.getElementById("Part");
-        const runInput = document.getElementById("RunNumber");
+        const runHidden = document.getElementById("RunNumber");
+        const machineInput = document.getElementById("Machine");
 
-        const selectedPart = partSelect.value;
-        runInput.value = partRunMapping[selectedPart] || "";
+        // Grab the selected <option>
+        const selectedOption = partSelect.options[partSelect.selectedIndex];
+        if (!selectedOption) return;
+
+        // Extract data-run and data-machine from the <option>
+        const selectedRun = selectedOption.getAttribute("data-run") || "";
+        const selectedMachine = selectedOption.getAttribute("data-machine") || "";
+
+        // Populate the hidden runNumber field
+        runHidden.value = selectedRun;
+
+        // Populate the Machine field
+        machineInput.value = selectedMachine;
     }
 </script>
 
-
-<!-- Logged-In Runs -->
+<!-- Open Mold Runs -->
 <h2 class="text-center mb-4">Open Mold Runs</h2>
 <div class="card shadow mb-4">
     <div class="card-body">
@@ -84,7 +111,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var run in ViewBag.OpenRuns as List<PressRunLogModel>)
+                    @foreach (var run in openRuns)
                     {
                         <tr>
                             <td>@run.Id</td>
@@ -108,24 +135,19 @@
     </div>
 </div>
 
-
-
-<!-- Full List of Records -->
+<!-- Full List of Records (React Table) -->
 <h2 class="text-center mt-4">All Mold Run Records</h2>
 <div class="card shadow mb-4">
     <div class="card-body">
         <div class="container-fluid px-3 mt-4">
             <div id="myReactPressRunTableRoot"
-                 data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model))'>
+                 data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
             </div>
         </div>
     </div>
 </div>
 
-
-</div>
 <script src="/js/mydatatable.bundle.js"></script>
-
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const container = document.getElementById("myReactPressRunTableRoot");
@@ -135,7 +157,7 @@
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData); // List<PressRunLogModel>
 
-        // Define columns for the table (same as C# model)
+        // Define columns for the table (same as C# PressRunLogModel)
         const columns = [
             { key: "Id", label: "ID" },
             { key: "Timestamp", label: "Timestamp" },
@@ -159,6 +181,7 @@
         }
     });
 </script>
+
 <!-- Stop Molding Modal -->
 <div id="stopMoldingModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog">
@@ -171,11 +194,12 @@
                 <form id="stopMoldingForm" method="post" action="/PressRunLog/Logout">
                     <input type="hidden" id="modalPart" name="part">
                     <input type="hidden" id="modalStartDateTime" name="startDateTime">
-                    <input type="hidden" id="modalEndDateTime" name="endDateTime" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")">
+                    <input type="hidden" id="modalEndDateTime" name="endDateTime"
+                           value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")" />
 
                     <div class="mb-3">
                         <label for="modalScrap" class="form-label">Scrap</label>
-                        <input type="number" id="modalScrap" name="scrap" class="form-control" required>
+                        <input type="number" id="modalScrap" name="scrap" class="form-control" required />
                     </div>
 
                     <div class="mb-3">
@@ -191,6 +215,7 @@
         </div>
     </div>
 </div>
+
 <script>
     function openStopMoldingModal(runId, part, startDateTime) {
         document.getElementById("modalPart").value = part;

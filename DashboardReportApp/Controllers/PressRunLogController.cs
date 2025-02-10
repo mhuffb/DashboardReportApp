@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using DashboardReportApp.Models;
+﻿using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
@@ -17,17 +19,25 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            ViewBag.Operators = await _pressRunLogService.GetOperatorsAsync();
-            ViewBag.Equipment = await _pressRunLogService.GetEquipmentAsync();
-            ViewBag.OpenPartsWithRuns = await _pressRunLogService.GetOpenPartsWithRunsAsync(); // Open parts
+            // Load supporting data for dropdowns
+            ViewData["Operators"] = await _pressRunLogService.GetOperatorsAsync();
+            ViewData["Equipment"] = await _pressRunLogService.GetEquipmentAsync();
 
-            ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync(); // Open runs (ViewBag)
-            var allRuns = await _pressRunLogService.GetAllRunsAsync(); // All runs (Model)
+            // Load open parts/runs for the login form
+            var openParts = await _pressRunLogService.GetOpenPartsWithRunsAndMachinesAsync();
+            ViewData["OpenParts"] = openParts ?? new Dictionary<(string, string), string>();
 
-            return View(allRuns); // Use all runs as the main model
+            // "Open Runs" = runs with open=1
+            var openRuns = await _pressRunLogService.GetLoggedInRunsAsync();
+            // "All Runs" = entire pressrun table
+            var allRuns = await _pressRunLogService.GetAllRunsAsync();
+
+            // Put open runs in ViewBag
+            ViewBag.OpenRuns = openRuns;
+
+            // Return all runs as the model (for React table)
+            return View(allRuns);
         }
-
-
 
         [HttpPost]
         public async Task<IActionResult> Login(string operatorName, string part, string machine)
@@ -43,15 +53,12 @@ namespace DashboardReportApp.Controllers
                 Operator = operatorName,
                 Part = part,
                 Machine = machine,
-                StartDateTime = DateTime.Now // Automatically set the current time
+                StartDateTime = DateTime.Now
             };
 
             await _pressRunLogService.HandleLoginAsync(formModel);
             return RedirectToAction("Index");
         }
-
-
-
 
         [HttpPost]
         public async Task<IActionResult> Logout(string part, DateTime startDateTime, int scrap, string notes, DateTime endDateTime)
@@ -74,8 +81,5 @@ namespace DashboardReportApp.Controllers
             await _pressRunLogService.HandleLogoutAsync(formModel);
             return RedirectToAction("Index");
         }
-
-
-
     }
 }

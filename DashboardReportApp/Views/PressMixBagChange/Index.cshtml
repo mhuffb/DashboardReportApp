@@ -2,6 +2,7 @@
     ViewData["Title"] = "Press Mix Bag Change";
     var operators = ViewData["OperatorList"] as List<string> ?? new List<string>();
     var equipment = ViewData["EquipmentList"] as List<string> ?? new List<string>();
+    var openPartsWithRuns = ViewData["OpenPartsWithRuns"] as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
 <div class="container mt-4">
@@ -11,7 +12,18 @@
         <div class="row">
             <div class="col-md-6 mb-3">
                 <label for="Part" class="form-label">Part:</label>
-                <input type="text" id="Part" name="Part" class="form-control" required />
+                <select id="Part" name="Part" class="form-control" required onchange="updateRunNumber()">
+                    <option value="">-- Select Part --</option>
+                    @foreach (var part in openPartsWithRuns.Keys)
+                    {
+                        <option value="@part">@part</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label for="RunNumber" class="form-label">Run Number:</label>
+                <input type="text" id="RunNumber" name="RunNumber" class="form-control" readonly />
             </div>
 
             <div class="col-md-6 mb-3">
@@ -46,11 +58,6 @@
                 <input type="text" id="MixNumber" name="MixNumber" class="form-control" required />
             </div>
 
-            <div class="col-md-6 mb-3">
-                <label for="SupplierItemNumber" class="form-label">Supplier Item Number:</label>
-                <input type="text" id="SupplierItemNumber" name="SupplierItemNumber" class="form-control" required />
-            </div>
-
             <div class="col-md-12 mb-3">
                 <label for="Note" class="form-label">Notes:</label>
                 <textarea id="Note" name="Note" class="form-control text-area-large"></textarea>
@@ -61,3 +68,14 @@
     </form>
 </div>
 
+<script>
+    const partRunMapping = @Html.Raw(Json.Serialize(ViewData["OpenPartsWithRuns"]));
+
+    function updateRunNumber() {
+        const partSelect = document.getElementById("Part");
+        const runInput = document.getElementById("RunNumber");
+
+        const selectedPart = partSelect.value;
+        runInput.value = partRunMapping[selectedPart] || "";
+    }
+</script>
