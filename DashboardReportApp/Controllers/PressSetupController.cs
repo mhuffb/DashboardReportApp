@@ -28,7 +28,8 @@ namespace DashboardReportApp.Controllers
             ViewData["Machines"] = _pressSetupService.GetEquipment();
             ViewData["Trainers"] = _pressSetupService.GetTrainers();
             ViewData["SortOrder"] = sortOrder == "asc" ? "desc" : "asc";
-            ViewData["Parts"] = _pressSetupService.GetScheduledParts();
+            var scheduledParts = _pressSetupService.GetScheduledParts();
+            ViewData["Parts"] = scheduledParts;
             var records = _pressSetupService.GetAllRecords(part, operatorName, machine, setupComplete, assistanceRequired, search, startDate, endDate, sortBy, sortOrder);
 
             return View(records);

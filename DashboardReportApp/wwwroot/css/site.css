@@ -179,3 +179,42 @@ form {
     .custom-table th:hover {
         background-color: rgba(255, 215, 0, 0.3) !important; /* ?? Light goldenrod highlight */
     }
+
+/* Make modal background black */
+.modal-content {
+    background-color: black !important; /* Black background */
+    color: goldenrod !important; /* Goldenrod text for contrast */
+    border: 1px solid goldenrod !important; /* Optional: Goldenrod border */
+}
+
+/* Style the modal header */
+.modal-header {
+    border-bottom: 1px solid goldenrod !important; /* Add a goldenrod line */
+}
+
+    /* Style the modal close button */
+    .modal-header .btn-close {
+        filter: invert(1); /* Makes the close button white */
+    }
+
+/* Style form fields inside modal */
+.modal-body input,
+.modal-body select,
+.modal-body textarea {
+    background-color: black !important; /* Black input background */
+    color: goldenrod !important; /* Goldenrod text */
+    border: 1px solid goldenrod !important; /* Goldenrod border */
+}
+
+/* Style buttons in the modal */
+.modal-footer .btn {
+    background-color: black !important;
+    color: goldenrod !important;
+    border: 1px solid goldenrod !important;
+    transition: 0.3s ease-in-out;
+}
+
+    .modal-footer .btn:hover {
+        background-color: goldenrod !important;
+        color: black !important;
+    }

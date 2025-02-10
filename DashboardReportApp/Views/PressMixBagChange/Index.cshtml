@@ -7,90 +7,151 @@
     // Dictionary containing Part → (Run, Machine)
     var openPartsWithRunsAndMachines = ViewData["OpenPartsWithRunsAndMachines"] as Dictionary<string, (string Run, string Machine)>
                                        ?? new Dictionary<string, (string, string)>();
+
+    var allRecords = ViewData["AllRecords"] as List<DashboardReportApp.Models.PressMixBagChangeModel>
+                     ?? new List<DashboardReportApp.Models.PressMixBagChangeModel>();
+
+}
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null && !ViewContext.HttpContext.Request.Method.Equals("GET"))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Mix Bag Change</h1>
+    <h2 class="text-center">Log Mix Change</h2>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form asp-action="Submit" method="post">
+                <div class="row">
+                    <!-- Part Selection -->
+                    <div class="mb-3">
+                        <label for="partNumber" class="form-label">Part:</label>
+                        <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
+                            <option value="">-- Select Part --</option>
+                            @foreach (var entry in ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel> ?? new List<DashboardReportApp.Models.PressSetupModel>())
+                            {
+                                <option value="@entry.Part"
+                                        data-run="@entry.Run"
+                                        data-operator="@entry.Operator"
+                                        data-machine="@entry.Machine">
+                                    @entry.Part (Run: @entry.Run)
+                                </option>
+                            }
+                        </select>
 
-    <form asp-action="Submit" method="post">
-        <div class="row">
-            <!-- Part Selection -->
-            <div class="col-md-6 mb-3">
-                <label for="Part" class="form-label">Part:</label>
-                <select id="Part" name="Part" class="form-control" required onchange="updateHiddenRunAndMachine()">
-                    <option value="">-- Select Part --</option>
-                    @foreach (var entry in openPartsWithRunsAndMachines)
-                    {
-                        <!-- Key = Part, Value = (Run, Machine) -->
-                        var partNumber = entry.Key;
-                        var runNumber = entry.Value.Run;
-                        var machine = entry.Value.Machine;
+                        <!-- Hidden Run Number -->
+                        <input type="hidden" id="RunNumber" name="Run" />
 
-                        <option value="@partNumber"
-                                data-run="@runNumber"
-                                data-machine="@machine">
-                            @partNumber (Run: @runNumber)
-                        </option>
-                    }
-                </select>
-            </div>
+                        <!-- Operator Field -->
+                        <div class="mb-3">
+                            <label for="operatorName" class="form-label">Operator</label>
+                            <input type="text" id="operatorName" name="Operator" class="form-control" readonly />
+                        </div>
 
-            <!-- HIDDEN Run Number -->
-            <input type="hidden" id="RunNumber" name="RunNumber" />
+                        <!-- Machine Field -->
+                        <div class="mb-3">
+                            <label for="machine" class="form-label">Machine</label>
+                            <input type="text" id="machine" name="Machine" class="form-control" readonly />
+                        </div>
 
-            <!-- Operator Dropdown -->
-            <div class="col-md-6 mb-3">
-                <label for="Operator" class="form-label">Operator:</label>
-                <select id="Operator" name="Operator" class="form-control">
-                    <option value="">-- Select Operator --</option>
-                    @foreach (var op in operators)
-                    {
-                        <option value="@op">@op</option>
-                    }
-                </select>
-            </div>
+                        <!-- Lot Number -->
+                        <div class="mb-3">
+                            <label for="LotNumber" class="form-label">Lot Number:</label>
+                            <input type="text" id="LotNumber" name="LotNumber" class="form-control" required />
+                        </div>
 
-            <!-- Machine (Now auto-populated) -->
-            <div class="col-md-6 mb-3">
-                <label for="Machine" class="form-label">Machine:</label>
-                <input type="text" id="Machine" name="Machine" class="form-control" readonly />
-            </div>
+                        <!-- Mix Number -->
+                        <div class="mb-3">
+                            <label for="MixNumber" class="form-label">Mix Number:</label>
+                            <input type="text" id="MixNumber" name="MixNumber" class="form-control" required />
+                        </div>
 
-            <div class="col-md-6 mb-3">
-                <label for="LotNumber" class="form-label">Lot Number:</label>
-                <input type="text" id="LotNumber" name="LotNumber" class="form-control" required />
-            </div>
+                        <!-- Notes -->
+                        <div class="col-md-12 mb-3">
+                            <label for="Note" class="form-label">Notes:</label>
+                            <textarea id="Note" name="Notes" class="form-control text-area-large"></textarea>
+                        </div>
+                    </div>
+                </div>
 
-            <div class="col-md-6 mb-3">
-                <label for="MixNumber" class="form-label">Mix Number:</label>
-                <input type="text" id="MixNumber" name="MixNumber" class="form-control" required />
-            </div>
+                <button type="submit" class="btn btn-primary w-100 mt-3"><i class="bi bi-check-circle"></i> Submit</button>
+            </form>
 
-            <div class="col-md-12 mb-3">
-                <label for="Note" class="form-label">Notes:</label>
-                <textarea id="Note" name="Note" class="form-control text-area-large"></textarea>
+    </div>
+    </div>
+</div>
+<!-- Display All Records in React Component -->
+<h2 class="text-center mt-4">All Mix Bag Change Records</h2>
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <div class="container-fluid px-3 mt-4">
+            <div id="mixBagChangeTableRoot"
+                 data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'>
             </div>
         </div>
-
-        <button type="submit" class="btn btn-primary w-100 mt-3"><i class="bi bi-check-circle"></i> Submit</button>
-    </form>
+    </div>
 </div>
-
 <script>
-    function updateHiddenRunAndMachine() {
-        const partSelect = document.getElementById("Part");
+           function updateFields() {
+        const partSelect = document.getElementById("partNumber");
         const runHidden = document.getElementById("RunNumber");
-        const machineInput = document.getElementById("Machine");
+        const operatorField = document.getElementById("operatorName");
+        const machineField = document.getElementById("machine");
 
         const selectedOption = partSelect.options[partSelect.selectedIndex];
         if (!selectedOption) return;
 
-        // Get run number and machine from the selected option
-        const runValue = selectedOption.getAttribute("data-run") || "";
-        const machineValue = selectedOption.getAttribute("data-machine") || "";
-
-        // Update hidden fields
-        runHidden.value = runValue;
-        machineInput.value = machineValue;
+        // Get data attributes from the selected option
+        runHidden.value = selectedOption.getAttribute("data-run") || "";
+        operatorField.value = selectedOption.getAttribute("data-operator") || "";
+        machineField.value = selectedOption.getAttribute("data-machine") || "";
     }
+
+
+    
+
 </script>
+<script src="/js/mydatatable.bundle.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const container = document.getElementById('mixBagChangeTableRoot');
+        if (!container) return;
+
+        // Parse the JSON from data-records
+        const rawData = container.getAttribute('data-records');
+        const data = JSON.parse(rawData); // This is your List<PressMixBagChangeModel>
+
+        // Define columns to match PressMixBagChangeModel's properties
+        const columns = [
+            { key: 'Id', label: 'ID' },
+            { key: 'Part', label: 'Part' },
+            { key: 'Run', label: 'Run' },
+            { key: 'Operator', label: 'Operator' },
+            { key: 'Machine', label: 'Machine' },
+            { key: 'LotNumber', label: 'Lot Number' },
+            { key: 'MixNumber', label: 'Mix Number' },
+            { key: 'SentDateTime', label: 'Sent Time' },
+            { key: 'Notes', label: 'Notes' }
+        ];
+
+        // Render the React table component
+        if (window.renderMyDataTable) {
+            window.renderMyDataTable("mixBagChangeTableRoot", data, columns, true);
+        } else {
+            console.error("React table render function not found!");
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

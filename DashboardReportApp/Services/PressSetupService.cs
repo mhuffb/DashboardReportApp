@@ -43,8 +43,8 @@ namespace DashboardReportApp.Services
                             AssistanceReq = reader["assistanceReq"].ToString(),
                             AssistedBy = reader["assistedBy"].ToString(),
                             Notes = reader["notes"].ToString(),
-                            Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0
-
+                            Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+                            Run = reader["run"].ToString(),
 
                         });
                     }
@@ -188,10 +188,10 @@ namespace DashboardReportApp.Services
             }
             return run;
         }
-        public List<string> GetScheduledParts()
+        public Dictionary<string, string> GetScheduledParts()
         {
-            var parts = new List<string>();
-            string query = "SELECT part FROM schedule WHERE open = '1' ORDER BY part";
+            var scheduledParts = new Dictionary<string, string>();
+            string query = "SELECT part, run FROM schedule WHERE open = '1' ORDER BY part";
 
             using (var connection = new MySqlConnection(_connectionString))
             using (var command = new MySqlCommand(query, connection))
@@ -201,12 +201,20 @@ namespace DashboardReportApp.Services
                 {
                     while (reader.Read())
                     {
-                        parts.Add(reader["part"].ToString());
+                        string part = reader["part"].ToString();
+                        string run = reader["run"]?.ToString() ?? "N/A"; // Default to "N/A" if null
+
+                        if (!scheduledParts.ContainsKey(part))  // Avoid duplicates
+                        {
+                            scheduledParts.Add(part, run);
+                        }
                     }
                 }
             }
 
-            return parts;
+            return scheduledParts;
         }
+
+
     }
 }
