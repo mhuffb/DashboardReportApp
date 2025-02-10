@@ -42,7 +42,8 @@ namespace DashboardReportApp.Services
                             SetupComp = reader["setupComp"].ToString(),
                             AssistanceReq = reader["assistanceReq"].ToString(),
                             AssistedBy = reader["assistedBy"].ToString(),
-                            Notes = reader["notes"].ToString()
+                            Notes = reader["notes"].ToString(),
+                            Open = reader["open"].ToString()
                         });
                     }
                 }
