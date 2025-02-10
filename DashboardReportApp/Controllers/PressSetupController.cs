@@ -8,6 +8,7 @@ using DashboardReportApp.Models;
 
 namespace DashboardReportApp.Controllers
 {
+    [Route("PressSetup")]
     public class PressSetupController : Controller
     {
         private readonly PressSetupService _pressSetupService;
@@ -27,18 +28,18 @@ namespace DashboardReportApp.Controllers
             ViewData["Machines"] = _pressSetupService.GetEquipment();
             ViewData["Trainers"] = _pressSetupService.GetTrainers();
             ViewData["SortOrder"] = sortOrder == "asc" ? "desc" : "asc";
-
+            ViewData["Parts"] = _pressSetupService.GetScheduledParts();
             var records = _pressSetupService.GetAllRecords(part, operatorName, machine, setupComplete, assistanceRequired, search, startDate, endDate, sortBy, sortOrder);
 
             return View(records);
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Login(string partNumber, string operatorName, string machine)
+        [HttpPost("Login")]
+        public async Task<IActionResult> Login(string partNumber, string runNumber, string operatorName, string machine)
         {
             try
             {
-                await _pressSetupService.LoginAsync(partNumber, operatorName, machine);
+                await _pressSetupService.LoginAsync(partNumber, runNumber, operatorName, machine);
                 TempData["Message"] = "Login successfully recorded!";
             }
             catch (Exception ex)
@@ -48,7 +49,8 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-        [HttpPost]
+
+        [HttpPost("Logout")]
         public async Task<IActionResult> Logout(string partNumber, DateTime startDateTime, string difficulty,
                                                 string assistanceRequired, string assistedBy, string setupComplete, string notes)
         {
@@ -63,5 +65,13 @@ namespace DashboardReportApp.Controllers
             }
             return RedirectToAction("Index");
         }
+
+        [HttpGet("GetRunForPart")]
+        public IActionResult GetRunForPart(string part)
+        {
+            var run = _pressSetupService.GetRunForPart(part);
+            return Json(new { run });
+        }
+
     }
 }

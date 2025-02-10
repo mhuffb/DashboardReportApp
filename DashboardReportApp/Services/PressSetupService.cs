@@ -109,17 +109,18 @@ namespace DashboardReportApp.Services
             return records;
         }
 
-        public async Task LoginAsync(string partNumber, string operatorName, string machine)
+        public async Task LoginAsync(string partNumber, string runNumber, string operatorName, string machine)
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string query = @"INSERT INTO presssetup (part, operator, machine, startDateTime) 
-                                 VALUES (@part, @operator, @machine, @startDateTime)";
+                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime) 
+                         VALUES (@part, @run, @operator, @machine, @startDateTime)";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
                     command.Parameters.AddWithValue("@part", partNumber.ToUpper());
+                    command.Parameters.AddWithValue("@run", runNumber);
                     command.Parameters.AddWithValue("@operator", operatorName);
                     command.Parameters.AddWithValue("@machine", machine);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
@@ -128,6 +129,7 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+
 
         public async Task LogoutAsync(string partNumber, DateTime startDateTime, string difficulty, string assistanceRequired,
                                       string assistedBy, string setupComplete, string notes)
@@ -220,6 +222,44 @@ namespace DashboardReportApp.Services
             }
 
             return trainers;
+        }
+        public string GetRunForPart(string part)
+        {
+            string run = "";
+            string query = "SELECT run FROM schedule WHERE part = @part AND open = 1";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            using (var command = new MySqlCommand(query, connection))
+            {
+                command.Parameters.AddWithValue("@part", part);
+                connection.Open();
+                var result = command.ExecuteScalar();
+                if (result != null)
+                {
+                    run = result.ToString();
+                }
+            }
+            return run;
+        }
+        public List<string> GetScheduledParts()
+        {
+            var parts = new List<string>();
+            string query = "SELECT part FROM schedule WHERE open = '1' ORDER BY part";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            using (var command = new MySqlCommand(query, connection))
+            {
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        parts.Add(reader["part"].ToString());
+                    }
+                }
+            }
+
+            return parts;
         }
     }
 }

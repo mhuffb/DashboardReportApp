@@ -7,6 +7,7 @@ namespace DashboardReportApp.Models
         public long Id { get; set; }
         public DateTime? Timestamp { get; set; }
         public string Part { get; set; }
+        public string Run { get; set; }
         public string Operator { get; set; }
         public DateTime? StartDateTime { get; set; }
         public DateTime? EndDateTime { get; set; }
