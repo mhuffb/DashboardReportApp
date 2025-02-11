@@ -16,7 +16,7 @@ namespace DashboardReportApp.Services
                                                    string endDate, string sortBy, string sortOrder)
         {
             var records = new List<PressSetupModel>();
-            string query = "SELECT * FROM presssetup";
+            string query = "SELECT * FROM presssetup order by id desc";
 
 
             using (var connection = new MySqlConnection(_connectionString))

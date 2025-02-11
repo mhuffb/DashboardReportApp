@@ -67,7 +67,7 @@ namespace DashboardReportApp.Services
             const string query = @"
                 SELECT id, timestamp, run, part, startDateTime, endDateTime, operator, machine, pcsStart, pcsEnd, scrap, notes
                 FROM pressrun
-                ORDER BY startDateTime DESC";
+                ORDER BY id DESC";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();

@@ -127,7 +127,7 @@
             const string query = @"
         SELECT id, part, run, operator, machine, lotNumber, mixNumber, sentDateTime, notes
         FROM presslotchange
-        ORDER BY sentDateTime DESC";
+        ORDER BY id DESC";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
