@@ -92,16 +92,17 @@ main {
 }
 
     .table-responsive th, .table-responsive td {
-        border-color: goldenrod !important;
-        color: black !important;
-        background-color: wheat !important;
+        /*border-color: goldenrod !important;*/
+        /*color: black !important;*/
+        /*background-color: wheat !important;*/
     }
 .table {
     box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
     width: 100% !important;
-    max-width: 100% !important;
     table-layout: auto !important;
-   
+    max-width: 100% !important;
+    overflow-x: auto;
+    display: block;
 }
 .table th, .table td {
     border-color: goldenrod !important;
@@ -139,6 +140,10 @@ form {
     border-collapse: collapse;
     background-color: black;
     color: goldenrod;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto;
+    display: block;
 }
 
     /* Table Header */

@@ -100,11 +100,11 @@
                     <tr>
                         <th>ID</th>
                         <th>Timestamp</th>
-                        <th>Run</th>
                         <th>Part</th>
-                        <th>Start Time</th>
+                        <th>Run</th>
                         <th>Operator</th>
                         <th>Machine</th>
+                        <th>Start Time</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -114,11 +114,12 @@
                         <tr>
                             <td>@run.Id</td>
                             <td>@run.Timestamp</td>
-                            <td>@run.Run</td>
                             <td>@run.Part</td>
-                            <td>@run.StartDateTime</td>
+                            <td>@run.Run</td>
                             <td>@run.Operator</td>
                             <td>@run.Machine</td>
+                            <td>@run.StartDateTime</td>
+                            
                             <td>
                                 <button class="btn btn-danger btn-sm"
                                         onclick="openStopMoldingModal('@run.Id', '@run.Part', '@run.StartDateTime')">
@@ -159,12 +160,12 @@
         const columns = [
             { key: "Id", label: "ID" },
             { key: "Timestamp", label: "Timestamp" },
-            { key: "Run", label: "Run" },
             { key: "Part", label: "Part" },
-            { key: "StartDateTime", label: "Start Time" },
-            { key: "EndDateTime", label: "End Time" },
+            { key: "Run", label: "Run" },
             { key: "Operator", label: "Operator" },
             { key: "Machine", label: "Machine" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
             { key: "PcsStart", label: "Pcs Start" },
             { key: "PcsEnd", label: "Pcs End" },
             { key: "Scrap", label: "Scrap" },
