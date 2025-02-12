@@ -33,11 +33,6 @@
     <Content Update="wwwroot\js\mydatatable-react.svg">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Update="wwwroot\js\mydatatable.bundle.js">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Content Update="wwwroot\js\vite.svg">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

@@ -22,7 +22,7 @@ namespace DashboardReportApp.Models
         public int? Pcs { get; set; }
         public int? ScrapMach { get; set; }
         public int? ScrapNonMach { get; set; }
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
 
         [Range(0, double.MaxValue, ErrorMessage = "Setup hours must be a positive number.")]
         public decimal SetupHours { get; set; }

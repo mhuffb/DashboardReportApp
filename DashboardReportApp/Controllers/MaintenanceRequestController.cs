@@ -22,7 +22,7 @@ namespace DashboardReportApp.Controllers
         [HttpPost("SaveImagePath")]
         public async Task<IActionResult> SaveImagePath(int id, string imagePath)
         {
-            bool success = await _service.UpdateMediaLinkFile(id, imagePath);
+            bool success = await _service.UpdateFile1Link(id, imagePath);
             if (success)
                 TempData["Success"] = "Image path updated successfully.";
             else
@@ -34,74 +34,111 @@ namespace DashboardReportApp.Controllers
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
-            var requests = await _service.GetOpenRequestsAsync();
+            // Use GetAllRequests() to return every maintenance request (open and closed)
+            var requests = _service.GetAllRequests();
 
-            // Populate Requesters and EquipmentList
+            // Populate Requesters and EquipmentList as before
             ViewData["Requesters"] = await _service.GetRequestersAsync();
             ViewData["EquipmentList"] = await _service.GetEquipmentListAsync();
-          //  await _emailAttachmentService.ProcessIncomingEmailsAsync();
             return View(requests);
         }
 
+
         [HttpPost("AddRequest")]
-        public async Task<IActionResult> AddRequest(MaintenanceRequestModel request, IFormFile? file)
+        public async Task<IActionResult> AddRequest(
+            [FromForm] MaintenanceRequestModel request,
+            [FromForm] IFormFile? file
+        )
         {
+            // Log the start of the action
+            Console.WriteLine("[DEBUG] AddRequest method invoked.");
+
+            // Log the received data (basic fields)
+            Console.WriteLine($"[DEBUG] request.Equipment: {request.Equipment}");
+            Console.WriteLine($"[DEBUG] request.Requester: {request.Requester}");
+            Console.WriteLine($"[DEBUG] request.Problem: {request.Problem}");
+            Console.WriteLine($"[DEBUG] request.Department: {request.Department}");
+            Console.WriteLine($"[DEBUG] request.Status: {request.Status}");
+            Console.WriteLine($"[DEBUG] File upload present? {(file != null ? "Yes" : "No")}");
+
+            // Validate the model state
             if (!ModelState.IsValid)
             {
+                Console.WriteLine("[DEBUG] ModelState is invalid. Errors:");
                 foreach (var error in ModelState)
                 {
                     Console.WriteLine($"Key: {error.Key}");
                     foreach (var subError in error.Value.Errors)
                     {
-                        Console.WriteLine($"Error: {subError.ErrorMessage}");
+                        Console.WriteLine($"  Error: {subError.ErrorMessage}");
                     }
                 }
-
                 TempData["Error"] = "Invalid input. Please correct the errors.";
-                return RedirectToAction(nameof(Index));
+                return BadRequest(new { success = false, message = "Validation failed." });
             }
 
             try
             {
-                // Handle File Upload
+                // Log DownStatus
+                Console.WriteLine($"[DEBUG] request.DownStatus: {request.DownStatus}");
+
+                // Set default values
+                if (request.DownStatus == true)
+                {
+                    Console.WriteLine("[DEBUG] DownStatus == true; setting DownStartDateTime to now.");
+                    request.DownStartDateTime = DateTime.Now;
+                }
+                request.Status = "Open";
+
+                // First, add the new request without the file.
+                Console.WriteLine("[DEBUG] About to call AddRequestAsync...");
+                bool insertSuccess = await _service.AddRequestAsync(request);
+                Console.WriteLine($"[DEBUG] Insert success? {insertSuccess}");
+
+                if (!insertSuccess)
+                {
+                    TempData["Error"] = "Failed to add the request.";
+                    Console.WriteLine("[ERROR] Insert returned false; returning RedirectToAction(Index).");
+                    return RedirectToAction(nameof(Index));
+                    // Alternatively: return BadRequest(...) if you prefer consistent JSON
+                }
+
+                // Now request.Id should be populated.
+                Console.WriteLine($"[DEBUG] Request inserted with ID: {request.Id}");
+
+                // If a file was uploaded, handle the file upload.
                 if (file != null && file.Length > 0)
                 {
+                    Console.WriteLine("[DEBUG] Handling file upload...");
                     var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-                    var fileExtension = Path.GetExtension(file.FileName);
-                    var fileName = $"MaintenanceRequestMedia_{request.Id}{fileExtension}";
-                    var filePath = Path.Combine(uploadsFolder, fileName);
-
-                    // Ensure the upload directory exists
                     if (!Directory.Exists(uploadsFolder))
                     {
+                        Console.WriteLine("[DEBUG] Upload folder does not exist, creating it...");
                         Directory.CreateDirectory(uploadsFolder);
                     }
 
-                    // Save the file
+                    var fileExtension = Path.GetExtension(file.FileName);
+                    var fileName = $"MaintenanceRequestFile1_{request.Id}{fileExtension}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    Console.WriteLine($"[DEBUG] Saving file at: {filePath}");
+
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
                     {
                         await file.CopyToAsync(fileStream);
                     }
+                    Console.WriteLine("[DEBUG] File uploaded successfully.");
 
-                    // Assign the file path to the request model
-                    request.FileAddressMediaLink = filePath;
-                    Console.WriteLine($"[DEBUG] File uploaded: {filePath}");
+                    // Update the record with the new file path.
+                    Console.WriteLine("[DEBUG] Updating DB record with file path...");
+                    bool fileUpdateSuccess = await _service.UpdateFile1Link(request.Id, filePath);
+                    Console.WriteLine($"[DEBUG] File update success? {fileUpdateSuccess}");
+                    if (!fileUpdateSuccess)
+                    {
+                        TempData["Error"] = "Failed to update the image link.";
+                        Console.WriteLine("[ERROR] Could not update MaintenanceRequestFile1 link in DB.");
+                    }
                 }
-                else
-                {
-                    request.FileAddressMediaLink = null;
-                }
-
-                if (request.DownStatus == true)
-                {
-                    request.DownStartDateTime = DateTime.Now;
-                }
-
-                request.Status = "Open";
-
-                // Call the service to add the request
-                bool success = await _service.AddRequestAsync(request);
-                TempData["Success"] = success ? "Request added successfully." : "Failed to add the request.";
             }
             catch (Exception ex)
             {
@@ -109,8 +146,10 @@ namespace DashboardReportApp.Controllers
                 TempData["Error"] = "An error occurred while adding the request.";
             }
 
-            return RedirectToAction(nameof(Index));
+            Console.WriteLine("[DEBUG] Returning success JSON: success=true, message=Request added successfully!");
+            return Ok(new { success = true, message = "Request added successfully!" });
         }
+
 
 
 
@@ -195,8 +234,8 @@ namespace DashboardReportApp.Controllers
             }
         }
 
-        [HttpPost("UpdateMediaLinkFile")]
-        public async Task<IActionResult> UpdateMediaLinkFile(int id, IFormFile file)
+        [HttpPost("UpdateMaintenanceRequestFile1")]
+        public async Task<IActionResult> UpdateMaintenanceRequestFile1(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
             {
@@ -214,7 +253,7 @@ namespace DashboardReportApp.Controllers
                 }
 
                 var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"ProcessChangeRequestMedia_{id}{fileExtension}";
+                var fileName = $"MaintenanceRequestFile1_{id}{fileExtension}";
                 var filePath = Path.Combine(uploadsFolder, fileName);
 
                 Console.WriteLine($"[DEBUG] Saving file at: {filePath}");
@@ -227,7 +266,7 @@ namespace DashboardReportApp.Controllers
                 Console.WriteLine("[DEBUG] File saved successfully.");
 
                 // Ensure NULL safety when updating the database
-                bool success = await _service.UpdateMediaLinkFile(id, filePath ?? "");
+                bool success = await _service.UpdateFile1Link(id, filePath ?? "");
 
                 if (success)
                 {

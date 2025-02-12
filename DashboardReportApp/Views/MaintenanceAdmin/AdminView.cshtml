@@ -1,6 +1,6 @@
-﻿
-@model IEnumerable<DashboardReportApp.Models.MaintenanceRequestModel>
-@using System.Text.Json;
+﻿@model IEnumerable<DashboardReportApp.Models.MaintenanceRequestModel>
+@using System.Text.Json
+
 <div class="container-fluid px-3 mt-4">
     <h1 class="text-center mb-4">Admin - Maintenance Requests</h1>
 
@@ -12,40 +12,28 @@
         </div>
     }
 
-
-
     @{
         var operators = ViewBag.OperatorNames as List<string> ?? new List<string>();
     }
 
-    
+    <!-- Container for the React component -->
+    <div id="maintenanceAdminRoot"></div>
 
-        <div id="maintenanceRequestsReactRoot"></div>
+    <script type="text/javascript">
+        window.maintenanceRequests = @Html.Raw(JsonSerializer.Serialize(Model));
+        window.operators = @Html.Raw(JsonSerializer.Serialize(operators));
+        window.equipmentList = @Html.Raw(JsonSerializer.Serialize(ViewData["EquipmentList"]));
+    </script>
 
-        <script>
-            window.maintenanceRequests = @Html.Raw(JsonSerializer.Serialize(Model));
-            window.operators = @Html.Raw(JsonSerializer.Serialize(ViewBag.OperatorNames));
-        </script>
-
-        <script src="/js/mydatatable.bundle.js"></script>
-        <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                if (window.renderMyMaintenanceTable) {
-                    window.renderMyMaintenanceTable("maintenanceRequestsReactRoot", window.maintenanceRequests, window.operators);
-                } else {
-                    console.error("window.renderMyMaintenanceTable is not defined!");
-                }
-            });
-        </script>
-    
-
-
-
-
+    <script src="/js/mydatatable.bundle.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        document.addEventListener("DOMContentLoaded", function () {
+            if (window.renderAdminMaintenanceTable) {
+                console.log("Calling renderAdminMaintenanceTable for admin view...");
+                window.renderAdminMaintenanceTable("maintenanceAdminRoot", window.maintenanceRequests, window.operators, window.equipmentList);
+            } else {
+                console.error("renderAdminMaintenanceTable is not defined!");
+            }
+        });
+    </script>
 </div>
-
-
-
-
-
-

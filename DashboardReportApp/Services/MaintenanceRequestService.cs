@@ -29,51 +29,11 @@
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
         }
 
-        public async Task<IEnumerable<MaintenanceRequestModel>> GetOpenRequestsAsync()
-        {
-            var requests = new List<MaintenanceRequestModel>();
-            string query = @"SELECT id, timestamp, equipment, requester, problem, downStatus, hourMeter, fileAddressImageLink 
-                     FROM maintenance 
-                     WHERE closedDateTime IS NULL";
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    while (await reader.ReadAsync())
-                    {
-                        Console.WriteLine($"[DEBUG] Reading Record ID: {reader["id"]}");
-
-                        var request = new MaintenanceRequestModel
-                        {
-                            Id = reader.GetInt32("id"),
-                            Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? (DateTime?)null : reader.GetDateTime("timestamp"),
-                            Equipment = reader.IsDBNull(reader.GetOrdinal("equipment")) ? null : reader.GetString("equipment"),
-                            Requester = reader.IsDBNull(reader.GetOrdinal("requester")) ? null : reader.GetString("requester"),
-                            Problem = reader.IsDBNull(reader.GetOrdinal("problem")) ? null : reader.GetString("problem"),
-                            DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) && reader.GetBoolean("downStatus"),
-                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
-                            FileAddressMediaLink = reader.IsDBNull(reader.GetOrdinal("fileAddressImageLink")) ? null : reader.GetString("fileAddressImageLink"),
-                        };
-
-                        Console.WriteLine($"[DEBUG] ID: {request.Id}, Equipment: {request.Equipment}, Requester: {request.Requester}, File Path: {request.FileAddressMediaLink}");
-
-                        requests.Add(request);
-                    }
-                }
-            }
-
-            return requests;
-        }
-
-
-
+      
         public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
         {
-            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, fileAddressImageLink, department, downStartDateTime, status) 
-                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @fileAddress, @department, @downStartDateTime, @status);
+            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, MaintenanceRequestFile1, department, downStartDateTime, status) 
+                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @MaintenanceRequestFile1, @department, @downStartDateTime, @status);
                      SELECT LAST_INSERT_ID();"; // Retrieve the last inserted ID
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -87,7 +47,7 @@
                     command.Parameters.AddWithValue("@problem", request.Problem);
                     command.Parameters.AddWithValue("@downStatus", (bool)request.DownStatus ? 1 : 0);
                     command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@fileAddress", request.FileAddressMediaLink ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@MaintenanceRequestFile1", request.MaintenanceRequestFile1 ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@status", request.Status);
@@ -106,7 +66,7 @@
                     string pdfPath = GeneratePdf(request);
 
                     // Email the PDF
-                    await SendEmailWithPdfAsync(pdfPath, request);
+                    //await SendEmailWithPdfAsync(pdfPath, request);
 
                     return true;
                 }
@@ -119,7 +79,7 @@
             // Path to the input PDF template in wwwroot
             string inputFilePath = Path.Combine(_webHostEnvironment.WebRootPath, "workorderinput.pdf");
 
-            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequest{request.Id}_{request.Equipment}.pdf";
+            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequestFile1_{request.Id}_{request.Equipment}.pdf";
 
             try
             {
@@ -175,7 +135,7 @@
                             }
 
                             // Image Attached Note
-                            if (!string.IsNullOrEmpty(request.FileAddressMediaLink))
+                            if (!string.IsNullOrEmpty(request.MaintenanceRequestFile1))
                             {
                                 document.Add(new Paragraph("Image Attached").SetFixedPosition(450, 460, 200));
                             }
@@ -356,32 +316,29 @@ Problem: {request.Problem}"
                     {
                         requests.Add(new MaintenanceRequestModel
                         {
-                            Id = reader["Id"] != DBNull.Value ? Convert.ToInt32(reader["Id"]) : null,
-                            Timestamp = reader["Timestamp"] != DBNull.Value ? Convert.ToDateTime(reader["Timestamp"]) : null,
-                            Equipment = reader["Equipment"] != DBNull.Value ? reader["Equipment"].ToString() : null,
-                            Requester = reader["Requester"] != DBNull.Value ? reader["Requester"].ToString() : null,
-                            RequestedDate = reader["ReqDate"] != DBNull.Value ? Convert.ToDateTime(reader["ReqDate"]) : null,
-                            Problem = reader["Problem"] != DBNull.Value ? reader["Problem"].ToString() : null,
-                            DownStartDateTime = reader["DownStartDateTime"] != DBNull.Value ? Convert.ToDateTime(reader["DownStartDateTime"]) : null,
-                            ClosedDateTime = reader["ClosedDateTime"] != DBNull.Value ? Convert.ToDateTime(reader["ClosedDateTime"]) : null,
-                            CloseBy = reader["CloseBy"] != DBNull.Value ? reader["CloseBy"].ToString() : null,
-                            CloseResult = reader["CloseResult"] != DBNull.Value ? reader["CloseResult"].ToString() : null,
-
-                            // ✅ FIX: Handle NULL for DownStatus correctly
-                            DownStatus = reader["downStatus"] != DBNull.Value ? Convert.ToBoolean(reader["downStatus"]) : (bool?)null,
-
-                            // ✅ FIX: Handle NULL for HourMeter correctly
-                            HourMeter = reader["hourMeter"] != DBNull.Value ? Convert.ToDecimal(reader["hourMeter"]) : (decimal?)null,
-
-                            HoldStatus = reader["HoldStatus"] != DBNull.Value ? Convert.ToBoolean(reader["HoldStatus"]) : (bool?)null,
-                            HoldReason = reader["HoldReason"] != DBNull.Value ? reader["HoldReason"].ToString() : null,
-                            HoldResult = reader["HoldResult"] != DBNull.Value ? reader["HoldResult"].ToString() : null,
-                            HoldBy = reader["HoldBy"] != DBNull.Value ? reader["HoldBy"].ToString() : null,
-                            FileAddress = reader["FileAddress"] != DBNull.Value ? reader["FileAddress"].ToString() : null,
-                            FileAddressMediaLink = reader["fileAddressImageLink"] != DBNull.Value ? reader["fileAddressImageLink"].ToString() : null,
-                            StatusHistory = reader["StatusHistory"] != DBNull.Value ? reader["StatusHistory"].ToString() : null,
-                            CurrentStatusBy = reader["CurrentStatusBy"] != DBNull.Value ? reader["CurrentStatusBy"].ToString() : null,
-                            Department = reader["Department"] != DBNull.Value ? reader["Department"].ToString() : null
+                            Id = Convert.ToInt32(reader["Id"]),
+                            Timestamp = reader["Timestamp"] == DBNull.Value ? null : Convert.ToDateTime(reader["Timestamp"]),
+                            Equipment = reader["Equipment"]?.ToString(),
+                            Requester = reader["Requester"]?.ToString(),
+                            RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
+                            Problem = reader["Problem"]?.ToString(),
+                            DownStartDateTime = reader["DownStartDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["DownStartDateTime"]),
+                            ClosedDateTime = reader["ClosedDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["ClosedDateTime"]),
+                            CloseBy = reader["CloseBy"]?.ToString(),
+                            CloseResult = reader["CloseResult"]?.ToString(),
+                            DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) ? reader.GetBoolean("downStatus") : false,
+                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
+                            HoldStatus = reader["HoldStatus"] == DBNull.Value ? null : Convert.ToBoolean(reader["HoldStatus"]),
+                            HoldReason = reader["HoldReason"]?.ToString(),
+                            HoldResult = reader["HoldResult"]?.ToString(),
+                            HoldBy = reader["HoldBy"]?.ToString(),
+                            FileAddress = reader["FileAddress"]?.ToString(),
+                            MaintenanceRequestFile1 = reader["MaintenanceRequestFile1"] == DBNull.Value ? null : reader["MaintenanceRequestFile1"].ToString(),
+                            StatusHistory = reader["StatusHistory"]?.ToString(),
+                            CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
+                            Department = reader["Department"]?.ToString(),
+                            Status = reader["Status"]?.ToString(),
+                            StatusDesc = reader["StatusDesc"]?.ToString()
                         });
                     }
                 }
@@ -390,22 +347,22 @@ Problem: {request.Problem}"
         }
 
 
-        public async Task<bool> UpdateMediaLinkFile(int id, string imagePath)
+        public async Task<bool> UpdateFile1Link(int id, string imagePath)
         {
             try
             {
                 using (var connection = new MySqlConnection(_connectionString))
                 {
-                    string query = "UPDATE maintenance SET FileAddressImageLink = @imagePath WHERE Id = @id";
+                    string query = "UPDATE maintenance SET MaintenanceRequestFile1 = @MaintenanceRequestFile1 WHERE Id = @id";
 
                     await connection.OpenAsync();
                     using (var command = new MySqlCommand(query, connection))
                     {
-                        Console.WriteLine($"[DEBUG] Updating Media Link File for ID: {id}");
+                        Console.WriteLine($"[DEBUG] Updating MaintenanceRequestFile1 for ID: {id}");
                         Console.WriteLine($"[DEBUG] File Path: {imagePath}");
 
                         // Ensure NULL safety
-                        command.Parameters.AddWithValue("@imagePath", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
+                        command.Parameters.AddWithValue("@MaintenanceRequestFile1", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
                         command.Parameters.AddWithValue("@id", id);
 
                         int rowsAffected = await command.ExecuteNonQueryAsync();
@@ -417,7 +374,7 @@ Problem: {request.Problem}"
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERROR] UpdateMediaLinkFile failed: {ex.Message}");
+                Console.WriteLine($"[ERROR] UpdateMaintenanceRequestFile1 failed: {ex.Message}");
                 return false;
             }
         }
@@ -458,6 +415,25 @@ Problem: {request.Problem}"
             }
         }
 
+        public async Task<string> SaveFileAsync(int requestId, IFormFile file)
+        {
+            // Construct a folder path (example: a network share or local folder):
+            var uploadsFolder = Path.Combine("C:", "Uploads");
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            var fileExtension = Path.GetExtension(file.FileName);
+            var fileName = $"MaintenanceRequestFile1_{requestId}{fileExtension}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Return the physical path or any path you want to store
+            return filePath;
+        }
 
 
     }

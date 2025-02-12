@@ -18,7 +18,7 @@ namespace DashboardReportApp.Services
         public List<string> GetAllOperatorNames()
         {
             var operatorNames = new List<string>();
-            string query = "SELECT name FROM operators"; // Adjust column/table as needed
+            string query = "SELECT name FROM operators order by name"; // Adjust column/table as needed
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -66,8 +66,7 @@ namespace DashboardReportApp.Services
                             HoldReason = reader["HoldReason"]?.ToString(),
                             HoldResult = reader["HoldResult"]?.ToString(),
                             HoldBy = reader["HoldBy"]?.ToString(),
-                            FileAddress = reader["FileAddress"]?.ToString(),
-                            FileAddressMediaLink = reader["fileAddressImageLink"] == DBNull.Value ? null : reader["fileAddressImageLink"].ToString(),
+                            MaintenanceRequestFile2 = reader["MaintenanceRequestFile2"] == DBNull.Value ? null : reader["MaintenanceRequestFile2"].ToString(),
                             StatusHistory = reader["StatusHistory"]?.ToString(),
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString(),
@@ -95,7 +94,7 @@ namespace DashboardReportApp.Services
             Problem = @Problem,
             ClosedDateTime = @ClosedDateTime,
             HourMeter = @HourMeter,
-            FileAddress = @FileAddress,
+            MaintenanceRequestFile2 = @MaintenanceRequestFile2,
             Department = @Department,
             StatusDesc = @StatusDesc, 
             Status = @Status
@@ -112,7 +111,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@RequestedDate", model.RequestedDate ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Problem", model.Problem);
                     command.Parameters.AddWithValue("@ClosedDateTime", model.ClosedDateTime ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@FileAddress", model.FileAddress ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@MaintenanceRequestFile2", model.MaintenanceRequestFile2 ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@StatusDesc", model.StatusDesc);
                     command.Parameters.AddWithValue("@Status", model.Status);
@@ -124,6 +123,37 @@ namespace DashboardReportApp.Services
                     return rowsAffected > 0;
                 }
             }
+        }
+        // New: Get a distinct list of equipment values.
+        public async Task<List<string>> GetEquipmentListAsync()
+        {
+            var equipmentList = new List<string>();
+            string query = @"SELECT equipment, name, brand, description 
+                     FROM equipment 
+                     WHERE status IS NULL OR status != 'obsolete' 
+                     ORDER BY equipment";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        // Combine equipment details into a single string
+                        string equipment = reader["equipment"].ToString();
+                        string name = reader["name"] != DBNull.Value ? reader["name"].ToString() : "N/A";
+                        string brand = reader["brand"] != DBNull.Value ? reader["brand"].ToString() : "N/A";
+                        string description = reader["description"] != DBNull.Value ? reader["description"].ToString() : "N/A";
+
+                        // Format: "EquipmentNumber - Name (Brand: Description)"
+                        equipmentList.Add($"{equipment} - {name} (Brand: {brand}, Description: {description})");
+                    }
+                }
+            }
+
+            return equipmentList;
         }
 
     }

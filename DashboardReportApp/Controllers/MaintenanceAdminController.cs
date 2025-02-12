@@ -18,17 +18,21 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpGet("AdminView")]
-        public IActionResult AdminView()
+        public async Task<IActionResult> AdminView()
         {
             Console.WriteLine("AdminView was called");
 
             var requests = _adminService.GetAllRequests();
-            var operatorNames = _adminService.GetAllOperatorNames(); // from step #2
+            var operatorNames = _adminService.GetAllOperatorNames();
+            // NEW: Get the equipment list from the maintenance table
+            var equipmentList = _adminService.GetEquipmentListAsync();
+
             if (requests == null)
             {
                 Console.WriteLine("Requests are null!");
             }
             ViewBag.OperatorNames = operatorNames;
+            ViewData["EquipmentList"] = await _adminService.GetEquipmentListAsync();
             return View(requests);
         }
 
@@ -55,7 +59,7 @@ namespace DashboardReportApp.Controllers
                     }
 
                     var fileExtension = Path.GetExtension(FileUpload.FileName);
-                    var fileName = $"MaintenanceRequest_{model.Id}{fileExtension}";
+                    var fileName = $"MaintenanceRequestFile2_{model.Id}{fileExtension}";
                     var filePath = Path.Combine(uploadsFolder, fileName);
 
                     // 🔥 Check if the file already exists and delete it
@@ -69,7 +73,7 @@ namespace DashboardReportApp.Controllers
                         await FileUpload.CopyToAsync(stream);
                     }
 
-                    model.FileAddress = filePath; // Save new file path in database
+                    model.MaintenanceRequestFile2 = filePath; // Save new file path in database
                 }
 
                 // 1) Grab the old StatusDesc (already in model from form post, or re-fetch from DB if needed)
@@ -131,7 +135,7 @@ namespace DashboardReportApp.Controllers
             var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
             var destinationPath = Path.Combine(destinationDir, fileName);
 
-            if (!Directory.Exists(destinationDir))
+            if (!Directory.Exists(destinationDir)) 
             {
                 Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
             }

@@ -5,7 +5,7 @@ namespace DashboardReportApp.Models
 {
     public class MaintenanceRequestModel
     {
-        public int? Id { get; set; }
+        public int Id { get; set; }
 
         public DateTime? Timestamp { get; set; }
 
@@ -31,7 +31,8 @@ namespace DashboardReportApp.Models
         public string? HoldResult { get; set; }
         public string? HoldBy { get; set; }
         public string? FileAddress { get; set; }
-        public string? FileAddressMediaLink { get; set; }
+        public string? MaintenanceRequestFile1 { get; set; }
+        public string? MaintenanceRequestFile2 { get; set; }
         public string? StatusHistory { get; set; }
         public string? CurrentStatusBy { get; set; }
         public string? Department { get; set; }
