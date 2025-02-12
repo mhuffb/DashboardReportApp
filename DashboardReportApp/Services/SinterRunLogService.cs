@@ -11,7 +11,7 @@ public class SinterRunLogService
 {
     private readonly string _connectionStringMySQL;
     private readonly string _connectionStringDataflex;
-    private string datatable = "sinterruntest";
+    private string datatable = "sinterrun";
 
     public SinterRunLogService(IConfiguration configuration)
     {
