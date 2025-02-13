@@ -87,7 +87,6 @@ main {
     width: 100% !important;
     max-width: 100% !important;
     overflow-x: auto;
-    display: block;
     
 }
 
@@ -102,7 +101,6 @@ main {
     table-layout: auto !important;
     max-width: 100% !important;
     overflow-x: auto;
-    display: block;
 }
 .table th, .table td {
     border-color: goldenrod !important;
@@ -136,14 +134,12 @@ form {
 
 /* Ensure table styling */
 .custom-table {
-    width: 100%;
     border-collapse: collapse;
     background-color: black;
     color: goldenrod;
     width: 100% !important;
     max-width: 100% !important;
     overflow-x: auto;
-    display: block;
 }
 
     /* Table Header */

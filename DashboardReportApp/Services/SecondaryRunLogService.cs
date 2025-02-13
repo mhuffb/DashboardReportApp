@@ -2,31 +2,98 @@
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Threading.Tasks;
 
 namespace DashboardReportApp.Services
 {
-    public interface ISecondaryRunLogService
+    public class SecondaryRunLogService
     {
-        Task LoginAsync(string operatorName, string machine, string runNumber, string op); // For CreateRun
-        Task LoginAsync(string operatorName, string machine, string runNumber); // For Login
-        Task LogoutAsync(int pcs, int scrapMach, int scrapNonMach, string notes, int selectedRunId);
-        Task<IEnumerable<SecondaryRunLogModel>> GetActiveRunsAsync();
-        Task<SecondaryRunLogModel> GetRunByIdAsync(int id);
-        Task<IEnumerable<string>> GetOperatorsAsync();
-        Task<IEnumerable<string>> GetMachinesAsync();
-    }
-
-    public class SecondaryRunLogService : ISecondaryRunLogService
-    {
-        private const string ConnectionString = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
+        private const string _connectionStringMySQL = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
         private const string UpdateTable = "secondaryrun";
+
+        public async Task<List<SecondaryRunLogModel>> GetAllRunsAsync()
+        {
+            var allRuns = new List<SecondaryRunLogModel>();
+
+            const string query = @"
+                SELECT id, timestamp, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                FROM secondaryrun
+                ORDER BY id DESC";
+
+            await using var connection = new MySqlConnection(_connectionStringMySQL);
+            await connection.OpenAsync();
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                allRuns.Add(new SecondaryRunLogModel
+                {
+                    Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
+                    Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+                    Run = reader["run"]?.ToString() ?? "N/A",
+                    Part = reader["part"]?.ToString() ?? "N/A",
+                    Machine = reader["machine"]?.ToString(),
+                    Operator = reader["operator"]?.ToString(),
+                    Op = reader["op"]?.ToString(),
+                    Pcs = reader.IsDBNull(reader.GetOrdinal("pcs")) ? 0 : reader.GetInt32("pcs"),
+                    ScrapMach = reader.IsDBNull(reader.GetOrdinal("scrapMach")) ? 0 : reader.GetInt32("scrapMach"),
+                    ScrapNonMach = reader.IsDBNull(reader.GetOrdinal("scrapNonMach")) ? 0 : reader.GetInt32("scrapNonMach"),
+                    StartDateTime = reader.IsDBNull(reader.GetOrdinal("startDateTime")) ? default(DateTime) : reader.GetDateTime("startDateTime"),
+                    EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime")) ? (DateTime?)null : reader.GetDateTime("endDateTime"),
+                    Notes = reader["notes"]?.ToString(),
+                    Appearance = reader["appearance"]?.ToString(),
+                });
+            }
+
+            return allRuns;
+        }
+
+        public async Task<List<SecondaryRunLogModel>> GetLoggedInRunsAsync()
+        {
+            var loggedInRuns = new List<SecondaryRunLogModel>();
+
+            const string query = @"
+                SELECT id, timestamp, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                FROM secondaryrun
+                WHERE open = 1";
+
+            await using var connection = new MySqlConnection(_connectionStringMySQL);
+            await connection.OpenAsync();
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                loggedInRuns.Add(new SecondaryRunLogModel
+                {
+                    Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
+                    Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+                    Run = reader["run"]?.ToString() ?? "N/A",
+                    Part = reader["part"]?.ToString() ?? "N/A",
+                    Machine = reader["machine"]?.ToString(),
+                    Operator = reader["operator"]?.ToString(),
+                    Op = reader["op"]?.ToString(),
+                    Pcs = reader.IsDBNull(reader.GetOrdinal("pcs")) ? 0 : reader.GetInt32("pcs"),
+                    ScrapMach = reader.IsDBNull(reader.GetOrdinal("scrapMach")) ? 0 : reader.GetInt32("scrapMach"),
+                    ScrapNonMach = reader.IsDBNull(reader.GetOrdinal("scrapNonMach")) ? 0 : reader.GetInt32("scrapNonMach"),
+                    StartDateTime = reader.IsDBNull(reader.GetOrdinal("startDateTime")) ? default(DateTime) : reader.GetDateTime("startDateTime"),
+                    EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime")) ? (DateTime?)null : reader.GetDateTime("endDateTime"),
+                    Notes = reader["notes"]?.ToString(),
+                    Appearance = reader["appearance"]?.ToString(),
+                });
+            }
+
+            return loggedInRuns;
+        }
+
         public async Task<IEnumerable<string>> GetOperatorsAsync()
         {
             var operators = new List<string>();
             string query = "SELECT name FROM operators WHERE dept = 'secondary' ORDER BY name";
 
-            using (var connection = new MySqlConnection(ConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -49,7 +116,7 @@ namespace DashboardReportApp.Services
             var machines = new List<string>();
             string query = "SELECT equipment FROM equipment WHERE department = 'secondary' ORDER BY equipment";
 
-            using (var connection = new MySqlConnection(ConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -66,49 +133,17 @@ namespace DashboardReportApp.Services
 
             return machines;
         }
-        public async Task<IEnumerable<SecondaryRunLogModel>> GetActiveRunsAsync()
-        {
-            var activeRuns = new List<SecondaryRunLogModel>();
-            string query = $"SELECT id, timestamp, run, part, op, operator, startDateTime, machine, notes FROM secondaryrun WHERE endDateTime IS NULL";
 
-            using (var connection = new MySqlConnection(ConnectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            activeRuns.Add(new SecondaryRunLogModel
-                            {
-                                Id = Convert.ToInt32(reader["id"]),
-                                Timestamp = Convert.ToDateTime(reader["timestamp"]),
-                                Run = reader["run"].ToString(),
-                                Part = reader["part"].ToString(),
-                                Op = reader["op"] != DBNull.Value ? reader["op"].ToString() : null,
-                                Operator = reader["operator"].ToString(),
-                                StartDateTime = Convert.ToDateTime(reader["startDateTime"]),
-                                Machine = reader["machine"].ToString(),
-                                Notes = reader["notes"] != DBNull.Value ? reader["notes"].ToString() : null
-                            });
-                        }
-                    }
-                }
-            }
-            return activeRuns;
-        }
-
-
-        public async Task LoginAsync(string operatorName, string machine, string runNumber, string op)
+       
+        public async Task HandleLoginAsync(string operatorName, string machine, string runNumber, string op)
         {
             string part = await LookupPartNumberAsync(runNumber); // Use helper method to fetch the part
 
-            string query = $@"INSERT INTO secondaryrun 
-                      (run, operator, machine, op, part, startDateTime) 
-                      VALUES (@run, @operator, @machine, @op, @part, @startDateTime)";
+            string query = @"INSERT INTO secondaryrun 
+                      (run, operator, machine, op, part, startDateTime, open) 
+                      VALUES (@run, @operator, @machine, @op, @part, @startDateTime, 1)";
 
-            using (var connection = new MySqlConnection(ConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -116,8 +151,8 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@run", runNumber);
                     command.Parameters.AddWithValue("@operator", operatorName);
                     command.Parameters.AddWithValue("@machine", machine);
-                    command.Parameters.AddWithValue("@op", string.IsNullOrEmpty(op) ? DBNull.Value : op);
-                    command.Parameters.AddWithValue("@part", string.IsNullOrEmpty(part) ? DBNull.Value : part);
+                    command.Parameters.AddWithValue("@op", string.IsNullOrEmpty(op) ? DBNull.Value : (object)op);
+                    command.Parameters.AddWithValue("@part", string.IsNullOrEmpty(part) ? DBNull.Value : (object)part);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
 
                     await command.ExecuteNonQueryAsync();
@@ -130,7 +165,7 @@ namespace DashboardReportApp.Services
             string query = "SELECT part FROM schedule WHERE run = @run";
             string part = null;
 
-            using (var connection = new MySqlConnection(ConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -149,32 +184,12 @@ namespace DashboardReportApp.Services
             return part;
         }
 
-
-        // Overload for Login
-        public async Task LoginAsync(string operatorName, string machine, string runNumber)
+      
+        public async Task HandleLogoutAsync(int pcs, int scrapMach, int scrapNonMach, string notes, int selectedRunId)
         {
-            string query = $"INSERT INTO secondaryrun (run, operator, machine, startDateTime) VALUES (@run, @operator, @machine, @startDateTime)";
+            string query = $"UPDATE {UpdateTable} SET pcs = @pcs, scrapMach = @scrapMach, scrapNonMach = @scrapNonMach, notes = @notes, endDateTime = @endDateTime, open = 0 WHERE id = @id";
 
-            using (var connection = new MySqlConnection(ConnectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@run", runNumber);
-                    command.Parameters.AddWithValue("@operator", operatorName);
-                    command.Parameters.AddWithValue("@machine", machine);
-                    command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
-
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
-        }
-
-        public async Task LogoutAsync(int pcs, int scrapMach, int scrapNonMach, string notes, int selectedRunId)
-        {
-            string query = $"UPDATE {UpdateTable} SET pcs = @pcs, scrapMach = @scrapMach, scrapNonMach = @scrapNonMach, notes = @notes, endDateTime = @endDateTime WHERE id = @id";
-
-            using (var connection = new MySqlConnection(ConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -190,34 +205,7 @@ namespace DashboardReportApp.Services
                 }
             }
         }
-        public async Task<SecondaryRunLogModel> GetRunByIdAsync(int id)
-        {
-            string query = $"SELECT * FROM secondaryrun WHERE id = @id";
-            SecondaryRunLogModel run = null;
 
-            using (var connection = new MySqlConnection(ConnectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@id", id);
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        if (await reader.ReadAsync())
-                        {
-                            run = new SecondaryRunLogModel
-                            {
-                                Id = id,
-                                Part = reader["part"].ToString(),
-                                Machine = reader["machine"].ToString(),
-                                StartDateTime = Convert.ToDateTime(reader["startDateTime"]),
-                                Operator = reader["operator"].ToString()
-                            };
-                        }
-                    }
-                }
-            }
-            return run;
-        }
+       
     }
 }

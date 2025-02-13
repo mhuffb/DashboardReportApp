@@ -7,85 +7,46 @@ namespace DashboardReportApp.Controllers
 {
     public class SecondaryRunLogController : Controller
     {
-        private readonly ISecondaryRunLogService _secondaryRunLogService;
+        private readonly SecondaryRunLogService _secondaryRunLogService;
 
-        public SecondaryRunLogController(ISecondaryRunLogService secondaryRunLogService)
+        public SecondaryRunLogController(SecondaryRunLogService secondaryRunLogService)
         {
             _secondaryRunLogService = secondaryRunLogService;
         }
 
+
+        [HttpGet]
         public async Task<IActionResult> Index()
-        {
-            var operators = await _secondaryRunLogService.GetOperatorsAsync();
-            var machines = await _secondaryRunLogService.GetMachinesAsync();
-            var openRuns = await _secondaryRunLogService.GetActiveRunsAsync();
-
-            var viewModel = new SecondaryRunLogModel
             {
-                Operators = operators,
-                Machines = machines,
-                OpenRuns = openRuns
-            };
+            ViewBag.Operators = await _secondaryRunLogService.GetOperatorsAsync();
+            ViewBag.Machines = await _secondaryRunLogService.GetMachinesAsync();
+            ViewBag.OpenRuns = await _secondaryRunLogService.GetLoggedInRunsAsync();
+            
 
-            return View(viewModel);
+            // Fetch all runs (instead of open runs)
+            var allRuns = await _secondaryRunLogService.GetAllRunsAsync();
+
+            
+            // Return all runs as the model for React table
+            return View(allRuns);
         }
-
-
-        public IActionResult Login()
-        {
-            return View();
-        }
+        
 
         [HttpPost]
-        public async Task<IActionResult> Login(string operatorName, string machine, string runNumber)
+        public async Task<IActionResult> Login(string runNumber, string operatorName, string machine, string op)
         {
-            await _secondaryRunLogService.LoginAsync(operatorName, machine, runNumber);
+            await _secondaryRunLogService.HandleLoginAsync(operatorName, machine, runNumber, op);
+            return RedirectToAction("Index");
+        }
+       
+
+        [HttpPost]
+        public async Task<IActionResult> Logout(int id, int pcs, int scrapMach, int scrapNonMach, string notes)
+        {
+            await _secondaryRunLogService.HandleLogoutAsync(pcs, scrapMach, scrapNonMach, notes, id);
             return RedirectToAction("Index");
         }
 
-        public IActionResult Logout()
-        {
-            return View();
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> Logout(int pcs, int scrapMach, int scrapNonMach, string notes, int selectedRunId)
-        {
-            await _secondaryRunLogService.LogoutAsync(pcs, scrapMach, scrapNonMach, notes, selectedRunId);
-            return RedirectToAction("Index");
-        }
-        public async Task<IActionResult> OpenRuns()
-        {
-            var openRuns = await _secondaryRunLogService.GetActiveRunsAsync();
-            return View(openRuns);
-        }
-
-        public IActionResult CreateRun()
-        {
-            return View();
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> CreateRun(string runNumber, string operatorName, string machine, string op)
-        {
-            await _secondaryRunLogService.LoginAsync(operatorName, machine, runNumber, op);
-            return RedirectToAction("Index");
-        }
-
-
-        [HttpPost]
-        public async Task<IActionResult> CloseRun(int id, int pcs, int scrapMach, int scrapNonMach, string notes)
-        {
-            await _secondaryRunLogService.LogoutAsync(pcs, scrapMach, scrapNonMach, notes, id);
-            return RedirectToAction("Index");
-        }
-
-
-        public async Task<IActionResult> CloseRun(int id)
-        {
-            var run = await _secondaryRunLogService.GetRunByIdAsync(id); // Fetch run details
-            return View(run);
-        }
 
 
     }
