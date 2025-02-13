@@ -4,22 +4,27 @@
 @{
     ViewData["Title"] = "Press Run Log";
 
-    // 1) Operators from the DB
+    // Operators for the Login form
     var operators = ViewData["Operators"] as List<string> ?? new List<string>();
 
-    // 2) Dictionary of (part, run) => machine from presssetup
+    // Dictionary of (part, run) => machine from presssetup
     var openParts = ViewData["OpenParts"] as Dictionary<(string, string), string>
                     ?? new Dictionary<(string, string), string>();
 
-    // 3) The "open" runs from ViewBag (open=1)
+    // "Open runs" from ViewBag - typically rows with endDateTime=null
     var openRuns = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
                    ?? new List<DashboardReportApp.Models.PressRunLogModel>();
 }
 
+/* ----------------------------------------------------------
+   1) Login / Start Molding for Main Run
+   This form collects operator, part, machine, runNumber,
+   and inserts a new main run row (skidcount=0)
+   with pcsStart from the device.
+---------------------------------------------------------- */
 <div class="container-fluid px-3">
     <h1 class="text-center mb-4">Press Run Log</h1>
 
-    <!-- Start Molding Form -->
     <h2 class="text-center">Start Molding</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
@@ -28,9 +33,9 @@
                     <label for="Operator" class="form-label">Operator</label>
                     <select id="Operator" name="operatorName" class="form-control" required>
                         <option value="">Select an Operator</option>
-                        @foreach (var operatorName in operators)
+                        @foreach (var op in operators)
                         {
-                            <option value="@operatorName">@operatorName</option>
+                            <option value="@op">@op</option>
                         }
                     </select>
                 </div>
@@ -48,19 +53,9 @@
                             </option>
                         }
                     </select>
-
+                    <!-- hidden field for runNumber -->
                     <input type="hidden" id="RunNumber" name="runNumber" />
-
-
-
                 </div>
-
-                @* 
-                   HIDDEN input for runNumber. 
-                   This is populated by JavaScript so the server 
-                   still receives a "runNumber" on POST.
-                 *@
-                <input type="hidden" id="RunNumber" name="runNumber" />
 
                 <div class="mb-3">
                     <label for="Machine" class="form-label">Machine</label>
@@ -74,23 +69,31 @@
 </div>
 
 <script>
-        function updateHiddenRunAndMachine() {
-        const partSelect = document.getElementById("Part");
-        const runHidden = document.getElementById("RunNumber");
+    // Populate runNumber and Machine on part selection
+    function updateHiddenRunAndMachine() {
+        const partSelect   = document.getElementById("Part");
+        const runHidden    = document.getElementById("RunNumber");
         const machineInput = document.getElementById("Machine");
-        const selectedOption = partSelect.options[partSelect.selectedIndex];
-        if (!selectedOption) return;
 
-        const selectedRun = selectedOption.getAttribute("data-run") || "";
-        const selectedMachine = selectedOption.getAttribute("data-machine") || "";
+        const selectedOpt  = partSelect.options[partSelect.selectedIndex];
+        if (!selectedOpt) return;
 
-        runHidden.value = selectedRun;             // <--- populates hidden field
-        machineInput.value = selectedMachine;      // <--- populates machine field
+        const selectedRun     = selectedOpt.getAttribute("data-run")     || "";
+        const selectedMachine = selectedOpt.getAttribute("data-machine") || "";
+
+        runHidden.value    = selectedRun;
+        machineInput.value = selectedMachine;
     }
-
 </script>
 
-<!-- Open Mold Runs -->
+
+<!-- ----------------------------------------------------------
+     2) Table of Open Mold Runs
+     Each run row includes:
+       - "Logout" if skidcount==0
+       - "End Run" button => opens a modal to enter scrap, notes
+       - "Start Skid" if you want to do skid logic on the main run
+---------------------------------------------------------- -->
 <h2 class="text-center mb-4">Open Mold Runs</h2>
 <div class="card shadow mb-4">
     <div class="card-body">
@@ -105,26 +108,72 @@
                         <th>Operator</th>
                         <th>Machine</th>
                         <th>Start Time</th>
-                        <th>Action</th>
+                        <th>Actions</th>
+                        <th>Skid Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var run in openRuns)
+                    @foreach (var record in openRuns)
                     {
                         <tr>
-                            <td>@run.Id</td>
-                            <td>@run.Timestamp</td>
-                            <td>@run.Part</td>
-                            <td>@run.Run</td>
-                            <td>@run.Operator</td>
-                            <td>@run.Machine</td>
-                            <td>@run.StartDateTime</td>
-                            
+                            <td>@record.Id</td>
+                            <td>@record.Timestamp</td>
+                            <td>@record.Part</td>
+                            <td>@record.Run</td>
+                            <td>@record.Operator</td>
+                            <td>@record.Machine</td>
+                            <td>@record.StartDateTime</td>
+
+                            <!-- Main run actions if skidCount==0.
+                                 Otherwise "N/A."
+                            -->
                             <td>
-                                <button class="btn btn-danger btn-sm"
-                                        onclick="openStopMoldingModal('@run.Id', '@run.Part', '@run.StartDateTime')">
-                                    Stop Molding
-                                </button>
+                                @if (record.SkidCount == 0)
+                                {
+                                    <!-- Logout form (simple) -->
+                                    <form method="post" action="/PressRunLog/Logout" style="display:inline;">
+                                        <input type="hidden" name="runId" value="@record.Id" />
+                                        <input type="hidden" name="scrap" value="0" />
+                                        <input type="hidden" name="notes" value="" />
+                                        <button type="submit" class="btn btn-danger btn-sm">Logout</button>
+                                    </form>
+
+                                    <span><span>&nbsp;</span></span>
+
+                                    <!-- "End Run" => open a modal so user can input scrap, notes -->
+                                    <button type="button"
+                                            class="btn btn-secondary btn-sm"
+                                            onclick="openEndRunModal('@record.Id', '@record.Part')">
+                                        End Run
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span>N/A</span>
+                                }
+                            </td>
+
+                            <!--
+                                Skid Action: only for the main run row (skidCount==0).
+                                The service can handle "start skid" or "end previous skid" behind the scenes.
+                            -->
+                            <td>
+                                @if (record.SkidCount == 0)
+                                {
+                                    <form method="post" action="/PressRunLog/StartSkid" style="display:inline;">
+                                        <input type="hidden" name="runId" value="@record.Id" />
+                                        <input type="hidden" name="operatorName" value="@record.Operator" />
+                                        <input type="hidden" name="part" value="@record.Part" />
+                                        <input type="hidden" name="machine" value="@record.Machine" />
+                                        <input type="hidden" name="run" value="@record.Run" />
+                                        <input type="hidden" name="skidcount" value="@record.SkidCount" />
+                                        <button type="submit" class="btn btn-primary btn-sm">Start Skid</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span>N/A</span>
+                                }
                             </td>
                         </tr>
                     }
@@ -134,7 +183,9 @@
     </div>
 </div>
 
-<!-- Full List of Records (React Table) -->
+<!-- ----------------------------------------------------------
+     3) React Table of All Runs
+---------------------------------------------------------- -->
 <h2 class="text-center mt-4">All Mold Run Records</h2>
 <div class="card shadow mb-4">
     <div class="card-body">
@@ -152,27 +203,23 @@
         const container = document.getElementById("myReactPressRunTableRoot");
         if (!container) return;
 
-        // Get JSON data from the Razor model
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData); // List<PressRunLogModel>
-
-        // Define columns for the table (same as C# PressRunLogModel)
         const columns = [
-            { key: "Id", label: "ID" },
-            { key: "Timestamp", label: "Timestamp" },
-            { key: "Part", label: "Part" },
-            { key: "Run", label: "Run" },
-            { key: "Operator", label: "Operator" },
-            { key: "Machine", label: "Machine" },
-            { key: "StartDateTime", label: "Start Time" },
-            { key: "EndDateTime", label: "End Time" },
-            { key: "PcsStart", label: "Pcs Start" },
-            { key: "PcsEnd", label: "Pcs End" },
-            { key: "Scrap", label: "Scrap" },
-            { key: "Notes", label: "Notes" }
+            { key: "Id",           label: "ID" },
+            { key: "Timestamp",    label: "Timestamp" },
+            { key: "Part",         label: "Part" },
+            { key: "Run",          label: "Run" },
+            { key: "Operator",     label: "Operator" },
+            { key: "Machine",      label: "Machine" },
+            { key: "StartDateTime",label: "Start Time" },
+            { key: "EndDateTime",  label: "End Time" },
+            { key: "PcsStart",     label: "Pcs Start" },
+            { key: "PcsEnd",       label: "Pcs End" },
+            { key: "Scrap",        label: "Scrap" },
+            { key: "Notes",        label: "Notes" }
         ];
 
-        // Render the React table
         if (window.renderMyDataTable) {
             window.renderMyDataTable("myReactPressRunTableRoot", data, columns, true);
         } else {
@@ -181,52 +228,58 @@
     });
 </script>
 
-<!-- Stop Molding Modal -->
-<div id="stopMoldingModal" class="modal fade" tabindex="-1">
+<!-- ----------------------------------------------------------
+     4) End Run Modal
+     Prompts user for scrap, notes. Then posts to /PressRunLog/EndRun
+     The service method end run => ends last skid => ends main run
+---------------------------------------------------------- -->
+<div id="endRunModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Stop Molding</h5>
-                <button type="button" class="btn-close" onclick="closeModal()"></button>
+                <h5 class="modal-title">End Run</h5>
+                <button type="button" class="btn-close" onclick="closeEndRunModal()"></button>
             </div>
             <div class="modal-body">
-                <form id="stopMoldingForm" method="post" action="/PressRunLog/Logout">
-                    <input type="hidden" id="modalPart" name="part">
-                    <input type="hidden" id="modalStartDateTime" name="startDateTime">
-                    <input type="hidden" id="modalEndDateTime" name="endDateTime"
-                           value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")" />
+                <form id="endRunForm" method="post" action="/PressRunLog/EndRun">
+                    <input type="hidden" id="endRunRunId" name="runId" />
+                    <input type="hidden" id="endRunPart" name="part" />
 
                     <div class="mb-3">
-                        <label for="modalScrap" class="form-label">Scrap</label>
-                        <input type="number" id="modalScrap" name="scrap" class="form-control" required />
+                        <label for="endRunScrap" class="form-label">Scrap</label>
+                        <input type="number" id="endRunScrap" name="scrap"
+                               class="form-control" value="0" min="0" />
                     </div>
 
                     <div class="mb-3">
-                        <label for="modalNotes" class="form-label">Notes</label>
-                        <textarea id="modalNotes" name="notes" class="form-control text-area-large"></textarea>
+                        <label for="endRunNotes" class="form-label">Notes</label>
+                        <textarea id="endRunNotes" name="notes" class="form-control"></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" form="stopMoldingForm" class="btn btn-danger">Confirm Stop</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEndRunModal()">Cancel</button>
+                <!-- Confirm posts form -->
+                <button type="submit" form="endRunForm" class="btn btn-primary">Confirm End Run</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    function openStopMoldingModal(runId, part, startDateTime) {
-        document.getElementById("modalPart").value = part;
-        document.getElementById("modalStartDateTime").value = startDateTime;
+    function openEndRunModal(runId, part) {
+        document.getElementById("endRunRunId").value = runId;
+        document.getElementById("endRunPart").value  = part;
+        document.getElementById("endRunScrap").value = "0";
+        document.getElementById("endRunNotes").value = "";
 
-        const modal = new bootstrap.Modal(document.getElementById("stopMoldingModal"));
+        const modal = new bootstrap.Modal(document.getElementById("endRunModal"));
         modal.show();
     }
 
-    function closeModal() {
-        const modalElement = document.getElementById("stopMoldingModal");
-        const modalInstance = bootstrap.Modal.getInstance(modalElement);
-        modalInstance.hide();
+    function closeEndRunModal() {
+        const modalEl = document.getElementById("endRunModal");
+        const modal   = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
     }
 </script>

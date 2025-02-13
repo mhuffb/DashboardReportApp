@@ -18,6 +18,7 @@
         public int Scrap { get; set; }
         public string Notes { get; set; }
         public sbyte Open { get; set; }
+        public int SkidCount { get; set; }
     }
 
 
