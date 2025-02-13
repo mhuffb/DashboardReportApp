@@ -27,7 +27,7 @@ namespace DashboardReportApp.Services
             const string query = @"
                 SELECT id, timestamp, run, part, startDateTime, endDateTime, operator, machine, pcsStart, pcsEnd, scrap, notes
                 FROM pressrun
-                WHERE open = 1";
+                WHERE endDateTime is null";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -192,7 +192,7 @@ namespace DashboardReportApp.Services
         {
             const string query = @"
                 UPDATE pressrun
-                SET endDateTime = @endDateTime, scrap = @scrap, notes = @notes, open = 0
+                SET endDateTime = @endDateTime, scrap = @scrap, notes = @notes
                 WHERE part = @part AND startDateTime = @startDateTime";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);

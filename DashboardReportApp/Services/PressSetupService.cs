@@ -88,8 +88,7 @@ namespace DashboardReportApp.Services
                                      assistanceReq = @assistanceReq, 
                                      assistedBy = @assistedBy, 
                                      setupComp = @setupComp, 
-                                     notes = @notes,
-                                     open = @open
+                                     notes = @notes
                                  WHERE part = @part AND startDateTime = @startDateTime";
 
                 using (var command = new MySqlCommand(query, connection))
@@ -102,7 +101,6 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@notes", notes);
                     command.Parameters.AddWithValue("@part", partNumber);
                     command.Parameters.AddWithValue("@startDateTime", startDateTime);
-                    command.Parameters.AddWithValue("@open", 0);
 
                     await command.ExecuteNonQueryAsync();
                 }
