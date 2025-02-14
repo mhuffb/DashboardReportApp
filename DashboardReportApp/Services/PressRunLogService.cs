@@ -36,7 +36,7 @@ namespace DashboardReportApp.Services
             var dict = new Dictionary<string, string>
             {
                 { "2", "192.168.1.254" },
-                { "Machine102", "192.168.1.17" }
+                { "102", "192.168.1.17" }
                 // Add additional mappings as needed.
             };
             if (dict.TryGetValue(machine, out var ip))
