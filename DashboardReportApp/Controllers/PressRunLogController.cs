@@ -11,17 +11,17 @@ namespace DashboardReportApp.Controllers
     {
         private readonly PressRunLogService _pressRunLogService;
 
-        public PressRunLogController(PressRunLogService pressRunLogService)
+        public PressRunLogController(PressRunLogService service)
         {
-            _pressRunLogService = pressRunLogService;
+            _pressRunLogService = service;
         }
 
         [HttpGet]
         public async Task<IActionResult> Index()
         {
             ViewData["Operators"] = await _pressRunLogService.GetOperatorsAsync();
-            ViewData["Equipment"] = await _pressRunLogService.GetEquipmentAsync();
 
+            // openParts => for the Start Molding form
             var openParts = await _pressRunLogService.GetOpenPartsWithRunsAndMachinesAsync();
             ViewData["OpenParts"] = openParts ?? new Dictionary<(string, string), string>();
 
@@ -29,24 +29,28 @@ namespace DashboardReportApp.Controllers
             var allRuns = await _pressRunLogService.GetAllRunsAsync();
 
             ViewBag.OpenRuns = openRuns;
-            return View(allRuns);
+            return View(allRuns); // the Index.cshtml
+        }
+
+        // ==================== LOGIN =====================
+        // GET /PressRunLog/LoadLoginModal?machine=xxx
+        [HttpGet]
+        public async Task<IActionResult> LoadLoginModal(string machine)
+        {
+            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            ViewBag.Machine = machine;
+            ViewBag.DeviceCount = deviceCount ?? 0;
+
+            Console.WriteLine("DeviceCount: " + deviceCount);
+            Console.WriteLine("Machine: " + machine);
+            return PartialView("_LoginCountModal");
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(
-     string operatorName,
-     string part,
-     string machine,
-     string runNumber)
+        public async Task<IActionResult> ConfirmLogin(string operatorName, string part,
+                                              string machine, string runNumber,
+                                              int finalCount)
         {
-            if (string.IsNullOrEmpty(operatorName) ||
-                string.IsNullOrEmpty(part) ||
-                string.IsNullOrEmpty(machine))
-            {
-                ModelState.AddModelError("", "All fields are required for login.");
-                return RedirectToAction("Index");
-            }
-
             var formModel = new PressRunLogModel
             {
                 Operator = operatorName,
@@ -55,70 +59,65 @@ namespace DashboardReportApp.Controllers
                 Run = runNumber,
                 StartDateTime = DateTime.Now
             };
-
-            // Insert row and get the new ID
-            int newRunId = await _pressRunLogService.HandleLoginAsync(formModel);
-
-            // Store that ID in TempData or ViewBag so you can display it or pass to the next request.
-            TempData["NewRunId"] = newRunId;
-
+            await _pressRunLogService.HandleLoginWithCountAsync(formModel, finalCount);
             return RedirectToAction("Index");
         }
 
+        // ==================== START SKID =====================
+        // Updated action name and parameter names to match the modal form
         [HttpPost]
-        public async Task<IActionResult> Logout(
-     int runId,
-     int scrap,
-     string notes)
+        public async Task<IActionResult> StartSkid(int runId, string run, string part,
+                                            string machine, string operatorName,
+                                            int skidcount)
         {
-            // If runId is not found or 0, handle error
-            if (runId <= 0)
-            {
-                ModelState.AddModelError("", "Invalid runId for logout.");
-                return RedirectToAction("Index");
-            }
-
-            await _pressRunLogService.HandleLogoutAsync(runId, scrap, notes);
+            await _pressRunLogService.HandleStartSkidAsync(runId, run, part, operatorName, machine, skidcount);
             return RedirectToAction("Index");
         }
 
-
-
-        // Skid logic: Single “Start Skid” action that does both first skid and next skid.
-        [HttpPost]
-        public async Task<IActionResult> StartSkid(
-            int runId,
-            string run,
-            string part,
-            string operatorName,
-            string machine,
-            int skidcount)
+        // ==================== LOGOUT =====================
+        // GET /PressRunLog/LoadLogoutModal => user sees device count => typed final count
+        [HttpGet]
+        public async Task<IActionResult> LoadLogoutModal(int runId, string machine)
         {
-            await _pressRunLogService.HandleStartSkidAsync(
-                runId, run, part, operatorName, machine, skidcount);
-            return RedirectToAction("Index");
+            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            ViewBag.RunId = runId;
+            ViewBag.Machine = machine;
+            ViewBag.DeviceCount = deviceCount ?? 0;
+            return PartialView("_LogoutCountModal");
         }
 
         [HttpPost]
-        public async Task<IActionResult> EndRun(int runId, string part, int scrap, string notes)
+        public async Task<IActionResult> ConfirmLogout(int runId, int finalCount, int scrap, string notes)
         {
-            if (runId <= 0)
-            {
-                ModelState.AddModelError("", "Invalid runId for End Run.");
-                return RedirectToAction("Index");
-            }
-
-            await _pressRunLogService.HandleEndRunAsync(runId, part, scrap, notes);
+            // Update the main run record with endDateTime, pcsEnd, scrap, and notes.
+            await _pressRunLogService.HandleLogoutAsync(runId, finalCount, scrap, notes);
             return RedirectToAction("Index");
         }
 
-
-
-        // End skid by ID (optional).
-        [HttpPost]
-        public async Task<IActionResult> EndSkid(int skidRecordId)
+        // ==================== END RUN =====================
+        // GET /PressRunLog/LoadEndRunModal?runId=xxx&machine=xxx => partial
+        [HttpGet]
+        public async Task<IActionResult> LoadEndRunModal(int runId, string machine)
         {
-            await _pressRunLogService.HandleEndSkidAsync(skidRecordId);
+            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            ViewBag.RunId = runId;
+            ViewBag.Machine = machine;
+            ViewBag.DeviceCount = deviceCount ?? 0;
+            return PartialView("_EndRunCountModal");
+        }
+        [HttpGet]
+        public async Task<IActionResult> ApiGetDeviceCount(string machine)
+        {
+            // 1) Call your service to get device count or null
+            int? count = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            // 2) Return JSON
+            return Json(new { deviceCount = count ?? 0 });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes)
+        {
+            await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes);
             return RedirectToAction("Index");
         }
     }

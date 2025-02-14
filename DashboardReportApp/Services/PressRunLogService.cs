@@ -3,9 +3,10 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using System.Data.Common;
 using System.Data;
 
 namespace DashboardReportApp.Services
@@ -14,616 +15,437 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
 
-        public PressRunLogService(IConfiguration configuration)
+        public PressRunLogService(IConfiguration config)
         {
-            _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
+            _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
         }
 
-        #region Data Retrieval Methods
+        #region Device Mapping / Count
 
         /// <summary>
-        /// Returns all pressrun records where endDateTime is null.
-        /// These are considered "open" runs (including both the main run record and any skid records).
+        /// Maps a machine value to its device IP.
+        /// If the machine string already contains a dot, it is assumed to be an IP.
+        /// Otherwise, it is mapped using a dictionary.
         /// </summary>
-        public async Task<List<PressRunLogModel>> GetLoggedInRunsAsync()
+        private string MapMachineToIp(string machine)
         {
-            var loggedInRuns = new List<PressRunLogModel>();
-            const string query = @"
-                SELECT id, timestamp, run, part, startDateTime, endDateTime, 
-                       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
-                FROM pressrun
-                WHERE endDateTime IS NULL";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
+            if (machine.Contains("."))
             {
-                loggedInRuns.Add(new PressRunLogModel
-                {
-                    Id = reader.GetInt32("id"),
-                    Timestamp = reader.GetDateTime("timestamp"),
-                    Run = reader["run"]?.ToString() ?? "N/A",
-                    Part = reader["part"]?.ToString() ?? "N/A",
-                    StartDateTime = reader.GetDateTime("startDateTime"),
-                    EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                                   ? null
-                                   : reader.GetDateTime("endDateTime"),
-                    Operator = reader["operator"]?.ToString(),
-                    Machine = reader["machine"]?.ToString(),
-                    PcsStart = reader.IsDBNull(reader.GetOrdinal("pcsStart"))
-                                  ? 0
-                                  : reader.GetInt32("pcsStart"),
-                    PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd"))
-                                  ? 0
-                                  : reader.GetInt32("pcsEnd"),
-                    Scrap = reader.IsDBNull(reader.GetOrdinal("scrap"))
-                                  ? 0
-                                  : reader.GetInt32("scrap"),
-                    Notes = reader["notes"]?.ToString(),
-                    SkidCount = reader.IsDBNull(reader.GetOrdinal("skidcount"))
-                                  ? 0
-                                  : reader.GetInt32("skidcount")
-                });
+                return machine;
             }
-
-            return loggedInRuns;
+            var dict = new Dictionary<string, string>
+            {
+                { "2", "192.168.1.254" },
+                { "Machine102", "192.168.1.17" }
+                // Add additional mappings as needed.
+            };
+            if (dict.TryGetValue(machine, out var ip))
+            {
+                return ip;
+            }
+            throw new Exception($"No device found for machine: {machine}");
         }
 
         /// <summary>
-        /// Returns all pressrun records in descending order by ID (or startDateTime).
+        /// Attempts to query the device’s count.
+        /// Returns an integer if successful; otherwise, null.
+        /// This method uses multiple parsing strategies.
         /// </summary>
-        public async Task<List<PressRunLogModel>> GetAllRunsAsync()
+        public async Task<int?> TryGetDeviceCountOrNull(string machine)
         {
-            var allRuns = new List<PressRunLogModel>();
-            const string query = @"
-                SELECT id, timestamp, run, part, startDateTime, endDateTime, 
-                       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
-                FROM pressrun
-                ORDER BY id DESC";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
+            string deviceIp;
+            try
             {
-                allRuns.Add(new PressRunLogModel
+                deviceIp = MapMachineToIp(machine);
+            }
+            catch
+            {
+                return null;
+            }
+
+            try
+            {
+                using var httpClient = new HttpClient();
+                string url = $"http://{deviceIp}/api/picodata";
+                HttpResponseMessage response = await httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                string json = (await response.Content.ReadAsStringAsync()).Trim();
+                Console.WriteLine("Device JSON: " + json);
+
+                // 1. Try to parse as a plain integer.
+                if (int.TryParse(json, out int plainCount))
                 {
-                    Id = reader.GetInt32("id"),
-                    Timestamp = reader.GetDateTime("timestamp"),
-                    Run = reader["run"]?.ToString() ?? "N/A",
-                    Part = reader["part"]?.ToString() ?? "N/A",
-                    StartDateTime = reader.GetDateTime("startDateTime"),
-                    EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                                   ? null
-                                   : reader.GetDateTime("endDateTime"),
-                    Operator = reader["operator"]?.ToString(),
-                    Machine = reader["machine"]?.ToString(),
-                    PcsStart = reader.IsDBNull(reader.GetOrdinal("pcsStart"))
-                                  ? 0
-                                  : reader.GetInt32("pcsStart"),
-                    PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd"))
-                                  ? 0
-                                  : reader.GetInt32("pcsEnd"),
-                    Scrap = reader.IsDBNull(reader.GetOrdinal("scrap"))
-                                  ? 0
-                                  : reader.GetInt32("scrap"),
-                    Notes = reader["notes"]?.ToString(),
-                    SkidCount = reader.IsDBNull(reader.GetOrdinal("skidcount"))
-                                  ? 0
-                                  : reader.GetInt32("skidcount")
-                });
-            }
+                    return plainCount;
+                }
 
-            return allRuns;
-        }
-
-        public async Task<List<string>> GetOperatorsAsync()
-        {
-            var operators = new List<string>();
-            const string query = @"
-                SELECT name 
-                FROM operators 
-                WHERE dept = 'molding'
-                ORDER BY name";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                operators.Add(reader["name"]?.ToString() ?? "");
-            }
-            return operators;
-        }
-
-        public async Task<List<string>> GetEquipmentAsync()
-        {
-            var equipment = new List<string>();
-            const string query = @"
-                SELECT equipment 
-                FROM equipment 
-                WHERE name = 'press'
-                  AND (department = 'molding' OR department = 'sizing')
-                ORDER BY equipment";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                equipment.Add(reader["equipment"]?.ToString() ?? "");
-            }
-            return equipment;
-        }
-
-        public async Task<Dictionary<(string Part, string Run), string>> GetOpenPartsWithRunsAndMachinesAsync()
-        {
-            var partsWithDetails = new Dictionary<(string Part, string Run), string>();
-
-            const string query = @"
-                SELECT part, run, machine
-                FROM presssetup
-                WHERE open = 1
-                ORDER BY part, run";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                var part = reader["part"]?.ToString() ?? "";
-                var runVal = reader["run"]?.ToString() ?? "";
-                var machine = reader["machine"]?.ToString() ?? "";
-                if (!string.IsNullOrEmpty(part) && !string.IsNullOrEmpty(runVal))
+                // 2. If the JSON is quoted, trim the quotes.
+                if (json.StartsWith("\"") && json.EndsWith("\""))
                 {
-                    partsWithDetails[(part, runVal)] = machine;
+                    string trimmed = json.Trim('"');
+                    if (int.TryParse(trimmed, out int trimmedCount))
+                    {
+                        return trimmedCount;
+                    }
+                }
+
+                // 3. Parse the JSON using JsonDocument.
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                using var doc = JsonDocument.Parse(json);
+                JsonElement root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Number && root.TryGetInt32(out int numCount))
+                {
+                    return numCount;
+                }
+                else if (root.ValueKind == JsonValueKind.String)
+                {
+                    string s = root.GetString();
+                    if (int.TryParse(s, out int strCount))
+                    {
+                        return strCount;
+                    }
+                }
+                else if (root.ValueKind == JsonValueKind.Object)
+                {
+                    if (root.TryGetProperty("Count", out JsonElement countElement) ||
+                        root.TryGetProperty("count", out countElement))
+                    {
+                        if (countElement.ValueKind == JsonValueKind.Number && countElement.TryGetInt32(out int deviceCount))
+                        {
+                            return deviceCount;
+                        }
+                        else if (countElement.ValueKind == JsonValueKind.String &&
+                                 int.TryParse(countElement.GetString(), out int deviceCountFromStr))
+                        {
+                            return deviceCountFromStr;
+                        }
+                    }
                 }
             }
-            return partsWithDetails;
-        }
-
-        public async Task<int> HandleLoginAsync(PressRunLogModel formModel)
-        {
-            // 1. Map machine -> IP
-            string deviceIp = MapMachineToIp(formModel.Machine);
-
-            // 2. Query device for pcsStart
-            int deviceCountAtStart = await QueryDeviceForCountAsync(deviceIp);
-
-            // 3. Insert the main run record (skidcount=0)
-            const string query = @"
-        INSERT INTO pressrun
-            (operator, part, machine, run, startDateTime, open, skidcount, pcsStart)
-        VALUES
-            (@operator, @part, @machine, @run, @startDateTime, 1, 0, @pcsStart)";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var command = new MySqlCommand(query, connection);
-
-            command.Parameters.AddWithValue("@operator", formModel.Operator);
-            command.Parameters.AddWithValue("@part", formModel.Part);
-            command.Parameters.AddWithValue("@machine", formModel.Machine);
-            command.Parameters.AddWithValue("@run", formModel.Run);
-            command.Parameters.AddWithValue("@startDateTime", formModel.StartDateTime);
-            command.Parameters.AddWithValue("@pcsStart", deviceCountAtStart);
-
-            await command.ExecuteNonQueryAsync();
-
-            // Return the newly inserted auto-increment ID
-            int newId = (int)command.LastInsertedId;
-            return newId;
-        }
-
-
-        public async Task HandleLogoutAsync(int runId, int scrap, string notes)
-        {
-            // 1. Look up the existing run row so we know which machine to query.
-            DateTime startTime = DateTime.MinValue;
-            string machineValue = null;
-
-            const string selectQuery = @"
-        SELECT startDateTime, machine
-        FROM pressrun
-        WHERE id = @runId
-          AND skidcount=0
-        LIMIT 1";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var selectCmd = new MySqlCommand(selectQuery, connection);
-            selectCmd.Parameters.AddWithValue("@runId", runId);
-
-            await using var reader = await selectCmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            catch (Exception ex)
             {
-                startTime = reader.GetDateTime("startDateTime");
-                machineValue = reader["machine"]?.ToString();
+                Console.WriteLine("Error in TryGetDeviceCountOrNull: " + ex.Message);
             }
-            reader.Close();
-
-            if (string.IsNullOrEmpty(machineValue))
-            {
-                throw new Exception($"No main run record found with id={runId} for logout.");
-            }
-
-            // 2. Map machine -> IP
-            string deviceIp = MapMachineToIp(machineValue);
-
-            // 3. Query device => pcsEnd
-            int deviceCountAtEnd = await QueryDeviceForCountAsync(deviceIp);
-
-            // 4. Update that row: set endDateTime, pcsEnd, scrap, notes
-            DateTime endTime = DateTime.Now;
-
-            const string updateQuery = @"
-        UPDATE pressrun
-        SET endDateTime = @endTime,
-            pcsEnd      = @pcsEnd,
-            scrap       = @scrap,
-            notes       = @notes
-        WHERE id = @runId AND skidcount=0
-        LIMIT 1";
-
-            await using var updateCmd = new MySqlCommand(updateQuery, connection);
-            updateCmd.Parameters.AddWithValue("@endTime", endTime);
-            updateCmd.Parameters.AddWithValue("@pcsEnd", deviceCountAtEnd);
-            updateCmd.Parameters.AddWithValue("@scrap", scrap);
-            updateCmd.Parameters.AddWithValue("@notes", notes ?? "");
-            updateCmd.Parameters.AddWithValue("@runId", runId);
-
-            await updateCmd.ExecuteNonQueryAsync();
+            return null;
         }
 
+        #endregion
 
-        public async Task HandleEndRunAsync(int runId, string part, int scrap, string notes)
+        #region Main Run Logic (Login, Logout, EndRun)
+
+        public async Task HandleLoginWithCountAsync(PressRunLogModel formModel, int userCount)
         {
-            DateTime endTime = DateTime.Now;
+            const string insertMainRun = @"
+INSERT INTO pressrun 
+    (operator, part, machine, run, startDateTime, open, skidcount, pcsStart)
+VALUES 
+    (@operator, @part, @machine, @run, @startTime, 1, 0, @pcsStart)";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(insertMainRun, conn);
+            cmd.Parameters.AddWithValue("@operator", formModel.Operator);
+            cmd.Parameters.AddWithValue("@part", formModel.Part);
+            // Store the raw machine value.
+            cmd.Parameters.AddWithValue("@machine", formModel.Machine);
+            cmd.Parameters.AddWithValue("@run", formModel.Run);
+            cmd.Parameters.AddWithValue("@startTime", formModel.StartDateTime);
+            cmd.Parameters.AddWithValue("@pcsStart", userCount);
+            await cmd.ExecuteNonQueryAsync();
+        }
 
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
+        // Updated Logout: now accepts scrap and notes.
+        public async Task HandleLogoutAsync(int runId, int finalCount, int scrap, string notes)
+        {
+            const string sql = @"
+UPDATE pressrun
+SET endDateTime = NOW(),
+    pcsEnd = @finalCount,
+    scrap = @scrap,
+    notes = @notes
+WHERE id = @runId
+  AND skidcount = 0
+LIMIT 1";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@runId", runId);
+            cmd.Parameters.AddWithValue("@finalCount", finalCount);
+            cmd.Parameters.AddWithValue("@scrap", scrap);
+            cmd.Parameters.AddWithValue("@notes", notes ?? "");
+            await cmd.ExecuteNonQueryAsync();
+        }
 
-            // 1. Find the main run row (skidcount=0) by runId.
-            //    We need to retrieve its "machine" and "run" field to do further actions (like device query, or finding skids).
-            DateTime startTimeOfMainRun = DateTime.MinValue;
-            string runIdentifier = "";
-            string machineValue = "";
+        // Updated EndRun: ends any open skid record, then ends the main run.
+        public async Task HandleEndRunAsync(int runId, int finalCount, int scrap, string notes)
+        {
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // 1) Retrieve the run identifier from the main run record.
+            string mainRunIdentifier = "";
+            const string selectMainRun = @"
+SELECT run FROM pressrun
+WHERE id = @runId AND skidcount = 0
+LIMIT 1";
+            using (var selectCmd = new MySqlCommand(selectMainRun, conn))
             {
-                const string selectMainRun = @"
-            SELECT run, machine, startDateTime
-            FROM pressrun
-            WHERE id = @runId
-              AND skidcount=0
-            LIMIT 1";
-                await using var selectCmd = new MySqlCommand(selectMainRun, connection);
                 selectCmd.Parameters.AddWithValue("@runId", runId);
-
-                await using var reader = await selectCmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    runIdentifier = reader["run"]?.ToString() ?? "";
-                    machineValue = reader["machine"]?.ToString() ?? "";
-                    startTimeOfMainRun = reader.GetDateTime("startDateTime");
-                }
-                reader.Close();
+                object obj = await selectCmd.ExecuteScalarAsync();
+                if (obj != null)
+                    mainRunIdentifier = obj.ToString();
             }
 
-            if (string.IsNullOrEmpty(runIdentifier))
+            if (!string.IsNullOrEmpty(mainRunIdentifier))
             {
-                // No main run record found. Possibly handle error or just return.
-                throw new Exception($"Main run record not found for runId={runId}.");
-            }
-
-            // 2. End the last skid for that run if it is still open (max skidcount, endDateTime=null).
-            {
-                // We can query the device for final count for the skid.
-                // Map the machine -> IP
-                if (!string.IsNullOrEmpty(machineValue))
+                // 2) End any open skid record for this run and update its pcsEnd.
+                const string endSkidQuery = @"
+UPDATE pressrun
+SET endDateTime = NOW(),
+    pcsEnd = @finalCount
+WHERE run = @runIdentifier
+  AND skidcount > 0
+  AND endDateTime IS NULL";
+                using (var endSkidCmd = new MySqlCommand(endSkidQuery, conn))
                 {
-                    string deviceIp = MapMachineToIp(machineValue);
-                    int deviceCountSkidEnd = await QueryDeviceForCountAsync(deviceIp);
-
-                    // Use a JOIN to update the highest skid with null endDateTime
-                    const string endSkidQuery = @"
-                UPDATE pressrun p
-                JOIN (
-                    SELECT MAX(skidcount) AS maxSkid
-                    FROM pressrun
-                    WHERE run=@run
-                      AND skidcount>0
-                      AND endDateTime IS NULL
-                ) t ON p.run=@run
-                  AND p.skidcount = t.maxSkid
-                SET p.endDateTime=@endTime,
-                    p.pcsEnd=@pcsEnd
-                WHERE p.endDateTime IS NULL";
-                    await using var endSkidCmd = new MySqlCommand(endSkidQuery, connection);
-                    endSkidCmd.Parameters.AddWithValue("@run", runIdentifier);
-                    endSkidCmd.Parameters.AddWithValue("@endTime", endTime);
-                    endSkidCmd.Parameters.AddWithValue("@pcsEnd", deviceCountSkidEnd);
+                    endSkidCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
+                    endSkidCmd.Parameters.AddWithValue("@finalCount", finalCount);
                     await endSkidCmd.ExecuteNonQueryAsync();
                 }
             }
 
-            // 3. End the main run row: set endDateTime=now, scrap, notes, optionally pcsEnd if you want a final device reading
-            //    from the same machine.
-            int deviceCountRunEnd = 0;
-            if (!string.IsNullOrEmpty(machineValue))
+            // 3) End the main run record.
+            const string endMainRun = @"
+UPDATE pressrun
+SET endDateTime = NOW(),
+    pcsEnd = @finalCount,
+    scrap = @scrap,
+    notes = @notes
+WHERE id = @runId
+  AND skidcount = 0
+LIMIT 1";
+            using (var endMainCmd = new MySqlCommand(endMainRun, conn))
             {
-                string deviceIp = MapMachineToIp(machineValue);
-                deviceCountRunEnd = await QueryDeviceForCountAsync(deviceIp);
+                endMainCmd.Parameters.AddWithValue("@runId", runId);
+                endMainCmd.Parameters.AddWithValue("@finalCount", finalCount);
+                endMainCmd.Parameters.AddWithValue("@scrap", scrap);
+                endMainCmd.Parameters.AddWithValue("@notes", notes ?? "");
+                await endMainCmd.ExecuteNonQueryAsync();
             }
 
-            const string updateMainRun = @"
-        UPDATE pressrun
-        SET endDateTime = @endTime,
-            scrap       = @scrap,
-            notes       = @notes,
-            pcsEnd      = @pcsEnd
-        WHERE id = @runId
-          AND skidcount=0
-        LIMIT 1";
-            await using (var updateCmd = new MySqlCommand(updateMainRun, connection))
+            // 4) Mark the run as closed in the presssetup table.
+            const string closeSetup = @"
+UPDATE presssetup
+SET open = 0
+WHERE run = (
+    SELECT run FROM pressrun WHERE id = @runId AND skidcount = 0
+)
+LIMIT 1";
+            using (var closeCmd = new MySqlCommand(closeSetup, conn))
             {
-                updateCmd.Parameters.AddWithValue("@endTime", endTime);
-                updateCmd.Parameters.AddWithValue("@scrap", scrap);
-                updateCmd.Parameters.AddWithValue("@notes", notes ?? "");
-                updateCmd.Parameters.AddWithValue("@pcsEnd", deviceCountRunEnd);
-                updateCmd.Parameters.AddWithValue("@runId", runId);
-                await updateCmd.ExecuteNonQueryAsync();
-            }
-
-            // 4. Mark the run as closed in presssetup (open=0).
-            //    We'll find the part and run from the main run row. We already have runIdentifier and part from above.
-            const string updateSetup = @"
-        UPDATE presssetup
-        SET open=0
-        WHERE run=@run
-          AND part=@part
-        LIMIT 1";
-            await using (var setupCmd = new MySqlCommand(updateSetup, connection))
-            {
-                setupCmd.Parameters.AddWithValue("@run", runIdentifier);
-                setupCmd.Parameters.AddWithValue("@part", part);
-                await setupCmd.ExecuteNonQueryAsync();
+                closeCmd.Parameters.AddWithValue("@runId", runId);
+                await closeCmd.ExecuteNonQueryAsync();
             }
         }
-
 
         #endregion
 
         #region Skid Logic
 
-        /// <summary>
-        /// Queries the device for the current press count (via the device IP).
-        /// </summary>
-        public async Task<int> QueryDeviceForCountAsync(string deviceIp)
+        public async Task HandleStartSkidAsync(int runId, string run, string part,
+                                               string operatorName, string machine, int skidCountFromForm)
         {
-            string url = $"http://{deviceIp}/api/picodata";
-            using (var httpClient = new HttpClient())
-            {
-                HttpResponseMessage response = await httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
 
-                string jsonResponse = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonResponse);
-                if (result != null
-                    && result.TryGetValue("Count", out string countStr)
-                    && int.TryParse(countStr, out int count))
-                {
-                    return count;
-                }
-                throw new Exception("Device response did not contain a valid count.");
-            }
-        }
-
-        /// <summary>
-        /// Query the presscount table for the count at or before a specified time (for run).
-        /// If you prefer to rely on device queries, skip this.
-        /// </summary>
-        public async Task<int> QueryCountForTimeAsync(string run, DateTime targetTime)
-        {
-            int countValue = 0;
-            const string query = @"
-                SELECT `count`
-                FROM presscount
-                WHERE run = @run AND timestamp <= @targetTime
-                ORDER BY timestamp DESC
-                LIMIT 1";
-
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using var cmd = new MySqlCommand(query, connection);
-            cmd.Parameters.AddWithValue("@run", run);
-            cmd.Parameters.AddWithValue("@targetTime", targetTime);
-            var result = await cmd.ExecuteScalarAsync();
-            if (result != null && int.TryParse(result.ToString(), out int value))
-            {
-                countValue = value;
-            }
-            return countValue;
-        }
-
-        /// <summary>
-        /// Helper method to map machine => IP address so we never try connecting to "2" or "0.0.0.2".
-        /// </summary>
-        private string MapMachineToIp(string machine)
-        {
-            var mapping = new Dictionary<string, string>
-            {
-                { "2",           "192.168.1.254" },
-                { "Machine102",  "192.168.1.17"  }
-                // Add additional mappings here.
-            };
-
-            if (mapping.TryGetValue(machine, out string ip))
-            {
-                return ip;
-            }
-            else
-            {
-                throw new Exception($"No device found for machine: {machine}");
-            }
-        }
-
-        /// <summary>
-        /// Single method that either starts the first skid or ends the current skid and starts the next one.
-        /// The main run record retains skidcount = 0, while each skid record has a non-null skidcount (1+).
-        /// </summary>
-        public async Task HandleStartSkidAsync(int runId, string run, string part, string operatorName, string machine, int skidCountFromForm)
-        {
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-
-            // 1. Determine how many skid records exist for this run.
+            // 1) Count existing skid records for this run (skidcount > 0)
             int currentSkidCount = 0;
-            const string getSkidCountQuery = @"
-                SELECT IFNULL(MAX(skidcount), 0) 
-                FROM pressrun 
-                WHERE run = @run AND skidcount IS NOT NULL";
-            await using (var cmd = new MySqlCommand(getSkidCountQuery, connection))
+            const string getSkids = @"
+SELECT IFNULL(MAX(skidcount), 0)
+FROM pressrun
+WHERE run = @run
+  AND skidcount > 0";
+            using (var cmd = new MySqlCommand(getSkids, conn))
             {
                 cmd.Parameters.AddWithValue("@run", run);
                 var result = await cmd.ExecuteScalarAsync();
-                if (result != null && int.TryParse(result.ToString(), out int count))
-                {
-                    currentSkidCount = count;
-                }
+                if (result != null && int.TryParse(result.ToString(), out int c))
+                    currentSkidCount = c;
             }
 
-            // 2. Map machine to IP so we can query the device.
-            string deviceIp = MapMachineToIp(machine);
+            // 2) Get device count using the raw machine value.
+            int? deviceCount = await TryGetDeviceCountOrNull(machine);
 
             if (currentSkidCount == 0)
             {
-                // No existing skid => start the first one with skidcount=1.
-                int deviceCountAtStart = await QueryDeviceForCountAsync(deviceIp);
-
-                const string insertSkidQuery = @"
-                    INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
-                    VALUES (@run, @part, @startTime, @operator, @machine, 1, 1, @pcsStart)";
-                await using (var insertCmd = new MySqlCommand(insertSkidQuery, connection))
-                {
-                    insertCmd.Parameters.AddWithValue("@run", run);
-                    insertCmd.Parameters.AddWithValue("@part", part);
-                    insertCmd.Parameters.AddWithValue("@startTime", DateTime.Now);
-                    insertCmd.Parameters.AddWithValue("@operator", operatorName);
-                    insertCmd.Parameters.AddWithValue("@machine", machine);
-                    insertCmd.Parameters.AddWithValue("@pcsStart", deviceCountAtStart);
-                    await insertCmd.ExecuteNonQueryAsync();
-                }
+                const string insertFirst = @"
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
+VALUES (@run, @part, NOW(), @operator, @machine, 1, 1, @pcsStart)";
+                using var insCmd = new MySqlCommand(insertFirst, conn);
+                insCmd.Parameters.AddWithValue("@run", run);
+                insCmd.Parameters.AddWithValue("@part", part);
+                insCmd.Parameters.AddWithValue("@operator", operatorName);
+                insCmd.Parameters.AddWithValue("@machine", machine);
+                if (deviceCount.HasValue)
+                    insCmd.Parameters.AddWithValue("@pcsStart", deviceCount.Value);
+                else
+                    insCmd.Parameters.AddWithValue("@pcsStart", DBNull.Value);
+                await insCmd.ExecuteNonQueryAsync();
             }
             else
             {
-                // At least one skid exists => end the active skid, then insert a new one.
-                DateTime endTime = DateTime.Now;
+                DateTime now = DateTime.Now;
+                const string endSkidSql = @"
+UPDATE pressrun p
+JOIN (
+    SELECT run, MAX(skidcount) AS maxSkid
+    FROM pressrun
+    WHERE run = @run
+      AND skidcount > 0
+      AND endDateTime IS NULL
+    GROUP BY run
+) t ON p.run = @run AND p.skidcount = t.maxSkid
+SET p.endDateTime = NOW(),
+    p.pcsEnd = @pcsEnd
+WHERE p.endDateTime IS NULL";
+                using var endCmd = new MySqlCommand(endSkidSql, conn);
+                endCmd.Parameters.AddWithValue("@run", run);
+                if (deviceCount.HasValue)
+                    endCmd.Parameters.AddWithValue("@pcsEnd", deviceCount.Value);
+                else
+                    endCmd.Parameters.AddWithValue("@pcsEnd", DBNull.Value);
+                await endCmd.ExecuteNonQueryAsync();
 
-                // 2a. End the active skid record (max skidcount, endDateTime = null).
-                const string endActiveSkidQuery = @"
-                    UPDATE pressrun p
-                    JOIN (
-                        SELECT MAX(skidcount) AS maxSkid
-                        FROM pressrun
-                        WHERE run = @run AND skidcount IS NOT NULL AND endDateTime IS NULL
-                    ) t ON p.run = @run AND p.skidcount = t.maxSkid
-                    SET p.endDateTime = @endTime, p.pcsEnd = @pcsEnd";
-                int deviceCountAtEnd = await QueryDeviceForCountAsync(deviceIp);
-
-                await using (var endCmd = new MySqlCommand(endActiveSkidQuery, connection))
-                {
-                    endCmd.Parameters.AddWithValue("@endTime", endTime);
-                    endCmd.Parameters.AddWithValue("@run", run);
-                    endCmd.Parameters.AddWithValue("@pcsEnd", deviceCountAtEnd);
-                    await endCmd.ExecuteNonQueryAsync();
-                }
-
-                // 2b. Insert new skid record with incremented skidcount.
                 int newSkidCount = currentSkidCount + 1;
-                int deviceCountNewStart = await QueryDeviceForCountAsync(deviceIp);
-
-                const string insertNewSkidQuery = @"
-                    INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
-                    VALUES (@run, @part, @startTime, @operator, @machine, 1, @newSkidCount, @pcsStart)";
-                await using (var insertNewCmd = new MySqlCommand(insertNewSkidQuery, connection))
-                {
-                    insertNewCmd.Parameters.AddWithValue("@run", run);
-                    insertNewCmd.Parameters.AddWithValue("@part", part);
-                    insertNewCmd.Parameters.AddWithValue("@startTime", DateTime.Now);
-                    insertNewCmd.Parameters.AddWithValue("@operator", operatorName);
-                    insertNewCmd.Parameters.AddWithValue("@machine", machine);
-                    insertNewCmd.Parameters.AddWithValue("@newSkidCount", newSkidCount);
-                    insertNewCmd.Parameters.AddWithValue("@pcsStart", deviceCountNewStart);
-                    await insertNewCmd.ExecuteNonQueryAsync();
-                }
+                int? newSkidStart = await TryGetDeviceCountOrNull(machine);
+                const string insertNext = @"
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
+VALUES (@run, @part, NOW(), @operator, @machine, 1, @skidcount, @pcsStart)";
+                using var insSkid = new MySqlCommand(insertNext, conn);
+                insSkid.Parameters.AddWithValue("@run", run);
+                insSkid.Parameters.AddWithValue("@part", part);
+                insSkid.Parameters.AddWithValue("@operator", operatorName);
+                insSkid.Parameters.AddWithValue("@machine", machine);
+                insSkid.Parameters.AddWithValue("@skidcount", newSkidCount);
+                if (newSkidStart.HasValue)
+                    insSkid.Parameters.AddWithValue("@pcsStart", newSkidStart.Value);
+                else
+                    insSkid.Parameters.AddWithValue("@pcsStart", DBNull.Value);
+                await insSkid.ExecuteNonQueryAsync();
             }
         }
 
-        /// <summary>
-        /// Explicitly ends a skid by ID (optional).
-        /// </summary>
-        public async Task HandleEndSkidAsync(int skidRecordId)
+        #endregion
+
+        #region Retrieval
+
+        public async Task<List<string>> GetOperatorsAsync()
         {
-            // 1. Update the active skid record with the end datetime.
-            DateTime endTime = DateTime.Now;
-            const string updateSkidQuery = @"
-                UPDATE pressrun
-                SET endDateTime = @endTime
-                WHERE id = @skidRecordId AND endDateTime IS NULL";
-            await using var connection = new MySqlConnection(_connectionStringMySQL);
-            await connection.OpenAsync();
-            await using (var updateCmd = new MySqlCommand(updateSkidQuery, connection))
+            var ops = new List<string>();
+            const string sql = @"
+SELECT name
+FROM operators
+WHERE dept = 'molding'
+ORDER BY name";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
             {
-                updateCmd.Parameters.AddWithValue("@endTime", endTime);
-                updateCmd.Parameters.AddWithValue("@skidRecordId", skidRecordId);
-                await updateCmd.ExecuteNonQueryAsync();
+                ops.Add(rdr.GetString(0));
             }
+            return ops;
+        }
 
-            // 2. Retrieve startDateTime and run for this skid.
-            DateTime startTime = DateTime.MinValue;
-            string runIdentifier = "";
-            const string selectQuery = @"
-                SELECT startDateTime, run
-                FROM pressrun
-                WHERE id = @skidRecordId";
-            await using (var selectCmd = new MySqlCommand(selectQuery, connection))
+        public async Task<Dictionary<(string Part, string Run), string>> GetOpenPartsWithRunsAndMachinesAsync()
+        {
+            var dict = new Dictionary<(string, string), string>();
+            const string sql = @"
+SELECT part, run, machine
+FROM presssetup
+WHERE open = 1
+ORDER BY part, run";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
             {
-                selectCmd.Parameters.AddWithValue("@skidRecordId", skidRecordId);
-                await using var reader = await selectCmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    startTime = reader.GetDateTime("startDateTime");
-                    runIdentifier = reader["run"]?.ToString() ?? "";
-                }
-                reader.Close();
+                var part = rdr.GetString("part");
+                var run = rdr.GetString("run");
+                var mach = rdr.GetString("machine");
+                dict[(part, run)] = mach;
             }
+            return dict;
+        }
 
-            // 3. Query presscount table or device for counts. Example uses presscount table:
-            int pcsStart = await QueryCountForTimeAsync(runIdentifier, startTime);
-            int pcsEnd = await QueryCountForTimeAsync(runIdentifier, endTime);
-
-            // 4. Update pcsStart and pcsEnd in pressrun.
-            const string updateCounts = @"
-                UPDATE pressrun
-                SET pcsStart = @pcsStart, pcsEnd = @pcsEnd
-                WHERE id = @skidRecordId";
-            await using (var updateCountsCmd = new MySqlCommand(updateCounts, connection))
+        public async Task<List<PressRunLogModel>> GetLoggedInRunsAsync()
+        {
+            var list = new List<PressRunLogModel>();
+            const string sql = @"
+SELECT id, timestamp, run, part, startDateTime, endDateTime,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
+FROM pressrun
+WHERE endDateTime IS NULL";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
             {
-                updateCountsCmd.Parameters.AddWithValue("@pcsStart", pcsStart);
-                updateCountsCmd.Parameters.AddWithValue("@pcsEnd", pcsEnd);
-                updateCountsCmd.Parameters.AddWithValue("@skidRecordId", skidRecordId);
-                await updateCountsCmd.ExecuteNonQueryAsync();
+                list.Add(ParseRunFromReader(rdr));
             }
+            return list;
+        }
+
+        public async Task<List<PressRunLogModel>> GetAllRunsAsync()
+        {
+            var list = new List<PressRunLogModel>();
+            const string sql = @"
+SELECT id, timestamp, run, part, startDateTime, endDateTime,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
+FROM pressrun
+ORDER BY id DESC";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
+            {
+                list.Add(ParseRunFromReader(rdr));
+            }
+            return list;
+        }
+
+        private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
+        {
+            var model = new PressRunLogModel
+            {
+                Id = rdr.GetInt32("id"),
+                Timestamp = rdr.GetDateTime("timestamp"),
+                Run = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                StartDateTime = rdr.GetDateTime("startDateTime"),
+                EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime"))
+                                ? null
+                                : rdr.GetDateTime("endDateTime"),
+                Operator = rdr["operator"]?.ToString(),
+                Machine = rdr["machine"]?.ToString(),
+                PcsStart = rdr.IsDBNull(rdr.GetOrdinal("pcsStart"))
+                                ? 0
+                                : rdr.GetInt32("pcsStart"),
+                PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd"))
+                                ? 0
+                                : rdr.GetInt32("pcsEnd"),
+                Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap"))
+                                ? 0
+                                : rdr.GetInt32("scrap"),
+                Notes = rdr["notes"]?.ToString(),
+                SkidCount = rdr.IsDBNull(rdr.GetOrdinal("skidcount"))
+                                ? 0
+                                : rdr.GetInt32("skidcount")
+            };
+            return model;
         }
 
         #endregion

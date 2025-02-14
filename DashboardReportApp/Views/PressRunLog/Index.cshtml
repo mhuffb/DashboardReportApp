@@ -1,179 +1,64 @@
 ﻿@model List<DashboardReportApp.Models.PressRunLogModel>
-@using System.Text.Json;
+@using System.Text.Json
+@using System.Linq
 
 @{
-    ViewData["Title"] = "Press Run Log";
+    ViewData["Title"] = "Press Run Log - Split Tables, Login, & Start Skid Modal";
 
-    // Operators for the Login form
+    // Operators for the login form
     var operators = ViewData["Operators"] as List<string> ?? new List<string>();
 
-    // Dictionary of (part, run) => machine from presssetup
+    // Dictionary of (part, run) => machine (raw machine code, e.g. "2")
     var openParts = ViewData["OpenParts"] as Dictionary<(string, string), string>
                     ?? new Dictionary<(string, string), string>();
 
-    // "Open runs" from ViewBag - typically rows with endDateTime=null
-    var openRuns = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
-                   ?? new List<DashboardReportApp.Models.PressRunLogModel>();
+    // All open records (records with EndDateTime == null)
+    var openRecords = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
+                      ?? new List<DashboardReportApp.Models.PressRunLogModel>();
+
+    // Split open records into main run records (SkidCount == 0) and skid records (SkidCount > 0)
+    var mainRuns = openRecords.Where(r => r.SkidCount == 0).ToList();
+    var skids = openRecords.Where(r => r.SkidCount > 0).ToList();
 }
 
-/* ----------------------------------------------------------
-   1) Login / Start Molding for Main Run
-   This form collects operator, part, machine, runNumber,
-   and inserts a new main run row (skidcount=0)
-   with pcsStart from the device.
----------------------------------------------------------- */
+@if (TempData["DeviceMessage"] != null)
+{
+    <div class="alert alert-warning">
+        @TempData["DeviceMessage"]
+    </div>
+}
+
 <div class="container-fluid px-3">
     <h1 class="text-center mb-4">Press Run Log</h1>
 
-    <h2 class="text-center">Start Molding</h2>
+    <!-- Available Parts / Runs -->
+    <h2 class="text-center">Available Parts / Runs</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
-            <form method="post" action="/PressRunLog/Login">
-                <div class="mb-3">
-                    <label for="Operator" class="form-label">Operator</label>
-                    <select id="Operator" name="operatorName" class="form-control" required>
-                        <option value="">Select an Operator</option>
-                        @foreach (var op in operators)
-                        {
-                            <option value="@op">@op</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="Part" class="form-label">Part</label>
-                    <select id="Part" name="part" class="form-control" required onchange="updateHiddenRunAndMachine()">
-                        <option value="">Select a Part</option>
-                        @foreach (var entry in openParts)
-                        {
-                            <option value="@entry.Key.Item1"
-                                    data-run="@entry.Key.Item2"
-                                    data-machine="@entry.Value">
-                                @entry.Key.Item1 (Run: @entry.Key.Item2)
-                            </option>
-                        }
-                    </select>
-                    <!-- hidden field for runNumber -->
-                    <input type="hidden" id="RunNumber" name="runNumber" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="Machine" class="form-label">Machine</label>
-                    <input type="text" id="Machine" name="machine" class="form-control" readonly />
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100">Login</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Populate runNumber and Machine on part selection
-    function updateHiddenRunAndMachine() {
-        const partSelect   = document.getElementById("Part");
-        const runHidden    = document.getElementById("RunNumber");
-        const machineInput = document.getElementById("Machine");
-
-        const selectedOpt  = partSelect.options[partSelect.selectedIndex];
-        if (!selectedOpt) return;
-
-        const selectedRun     = selectedOpt.getAttribute("data-run")     || "";
-        const selectedMachine = selectedOpt.getAttribute("data-machine") || "";
-
-        runHidden.value    = selectedRun;
-        machineInput.value = selectedMachine;
-    }
-</script>
-
-
-<!-- ----------------------------------------------------------
-     2) Table of Open Mold Runs
-     Each run row includes:
-       - "Logout" if skidcount==0
-       - "End Run" button => opens a modal to enter scrap, notes
-       - "Start Skid" if you want to do skid logic on the main run
----------------------------------------------------------- -->
-<h2 class="text-center mb-4">Open Mold Runs</h2>
-<div class="card shadow mb-4">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-striped table-bordered shadow-sm wider-table">
+            <table class="table table-striped table-bordered">
                 <thead class="table-dark">
                     <tr>
-                        <th>ID</th>
-                        <th>Timestamp</th>
                         <th>Part</th>
                         <th>Run</th>
-                        <th>Operator</th>
                         <th>Machine</th>
-                        <th>Start Time</th>
-                        <th>Actions</th>
-                        <th>Skid Action</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var record in openRuns)
+                    @foreach (var kvp in openParts)
                     {
+                        var partVal = kvp.Key.Item1;
+                        var runVal = kvp.Key.Item2;
+                        var machine = kvp.Value; // raw machine code (e.g. "2")
                         <tr>
-                            <td>@record.Id</td>
-                            <td>@record.Timestamp</td>
-                            <td>@record.Part</td>
-                            <td>@record.Run</td>
-                            <td>@record.Operator</td>
-                            <td>@record.Machine</td>
-                            <td>@record.StartDateTime</td>
-
-                            <!-- Main run actions if skidCount==0.
-                                 Otherwise "N/A."
-                            -->
+                            <td>@partVal</td>
+                            <td>@runVal</td>
+                            <td>@machine</td>
                             <td>
-                                @if (record.SkidCount == 0)
-                                {
-                                    <!-- Logout form (simple) -->
-                                    <form method="post" action="/PressRunLog/Logout" style="display:inline;">
-                                        <input type="hidden" name="runId" value="@record.Id" />
-                                        <input type="hidden" name="scrap" value="0" />
-                                        <input type="hidden" name="notes" value="" />
-                                        <button type="submit" class="btn btn-danger btn-sm">Logout</button>
-                                    </form>
-
-                                    <span><span>&nbsp;</span></span>
-
-                                    <!-- "End Run" => open a modal so user can input scrap, notes -->
-                                    <button type="button"
-                                            class="btn btn-secondary btn-sm"
-                                            onclick="openEndRunModal('@record.Id', '@record.Part')">
-                                        End Run
-                                    </button>
-                                }
-                                else
-                                {
-                                    <span>N/A</span>
-                                }
-                            </td>
-
-                            <!--
-                                Skid Action: only for the main run row (skidCount==0).
-                                The service can handle "start skid" or "end previous skid" behind the scenes.
-                            -->
-                            <td>
-                                @if (record.SkidCount == 0)
-                                {
-                                    <form method="post" action="/PressRunLog/StartSkid" style="display:inline;">
-                                        <input type="hidden" name="runId" value="@record.Id" />
-                                        <input type="hidden" name="operatorName" value="@record.Operator" />
-                                        <input type="hidden" name="part" value="@record.Part" />
-                                        <input type="hidden" name="machine" value="@record.Machine" />
-                                        <input type="hidden" name="run" value="@record.Run" />
-                                        <input type="hidden" name="skidcount" value="@record.SkidCount" />
-                                        <button type="submit" class="btn btn-primary btn-sm">Start Skid</button>
-                                    </form>
-                                }
-                                else
-                                {
-                                    <span>N/A</span>
-                                }
+                                <button class="btn btn-primary btn-sm"
+                                        onclick="openLoginCountModalForRun('@partVal', '@runVal', '@machine')">
+                                    Login to Run
+                                </button>
                             </td>
                         </tr>
                     }
@@ -181,105 +66,332 @@
             </table>
         </div>
     </div>
-</div>
 
-<!-- ----------------------------------------------------------
-     3) React Table of All Runs
----------------------------------------------------------- -->
-<h2 class="text-center mt-4">All Mold Run Records</h2>
-<div class="card shadow mb-4">
-    <div class="card-body">
-        <div class="container-fluid px-3 mt-4">
-            <div id="myReactPressRunTableRoot"
-                 data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
-            </div>
+    <!-- Open Main Runs -->
+    <h2 class="text-center mb-4">Open Runs</h2>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            @if (mainRuns.Any())
+            {
+                <table class="table table-striped table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Part</th>
+                            <th>Run</th>
+                            <th>Machine</th>
+                            <th>Operator</th>
+                            <th>SkidCount</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rec in mainRuns)
+                        {
+                            <tr>
+                                <td>@rec.Id</td>
+                                <td>@rec.Part</td>
+                                <td>@rec.Run</td>
+                                <td>@rec.Machine</td>
+                                <td>@rec.Operator</td>
+                                <td>@rec.SkidCount</td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm"
+                                            onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
+                                        Logout (Count)
+                                    </button>
+                                    <span>&nbsp;</span>
+                                    <button class="btn btn-secondary btn-sm"
+                                            onclick="openEndRunModal('@rec.Id', '@rec.Machine')">
+                                        End Run (Count)
+                                    </button>
+                                    <span>&nbsp;</span>
+                                    <!-- Pass the run value as well -->
+                                    <button class="btn btn-info btn-sm"
+                                            onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Operator', '@rec.Run')">
+                                        Start Skid
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p>No open run records.</p>
+            }
+        </div>
+    </div>
+
+    <!-- Open Skid Records -->
+    <h2 class="text-center mb-4">Open Skids</h2>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            @if (skids.Any())
+            {
+                <table class="table table-striped table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Part</th>
+                            <th>Run</th>
+                            <th>Machine</th>
+                            <th>Operator</th>
+                            <th>SkidCount</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Pcs Start</th>
+                            <th>Pcs End</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var skid in skids)
+                        {
+                            <tr>
+                                <td>@skid.Id</td>
+                                <td>@skid.Part</td>
+                                <td>@skid.Run</td>
+                                <td>@skid.Machine</td>
+                                <td>@skid.Operator</td>
+                                <td>@skid.SkidCount</td>
+                                <td>@skid.StartDateTime</td>
+                                <td>@(skid.EndDateTime.HasValue ? skid.EndDateTime.ToString() : "Open")</td>
+                                <td>@skid.PcsStart</td>
+                                <td>@skid.PcsEnd</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p>No open skid records.</p>
+            }
+        </div>
+    </div>
+
+    <!-- React Table of All Runs (Optional) -->
+    <h2 class="text-center">All Runs</h2>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div id="myReactPressRunTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
         </div>
     </div>
 </div>
 
+<!-- JavaScript for React Table -->
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const container = document.getElementById("myReactPressRunTableRoot");
         if (!container) return;
-
         const rawData = container.getAttribute("data-records");
-        const data = JSON.parse(rawData); // List<PressRunLogModel>
+        const data = JSON.parse(rawData);
         const columns = [
-            { key: "Id",           label: "ID" },
-            { key: "Timestamp",    label: "Timestamp" },
-            { key: "Part",         label: "Part" },
-            { key: "Run",          label: "Run" },
-            { key: "Operator",     label: "Operator" },
-            { key: "Machine",      label: "Machine" },
-            { key: "StartDateTime",label: "Start Time" },
-            { key: "EndDateTime",  label: "End Time" },
-            { key: "PcsStart",     label: "Pcs Start" },
-            { key: "PcsEnd",       label: "Pcs End" },
-            { key: "Scrap",        label: "Scrap" },
-            { key: "Notes",        label: "Notes" }
+            { key: "Id", label: "ID" },
+            { key: "Timestamp", label: "Timestamp" },
+            { key: "Part", label: "Part" },
+            { key: "Run", label: "Run" },
+            { key: "Machine", label: "Machine" },
+            { key: "Operator", label: "Operator" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
+            { key: "PcsStart", label: "Pcs Start" },
+            { key: "PcsEnd", label: "Pcs End" },
+            { key: "Scrap", label: "Scrap" },
+            { key: "Notes", label: "Notes" }
         ];
-
         if (window.renderMyDataTable) {
             window.renderMyDataTable("myReactPressRunTableRoot", data, columns, true);
-        } else {
-            console.error("React table render function not found!");
         }
     });
 </script>
 
-<!-- ----------------------------------------------------------
-     4) End Run Modal
-     Prompts user for scrap, notes. Then posts to /PressRunLog/EndRun
-     The service method end run => ends last skid => ends main run
----------------------------------------------------------- -->
-<div id="endRunModal" class="modal fade" tabindex="-1">
-    <div class="modal-dialog">
+<!-- JavaScript Functions for Modals -->
+<script>
+    // Opens the Login modal.
+    function openLoginCountModalForRun(part, run, machine) {
+        console.log("openLoginCountModalForRun called with", part, run, machine);
+        document.getElementById("loginPartHidden").value = part;
+        document.getElementById("loginRunHidden").value = run;
+        document.getElementById("loginMachineHidden").value = machine;
+        document.getElementById("loginOperatorSelect").selectedIndex = 0;
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("loginFinalCountInput").value = data.deviceCount || 0;
+                let modal = new bootstrap.Modal(document.getElementById("LoginCountModal"));
+                modal.show();
+            })
+            .catch(err => console.error("Error fetching device count:", err));
+    }
+
+    // Opens the Logout modal.
+    function openLogoutModal(runId, machine) {
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("logoutRunId").value = runId;
+                document.getElementById("logoutFinalCount").value = data.deviceCount || 0;
+                let modal = new bootstrap.Modal(document.getElementById("LogoutCountModal"));
+                modal.show();
+            })
+            .catch(err => console.error("Error fetching device count:", err));
+    }
+
+    // Opens the End Run modal.
+    function openEndRunModal(runId, machine) {
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("endRunId").value = runId;
+                document.getElementById("endRunFinalCount").value = data.deviceCount || 0;
+                document.getElementById("endRunScrap").value = "0";
+                document.getElementById("endRunNotes").value = "";
+                let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
+                modal.show();
+            })
+            .catch(err => console.error("Error fetching device count:", err));
+    }
+
+    // Opens the Start Skid modal.
+    function openStartSkidModal(runId, machine, part, operator, run) {
+        console.log("openStartSkidModal called with", runId, machine, part, operator, run);
+        document.getElementById("startSkidRunId").value = runId;
+        document.getElementById("startSkidRunValue").value = run;
+        document.getElementById("startSkidMachineHidden").value = machine;
+        document.getElementById("startSkidPartHidden").value = part;
+        document.getElementById("startSkidOperatorHidden").value = operator;
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("startSkidSkidCount").value = data.deviceCount || 0;
+                let modal = new bootstrap.Modal(document.getElementById("StartSkidModal"));
+                modal.show();
+            })
+            .catch(err => console.error("Error fetching device count:", err));
+    }
+</script>
+
+<!-- Inline Modals -->
+<!-- (A) Login Count Modal -->
+<div id="LoginCountModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">End Run</h5>
-                <button type="button" class="btn-close" onclick="closeEndRunModal()"></button>
+                <h5 class="modal-title">Login (Device Count)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="endRunForm" method="post" action="/PressRunLog/EndRun">
-                    <input type="hidden" id="endRunRunId" name="runId" />
-                    <input type="hidden" id="endRunPart" name="part" />
-
+                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogin">
+                    <input type="hidden" id="loginPartHidden" name="part" />
+                    <input type="hidden" id="loginMachineHidden" name="machine" />
+                    <input type="hidden" id="loginRunHidden" name="runNumber" />
                     <div class="mb-3">
-                        <label for="endRunScrap" class="form-label">Scrap</label>
-                        <input type="number" id="endRunScrap" name="scrap"
-                               class="form-control" value="0" min="0" />
+                        <label for="loginOperatorSelect" class="form-label">Operator</label>
+                        <select id="loginOperatorSelect" name="operatorName" class="form-select">
+                            <option value="">Select an operator</option>
+                            @foreach (var op in operators)
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
                     </div>
-
                     <div class="mb-3">
-                        <label for="endRunNotes" class="form-label">Notes</label>
-                        <textarea id="endRunNotes" name="notes" class="form-control"></textarea>
+                        <label class="form-label">Count (Override if needed):</label>
+                        <input type="number" id="loginFinalCountInput" name="finalCount" class="form-control" value="0" />
                     </div>
+                    <button type="submit" class="btn btn-primary w-100">Confirm Login</button>
                 </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeEndRunModal()">Cancel</button>
-                <!-- Confirm posts form -->
-                <button type="submit" form="endRunForm" class="btn btn-primary">Confirm End Run</button>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-    function openEndRunModal(runId, part) {
-        document.getElementById("endRunRunId").value = runId;
-        document.getElementById("endRunPart").value  = part;
-        document.getElementById("endRunScrap").value = "0";
-        document.getElementById("endRunNotes").value = "";
+<!-- (B) Logout Count Modal -->
+<div id="LogoutCountModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Logout (Device Count)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
+                    <input type="hidden" id="logoutRunId" name="runId" />
+                    <div class="mb-3">
+                        <label class="form-label">Final Count (Override if needed):</label>
+                        <input type="number" id="logoutFinalCount" name="finalCount" class="form-control" value="0" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Scrap:</label>
+                        <input type="number" id="logoutScrap" name="scrap" class="form-control" value="0" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes:</label>
+                        <textarea id="logoutNotes" name="notes" class="form-control"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Confirm Logout</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
-        const modal = new bootstrap.Modal(document.getElementById("endRunModal"));
-        modal.show();
-    }
+<!-- (C) End Run Count Modal -->
+<div id="EndRunCountModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">End Run (Device Count)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmEndRun">
+                    <input type="hidden" id="endRunId" name="runId" />
+                    <div class="mb-3">
+                        <label class="form-label">Final Count (Override if needed):</label>
+                        <input type="number" id="endRunFinalCount" name="finalCount" class="form-control" value="0" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Scrap:</label>
+                        <input type="number" id="endRunScrap" name="scrap" class="form-control" value="0" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes:</label>
+                        <textarea id="endRunNotes" name="notes" class="form-control"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Confirm End Run</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
-    function closeEndRunModal() {
-        const modalEl = document.getElementById("endRunModal");
-        const modal   = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
-    }
-</script>
+<!-- (D) Start Skid Modal -->
+<div id="StartSkidModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Start Skid</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Note: The form posts to the StartSkid action, and field names match the controller parameters -->
+                <form method="post" asp-controller="PressRunLog" asp-action="StartSkid">
+                    <input type="hidden" id="startSkidRunId" name="runId" />
+                    <input type="hidden" id="startSkidRunValue" name="run" />
+                    <input type="hidden" id="startSkidMachineHidden" name="machine" />
+                    <input type="hidden" id="startSkidPartHidden" name="part" />
+                    <input type="hidden" id="startSkidOperatorHidden" name="operatorName" />
+                    <div class="mb-3">
+                        <label class="form-label">Skid Count (Override if needed):</label>
+                        <input type="number" id="startSkidSkidCount" name="skidcount" class="form-control" value="0" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Confirm Start Skid</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
