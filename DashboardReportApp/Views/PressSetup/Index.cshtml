@@ -5,6 +5,8 @@
     var operators = ViewData["Operators"] as List<string> ?? new List<string>();
     var machines = ViewData["Machines"] as List<string> ?? new List<string>();
     var trainers = ViewData["Trainers"] as List<string> ?? new List<string>();
+    var partsList = ViewData["Parts"] as List<Scheduled>; // Replace with your actual model type
+
 }
 
 <div class="container mt-4">
@@ -28,57 +30,68 @@
     <h2 class="text-center">Start Setup</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
-            <form method="post" asp-action="Login">
-                <!-- Part Selection -->
-                <div class="mb-3">
-                    <label for="partNumber" class="form-label">Part Number</label>
-                    <select id="partNumber" name="partNumber" class="form-control" required onchange="updateRunNumber()">
-                        <option value="">-- Select Part --</option>
-                        @foreach (var entry in ViewData["Parts"] as Dictionary<string, string> ?? new Dictionary<string, string>())
-                        {
-                            <option value="@entry.Key" data-run="@entry.Value">
-                                @entry.Key (Run: @entry.Value)
-                            </option>
-                        }
-                    </select>
+<form method="post" asp-action="Login">
+    <!-- Part Selection -->
+    <div class="mb-3">
+        <label for="partNumber" class="form-label">Part Number</label>
+        <select id="partNumber" name="Part" class="form-control" required onchange="updateHiddenFields()">
+            <option value="">-- Select Part --</option>
+            @* Assume you are iterating over your parts list here *@
+            @foreach (var part in ViewData["Parts"] as List<Scheduled> ?? new List<Scheduled>())
+            {
+                var displayText = !string.IsNullOrEmpty(part.Subcomponent) ? part.Subcomponent :
+                                  !string.IsNullOrEmpty(part.Component) ? part.Component :
+                                  part.Part;
+                <option value="@part.Part"
+                        data-prodnumber="@part.ProdNumber"
+                        data-run="@part.Run"
+                        data-component="@part.Component"
+                        data-subcomponent="@part.Subcomponent">
+                    @($"{displayText} (Production Number: {part.ProdNumber} Run Number: {part.Run})")
+                </option>
+            }
+        </select>
+    </div>
 
-                    <!-- Hidden Run Number (sent to backend but not visible) -->
-                    <input type="hidden" id="RunNumber" name="runNumber" />
-                </div>
+    <!-- Hidden Inputs to capture additional values from the selected part -->
+    <input type="hidden" id="RunNumber" name="Run" />
+    <input type="hidden" id="ProdNumber" name="ProdNumber" />
+    <input type="hidden" id="Component" name="Component" />
+    <input type="hidden" id="Subcomponent" name="Subcomponent" />
+
+    <!-- Operator Dropdown -->
+    <div class="mb-3">
+        <label for="operatorName" class="form-label">Operator</label>
+        <select id="operatorName" name="Operator" class="form-control" required>
+            <option value="">-- Select Operator --</option>
+            @foreach (var op in ViewData["Operators"] as List<string> ?? new List<string>())
+            {
+                <option value="@op">@op</option>
+            }
+        </select>
+    </div>
+
+    <!-- Machine Dropdown -->
+    <div class="mb-3">
+        <label for="machine" class="form-label">Machine</label>
+        <select id="machine" name="Machine" class="form-control" required>
+            <option value="">-- Select Machine --</option>
+            @foreach (var machine in ViewData["Machines"] as List<string> ?? new List<string>())
+            {
+                <option value="@machine">@machine</option>
+            }
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">Login to Setup </button>
+</form>
 
 
-                
 
-                <!-- Operator Dropdown -->
-                <div class="mb-3">
-                    <label for="operatorName" class="form-label">Operator</label>
-                    <select id="operatorName" name="operatorName" class="form-control" required>
-                        <option value="">-- Select Operator --</option>
-                        @foreach (var op in operators)
-                        {
-                            <option value="@op">@op</option>
-                        }
-                    </select>
-                </div>
-
-                <!-- Machine Dropdown -->
-                <div class="mb-3">
-                    <label for="machine" class="form-label">Machine</label>
-                    <select id="machine" name="machine" class="form-control" required>
-                        <option value="">-- Select Machine --</option>
-                        @foreach (var machine in machines)
-                        {
-                            <option value="@machine">@machine</option>
-                        }
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100">Login</button>
-            </form>
         </div>
     </div>
 
-    <!-- Active Setups -->
+    <!-- Open Setups -->
     <h2 class="text-center mb-4">Open Setups</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
@@ -87,6 +100,7 @@
                     <thead class="table-dark">
                         <tr>
                             <th>Part</th>
+                            <th>Production Number</th>
                             <th>Run</th>     <!-- NEW COLUMN FOR RUN NUMBER -->
                             <th>Operator</th>
                             <th>Machine</th>
@@ -99,6 +113,7 @@
                         {
                             <tr>
                                 <td>@login.Part</td>
+                                <td>@login.ProdNumber</td>
                                 <td>@login.Run</td>  <!-- MAKE SURE PressSetupModel HAS THIS PROPERTY -->
                                 <td>@login.Operator</td>
                                 <td>@login.Machine</td>
@@ -107,7 +122,7 @@
                                     <!-- Instead of inline form, use a button that opens the modal -->
                                     <button class="btn btn-danger btn-sm"
                                             onclick="openStopSetupModal('@login.Part', '@login.Run', '@login.StartDateTime')">
-                                        Logout
+                                        Logout of Setup
                                     </button>
                                 </td>
                             </tr>
@@ -144,6 +159,7 @@
                 <div class="modal-body">
                     <!-- Hidden fields for identifying the correct record -->
                     <input type="hidden" id="modalPart" name="partNumber" />
+                    <input type="hidden" id="modalProdNumber" name="prodNumber" />
                     <input type="hidden" id="modalRun" name="runNumber" />
                     <input type="hidden" id="modalStartDateTime" name="startDateTime" />
 
@@ -195,7 +211,9 @@
         </form>
     </div>
 </div>
-
+<script>
+    
+</script>
 <!-- JS for React Table, etc. -->
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
@@ -212,6 +230,7 @@
         const columns = [
             { key: 'Id', label: 'Id' },
             { key: 'Part', label: 'Part' },
+            {key: 'ProdNumber', label: 'Production Number'},
             { key: 'Run', label: 'Run' },
             { key: 'Operator', label: 'Operator' },
             { key: 'Machine', label: 'Machine' },
@@ -285,15 +304,14 @@
 
 
 
-        function updateRunNumber() {
+        function updateHiddenFields() {
         const partSelect = document.getElementById("partNumber");
-        const runHidden = document.getElementById("RunNumber");
-
         const selectedOption = partSelect.options[partSelect.selectedIndex];
         if (!selectedOption) return;
-
-        const selectedRun = selectedOption.getAttribute("data-run") || "";
-        runHidden.value = selectedRun;  // Store value in hidden field
+        document.getElementById("ProdNumber").value = selectedOption.getAttribute("data-prodnumber") || "";
+        document.getElementById("RunNumber").value = selectedOption.getAttribute("data-run") || "";
+        document.getElementById("Component").value = selectedOption.getAttribute("data-component") || "";
+        document.getElementById("Subcomponent").value = selectedOption.getAttribute("data-subcomponent") || "";
     }
 
 </script>

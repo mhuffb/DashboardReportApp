@@ -9,8 +9,9 @@
     var operators = ViewData["Operators"] as List<string> ?? new List<string>();
 
     // Dictionary of (part, run) => machine (raw machine code, e.g. "2")
-    var openParts = ViewData["OpenParts"] as Dictionary<(string, string), string>
-                    ?? new Dictionary<(string, string), string>();
+    var openParts = ViewData["OpenParts"] as List<DashboardReportApp.Models.PressSetupModel>
+                      ?? new List<DashboardReportApp.Models.PressSetupModel>();
+
 
     // All open records (records with EndDateTime == null)
     var openRecords = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
@@ -31,34 +32,42 @@
 <div class="container-fluid px-3">
     <h1 class="text-center mb-4">Press Run Log</h1>
 
-    <!-- Available Parts / Runs -->
-    <h2 class="text-center">Available Parts / Runs</h2>
+    <!-- Parts Setup and Ready to Mold -->
+    <h2 class="text-center">Parts Currently Setup and Available to Run</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
             <table class="table table-striped table-bordered">
                 <thead class="table-dark">
                     <tr>
                         <th>Part</th>
+                        <th>Prod Number</th>
                         <th>Run</th>
                         <th>Machine</th>
+                        <th>Notes</th>
+                        <th>Operator</th>
+                        <th>End DateTime</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var kvp in openParts)
+                    @foreach (var item in openParts)
                     {
-                        var partVal = kvp.Key.Item1;
-                        var runVal = kvp.Key.Item2;
-                        var machine = kvp.Value; // raw machine code (e.g. "2")
                         <tr>
-                            <td>@partVal</td>
-                            <td>@runVal</td>
-                            <td>@machine</td>
+                            <td>@item.Part</td>
+                            <td>@item.ProdNumber</td>
+                            <td>@item.Run</td>
+                            <td>@item.Machine</td>
+                            <td>@item.Notes</td>
+                            <td>@item.Operator</td>
+                            <td>@(item.EndDateTime.HasValue ? item.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm") : "Open")</td>
                             <td>
                                 <button class="btn btn-primary btn-sm"
-                                        onclick="openLoginCountModalForRun('@partVal', '@runVal', '@machine')">
+                                        onclick="openLoginCountModalForRun('@item.Part', '@item.Run', '@item.Machine', '@item.ProdNumber')">
                                     Login to Run
                                 </button>
+
+
+
                             </td>
                         </tr>
                     }
@@ -67,8 +76,9 @@
         </div>
     </div>
 
-    <!-- Open Main Runs -->
-    <h2 class="text-center mb-4">Open Runs</h2>
+
+    <!-- Open Mold Production Operator Runs -->
+    <h2 class="text-center mb-4">Open Mold Production Operator Runs</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
             @if (mainRuns.Any())
@@ -78,10 +88,12 @@
                         <tr>
                             <th>ID</th>
                             <th>Part</th>
+                            <th>Prod Number</th>
                             <th>Run</th>
                             <th>Machine</th>
                             <th>Operator</th>
-                            <th>SkidCount</th>
+                            <th>Start Time</th>
+                            <th>Pcs Start</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -91,10 +103,12 @@
                             <tr>
                                 <td>@rec.Id</td>
                                 <td>@rec.Part</td>
+                                <td>@rec.ProdNumber</td>
                                 <td>@rec.Run</td>
                                 <td>@rec.Machine</td>
                                 <td>@rec.Operator</td>
-                                <td>@rec.SkidCount</td>
+                                <td>@(rec.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                                <td>@rec.PcsStart</td>
                                 <td>
                                     <button class="btn btn-danger btn-sm"
                                             onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
@@ -106,11 +120,11 @@
                                         End Run (Count)
                                     </button>
                                     <span>&nbsp;</span>
-                                    <!-- Pass the run value as well -->
                                     <button class="btn btn-info btn-sm"
-                                            onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Operator', '@rec.Run')">
+                                            onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
                                         Start Skid
                                     </button>
+
                                 </td>
                             </tr>
                         }
@@ -124,6 +138,7 @@
         </div>
     </div>
 
+
     <!-- Open Skid Records -->
     <h2 class="text-center mb-4">Open Skids</h2>
     <div class="card shadow mb-4">
@@ -135,12 +150,12 @@
                         <tr>
                             <th>ID</th>
                             <th>Part</th>
+                            <th>Prod Number</th>
                             <th>Run</th>
                             <th>Machine</th>
                             <th>Operator</th>
                             <th>SkidCount</th>
                             <th>Start Time</th>
-                            <th>End Time</th>
                             <th>Pcs Start</th>
                             <th>Pcs End</th>
                         </tr>
@@ -151,12 +166,12 @@
                             <tr>
                                 <td>@skid.Id</td>
                                 <td>@skid.Part</td>
+                                <td>@skid.ProdNumber</td>
                                 <td>@skid.Run</td>
                                 <td>@skid.Machine</td>
                                 <td>@skid.Operator</td>
                                 <td>@skid.SkidCount</td>
                                 <td>@skid.StartDateTime</td>
-                                <td>@(skid.EndDateTime.HasValue ? skid.EndDateTime.ToString() : "Open")</td>
                                 <td>@skid.PcsStart</td>
                                 <td>@skid.PcsEnd</td>
                             </tr>
@@ -170,6 +185,7 @@
             }
         </div>
     </div>
+
 
     <!-- React Table of All Runs (Optional) -->
     <h2 class="text-center">All Runs</h2>
@@ -188,20 +204,22 @@
         if (!container) return;
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData);
-        const columns = [
-            { key: "Id", label: "ID" },
-            { key: "Timestamp", label: "Timestamp" },
-            { key: "Part", label: "Part" },
-            { key: "Run", label: "Run" },
-            { key: "Machine", label: "Machine" },
-            { key: "Operator", label: "Operator" },
-            { key: "StartDateTime", label: "Start Time" },
-            { key: "EndDateTime", label: "End Time" },
-            { key: "PcsStart", label: "Pcs Start" },
-            { key: "PcsEnd", label: "Pcs End" },
-            { key: "Scrap", label: "Scrap" },
-            { key: "Notes", label: "Notes" }
-        ];
+           const columns = [
+        { key: "Id", label: "ID" },
+        { key: "Part", label: "Part" },
+        { key: "ProdNumber", label: "Prod Number" },
+        { key: "Run", label: "Run" },
+        { key: "Machine", label: "Machine" },
+        { key: "Operator", label: "Operator" },
+        { key: "SkidCount", label: "SkidCount" },
+        { key: "StartDateTime", label: "Start Time" },
+        { key: "EndDateTime", label: "End Time" },
+        { key: "PcsStart", label: "Pcs Start" },
+        { key: "PcsEnd", label: "Pcs End" },
+        { key: "Scrap", label: "Scrap" },
+        { key: "Notes", label: "Notes" }
+    ];
+
         if (window.renderMyDataTable) {
             window.renderMyDataTable("myReactPressRunTableRoot", data, columns, true);
         }
@@ -211,11 +229,13 @@
 <!-- JavaScript Functions for Modals -->
 <script>
     // Opens the Login modal.
-    function openLoginCountModalForRun(part, run, machine) {
-        console.log("openLoginCountModalForRun called with", part, run, machine);
+       // Opens the Login modal.
+        function openLoginCountModalForRun(part, run, machine, prodNumber) {
+        console.log("openLoginCountModalForRun called with", part, run, machine, prodNumber);
         document.getElementById("loginPartHidden").value = part;
         document.getElementById("loginRunHidden").value = run;
         document.getElementById("loginMachineHidden").value = machine;
+        document.getElementById("loginProdHidden").value = prodNumber; // Set the ProdNumber
         document.getElementById("loginOperatorSelect").selectedIndex = 0;
         fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
             .then(response => response.json())
@@ -226,6 +246,7 @@
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
+
 
     // Opens the Logout modal.
     function openLogoutModal(runId, machine) {
@@ -256,13 +277,15 @@
     }
 
     // Opens the Start Skid modal.
-    function openStartSkidModal(runId, machine, part, operator, run) {
-        console.log("openStartSkidModal called with", runId, machine, part, operator, run);
+        function openStartSkidModal(runId, machine, part, operator, run, prodNumber) {
+        console.log("openStartSkidModal called with", runId, machine, part, operator, run, prodNumber);
         document.getElementById("startSkidRunId").value = runId;
         document.getElementById("startSkidRunValue").value = run;
         document.getElementById("startSkidMachineHidden").value = machine;
         document.getElementById("startSkidPartHidden").value = part;
         document.getElementById("startSkidOperatorHidden").value = operator;
+        document.getElementById("startSkidProdHidden").value = prodNumber;  // Set the prodNumber
+
         fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
             .then(response => response.json())
             .then(data => {
@@ -272,9 +295,11 @@
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
+
 </script>
 
 <!-- Inline Modals -->
+<!-- (A) Login Count Modal -->
 <!-- (A) Login Count Modal -->
 <div id="LoginCountModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -287,10 +312,11 @@
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogin">
                     <input type="hidden" id="loginPartHidden" name="part" />
                     <input type="hidden" id="loginMachineHidden" name="machine" />
-                    <input type="hidden" id="loginRunHidden" name="runNumber" />
+                    <input type="hidden" id="loginProdHidden" name="ProdNumber" />
+                    <input type="hidden" id="loginRunHidden" name="Run" />
                     <div class="mb-3">
                         <label for="loginOperatorSelect" class="form-label">Operator</label>
-                        <select id="loginOperatorSelect" name="operatorName" class="form-select">
+                        <select id="loginOperatorSelect" name="operator" class="form-select" required>
                             <option value="">Select an operator</option>
                             @foreach (var op in operators)
                             {
@@ -308,6 +334,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- (B) Logout Count Modal -->
 <div id="LogoutCountModal" class="modal fade" tabindex="-1">
@@ -378,13 +405,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <!-- Note: The form posts to the StartSkid action, and field names match the controller parameters -->
+                <!-- The form posts to the StartSkid action; field names must match your controller parameters -->
                 <form method="post" asp-controller="PressRunLog" asp-action="StartSkid">
                     <input type="hidden" id="startSkidRunId" name="runId" />
                     <input type="hidden" id="startSkidRunValue" name="run" />
                     <input type="hidden" id="startSkidMachineHidden" name="machine" />
                     <input type="hidden" id="startSkidPartHidden" name="part" />
-                    <input type="hidden" id="startSkidOperatorHidden" name="operatorName" />
+                    <input type="hidden" id="startSkidOperatorHidden" name="operator" />
+                    <!-- New hidden field for ProdNumber -->
+                    <input type="hidden" id="startSkidProdHidden" name="prodNumber" />
+
                     <div class="mb-3">
                         <label class="form-label">Skid Count (Override if needed):</label>
                         <input type="number" id="startSkidSkidCount" name="skidcount" class="form-control" value="0" />

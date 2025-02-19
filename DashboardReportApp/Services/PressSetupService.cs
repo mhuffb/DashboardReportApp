@@ -1,7 +1,9 @@
 ﻿using DashboardReportApp.Models;
+using Microsoft.AspNetCore.Components;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Threading.Tasks;
 
@@ -45,7 +47,7 @@ namespace DashboardReportApp.Services
                             Notes = reader["notes"].ToString(),
                             Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                             Run = reader["run"].ToString(),
-
+                            ProdNumber = reader["prodNumber"].ToString()
                         });
                     }
                 }
@@ -53,22 +55,36 @@ namespace DashboardReportApp.Services
             return records;
         }
 
-        public async Task LoginAsync(string partNumber, string runNumber, string operatorName, string machine)
+        public async Task LoginAsync(PressSetupLoginViewModel model)
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime, open) 
-                         VALUES (@part, @run, @operator, @machine, @startDateTime, @open)";
+                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime, open, prodNumber) 
+                         VALUES (@part, @run, @operator, @machine, @startDateTime, @open, @prodNumber)";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@part", partNumber.ToUpper());
-                    command.Parameters.AddWithValue("@run", runNumber);
-                    command.Parameters.AddWithValue("@operator", operatorName);
-                    command.Parameters.AddWithValue("@machine", machine);
+                    string toAdd = null;
+                    if (model.Part != null)
+                    {
+                        toAdd = model.Part; ;
+                    }
+                    if (model.Component != null)
+                    {
+                        toAdd = model.Component;
+                    }
+                    if (model.Subcomponent != null)
+                    {
+                        toAdd = model.Subcomponent;
+                    }
+                    command.Parameters.AddWithValue("@part", toAdd.ToUpper());
+                    command.Parameters.AddWithValue("@run", model.Run);
+                    command.Parameters.AddWithValue("@operator", model.Operator);
+                    command.Parameters.AddWithValue("@machine", model.Machine);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
-                    command.Parameters.AddWithValue("@open", 1);
+                    command.Parameters.AddWithValue("@open", 0);
+                    command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -88,6 +104,7 @@ namespace DashboardReportApp.Services
                                      assistanceReq = @assistanceReq, 
                                      assistedBy = @assistedBy, 
                                      setupComp = @setupComp, 
+                                     open = @open,
                                      notes = @notes
                                  WHERE part = @part AND startDateTime = @startDateTime";
 
@@ -97,7 +114,16 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@difficulty", difficulty);
                     command.Parameters.AddWithValue("@assistanceReq", assistanceRequired);
                     command.Parameters.AddWithValue("@assistedBy", assistanceRequired == "Assisted" ? assistedBy : null);
+                    
                     command.Parameters.AddWithValue("@setupComp", setupComplete);
+                    if (setupComplete == "Yes")
+                    {
+                        command.Parameters.AddWithValue("@open", 1);
+                    }
+                    else
+                    {
+                        command.Parameters.AddWithValue("@open", 0);
+                    }
                     command.Parameters.AddWithValue("@notes", notes);
                     command.Parameters.AddWithValue("@part", partNumber);
                     command.Parameters.AddWithValue("@startDateTime", startDateTime);
@@ -186,33 +212,39 @@ namespace DashboardReportApp.Services
             }
             return run;
         }
-        public Dictionary<string, string> GetScheduledParts()
+
+       
+        public List<Scheduled> GetScheduledParts()
         {
-            var scheduledParts = new Dictionary<string, string>();
-            string query = "SELECT part, run FROM schedule WHERE open = '1' ORDER BY part";
+            var records = new List<Scheduled>();
+            string query = "SELECT * FROM schedule where open = 1 order by id desc";
+
 
             using (var connection = new MySqlConnection(_connectionString))
             using (var command = new MySqlCommand(query, connection))
             {
+
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string part = reader["part"].ToString();
-                        string run = reader["run"]?.ToString() ?? "N/A"; // Default to "N/A" if null
-
-                        if (!scheduledParts.ContainsKey(part))  // Avoid duplicates
+                        records.Add(new Scheduled
                         {
-                            scheduledParts.Add(part, run);
-                        }
+                            Id = Convert.ToInt32(reader["id"]),
+                            Part = reader["part"].ToString(),
+                            Component = reader["component"].ToString(),
+                            Subcomponent = reader["Subcomponent"].ToString(),
+                            ProdNumber = reader["ProdNumber"].ToString(),
+                            Run = reader["run"].ToString(),
+
+
+                        });
                     }
                 }
             }
-
-            return scheduledParts;
+            return records;
         }
-
 
     }
 }

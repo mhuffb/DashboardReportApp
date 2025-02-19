@@ -7,17 +7,13 @@
     // 1) Operators from the DB
     var operators = ViewData["Operators"] as List<string> ?? new List<string>();
 
-    // 2) Dictionary of (Part, Run) => Furnace from open skids
-    var openParts = ViewData["OpenParts"] as Dictionary<(string, string), string>
-                    ?? new Dictionary<(string, string), string>();
+    // 2) Get open skids from the ViewBag
+    var openGreenSkids = ViewBag.OpenGreenSkids as List<DashboardReportApp.Models.PressRunLogModel>
+                   ?? new List<DashboardReportApp.Models.PressRunLogModel>();
 
-    // 3) Open sintering runs (`open = 1`)
-    var openRuns = ViewBag.OpenRuns as List<DashboardReportApp.Models.SinterRunSkid>
-                   ?? new List<DashboardReportApp.Models.SinterRunSkid>();
-
-    var openSkids = ViewBag.OpenSkids as List<DashboardReportApp.Models.SinterRunSkid>
-                   ?? new List<DashboardReportApp.Models.SinterRunSkid>();
+   
 }
+
 <div class="container-fluid px-3">
     <h1 class="text-center mb-4">Sintering Run Log</h1>
 
@@ -41,17 +37,22 @@
                     <label for="Part" class="form-label">Part</label>
                     <select id="Part" name="part" class="form-control" required onchange="updateHiddenRun()">
                         <option value="">Select a Part</option>
-                        @foreach (var entry in openParts)
+                        @foreach (var entry in openGreenSkids)
                         {
-                            <option value="@entry.Key.Item1"
-                                    data-run="@entry.Key.Item2">
-                                @entry.Key.Item1 (Run: @entry.Key.Item2)
+                            <option value="@entry.Part"
+                                    data-run="@entry.Run"
+                                    skid-count="@entry.SkidCount"
+                                    prodNum="@entry.ProdNumber"
+                                    >
+                                @entry.Part (Production Number: @entry.ProdNumber Run: @entry.Run Skid: @entry.SkidCount)
                             </option>
                         }
                     </select>
-
+                    <input type="hidden" id="ProdNumber" name="prodnumber" />
                     <input type="hidden" id="RunNumber" name="run" />
+
                 </div>
+
                 <div class="mb-3">
                     <label for="Furnace" class="form-label">Furnace</label>
                     <select id="Furnace" name="furnace" class="form-control" required>
@@ -76,15 +77,16 @@
                     <textarea id="Notes" name="notes" class="form-control text-area-large"></textarea>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100">Start Sintering</button>
+                <button type="submit" class="btn btn-primary w-100">Login to Sintering Skid</button>
             </form>
         </div>
     </div>
 </div>
 
 <script>
-           function updateHiddenRun() {
+    function updateHiddenRun() {
         const partSelect = document.getElementById("Part");
+        const prodHidden = document.getElementById("ProdNumber");
         const runHidden = document.getElementById("RunNumber");
         const selectedOption = partSelect.options[partSelect.selectedIndex];
 
@@ -94,16 +96,15 @@
         }
 
         const selectedRun = selectedOption.getAttribute("data-run") || "";
-        runHidden.value = selectedRun; // Ensure correct `run` value is set
-
-        console.log("Selected Run:", selectedRun); // Debugging output
+        const selectedProdNumber = selectedOption.getAttribute("prodNum") || "";
+        prodHidden.value = selectedProdNumber;
+        runHidden.value = selectedRun; // Set the hidden run value
+        console.log("Selected Run:", selectedRun);
     }
-
-
 </script>
 
-<!-- Open Sinter Runs -->
-<h2 class="text-center mb-4">Open Sinter Runs</h2>
+<!-- Open Sinter Skids Table -->
+<h2 class="text-center mb-4">Open Sintering Production Skid Runs</h2>
 <div class="card shadow mb-4">
     <div class="card-body">
         <div class="table-responsive">
@@ -112,6 +113,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Timestamp</th>
+                        <th>Production Number</th>
                         <th>Run</th>
                         <th>Part</th>
                         <th>Start Time</th>
@@ -121,25 +123,23 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var run in openSkids)
+                    @foreach (var skid in Model.Where(s => s.EndDateTime == null))
                     {
                         <tr>
-                            <td>@run.Id</td>
-                            <td>@run.Timestamp</td>
-                            <td>@run.Run</td>
-                            <td>@run.Part</td>
-                            <td>@run.StartDateTime</td>
-                            <td>@run.Operator</td>
-                            <td>@run.Machine</td>
+                            <td>@skid.Id</td>
+                            <td>@skid.Timestamp</td>
+                            <td>@skid.ProdNumber</td>
+                            <td>@skid.Run</td>
+                            <td>@skid.Part</td>
+                            <td>@skid.StartDateTime</td>
+                            <td>@skid.Operator</td>
+                            <td>@skid.Machine</td>
                             <td>
                                 <button class="btn btn-danger btn-sm"
-                                        onclick="openStopSinteringModal('@run.Id', '@run.Part', '@run.Run', '@run.StartDateTime')"
+                                        onclick="openStopSinteringModal('@skid.Id', '@skid.Part', '@skid.Run', '@skid.StartDateTime')"
                                         data-bs-toggle="modal" data-bs-target="#stopSinteringModal">
-                                    Stop Sintering
+                                    Logout of Skid Run
                                 </button>
-
-
-
                             </td>
                         </tr>
                     }
@@ -150,54 +150,52 @@
 </div>
 
 
-    <!-- Full List of Records (React Table) -->
-    <h3 class="text-center mt-4">All Sinter Run Records</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div class="container-fluid px-3 mt-4">
-                <div id="myReactSinterRunTableRoot"
-                     data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
-                </div>
+<!-- Full List of Records (React Table) -->
+<h3 class="text-center mt-4">All Sinter Run Records</h3>
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <div class="container-fluid px-3 mt-4">
+            <div id="myReactSinterRunTableRoot"
+                 data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="/js/mydatatable.bundle.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const container = document.getElementById("myReactSinterRunTableRoot");
-            if (!container) return;
+<script src="/js/mydatatable.bundle.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const container = document.getElementById("myReactSinterRunTableRoot");
+        if (!container) return;
 
-            // Get JSON data from the Razor model
-            const rawData = container.getAttribute("data-records");
-            const data = JSON.parse(rawData); // List<PressRunLogModel>
+        // Get JSON data from the Razor model
+        const rawData = container.getAttribute("data-records");
+        const data = JSON.parse(rawData);
 
-            // Define columns for the table (same as C# PressRunLogModel)
-            const columns = [
-                { key: "Id", label: "ID" },
-                { key: "Timestamp", label: "Timestamp" },
-                { key: "Operator", label: "Operator" },
-                { key: "Run", label: "Run" },
-                { key: "Part", label: "Part" },
-                { key: "Machine", label: "Furnace" },
-                { key: "Process", label: "Process" },
-                { key: "StartDateTime", label: "Start Time" },
-                { key: "EndDateTime", label: "End Time" },
-                { key: "Notes", label: "Notes" },
-                { key: "Open", label: "Open" }
-                
-                
-                
-            ];
+        // Define columns for the React table
+        const columns = [
+            { key: "Id", label: "ID" },
+            { key: "Timestamp", label: "Timestamp" },
+            { key: "Operator", label: "Operator" },
+            {key: "ProdNumber", label: "Production Number" },
+            { key: "Run", label: "Run" },
+            { key: "Part", label: "Part" },
+            { key: "Machine", label: "Furnace" },
+            { key: "Process", label: "Process" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
+            { key: "Notes", label: "Notes" },
+            { key: "Open", label: "Open" }
+        ];
 
-            // Render the React table
-            if (window.renderMyDataTable) {
-                window.renderMyDataTable("myReactSinterRunTableRoot", data, columns, true);
-            } else {
-                console.error("React table render function not found!");
-            }
-        });
-    </script>
+        if (window.renderMyDataTable) {
+            window.renderMyDataTable("myReactSinterRunTableRoot", data, columns, true);
+        } else {
+            console.error("React table render function not found!");
+        }
+    });
+</script>
+
 <!-- Stop Sintering Modal -->
 <div class="modal fade" id="stopSinteringModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -208,22 +206,20 @@
             </div>
             <div class="modal-body">
                 <form id="stopSinteringForm" method="post" action="/SinterRunLog/CloseSkid">
-                    <!-- Hidden Fields for Submission -->
+                    <!-- Hidden Fields -->
                     <input type="hidden" id="modalRunId" name="run" />
                     <input type="hidden" id="modalStartTime" name="startTime" />
 
-                    <!-- Display Part Number -->
+                    <!-- Part Number Display -->
                     <div class="mb-3">
                         <label class="form-label">Part Number</label>
                         <input type="text" id="modalPart" class="form-control" name="part" readonly />
                     </div>
 
-                    <!-- Confirmation Message -->
-                    <p class="text-danger">Are you sure you want to stop this sintering run?</p>
-
+                    <p class="text-danger">Are you sure you want to logout of this sintering skid run?</p>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-danger">Stop Sintering</button>
+                        <button type="submit" class="btn btn-danger">Logout of Skid Run</button>
                     </div>
                 </form>
             </div>
@@ -234,46 +230,31 @@
 <script>
     function openStopSinteringModal(runId, part, run, startDateTime) {
         if (!confirm(`Are you sure you want to stop sintering for ${part} (Run: ${run}) started at ${startDateTime}?`)) {
-            return; // Cancel if the user clicks "No"
+            return;
         }
-
-        // Debugging output to ensure the correct values are passed
-        console.log("Stopping sintering:");
-        console.log("Run ID:", runId);
-        console.log("Part:", part);
-        console.log("Run:", run); // ✅ Check if the correct run value is here
-        console.log("Start Time:", startDateTime);
-
-        // Create a form dynamically and submit it
+        console.log("Stopping sintering:", { runId, part, run, startDateTime });
+        // Create and submit a form dynamically
         const form = document.createElement("form");
         form.method = "post";
         form.action = "/SinterRunLog/CloseSkid";
-
-        // Add input fields for the required data
         const partInput = document.createElement("input");
         partInput.type = "hidden";
         partInput.name = "part";
         partInput.value = part;
         form.appendChild(partInput);
-
         const runInput = document.createElement("input");
         runInput.type = "hidden";
         runInput.name = "run";
-        runInput.value = run; // ✅ Ensuring the correct value is passed
+        runInput.value = run;
         form.appendChild(runInput);
-
         document.body.appendChild(form);
         form.submit();
     }
-</script>
 
-<script>
+    // Alternate modal setup (if needed)
     function openStopSinteringModal(id, part, run, startTime) {
         document.getElementById("modalPart").value = part;
-        document.getElementById("modalRunId").value = run;  // Ensure Run is correct
+        document.getElementById("modalRunId").value = run;
         document.getElementById("modalStartTime").value = startTime;
     }
 </script>
-
-
-   

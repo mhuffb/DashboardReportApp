@@ -22,8 +22,7 @@ namespace DashboardReportApp.Controllers
             ViewData["Operators"] = await _pressRunLogService.GetOperatorsAsync();
 
             // openParts => for the Start Molding form
-            var openParts = await _pressRunLogService.GetOpenPartsWithRunsAndMachinesAsync();
-            ViewData["OpenParts"] = openParts ?? new Dictionary<(string, string), string>();
+            ViewData["OpenParts"] = await _pressRunLogService.GetOpenSetups();
 
             var openRuns = await _pressRunLogService.GetLoggedInRunsAsync();
             var allRuns = await _pressRunLogService.GetAllRunsAsync();
@@ -47,32 +46,32 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmLogin(string operatorName, string part,
-                                              string machine, string runNumber,
-                                              int finalCount)
+        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int finalCount)
         {
+            Console.WriteLine("Received ProdNumber: " + model.ProdNumber);  // For debugging
             var formModel = new PressRunLogModel
             {
-                Operator = operatorName,
-                Part = part,
-                Machine = machine,
-                Run = runNumber,
-                StartDateTime = DateTime.Now
+                Operator = model.Operator,
+                Part = model.Part,
+                Machine = model.Machine,
+                Run = model.Run,
+                StartDateTime = DateTime.Now,
+                ProdNumber = model.ProdNumber  // This should now be set
             };
             await _pressRunLogService.HandleLoginWithCountAsync(formModel, finalCount);
             return RedirectToAction("Index");
         }
 
+
         // ==================== START SKID =====================
         // Updated action name and parameter names to match the modal form
         [HttpPost]
-        public async Task<IActionResult> StartSkid(int runId, string run, string part,
-                                            string machine, string operatorName,
-                                            int skidcount)
+        public async Task<IActionResult> StartSkid(PressRunLogModel model)
         {
-            await _pressRunLogService.HandleStartSkidAsync(runId, run, part, operatorName, machine, skidcount);
+            await _pressRunLogService.HandleStartSkidAsync(model);
             return RedirectToAction("Index");
         }
+
 
         // ==================== LOGOUT =====================
         // GET /PressRunLog/LoadLogoutModal => user sees device count => typed final count

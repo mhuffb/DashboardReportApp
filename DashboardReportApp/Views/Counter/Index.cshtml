@@ -1,0 +1,192 @@
+﻿@{
+    // Dictionary of device IDs and their corresponding IPs
+    var deviceIPs = new Dictionary<string, string>
+    {
+        { "1", "192.168.1.30" },
+        { "2", "192.168.1.31" },
+        { "41", "192.168.1.32" },
+        { "45", "192.168.1.33" },
+        { "50", "192.168.1.34" },
+        { "51", "192.168.1.35" },
+        { "57", "192.168.1.36" },
+        { "59", "192.168.1.37" },
+        { "70", "192.168.1.38" },
+        { "74", "192.168.1.39" },
+        { "92", "192.168.1.40" },
+        { "95", "192.168.1.41" },
+        { "102", "192.168.1.42" },
+        { "112", "192.168.1.43" },
+        { "124", "192.168.1.44" },
+        { "125", "192.168.1.45" },
+        { "154", "192.168.1.46" },
+        { "156", "192.168.1.47" },
+        { "175", "192.168.1.48" }
+    };
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Press Configuration</title>
+    <style>
+        /* Optional: style the status message */
+        #statusMessage {
+            margin-bottom: 1em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Update Press Configuration</h1>
+
+    <!-- Device Selection -->
+    <label for="deviceSelect">Select Device:</label>
+    <select id="deviceSelect" name="deviceSelect" required onchange="fetchCurrentValues()">
+        <option value="">-- Select Device --</option>
+        @foreach (var device in deviceIPs)
+        {
+            <option value="@device.Value">Device @device.Key (@device.Value)</option>
+        }
+    </select>
+    <br>
+    <br>
+
+    <!-- Status Message -->
+    <div id="statusMessage"></div>
+
+    <!-- Configuration Form (prefilled with current data) -->
+    <form id="updateForm">
+        <label for="press_value">Press:</label>
+        <input type="text" id="press_value" name="press_value" required autocomplete="off" disabled><br>
+
+        <label for="count_value">Count:</label>
+        <input type="text" id="count_value" name="count_value" required autocomplete="off" disabled><br>
+
+        <button type="submit" disabled>Update</button>
+    </form>
+
+    <script>
+        // Lock/unlock helper functions
+        function lockForm(message) {
+            document.getElementById("press_value").disabled = true;
+            document.getElementById("count_value").disabled = true;
+            document.getElementById("updateForm").querySelector("button[type='submit']").disabled = true;
+            let statusEl = document.getElementById("statusMessage");
+            statusEl.style.color = "red";
+            statusEl.textContent = message;
+        }
+
+        function unlockForm() {
+            document.getElementById("press_value").disabled = false;
+            document.getElementById("count_value").disabled = false;
+            document.getElementById("updateForm").querySelector("button[type='submit']").disabled = false;
+            document.getElementById("statusMessage").textContent = "";
+        }
+
+        // Recursive polling function: tries to fetch updated values until success or max attempts reached
+        function pollForValues(selectedIP, attempt = 1, maxAttempts = 20) {
+            console.log("Poll attempt:", attempt);
+            fetch(`http://${selectedIP}/api/picodata`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Response not ok");
+                }
+                return response.json();
+            })
+            .then(data => {
+                // If we successfully get data, prefill the form and show success
+                document.getElementById("press_value").value = data.press_value;
+                document.getElementById("count_value").value = data.count_value;
+                unlockForm();
+                let statusEl = document.getElementById("statusMessage");
+                statusEl.style.color = "green";
+                statusEl.textContent = "Update successful!";
+            })
+            .catch(err => {
+                console.error("Polling error:", err);
+                if (attempt < maxAttempts) {
+                    setTimeout(() => pollForValues(selectedIP, attempt + 1, maxAttempts), 1000);
+                } else {
+                    lockForm("Unable to connect after update. Please try again.");
+                }
+            });
+        }
+
+        // Handle form submission (update)
+        document.getElementById("updateForm").addEventListener("submit", function(event) {
+            event.preventDefault(); // Prevent page reload
+
+            let selectedIP = document.getElementById("deviceSelect").value;
+            let pressValue = document.getElementById("press_value").value;
+            let countValue = document.getElementById("count_value").value;
+            let statusMessage = document.getElementById("statusMessage");
+
+            if (!selectedIP) {
+                statusMessage.style.color = "red";
+                statusMessage.textContent = "Please select a device.";
+                return;
+            }
+
+            // Lock the form while updating
+            lockForm("Updating…");
+
+            fetch(`http://${selectedIP}/update`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `press_value=${encodeURIComponent(pressValue)}&count_value=${encodeURIComponent(countValue)}`
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log("Update response:", data);
+                // Start polling for updated values after the update POST completes
+                pollForValues(selectedIP);
+            })
+            .catch(error => {
+                console.error("Error updating:", error);
+                lockForm("Update failed. Waiting to connect…");
+            });
+        });
+
+        // Fetch current values and prefill the form when a device is selected
+        function fetchCurrentValues() {
+            let selectedIP = document.getElementById("deviceSelect").value;
+            let statusMessage = document.getElementById("statusMessage");
+
+            if (!selectedIP) {
+                document.getElementById("press_value").value = "";
+                document.getElementById("count_value").value = "";
+                statusMessage.textContent = "";
+                return;
+            }
+
+            lockForm("Waiting to connect…");
+
+            fetch(`http://${selectedIP}/api/picodata`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById("press_value").value = data.press_value;
+                document.getElementById("count_value").value = data.count_value;
+                unlockForm();
+            })
+            .catch(error => {
+                console.error("Error fetching current values:", error);
+                document.getElementById("press_value").value = "";
+                document.getElementById("count_value").value = "";
+                lockForm("Unable to connect. Waiting to connect…");
+            });
+        }
+
+        // Update form values when a new device is selected
+        document.getElementById("deviceSelect").addEventListener("change", fetchCurrentValues);
+    </script>
+
+
+
+</body>
+</html>

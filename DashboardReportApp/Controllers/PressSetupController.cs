@@ -36,11 +36,11 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost("Login")]
-        public async Task<IActionResult> Login(string partNumber, string runNumber, string operatorName, string machine)
+        public async Task<IActionResult> Login(PressSetupLoginViewModel model)
         {
             try
             {
-                await _pressSetupService.LoginAsync(partNumber, runNumber, operatorName, machine);
+                await _pressSetupService.LoginAsync(model);
                 TempData["Message"] = "Login successfully recorded!";
             }
             catch (Exception ex)

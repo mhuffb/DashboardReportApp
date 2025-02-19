@@ -17,6 +17,7 @@
         public int QtyToSchedule { get; set; }
         public string Run { get; set; }
         public int Open { get; set; } // Add this property
+        public string ProdNumber { get; set; }
     }
 
 

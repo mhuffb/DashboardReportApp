@@ -43,44 +43,6 @@ public class SinterRunLogService
         return operators;
     }
 
-    // Fetch open skids from MySQL
-    public List<SinterRunSkid> GetOpenSkids()
-    {
-        var openSkids = new List<SinterRunSkid>();
-        string query = "SELECT id, timestamp, operator, part, oven, process, startDateTime, endDateTime, notes, run FROM " + datatable + " WHERE endDateTime IS NULL";
-
-        using (var connection = new MySqlConnection(_connectionStringMySQL))
-        {
-            connection.Open();
-            using (var command = new MySqlCommand(query, connection))
-            {
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        var skid = new SinterRunSkid
-                        {
-                            Id = reader.GetInt32("id"),
-                            Timestamp = reader.GetDateTime("timestamp"),
-                            Operator = reader["operator"].ToString(),
-                            Part = reader["part"].ToString(),
-                            Machine = reader["oven"].ToString(),
-                            Process = reader["process"].ToString(),
-                            StartDateTime = reader.GetDateTime("startDateTime"),
-                            EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                                   ? null : reader.GetDateTime("endDateTime"),
-                            Notes = reader["notes"] as string,
-                            Run = reader["run"] as string
-                        };
-
-                        openSkids.Add(skid);
-                    }
-                }
-            }
-        }
-
-        return openSkids;
-    }
 
     // Fetch furnaces from MySQL
     public List<string> GetFurnaces()
@@ -106,33 +68,6 @@ public class SinterRunLogService
         return furnaces;
     }
 
-
-
-    // Get part numbers from Dataflex
-    public List<string> GetParts()
-    {
-        var parts = new List<string>();
-        string query = "SELECT DISTINCT master_id FROM master WHERE active_status = 'A' AND master_id NOT LIKE '%p%' ORDER BY master_id";
-
-        using (var connection = new OdbcConnection(_connectionStringDataflex))
-        {
-            connection.Open();
-            using (var command = new OdbcCommand(query, connection))
-            {
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        parts.Add(reader["master_id"].ToString());
-                    }
-                }
-            }
-        }
-
-        return parts;
-    }
-
-  
 
     // Close all skids for the selected furnace
     public void CloseSkidsByFurnace(string furnace)
@@ -198,7 +133,7 @@ public class SinterRunLogService
         Console.WriteLine($"➡️ Process: {process}");
         Console.WriteLine($"➡️ Notes: {notes}");
 
-        string query = "INSERT INTO " + datatable + " (operator, part, run, startDateTime, oven, process, notes, open) VALUES (@operator, @part, @run, @startDateTime, @oven, @process, @notes, @open)";
+        string query = "INSERT INTO " + datatable + " (operator, part, run, startDateTime, oven, process, notes) VALUES (@operator, @part, @run, @startDateTime, @oven, @process, @notes)";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -212,7 +147,6 @@ public class SinterRunLogService
                 command.Parameters.AddWithValue("@oven", furnace);
                 command.Parameters.AddWithValue("@process", process);
                 command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(notes) ? DBNull.Value : notes);
-                command.Parameters.AddWithValue("@open", 1);
 
                 command.ExecuteNonQuery();
             }
@@ -260,33 +194,37 @@ public class SinterRunLogService
 
         return allRuns;
     }
-    public async Task<List<SinterRunSkid>> GetOpenRunsAsync()
+   
+    public async Task<List<PressRunLogModel>> GetOpenGreenSkidsAsync()
     {
-        var openRuns = new List<SinterRunSkid>();
+        var openGreenSkids = new List<PressRunLogModel>();
 
         string query = @"
-        SELECT id, timestamp, run, part
-        FROM pressrun" +
-            " WHERE open = 1 ORDER BY startDateTime DESC";
+        SELECT id, timestamp, prodNumber, run, part, skidcount, machine, pcsStart, pcsEnd
+        FROM pressrun
+        WHERE open = 1 AND skidcount > 0
+        ORDER BY startDateTime DESC";
 
-    await using var connection = new MySqlConnection(_connectionStringMySQL);
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
         await using var command = new MySqlCommand(query, connection);
         await using var reader = await command.ExecuteReaderAsync();
 
         while (await reader.ReadAsync())
         {
-            openRuns.Add(new SinterRunSkid
+            openGreenSkids.Add(new PressRunLogModel
             {
                 Id = reader.GetInt32("id"),
                 Timestamp = reader.GetDateTime("timestamp"),
+                ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
-                
+                SkidCount = reader.GetInt32("skidcount"),
+                Machine = reader["Machine"]?.ToString() ?? "N/A"
             });
         }
 
-        return openRuns;
+        return openGreenSkids;
     }
 
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
@@ -19,5 +20,38 @@ namespace DashboardReportApp.Models
         public string AssistedBy { get; set; }
         public string Notes { get; set; }
         public sbyte Open { get; set; }
+        public string ProdNumber { get; set; }
+        public string Component { get; set; }
+        public string Subcomponent { get; set; }
     }
-}
+    public class PressSetupLoginViewModel
+    {
+        // Only include fields that are submitted from the form.
+        [Required]
+        public string Part { get; set; }
+
+        [Required]
+        public string Run { get; set; }
+
+        [Required]
+        public string Operator { get; set; }
+
+        [Required]
+        public string Machine { get; set; }
+
+        // If prodNumber is required:
+        public string ProdNumber { get; set; }
+        public string Component { get; set; }
+        public string Subcomponent { get; set; }
+    }
+
+    public class Scheduled
+    {
+        public long Id { get; set; }
+        public string Part { get; set; }
+        public string Component { get; set; }
+        public string Subcomponent { get; set; }
+        public string ProdNumber { get; set; }
+        public string Run { get; set; }
+    }
+    }

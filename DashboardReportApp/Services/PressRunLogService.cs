@@ -8,6 +8,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using System.Data.Common;
 using System.Data;
+using iText.Layout.Element;
+using System.Reflection.PortableExecutable;
 
 namespace DashboardReportApp.Services
 {
@@ -35,8 +37,25 @@ namespace DashboardReportApp.Services
             }
             var dict = new Dictionary<string, string>
             {
-                { "2", "192.168.1.254" },
-                { "102", "192.168.1.17" }
+                { "1", "192.168.1.30" },
+                { "2", "192.168.1.31" },
+                { "41", "192.168.1.32" },
+                { "45", "192.168.1.33" },
+                { "50", "192.168.1.34" },
+                { "51", "192.168.1.35" },
+                { "57", "192.168.1.36" },
+                { "59", "192.168.1.37" },
+                { "70", "192.168.1.38" },
+                { "74", "192.168.1.39" },
+                { "92", "192.168.1.40" },
+                { "95", "192.168.1.41" },
+                { "102", "192.168.1.42" },
+                { "112", "192.168.1.43" },
+                { "124", "192.168.1.44" },
+                { "125", "192.168.1.45" },
+                { "154", "192.168.1.46" },
+                { "156", "192.168.1.47" },
+                { "175", "192.168.1.48" }
                 // Add additional mappings as needed.
             };
             if (dict.TryGetValue(machine, out var ip))
@@ -73,53 +92,33 @@ namespace DashboardReportApp.Services
                 string json = (await response.Content.ReadAsStringAsync()).Trim();
                 Console.WriteLine("Device JSON: " + json);
 
-                // 1. Try to parse as a plain integer.
-                if (int.TryParse(json, out int plainCount))
+                // If the response appears to be a JSON object, try to extract "count_value"
+                if (json.StartsWith("{"))
                 {
-                    return plainCount;
-                }
-
-                // 2. If the JSON is quoted, trim the quotes.
-                if (json.StartsWith("\"") && json.EndsWith("\""))
-                {
-                    string trimmed = json.Trim('"');
-                    if (int.TryParse(trimmed, out int trimmedCount))
-                    {
-                        return trimmedCount;
-                    }
-                }
-
-                // 3. Parse the JSON using JsonDocument.
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                using var doc = JsonDocument.Parse(json);
-                JsonElement root = doc.RootElement;
-                if (root.ValueKind == JsonValueKind.Number && root.TryGetInt32(out int numCount))
-                {
-                    return numCount;
-                }
-                else if (root.ValueKind == JsonValueKind.String)
-                {
-                    string s = root.GetString();
-                    if (int.TryParse(s, out int strCount))
-                    {
-                        return strCount;
-                    }
-                }
-                else if (root.ValueKind == JsonValueKind.Object)
-                {
-                    if (root.TryGetProperty("Count", out JsonElement countElement) ||
-                        root.TryGetProperty("count", out countElement))
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    using var doc = JsonDocument.Parse(json);
+                    JsonElement root = doc.RootElement;
+                    if (root.TryGetProperty("count_value", out JsonElement countElement))
                     {
                         if (countElement.ValueKind == JsonValueKind.Number && countElement.TryGetInt32(out int deviceCount))
                         {
                             return deviceCount;
                         }
-                        else if (countElement.ValueKind == JsonValueKind.String &&
-                                 int.TryParse(countElement.GetString(), out int deviceCountFromStr))
+                        else if (countElement.ValueKind == JsonValueKind.String)
                         {
-                            return deviceCountFromStr;
+                            string countStr = countElement.GetString();
+                            if (int.TryParse(countStr, out int parsedCount))
+                            {
+                                return parsedCount;
+                            }
                         }
                     }
+                }
+
+                // Fallback: if the JSON is just a plain integer (unlikely in our new format)
+                if (int.TryParse(json, out int plainCount))
+                {
+                    return plainCount;
                 }
             }
             catch (Exception ex)
@@ -129,6 +128,7 @@ namespace DashboardReportApp.Services
             return null;
         }
 
+
         #endregion
 
         #region Main Run Logic (Login, Logout, EndRun)
@@ -137,9 +137,9 @@ namespace DashboardReportApp.Services
         {
             const string insertMainRun = @"
 INSERT INTO pressrun 
-    (operator, part, machine, run, startDateTime, open, skidcount, pcsStart)
+    (operator, part, machine, prodNumber, run, startDateTime, skidcount, pcsStart)
 VALUES 
-    (@operator, @part, @machine, @run, @startTime, 1, 0, @pcsStart)";
+    (@operator, @part, @machine, @prodNumber, @run, @startTime, 0, @pcsStart)";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(insertMainRun, conn);
@@ -147,6 +147,7 @@ VALUES
             cmd.Parameters.AddWithValue("@part", formModel.Part);
             // Store the raw machine value.
             cmd.Parameters.AddWithValue("@machine", formModel.Machine);
+            cmd.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
             cmd.Parameters.AddWithValue("@run", formModel.Run);
             cmd.Parameters.AddWithValue("@startTime", formModel.StartDateTime);
             cmd.Parameters.AddWithValue("@pcsStart", userCount);
@@ -201,7 +202,8 @@ LIMIT 1";
                 const string endSkidQuery = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
-    pcsEnd = @finalCount
+    pcsEnd = @finalCount,
+    open = 1
 WHERE run = @runIdentifier
   AND skidcount > 0
   AND endDateTime IS NULL";
@@ -251,8 +253,7 @@ LIMIT 1";
 
         #region Skid Logic
 
-        public async Task HandleStartSkidAsync(int runId, string run, string part,
-                                               string operatorName, string machine, int skidCountFromForm)
+        public async Task HandleStartSkidAsync(PressRunLogModel model)
         {
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -266,25 +267,26 @@ WHERE run = @run
   AND skidcount > 0";
             using (var cmd = new MySqlCommand(getSkids, conn))
             {
-                cmd.Parameters.AddWithValue("@run", run);
+                cmd.Parameters.AddWithValue("@run", model.Run);
                 var result = await cmd.ExecuteScalarAsync();
                 if (result != null && int.TryParse(result.ToString(), out int c))
                     currentSkidCount = c;
             }
 
             // 2) Get device count using the raw machine value.
-            int? deviceCount = await TryGetDeviceCountOrNull(machine);
+            int? deviceCount = await TryGetDeviceCountOrNull(model.Machine);
 
             if (currentSkidCount == 0)
             {
                 const string insertFirst = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
-VALUES (@run, @part, NOW(), @operator, @machine, 1, 1, @pcsStart)";
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidcount, pcsStart)
+VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
                 using var insCmd = new MySqlCommand(insertFirst, conn);
-                insCmd.Parameters.AddWithValue("@run", run);
-                insCmd.Parameters.AddWithValue("@part", part);
-                insCmd.Parameters.AddWithValue("@operator", operatorName);
-                insCmd.Parameters.AddWithValue("@machine", machine);
+                insCmd.Parameters.AddWithValue("@run", model.Run);
+                insCmd.Parameters.AddWithValue("@part", model.Part);
+                insCmd.Parameters.AddWithValue("@operator", model.Operator);
+                insCmd.Parameters.AddWithValue("@machine", model.Machine);
+                insCmd.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
                 if (deviceCount.HasValue)
                     insCmd.Parameters.AddWithValue("@pcsStart", deviceCount.Value);
                 else
@@ -305,10 +307,11 @@ JOIN (
     GROUP BY run
 ) t ON p.run = @run AND p.skidcount = t.maxSkid
 SET p.endDateTime = NOW(),
-    p.pcsEnd = @pcsEnd
+    p.pcsEnd = @pcsEnd,
+    p.open = 1
 WHERE p.endDateTime IS NULL";
                 using var endCmd = new MySqlCommand(endSkidSql, conn);
-                endCmd.Parameters.AddWithValue("@run", run);
+                endCmd.Parameters.AddWithValue("@run", model.Run);
                 if (deviceCount.HasValue)
                     endCmd.Parameters.AddWithValue("@pcsEnd", deviceCount.Value);
                 else
@@ -316,15 +319,16 @@ WHERE p.endDateTime IS NULL";
                 await endCmd.ExecuteNonQueryAsync();
 
                 int newSkidCount = currentSkidCount + 1;
-                int? newSkidStart = await TryGetDeviceCountOrNull(machine);
+                int? newSkidStart = await TryGetDeviceCountOrNull(model.Machine);
                 const string insertNext = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, open, skidcount, pcsStart)
-VALUES (@run, @part, NOW(), @operator, @machine, 1, @skidcount, @pcsStart)";
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidcount, pcsStart)
+VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidcount, @pcsStart)";
                 using var insSkid = new MySqlCommand(insertNext, conn);
-                insSkid.Parameters.AddWithValue("@run", run);
-                insSkid.Parameters.AddWithValue("@part", part);
-                insSkid.Parameters.AddWithValue("@operator", operatorName);
-                insSkid.Parameters.AddWithValue("@machine", machine);
+                insSkid.Parameters.AddWithValue("@run", model.Run);
+                insSkid.Parameters.AddWithValue("@part", model.Part);
+                insSkid.Parameters.AddWithValue("@operator", model.Operator);
+                insSkid.Parameters.AddWithValue("@machine", model.Machine);
+                insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
                 insSkid.Parameters.AddWithValue("@skidcount", newSkidCount);
                 if (newSkidStart.HasValue)
                     insSkid.Parameters.AddWithValue("@pcsStart", newSkidStart.Value);
@@ -357,36 +361,57 @@ ORDER BY name";
             return ops;
         }
 
-        public async Task<Dictionary<(string Part, string Run), string>> GetOpenPartsWithRunsAndMachinesAsync()
+        public async Task<List<PressSetupModel>> GetOpenSetups()
         {
-            var dict = new Dictionary<(string, string), string>();
+            var list = new List<PressSetupModel>();
             const string sql = @"
-SELECT part, run, machine
-FROM presssetup
-WHERE open = 1
-ORDER BY part, run";
+        SELECT id, timestamp, part, prodNumber, run, operator, endDateTime, machine, notes
+        FROM presssetup
+        WHERE open = 1
+        ORDER BY part, run";
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
             await using var rdr = await cmd.ExecuteReaderAsync();
             while (await rdr.ReadAsync())
             {
-                var part = rdr.GetString("part");
-                var run = rdr.GetString("run");
-                var mach = rdr.GetString("machine");
-                dict[(part, run)] = mach;
+                var model = new PressSetupModel
+                {
+                    Id = rdr.GetInt32("id"),
+                    Timestamp = rdr.GetDateTime("timestamp"),
+                    Part = rdr.GetString("part"),
+                    // Safely read prodNumber
+                    ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
+                                 ? ""
+                                 : rdr.GetString("prodNumber"),
+                    Run = rdr.GetString("run"),
+                    Operator = rdr.GetString("operator"),
+                    EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime"))
+                                 ? (DateTime?)null
+                                 : rdr.GetDateTime("endDateTime"),
+                    Machine = rdr.GetString("machine"),
+                    Notes = rdr.IsDBNull(rdr.GetOrdinal("notes"))
+                                 ? ""
+                                 : rdr.GetString("notes")
+                };
+
+                list.Add(model);
             }
-            return dict;
+            return list;
         }
+
+
 
         public async Task<List<PressRunLogModel>> GetLoggedInRunsAsync()
         {
             var list = new List<PressRunLogModel>();
             const string sql = @"
-SELECT id, timestamp, run, part, startDateTime, endDateTime,
+SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
 FROM pressrun
 WHERE endDateTime IS NULL";
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
@@ -402,7 +427,7 @@ WHERE endDateTime IS NULL";
         {
             var list = new List<PressRunLogModel>();
             const string sql = @"
-SELECT id, timestamp, run, part, startDateTime, endDateTime,
+SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
 FROM pressrun
 ORDER BY id DESC";
@@ -423,6 +448,10 @@ ORDER BY id DESC";
             {
                 Id = rdr.GetInt32("id"),
                 Timestamp = rdr.GetDateTime("timestamp"),
+                // Safely read prodNumber:
+                ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
+                             ? ""
+                             : rdr.GetString("prodNumber"),
                 Run = rdr["run"]?.ToString(),
                 Part = rdr["part"]?.ToString(),
                 StartDateTime = rdr.GetDateTime("startDateTime"),
@@ -447,6 +476,7 @@ ORDER BY id DESC";
             };
             return model;
         }
+
 
         #endregion
     }

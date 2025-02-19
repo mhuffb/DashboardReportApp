@@ -48,11 +48,12 @@
                 <table class="table table-striped table-bordered shadow-sm w-100">
                     <thead class="table-dark">
                         <tr>
-                            <th>Master ID</th>
+                            <th>Part</th>
                             <th>Component</th>
                             <th>Subcomponent</th>
                             <th>Qty to Make Master ID</th>
                             <th>Qty to Schedule</th>
+                            <th>Production Number</th>
                             <th>Run</th>
                         </tr>
                     </thead>
@@ -78,6 +79,10 @@
                                 </td>
                                 <td>
                                     <input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" required />
+                                </td>
+                                <td>
+                                    <input type="hidden" name="AllComponents[@i].ProdNumber" value="@Model.AllComponents[i].ProdNumber" />
+                                    @Model.AllComponents[i].ProdNumber
                                 </td>
                                 <td>
                                     <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
@@ -115,6 +120,7 @@
                             <th>Component</th>
                             <th>Subcomponent</th>
                             <th>Quantity</th>
+                            <th>Production Number</th>
                             <th>Run</th>
                             <th>Open</th>
                         </tr>
@@ -128,6 +134,7 @@
                                 <td><input type="text" name="OpenParts[@i].Component" value="@Model.OpenParts[i].Component" class="form-control" /></td>
                                 <td><input type="text" name="OpenParts[@i].SubComponent" value="@(Model.OpenParts[i].SubComponent ?? "")" class="form-control" /></td>
                                 <td><input type="number" name="OpenParts[@i].QtyToSchedule" value="@Model.OpenParts[i].QtyToSchedule" class="form-control" /></td>
+                                <td><input type="text" name="OpenParts[@i].ProdNumber" value="@Model.OpenParts[i].ProdNumber" class="form-control" /></td>
                                 <td><input type="text" name="OpenParts[@i].Run" value="@Model.OpenParts[i].Run" class="form-control" /></td>
                                 <td>
                                     <select name="OpenParts[@i].Open" class="form-control">

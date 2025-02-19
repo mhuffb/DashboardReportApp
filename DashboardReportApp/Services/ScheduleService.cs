@@ -28,6 +28,7 @@ namespace DashboardReportApp.Services
             queue.Enqueue(masterId);
 
             int nextRunNumber = GetNextRunNumber();
+            int nextProdNumber = GetNextProdNumber();
             bool componentsFound = false;
 
             while (queue.Count > 0)
@@ -68,7 +69,8 @@ namespace DashboardReportApp.Services
                                     SubComponent = null,
                                     QtyToMakeMasterID = qty,
                                     QtyToSchedule = quantity * qty,
-                                    Run = nextRunNumber++.ToString()
+                                    Run = nextRunNumber++.ToString(),
+                                    ProdNumber = nextProdNumber.ToString()
                                 });
 
                                 processedPairs.Add((currentMasterId, componentId));
@@ -107,7 +109,8 @@ namespace DashboardReportApp.Services
                                         SubComponent = subComponentId,
                                         QtyToMakeMasterID = subQty,
                                         QtyToSchedule = component.QtyToSchedule * subQty,
-                                        Run = nextRunNumber++.ToString()
+                                        Run = nextRunNumber++.ToString(),
+                                        ProdNumber = nextProdNumber.ToString()
                                     });
 
                                     processedPairs.Add((component.Component, subComponentId));
@@ -127,7 +130,8 @@ namespace DashboardReportApp.Services
                     SubComponent = null,
                     QtyToMakeMasterID = 1,
                     QtyToSchedule = quantity,
-                    Run = nextRunNumber++.ToString()
+                    Run = nextRunNumber++.ToString(),
+                    ProdNumber = nextProdNumber.ToString()
                 });
             }
 
@@ -169,8 +173,9 @@ namespace DashboardReportApp.Services
 
         public void ScheduleComponents(ScheduleModel viewModel)
         {
-            string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open)";
-            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open) VALUES (@Part, @Quantity, @Run, @Date, @Open)";
+            int nextProdNumber = GetNextProdNumber();
+            string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open, prodNumber) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open, @ProdNumber)";
+            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber)";
 
             using (var connection = new MySqlConnection(MySQLConnectionString))
             {
@@ -187,7 +192,7 @@ namespace DashboardReportApp.Services
                         command.Parameters.AddWithValue("@Run", component.Run);
                         command.Parameters.AddWithValue("@Date", DateTime.Now);
                         command.Parameters.AddWithValue("@Open", 1);
-
+                        command.Parameters.AddWithValue("@ProdNumber", nextProdNumber);
                         if (hasComponent)
                         {
                             command.Parameters.AddWithValue("@Component", component.Component);
@@ -218,7 +223,24 @@ namespace DashboardReportApp.Services
 
             return nextRunNumber;
         }
+        public int GetNextProdNumber()
+        {
+            int nextProdNumber = 0;
 
+            using (var connection = new MySqlConnection(MySQLConnectionString))
+            {
+                string query = "SELECT MAX(prodNumber) + 1 AS NextProdNumber FROM schedule";
+                connection.Open();
+
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    var result = command.ExecuteScalar();
+                    nextProdNumber = result != DBNull.Value ? Convert.ToInt32(result) : 1;
+                }
+            }
+
+            return nextProdNumber;
+        }
         public void UpdateOpenParts(ScheduleModel viewModel)
         {
             try
