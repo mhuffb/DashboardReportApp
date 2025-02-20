@@ -22,13 +22,13 @@ namespace DashboardReportApp.Controllers
             var furnaces = _sinterRunLogService.GetFurnaces();
             ViewData["Furnaces"] = furnaces ?? new List<string>();
 
-            // 2) Fetch open skids (where open = 1 and skidcount > 0) from the pressrun table
+            // 2) Fetch open skids (where open = 1 and skidNumber > 0) from the pressrun table
             var openGreenSkids = await _sinterRunLogService.GetOpenGreenSkidsAsync();
             ViewBag.OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>();
 
             // 3) Create a dictionary of (Part, Run) => Furnace for dropdown selection from open skids
            var openParts = openGreenSkids.ToDictionary(
-    r => (r.Part, r.Run, r.SkidCount),
+    r => (r.Part, r.Run, r.SkidNumber),
     r => r.Machine
 );
 
@@ -43,13 +43,15 @@ namespace DashboardReportApp.Controllers
             return View(allRuns);
         }
 
-        [HttpPost("StartSkid")]
-        public IActionResult StartSkid(string operatorName, string part, string run, string furnace, string process, string notes)
+        [HttpPost("LoginToSkid")]
+        public IActionResult LoginToSkid(SinterRunSkid model)
         {
-            // Validate inputs and start the new skid
-            if (string.IsNullOrWhiteSpace(operatorName) || string.IsNullOrWhiteSpace(part) ||
-                string.IsNullOrWhiteSpace(run) || string.IsNullOrWhiteSpace(furnace) ||
-                string.IsNullOrWhiteSpace(process))
+            if (string.IsNullOrWhiteSpace(model.Operator) ||
+                string.IsNullOrWhiteSpace(model.ProdNumber) ||
+                string.IsNullOrWhiteSpace(model.Part) ||
+                string.IsNullOrWhiteSpace(model.Run) ||
+                string.IsNullOrWhiteSpace(model.Machine) ||
+                string.IsNullOrWhiteSpace(model.Process))
             {
                 ViewData["Error"] = "All fields are required.";
                 return RedirectToAction("Index");
@@ -57,11 +59,9 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                // End any existing skids on the selected furnace if needed
-                _sinterRunLogService.EndSkidsByFurnaceIfNeeded(furnace);
-                // Start a new skid
-                _sinterRunLogService.StartSkid(operatorName, part, run, furnace, process, notes);
-                ViewData["Message"] = $"{part} - {run} started successfully on Furnace {furnace}.";
+                _sinterRunLogService.EndSkidsByMachineIfNeeded(model.Machine);
+                _sinterRunLogService.LoginToSkid(model);
+                ViewData["Message"] = $"{model.Part} - {model.Run} started successfully on Furnace {model.Machine}.";
             }
             catch (Exception ex)
             {
@@ -71,14 +71,15 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-        [HttpPost("CloseSkid")]
-        public IActionResult CloseSkid(string part, string run)
+
+        [HttpPost("LogoutOfSkid")]
+        public IActionResult LogoutOfSkid(string part, string run, string skidNumber)
         {
             try
             {
-                Console.WriteLine($"Closing Sinter Run: Part = {part}, Run = {run}");
-                _sinterRunLogService.CloseSkid(part, run);
-                ViewData["Message"] = $"Sintering stopped for {part} - {run} successfully.";
+                Console.WriteLine($"Closing Sinter Run: Part = {part}, Run = {run}, SkidNumber = {skidNumber}");
+                _sinterRunLogService.LogoutOfSkid(part, run, skidNumber);
+                ViewData["Message"] = $"Sintering stopped for {part} - {run} (Skid: {skidNumber}) successfully.";
             }
             catch (Exception ex)
             {
@@ -88,19 +89,22 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-        [HttpPost("CloseSkidByFurnace")]
-        public IActionResult CloseSkidByFurnace(string furnace)
+        [HttpPost("EndSkid")]
+        public IActionResult EndSkid(string prodNumber, string part, string skidNumber, string pcs,
+                                        string run, string oper, string oven, string process, string notes)
         {
             try
             {
-                _sinterRunLogService.CloseSkidsByFurnace(furnace);
-                ViewData["Message"] = $"All open skids on Furnace {furnace} closed successfully.";
+                _sinterRunLogService.EndSkid(prodNumber, part, skidNumber, pcs, run, oper, oven, process, notes);
+                ViewData["Message"] = "Skid run ended successfully.";
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error Ending Skid Run: {ex.Message}");
                 ViewData["Error"] = $"An error occurred: {ex.Message}";
             }
             return RedirectToAction("Index");
         }
+
     }
 }

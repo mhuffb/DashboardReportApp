@@ -18,6 +18,59 @@ public class SinterRunLogService
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
         _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
     }
+    /// <summary>
+    /// Get *all* runs in descending order by startDateTime.
+    /// </summary>
+   public async Task<List<SinterRunSkid>> GetAllRunsAsync()
+{
+    var allRuns = new List<SinterRunSkid>();
+
+    string query = @"
+            SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber
+            FROM " + datatable +
+            " ORDER BY id DESC";
+
+    await using var connection = new MySqlConnection(_connectionStringMySQL);
+    await connection.OpenAsync();
+    await using var command = new MySqlCommand(query, connection);
+    await using var reader = await command.ExecuteReaderAsync();
+
+    while (await reader.ReadAsync())
+    {
+        // Use IsDBNull to check for null values before calling GetDateTime
+        DateTime timestamp = !reader.IsDBNull(reader.GetOrdinal("timestamp"))
+                             ? reader.GetDateTime("timestamp")
+                             : DateTime.MinValue; // or choose a default value
+
+        DateTime startDateTime = !reader.IsDBNull(reader.GetOrdinal("startDateTime"))
+                                 ? reader.GetDateTime("startDateTime")
+                                 : DateTime.MinValue; // adjust default as needed
+
+        // For endDateTime, you already check for DBNull
+        DateTime? endDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
+                                ? (DateTime?)null
+                                : reader.GetDateTime("endDateTime");
+
+        allRuns.Add(new SinterRunSkid
+        {
+            Id = reader.GetInt32("id"),
+            Timestamp = timestamp,
+            Operator = reader["operator"]?.ToString(),
+            ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+            Run = reader["run"]?.ToString() ?? "N/A",
+            Part = reader["part"]?.ToString() ?? "N/A",
+            Machine = reader["oven"]?.ToString(),
+            Process = reader["process"]?.ToString(),
+            StartDateTime = startDateTime,
+            EndDateTime = endDateTime,
+            Notes = reader["notes"]?.ToString(),
+            Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+            SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0
+        });
+    }
+
+    return allRuns;
+}
 
     // Get a list of operators from MySQL
     public List<string> GetOperators()
@@ -69,27 +122,11 @@ public class SinterRunLogService
     }
 
 
-    // Close all skids for the selected furnace
-    public void CloseSkidsByFurnace(string furnace)
+    // Close a specific skid for a part and furnace, now including skidNumber
+    public void LogoutOfSkid(string part, string run, string skidNumber)
     {
-        string query = "UPDATE " + datatable + " SET endDateTime = @endDateTime WHERE oven = @furnace AND endDateTime IS NULL";
-
-        using (var connection = new MySqlConnection(_connectionStringMySQL))
-        {
-            connection.Open();
-            using (var command = new MySqlCommand(query, connection))
-            {
-                command.Parameters.AddWithValue("@endDateTime", DateTime.Now);
-                command.Parameters.AddWithValue("@furnace", furnace);
-                command.ExecuteNonQuery();
-            }
-        }
-    }
-
-    // Close a specific skid for a part and furnace
-    public void CloseSkid(string part, string run)
-    {
-        string query = "UPDATE " + datatable + " SET open = 0, endDateTime = NOW() WHERE part = @part AND run = @run AND open = 1";
+        string query = "UPDATE " + datatable + " SET endDateTime = NOW() " +
+                       "WHERE part = @part AND run = @run AND skidNumber = @skidNumber";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -98,6 +135,7 @@ public class SinterRunLogService
             {
                 command.Parameters.AddWithValue("@part", part);
                 command.Parameters.AddWithValue("@run", run);
+                command.Parameters.AddWithValue("@skidNumber", skidNumber);
 
                 int rowsAffected = command.ExecuteNonQuery();
                 Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
@@ -105,8 +143,66 @@ public class SinterRunLogService
         }
     }
 
+    // End the current skid record by updating endDateTime, pcs, and notes,
+    // and matching on prodNumber, run, part, and skidNumber.
+    public void EndSkid(string prodNumber, string part, string skidNumber, string pcs,
+                      string run, string oper, string oven, string process, string notes)
+    {
+        string updateQuery = "UPDATE " + datatable + " " +
+                             "SET endDateTime = NOW(), pcs = @pcs, notes = @notes " +
+                             "WHERE prodNumber = @prodNumber " +
+                             "AND run = @run " +
+                             "AND part = @part " +
+                             "AND skidNumber = @skidNumber " +
+                             "ORDER BY id DESC LIMIT 1";
+
+        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        {
+            connection.Open();
+            using (var updateCommand = new MySqlCommand(updateQuery, connection))
+            {
+                updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
+                updateCommand.Parameters.AddWithValue("@part", part);
+                updateCommand.Parameters.AddWithValue("@run", run);
+                updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
+                updateCommand.Parameters.AddWithValue("@pcs", pcs);
+                updateCommand.Parameters.AddWithValue("@notes", notes);
+
+                int rowsAffected = updateCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+            }
+        }
+
+        string updateQuery2 = "UPDATE pressrun "  +
+                             "SET open = 0 " +
+                             "WHERE prodNumber = @prodNumber " +
+                             "AND run = @run " +
+                             "AND part = @part " +
+                             "AND skidNumber = @skidNumber " +
+                             "ORDER BY id DESC LIMIT 1";
+
+        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        {
+            connection.Open();
+            using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+            {
+                updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
+                updateCommand.Parameters.AddWithValue("@part", part);
+                updateCommand.Parameters.AddWithValue("@run", run);
+                updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
+
+                int rowsAffected = updateCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+            }
+        }
+
+    }
+
+
+
+
     // End skids on the same furnace if one is already running
-    public void EndSkidsByFurnaceIfNeeded(string furnace)
+    public void EndSkidsByMachineIfNeeded(string furnace)
     {
         string query = "UPDATE " + datatable + " SET endDateTime = @endDateTime WHERE oven = @furnace AND endDateTime IS NULL";
 
@@ -123,76 +219,40 @@ public class SinterRunLogService
     }
 
     // Start a new skid (insert into sinterrun table)
-    public void StartSkid(string operatorName, string part, string run, string furnace, string process, string notes)
+    public void LoginToSkid(SinterRunSkid model)
     {
         Console.WriteLine("📌 StartSkid() Called:");
-        Console.WriteLine($"➡️ Operator: {operatorName}");
-        Console.WriteLine($"➡️ Part: {part}");
-        Console.WriteLine($"➡️ Run: {run}");  // Check if this prints correctly
-        Console.WriteLine($"➡️ Furnace: {furnace}");
-        Console.WriteLine($"➡️ Process: {process}");
-        Console.WriteLine($"➡️ Notes: {notes}");
+        Console.WriteLine($"➡️ Operator: {model.Operator}");
+        Console.WriteLine($"➡️ Part: {model.Part}");
+        Console.WriteLine($"➡️ ProdNumber: {model.ProdNumber}");
+        Console.WriteLine($"➡️ Run: {model.Run}");  // Check if this prints correctly
+        Console.WriteLine($"➡️ Furnace: {model.Machine}");
+        Console.WriteLine($"➡️ Process: {model.Process}");
+        Console.WriteLine($"➡️ Notes: {model.Notes}");
 
-        string query = "INSERT INTO " + datatable + " (operator, part, run, startDateTime, oven, process, notes) VALUES (@operator, @part, @run, @startDateTime, @oven, @process, @notes)";
+        string query = "INSERT INTO " + datatable + " (prodNumber,  run, part, startDateTime, operator, oven, process, notes, skidNumber ) " +
+                   "VALUES (@prodNumber, @run, @part,  @startDateTime, @operator, @oven, @process, @notes, @skidNumber)";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
             connection.Open();
             using (var command = new MySqlCommand(query, connection))
             {
-                command.Parameters.AddWithValue("@operator", operatorName);
-                command.Parameters.AddWithValue("@part", part.ToUpper());
-                command.Parameters.AddWithValue("@run", run);
+
+                command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                command.Parameters.AddWithValue("@run", model.Run);
+                command.Parameters.AddWithValue("@part", model.Part.ToUpper());
                 command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
-                command.Parameters.AddWithValue("@oven", furnace);
-                command.Parameters.AddWithValue("@process", process);
-                command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(notes) ? DBNull.Value : notes);
+                command.Parameters.AddWithValue("@operator", model.Operator);
+                command.Parameters.AddWithValue("@oven", model.Machine);
+                command.Parameters.AddWithValue("@process", model.Process);
+                command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(model.Notes) ? DBNull.Value : model.Notes);
+                command.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
 
                 command.ExecuteNonQuery();
             }
         }
 
-    }
-    /// <summary>
-    /// Get *all* runs in descending order by startDateTime.
-    /// </summary>
-    public async Task<List<SinterRunSkid>> GetAllRunsAsync()
-    {
-        var allRuns = new List<SinterRunSkid>();
-
-        string query = @"
-                SELECT id, timestamp, operator, run, part, oven, process, startDateTime, endDateTime, notes, open
-                FROM " + datatable + 
-                " ORDER BY id DESC";
-
-        await using var connection = new MySqlConnection(_connectionStringMySQL);
-        await connection.OpenAsync();
-        await using var command = new MySqlCommand(query, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
-        {
-            allRuns.Add(new SinterRunSkid
-            {
-                Id = reader.GetInt32("id"),
-                Timestamp = reader.GetDateTime("timestamp"),
-                Operator = reader["operator"]?.ToString(),
-                Run = reader["run"]?.ToString() ?? "N/A",
-                Part = reader["part"]?.ToString() ?? "N/A",
-                Machine = reader["oven"]?.ToString(),
-                Process = reader["process"]?.ToString(),
-                StartDateTime = reader.GetDateTime("startDateTime"),
-                EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                               ? null : reader.GetDateTime("endDateTime"),
-                Notes = reader["notes"]?.ToString(),
-                Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0
-
-
-
-            });
-        }
-
-        return allRuns;
     }
    
     public async Task<List<PressRunLogModel>> GetOpenGreenSkidsAsync()
@@ -200,9 +260,9 @@ public class SinterRunLogService
         var openGreenSkids = new List<PressRunLogModel>();
 
         string query = @"
-        SELECT id, timestamp, prodNumber, run, part, skidcount, machine, pcsStart, pcsEnd
+        SELECT id, timestamp, prodNumber, run, part, endDateTime, operator, machine, pcsStart, pcsEnd, notes, skidNumber
         FROM pressrun
-        WHERE open = 1 AND skidcount > 0
+        WHERE open = 1 AND skidNumber > 0
         ORDER BY startDateTime DESC";
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
@@ -219,9 +279,17 @@ public class SinterRunLogService
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
-                SkidCount = reader.GetInt32("skidcount"),
-                Machine = reader["Machine"]?.ToString() ?? "N/A"
+                EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
+              ? null
+              : reader.GetDateTime("endDateTime"),
+
+                Operator = reader["operator"]?.ToString() ?? "N/A",
+                SkidNumber = reader.GetInt32("skidNumber"),
+                Machine = reader["Machine"]?.ToString() ?? "N/A",
+                PcsStart = reader.IsDBNull(reader.GetOrdinal("pcsStart")) ? 0 : Convert.ToInt32(reader["pcsStart"]),
+                PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd")) ? 0 : Convert.ToInt32(reader["pcsEnd"])
             });
+
         }
 
         return openGreenSkids;

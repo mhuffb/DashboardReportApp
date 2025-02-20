@@ -17,9 +17,9 @@
     var openRecords = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
                       ?? new List<DashboardReportApp.Models.PressRunLogModel>();
 
-    // Split open records into main run records (SkidCount == 0) and skid records (SkidCount > 0)
-    var mainRuns = openRecords.Where(r => r.SkidCount == 0).ToList();
-    var skids = openRecords.Where(r => r.SkidCount > 0).ToList();
+    // Split open records into main run records (SkidNumber == 0) and skid records (SkidNumber > 0)
+    var mainRuns = openRecords.Where(r => r.SkidNumber == 0).ToList();
+    var skids = openRecords.Where(r => r.SkidNumber > 0).ToList();
 }
 
 @if (TempData["DeviceMessage"] != null)
@@ -154,7 +154,7 @@
                             <th>Run</th>
                             <th>Machine</th>
                             <th>Operator</th>
-                            <th>SkidCount</th>
+                            <th>SkidNumber</th>
                             <th>Start Time</th>
                             <th>Pcs Start</th>
                             <th>Pcs End</th>
@@ -170,7 +170,7 @@
                                 <td>@skid.Run</td>
                                 <td>@skid.Machine</td>
                                 <td>@skid.Operator</td>
-                                <td>@skid.SkidCount</td>
+                                <td>@skid.SkidNumber</td>
                                 <td>@skid.StartDateTime</td>
                                 <td>@skid.PcsStart</td>
                                 <td>@skid.PcsEnd</td>
@@ -211,7 +211,7 @@
         { key: "Run", label: "Run" },
         { key: "Machine", label: "Machine" },
         { key: "Operator", label: "Operator" },
-        { key: "SkidCount", label: "SkidCount" },
+        { key: "SkidNumber", label: "SkidNumber" },
         { key: "StartDateTime", label: "Start Time" },
         { key: "EndDateTime", label: "End Time" },
         { key: "PcsStart", label: "Pcs Start" },
@@ -289,7 +289,7 @@
         fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
             .then(response => response.json())
             .then(data => {
-                document.getElementById("startSkidSkidCount").value = data.deviceCount || 0;
+                document.getElementById("startSkidSkidNumber").value = data.deviceCount || 0;
                 let modal = new bootstrap.Modal(document.getElementById("StartSkidModal"));
                 modal.show();
             })
@@ -417,7 +417,7 @@
 
                     <div class="mb-3">
                         <label class="form-label">Skid Count (Override if needed):</label>
-                        <input type="number" id="startSkidSkidCount" name="skidcount" class="form-control" value="0" />
+                        <input type="number" id="startSkidSkidNumber" name="skidnumber" class="form-control" value="0" />
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Confirm Start Skid</button>
                 </form>

@@ -137,9 +137,9 @@ namespace DashboardReportApp.Services
         {
             const string insertMainRun = @"
 INSERT INTO pressrun 
-    (operator, part, machine, prodNumber, run, startDateTime, skidcount, pcsStart)
+    (operator, part, machine, prodNumber, run, startDateTime, skidNumber)
 VALUES 
-    (@operator, @part, @machine, @prodNumber, @run, @startTime, 0, @pcsStart)";
+    (@operator, @part, @machine, @prodNumber, @run, @startTime, 0)";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(insertMainRun, conn);
@@ -150,7 +150,6 @@ VALUES
             cmd.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
             cmd.Parameters.AddWithValue("@run", formModel.Run);
             cmd.Parameters.AddWithValue("@startTime", formModel.StartDateTime);
-            cmd.Parameters.AddWithValue("@pcsStart", userCount);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -160,11 +159,10 @@ VALUES
             const string sql = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
-    pcsEnd = @finalCount,
     scrap = @scrap,
     notes = @notes
 WHERE id = @runId
-  AND skidcount = 0
+  AND skidNumber = 0
 LIMIT 1";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -186,7 +184,7 @@ LIMIT 1";
             string mainRunIdentifier = "";
             const string selectMainRun = @"
 SELECT run FROM pressrun
-WHERE id = @runId AND skidcount = 0
+WHERE id = @runId AND skidNumber = 0
 LIMIT 1";
             using (var selectCmd = new MySqlCommand(selectMainRun, conn))
             {
@@ -205,7 +203,7 @@ SET endDateTime = NOW(),
     pcsEnd = @finalCount,
     open = 1
 WHERE run = @runIdentifier
-  AND skidcount > 0
+  AND skidNumber > 0
   AND endDateTime IS NULL";
                 using (var endSkidCmd = new MySqlCommand(endSkidQuery, conn))
                 {
@@ -219,16 +217,14 @@ WHERE run = @runIdentifier
             const string endMainRun = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
-    pcsEnd = @finalCount,
     scrap = @scrap,
     notes = @notes
 WHERE id = @runId
-  AND skidcount = 0
+  AND skidNumber = 0
 LIMIT 1";
             using (var endMainCmd = new MySqlCommand(endMainRun, conn))
             {
                 endMainCmd.Parameters.AddWithValue("@runId", runId);
-                endMainCmd.Parameters.AddWithValue("@finalCount", finalCount);
                 endMainCmd.Parameters.AddWithValue("@scrap", scrap);
                 endMainCmd.Parameters.AddWithValue("@notes", notes ?? "");
                 await endMainCmd.ExecuteNonQueryAsync();
@@ -239,7 +235,7 @@ LIMIT 1";
 UPDATE presssetup
 SET open = 0
 WHERE run = (
-    SELECT run FROM pressrun WHERE id = @runId AND skidcount = 0
+    SELECT run FROM pressrun WHERE id = @runId AND skidNumber = 0
 )
 LIMIT 1";
             using (var closeCmd = new MySqlCommand(closeSetup, conn))
@@ -247,6 +243,8 @@ LIMIT 1";
                 closeCmd.Parameters.AddWithValue("@runId", runId);
                 await closeCmd.ExecuteNonQueryAsync();
             }
+
+           
         }
 
         #endregion
@@ -258,28 +256,28 @@ LIMIT 1";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            // 1) Count existing skid records for this run (skidcount > 0)
-            int currentSkidCount = 0;
+            // 1) Count existing skid records for this run (skidNumber > 0)
+            int currentSkidNumber = 0;
             const string getSkids = @"
-SELECT IFNULL(MAX(skidcount), 0)
+SELECT IFNULL(MAX(skidNumber), 0)
 FROM pressrun
 WHERE run = @run
-  AND skidcount > 0";
+  AND skidNumber > 0";
             using (var cmd = new MySqlCommand(getSkids, conn))
             {
                 cmd.Parameters.AddWithValue("@run", model.Run);
                 var result = await cmd.ExecuteScalarAsync();
                 if (result != null && int.TryParse(result.ToString(), out int c))
-                    currentSkidCount = c;
+                    currentSkidNumber = c;
             }
 
             // 2) Get device count using the raw machine value.
             int? deviceCount = await TryGetDeviceCountOrNull(model.Machine);
 
-            if (currentSkidCount == 0)
+            if (currentSkidNumber == 0)
             {
                 const string insertFirst = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidcount, pcsStart)
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
 VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
                 using var insCmd = new MySqlCommand(insertFirst, conn);
                 insCmd.Parameters.AddWithValue("@run", model.Run);
@@ -299,13 +297,13 @@ VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
                 const string endSkidSql = @"
 UPDATE pressrun p
 JOIN (
-    SELECT run, MAX(skidcount) AS maxSkid
+    SELECT run, MAX(skidNumber) AS maxSkid
     FROM pressrun
     WHERE run = @run
-      AND skidcount > 0
+      AND skidNumber > 0
       AND endDateTime IS NULL
     GROUP BY run
-) t ON p.run = @run AND p.skidcount = t.maxSkid
+) t ON p.run = @run AND p.skidNumber = t.maxSkid
 SET p.endDateTime = NOW(),
     p.pcsEnd = @pcsEnd,
     p.open = 1
@@ -318,18 +316,18 @@ WHERE p.endDateTime IS NULL";
                     endCmd.Parameters.AddWithValue("@pcsEnd", DBNull.Value);
                 await endCmd.ExecuteNonQueryAsync();
 
-                int newSkidCount = currentSkidCount + 1;
+                int newSkidNumber = currentSkidNumber + 1;
                 int? newSkidStart = await TryGetDeviceCountOrNull(model.Machine);
                 const string insertNext = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidcount, pcsStart)
-VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidcount, @pcsStart)";
+INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
                 using var insSkid = new MySqlCommand(insertNext, conn);
                 insSkid.Parameters.AddWithValue("@run", model.Run);
                 insSkid.Parameters.AddWithValue("@part", model.Part);
                 insSkid.Parameters.AddWithValue("@operator", model.Operator);
                 insSkid.Parameters.AddWithValue("@machine", model.Machine);
                 insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                insSkid.Parameters.AddWithValue("@skidcount", newSkidCount);
+                insSkid.Parameters.AddWithValue("@skidNumber", newSkidNumber);
                 if (newSkidStart.HasValue)
                     insSkid.Parameters.AddWithValue("@pcsStart", newSkidStart.Value);
                 else
@@ -408,7 +406,7 @@ ORDER BY name";
             var list = new List<PressRunLogModel>();
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
 FROM pressrun
 WHERE endDateTime IS NULL";
 
@@ -428,7 +426,7 @@ WHERE endDateTime IS NULL";
             var list = new List<PressRunLogModel>();
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidcount
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
 FROM pressrun
 ORDER BY id DESC";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
@@ -470,9 +468,9 @@ ORDER BY id DESC";
                                 ? 0
                                 : rdr.GetInt32("scrap"),
                 Notes = rdr["notes"]?.ToString(),
-                SkidCount = rdr.IsDBNull(rdr.GetOrdinal("skidcount"))
+                SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber"))
                                 ? 0
-                                : rdr.GetInt32("skidcount")
+                                : rdr.GetInt32("skidNumber")
             };
             return model;
         }
