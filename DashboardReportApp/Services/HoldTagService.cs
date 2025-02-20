@@ -314,7 +314,7 @@ ORDER BY
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            string query = "SELECT * FROM HoldRecords"; // or your actual table name
+            string query = "SELECT * FROM HoldRecords order by id desc"; // or your actual table name
 
             using var command = new MySqlCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();

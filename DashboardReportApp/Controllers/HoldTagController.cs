@@ -20,13 +20,21 @@ namespace DashboardReportApp.Controllers
         {
             var parts = await _service.GetPartsAsync();
             var operators = await _service.GetOperatorsAsync();
+            var records = await _service.GetAllHoldRecordsAsync();
 
             ViewData["Parts"] = parts ?? new List<string>();
             ViewData["Operators"] = operators;
 
-            return View(new HoldTagModel());
+            var model = new HoldTagIndexViewModel
+            {
+                FormModel = new HoldTagModel(), // Empty model for the form
+                Records = records // List of records for the table
+            };
+
+            return View(model);
         }
-        
+
+
 
 
 
@@ -100,50 +108,9 @@ namespace DashboardReportApp.Controllers
             TempData["ErrorMessage"] = "Please correct the errors and try again.";
             return View("Index", record);
         }
-        //[HttpGet("Create")]
-      //  public async Task<IActionResult> Create()
-       // {
-            // Fetch parts and operators
-       //     var parts = await _service.GetPartsAsync();
-        //    var operators = await _service.GetOperatorsAsync();
 
-            // Pass data to the view
-        //    ViewData["Parts"] = parts;
-        //    ViewData["Operators"] = operators;
-
-       //     return View();
-      //  }
        
-       // [HttpPost("UpdateRequest")]
-       // public IActionResult UpdateRequest(HoldRecordModel model, IFormFile? FileUpload)
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-                // Log validation errors for debugging
-         //       foreach (var state in ModelState)
-                //{
-          //          foreach (var error in state.Value.Errors)
-           //         {
-            //            Console.WriteLine($"Key: {state.Key}, Error: {error.ErrorMessage}");
-            //        }
-           //     }
 
-          //      return View("AdminView", _service.GetAllHoldRecordsAsync());
-         ///   }
-
-         ///   try
-        //   {
-                // Call the service to update the request
-          //      _service.UpdateRequest(model, FileUpload);
-
-          //      return RedirectToAction("AdminView");
-         //   }
-         //   catch (Exception ex)
-          //  {
-           //     Console.WriteLine($"Error: {ex.Message}");
-          //      return View("AdminView", _service.GetAllHoldRecordsAsync());
-          //  }
-       // }
     }
 
 }

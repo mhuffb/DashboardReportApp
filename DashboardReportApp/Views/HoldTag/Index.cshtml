@@ -1,4 +1,6 @@
-﻿@model DashboardReportApp.Models.HoldTagModel
+﻿@model DashboardReportApp.Models.HoldTagIndexViewModel
+
+@using System.Text.Json
 
 <div class="container-fluid px-3 mt-4">
     <h1 class="text-center mb-4">Hold Tag</h1>
@@ -40,53 +42,25 @@
                             <label for="Part" class="form-label">Part</label>
                             <select id="PartDropdown" class="form-control">
                                 <option value="">-- Select or Enter Part --</option>
-                                @if (ViewData["Parts"] != null && ViewData["Parts"] is List<string> partList)
+                                @foreach (var part in (ViewData["Parts"] as List<string>) ?? new List<string>())
                                 {
-                                    foreach (var part in partList)
-                                    {
-                                        <option value="@part">@part</option>
-                                    }
+                                    <option value="@part">@part</option>
                                 }
                             </select>
-                            <input type="text" id="CustomPartInput" name="Part" asp-for="Part" class="form-control mt-2" placeholder="Type a custom part number if not listed" />
-                            <span asp-validation-for="Part" class="text-danger"></span>
+                            <input type="text" id="CustomPartInput" name="Part" asp-for="FormModel.Part" class="form-control mt-2" placeholder="Type a custom part number if not listed" />
+                            <span asp-validation-for="FormModel.Part" class="text-danger"></span>
                         </div>
 
                         <div class="mb-3">
                             <label for="Discrepancy" class="form-label">Discrepancy</label>
-                            <textarea id="Discrepancy" name="Discrepancy" asp-for="Discrepancy" class="form-control text-area-large" required></textarea>
-                            <span asp-validation-for="Discrepancy" class="text-danger"></span>
+                            <textarea id="Discrepancy" name="Discrepancy" asp-for="FormModel.Discrepancy" class="form-control text-area-large" required></textarea>
+                            <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
                         </div>
 
                         <div class="mb-3">
                             <label for="Quantity" class="form-label">Quantity</label>
-                            <input type="number" id="Quantity" name="Quantity" asp-for="Quantity" class="form-control" required
-                                   placeholder="Enter the quantity" autocomplete="off" />
-                            <span asp-validation-for="Quantity" class="text-danger"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="Unit" class="form-label">Unit</label>
-                            <select id="Unit" name="Unit" asp-for="Unit" class="form-control" required>
-                                <option value="">Select Unit</option>
-                                <option value="skid(s)">Skid(s)</option>
-                                <option value="tray(s)">Tray(s)</option>
-                                <option value="tote(s)">Tote(s)</option>
-                                <option value="barrel(s)">Barrel(s)</option>
-                            </select>
-                            <span asp-validation-for="Unit" class="text-danger"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="IssuedBy" class="form-label">Operator</label>
-                            <select id="IssuedBy" name="IssuedBy" asp-for="IssuedBy" class="form-control" required>
-                                <option value="">Select Operator</option>
-                                @foreach (var operatorName in (ViewData["Operators"] as List<string>))
-                                {
-                                    <option value="@operatorName">@operatorName</option>
-                                }
-                            </select>
-                            <span asp-validation-for="IssuedBy" class="text-danger"></span>
+                            <input type="number" id="Quantity" name="Quantity" asp-for="FormModel.Quantity" class="form-control" required />
+                            <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send"></i> Submit</button>
@@ -97,14 +71,44 @@
     </div>
 </div>
 
-<script>
-    // JavaScript to sync dropdown and input field
-    document.getElementById("PartDropdown").addEventListener("change", function () {
-        document.getElementById("CustomPartInput").value = this.value;
-    });
+<div class="container mt-4">
+    <h3 class="text-center mt-4">All Hold Tags</h3>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div id="holdTagTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model.Records))'></div>
+        </div>
+    </div>
+</div>
 
-    document.getElementById("CustomPartInput").addEventListener("input", function () {
-        document.getElementById("PartDropdown").value = "";
+<script src="/js/mydatatable.bundle.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const container = document.getElementById("holdTagTableRoot");
+        if (!container) return;
+
+        const rawData = container.getAttribute("data-records");
+        const data = JSON.parse(rawData);
+
+        const columns = [
+            { key: "Id", label: "ID" },
+            { key: "Part", label: "Part" },
+            { key: "Discrepancy", label: "Discrepancy" },
+            { key: "Date", label: "Date" },
+            { key: "IssuedBy", label: "Issued By" },
+            { key: "Disposition", label: "Disposition" },
+            { key: "DispositionBy", label: "Disposition By" },
+            { key: "ReworkInstrBy", label: "Rework Instructions By" },
+            { key: "Quantity", label: "Quantity" },
+            { key: "Unit", label: "Unit" },
+            { key: "PcsScrapped", label: "pcsScrapped" },
+            { key: "DateCompleted", label: "Date Completed" },
+            { key: "FileAddress", label: "FileAddress" },
+        ];
+
+        if (window.renderMyDataTable) {
+            window.renderMyDataTable("holdTagTableRoot", data, columns, true);
+        } else {
+            console.error("React table render function not found!");
+        }
     });
 </script>
-</div>

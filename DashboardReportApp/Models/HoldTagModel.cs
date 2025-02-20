@@ -34,6 +34,10 @@ namespace DashboardReportApp.Models
 
         public string? FileAddress { get; set; } // Nullable string
     }
-
+    public class HoldTagIndexViewModel
+    {
+        public HoldTagModel FormModel { get; set; }
+        public List<HoldTagModel> Records { get; set; }
+    }
 
 }
