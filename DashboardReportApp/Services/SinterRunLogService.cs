@@ -26,7 +26,7 @@ public class SinterRunLogService
     var allRuns = new List<SinterRunSkid>();
 
     string query = @"
-            SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber
+            SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
             FROM " + datatable +
             " ORDER BY id DESC";
 
@@ -65,7 +65,10 @@ public class SinterRunLogService
             EndDateTime = endDateTime,
             Notes = reader["notes"]?.ToString(),
             Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
-            SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0
+            SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
+            Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0
+
+
         });
     }
 

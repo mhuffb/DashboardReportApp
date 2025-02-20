@@ -253,16 +253,24 @@ LIMIT 1";
 
         public async Task HandleStartSkidAsync(PressRunLogModel model)
         {
+            Console.WriteLine("Handling Start Skid in Service...");
+            Console.WriteLine($"Run: {model.Run}");
+            Console.WriteLine($"Machine: {model.Machine}");
+            Console.WriteLine($"Part: {model.Part}");
+            Console.WriteLine($"Operator: {model.Operator}");
+            Console.WriteLine($"Prod Number: {model.ProdNumber}");
+            Console.WriteLine($"Initial Pcs Start: {model.PcsStart}");
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
             // 1) Count existing skid records for this run (skidNumber > 0)
             int currentSkidNumber = 0;
             const string getSkids = @"
-SELECT IFNULL(MAX(skidNumber), 0)
-FROM pressrun
-WHERE run = @run
-  AND skidNumber > 0";
+    SELECT IFNULL(MAX(skidNumber), 0)
+    FROM pressrun
+    WHERE run = @run
+      AND skidNumber > 0";
             using (var cmd = new MySqlCommand(getSkids, conn))
             {
                 cmd.Parameters.AddWithValue("@run", model.Run);
@@ -271,56 +279,68 @@ WHERE run = @run
                     currentSkidNumber = c;
             }
 
-            // 2) Get device count using the raw machine value.
-            int? deviceCount = await TryGetDeviceCountOrNull(model.Machine);
+            // 2) Only Fetch API count if `pcsStart` is NOT already provided
+            if (model.PcsStart <= 0)
+            {
+                int? deviceCount = await TryGetDeviceCountOrNull(model.Machine);
+                if (deviceCount.HasValue)
+                {
+                    model.PcsStart = deviceCount.Value;
+                    Console.WriteLine($"Using API Device Count for Pcs Start: {model.PcsStart}");
+                }
+                else
+                {
+                    Console.WriteLine("Device count API failed, keeping original Pcs Start.");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Using manually entered Pcs Start: {model.PcsStart}");
+            }
 
+            // 3) Insert the first skid if no skids exist
             if (currentSkidNumber == 0)
             {
                 const string insertFirst = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
+        INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+        VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
                 using var insCmd = new MySqlCommand(insertFirst, conn);
                 insCmd.Parameters.AddWithValue("@run", model.Run);
                 insCmd.Parameters.AddWithValue("@part", model.Part);
                 insCmd.Parameters.AddWithValue("@operator", model.Operator);
                 insCmd.Parameters.AddWithValue("@machine", model.Machine);
                 insCmd.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                if (deviceCount.HasValue)
-                    insCmd.Parameters.AddWithValue("@pcsStart", deviceCount.Value);
-                else
-                    insCmd.Parameters.AddWithValue("@pcsStart", DBNull.Value);
+                insCmd.Parameters.AddWithValue("@pcsStart", model.PcsStart);  // Now using manual input
                 await insCmd.ExecuteNonQueryAsync();
             }
             else
             {
-                DateTime now = DateTime.Now;
+                // 4) End previous skid and insert a new one
+                int newSkidNumber = currentSkidNumber + 1;
+
                 const string endSkidSql = @"
-UPDATE pressrun p
-JOIN (
-    SELECT run, MAX(skidNumber) AS maxSkid
-    FROM pressrun
-    WHERE run = @run
-      AND skidNumber > 0
-      AND endDateTime IS NULL
-    GROUP BY run
-) t ON p.run = @run AND p.skidNumber = t.maxSkid
-SET p.endDateTime = NOW(),
-    p.pcsEnd = @pcsEnd,
-    p.open = 1
-WHERE p.endDateTime IS NULL";
+        UPDATE pressrun p
+        JOIN (
+            SELECT run, MAX(skidNumber) AS maxSkid
+            FROM pressrun
+            WHERE run = @run
+              AND skidNumber > 0
+              AND endDateTime IS NULL
+            GROUP BY run
+        ) t ON p.run = @run AND p.skidNumber = t.maxSkid
+        SET p.endDateTime = NOW(),
+            p.pcsEnd = @pcsEnd,
+            p.open = 1
+        WHERE p.endDateTime IS NULL";
                 using var endCmd = new MySqlCommand(endSkidSql, conn);
                 endCmd.Parameters.AddWithValue("@run", model.Run);
-                if (deviceCount.HasValue)
-                    endCmd.Parameters.AddWithValue("@pcsEnd", deviceCount.Value);
-                else
-                    endCmd.Parameters.AddWithValue("@pcsEnd", DBNull.Value);
+                endCmd.Parameters.AddWithValue("@pcsEnd", model.PcsStart); // End previous skid with same count
                 await endCmd.ExecuteNonQueryAsync();
 
-                int newSkidNumber = currentSkidNumber + 1;
-                int? newSkidStart = await TryGetDeviceCountOrNull(model.Machine);
+                // 5) Insert a new skid
                 const string insertNext = @"
-INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
+        INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+        VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
                 using var insSkid = new MySqlCommand(insertNext, conn);
                 insSkid.Parameters.AddWithValue("@run", model.Run);
                 insSkid.Parameters.AddWithValue("@part", model.Part);
@@ -328,13 +348,13 @@ VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsS
                 insSkid.Parameters.AddWithValue("@machine", model.Machine);
                 insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
                 insSkid.Parameters.AddWithValue("@skidNumber", newSkidNumber);
-                if (newSkidStart.HasValue)
-                    insSkid.Parameters.AddWithValue("@pcsStart", newSkidStart.Value);
-                else
-                    insSkid.Parameters.AddWithValue("@pcsStart", DBNull.Value);
+                insSkid.Parameters.AddWithValue("@pcsStart", model.PcsStart);  // Now using manual input
                 await insSkid.ExecuteNonQueryAsync();
             }
+
+            Console.WriteLine("Start Skid Processed Successfully.");
         }
+
 
         #endregion
 

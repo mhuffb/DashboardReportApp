@@ -66,11 +66,32 @@ namespace DashboardReportApp.Controllers
         // ==================== START SKID =====================
         // Updated action name and parameter names to match the modal form
         [HttpPost]
-        public async Task<IActionResult> StartSkid(PressRunLogModel model)
+        public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart)
         {
+            Console.WriteLine("Received Start Skid Request");
+            Console.WriteLine($"Run ID: {model.Run}");
+            Console.WriteLine($"Machine: {model.Machine}");
+            Console.WriteLine($"Part: {model.Part}");
+            Console.WriteLine($"Operator: {model.Operator}");
+            Console.WriteLine($"Prod Number: {model.ProdNumber}");
+            Console.WriteLine($"Pcs Start Received: {pcsStart}");
+
+            if (pcsStart > 0)
+            {
+                model.PcsStart = pcsStart;  // Keep manually entered pcsStart
+                Console.WriteLine("Using manually entered pcsStart: " + model.PcsStart);
+            }
+            else
+            {
+                Console.WriteLine("No valid pcsStart entered, will try fetching from API.");
+            }
+
             await _pressRunLogService.HandleStartSkidAsync(model);
+
+            Console.WriteLine("Start Skid Processed Successfully");
             return RedirectToAction("Index");
         }
+
 
 
         // ==================== LOGOUT =====================

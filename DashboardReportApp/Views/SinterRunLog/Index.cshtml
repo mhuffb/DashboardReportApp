@@ -33,7 +33,7 @@
                             <th>Operator</th>
                             <th>Machine</th>
                             <th>Skid Number</th>
-                            <th>Pcs on Skid</th>
+                            <th>Pcs</th>
                             <th>Notes</th>
                             <th>Action</th>
                         </tr>
@@ -114,19 +114,21 @@
                             <th>Start Time</th>
                             <th>Operator</th>
                             <th>Furnace</th>
+                            <th>Skid Number</th> <!-- Added -->
+                            <th>PCS</th>
+                            <th>Process</th>
+                            <th>Notes</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var skid in Model.Where(s => s.EndDateTime == null))
                         {
-                            // Find the corresponding green skid (press run) record based on ProdNumber and Part
                             var matchingPressRun = openGreenSkids.FirstOrDefault(pr =>
                             pr.ProdNumber == skid.ProdNumber &&
                             pr.Part == skid.Part &&
                             pr.SkidNumber == skid.SkidNumber);
 
-                            // Compute the difference (if found) or default to 0
                             var pcsDiff = matchingPressRun != null ? (matchingPressRun.PcsEnd - matchingPressRun.PcsStart) : 0;
 
                             <tr>
@@ -138,8 +140,11 @@
                                 <td>@skid.StartDateTime</td>
                                 <td>@skid.Operator</td>
                                 <td>@skid.Machine</td>
+                                <td>@skid.SkidNumber</td> <!-- Added -->
+                                <td>@pcsDiff</td> <!-- Updated -->
+                                <td>@skid.Process</td>
+                                <td>@skid.Notes</td>
                                 <td>
-                                    <!-- End Skid button now passes the computed pcsDiff -->
                                     <button class="btn btn-warning btn-sm"
                                             data-bs-toggle="modal"
                                             data-bs-target="#endSkidModal"
@@ -154,23 +159,24 @@
                                             data-notes="@skid.Notes">
                                         End Skid
                                     </button>
-                                    <!-- Logout button remains unchanged -->
                                     <button class="btn btn-danger btn-sm ms-1"
                                             data-bs-toggle="modal"
-                                            data-bs-target="#stopSinteringModal"
+                                            data-bs-target="#logoutSkidModal"
                                             data-part="@skid.Part"
                                             data-run="@skid.Run"
                                             data-starttime="@skid.StartDateTime"
-                                            data-skidnumber="@skid.SkidNumber">
+                                            data-skidnumber="@skid.SkidNumber"
+                                            data-pcs="@pcsDiff"
+                                            data-process="@skid.Process"
+                                            data-notes="@skid.Notes">
                                         Logout of Skid Run
                                     </button>
-
                                 </td>
                             </tr>
                         }
-
-
                     </tbody>
+
+
 
                 </table>
             </div>
@@ -200,20 +206,22 @@
             const data = JSON.parse(rawData);
 
             // Define columns for the React table
-            const columns = [
-                { key: "Id", label: "ID" },
-                { key: "Timestamp", label: "Timestamp" },
-                { key: "Operator", label: "Operator" },
-                { key: "ProdNumber", label: "Production Number" },
-                { key: "Run", label: "Run" },
-                { key: "Part", label: "Part" },
-                { key: "Machine", label: "Furnace" },
-                { key: "Process", label: "Process" },
-                { key: "StartDateTime", label: "Start Time" },
-                { key: "EndDateTime", label: "End Time" },
-                { key: "Notes", label: "Notes" },
-                { key: "Open", label: "Open" }
-            ];
+                   const columns = [
+            { key: "Id", label: "ID" },
+            { key: "ProdNumber", label: "Production Number" },
+            { key: "Run", label: "Run" },
+            { key: "Part", label: "Part" },
+            { key: "Machine", label: "Furnace" },
+            { key: "SkidNumber", label: "Skid Number" }, // Added
+            { key: "Pcs", label: "Pcs" }, // Added
+            { key: "Process", label: "Process" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
+            { key: "Operator", label: "Operator" },
+            { key: "Notes", label: "Notes" },
+            { key: "Open", label: "Open" }
+        ];
+
 
             if (window.renderMyDataTable) {
                 window.renderMyDataTable("myReactSinterRunTableRoot", data, columns, true);
@@ -246,15 +254,15 @@
                             <p id="displayPart" class="form-control-plaintext" style="color: goldenrod;"></p>
                         </div>
 
-                        <!-- Editable field for PCS and display Skid Count -->
+                        <!-- Editable field for PCS and display Skid Number -->
                         <div class="mb-3">
-                            <label for="Pcs" class="form-label">PCS</label>
+                            <label for="Pcs" class="form-label">Pcs</label>
                             <input type="number" id="Pcs" name="Pcs" class="form-control" required />
                         </div>
 
-                        <!-- Display Skid Count as read-only -->
+                        <!-- Display Skid Number as read-only -->
                         <div class="mb-3">
-                            <label class="form-label">Skid Count</label>
+                            <label class="form-label">Skid Number</label>
                             <p id="displaySkidNumber" class="form-control-" style="color: #000; font-weight: bold;"></p>
                         </div>
 
@@ -357,23 +365,27 @@
                 </div>
                 <div class="modal-body">
                     <form method="post" action="/SinterRunLog/EndSkid">
-                        <!-- Hidden fields for required data -->
+                        <!-- Hidden Fields: Ensuring All Data is Sent -->
                         <input type="hidden" id="end_prodNumber" name="prodNumber" />
                         <input type="hidden" id="end_part" name="part" />
                         <input type="hidden" id="end_skidNumber" name="skidNumber" />
                         <input type="hidden" id="end_pcs" name="pcs" />
-                        <!-- Extra hidden fields for additional data -->
                         <input type="hidden" id="end_run" name="run" />
                         <input type="hidden" id="end_oper" name="oper" />
                         <input type="hidden" id="end_oven" name="oven" />
-                        <input type="hidden" id="end_process" name="process" />
-                        <input type="hidden" id="end_notes" name="notes" />
+                        <input type="hidden" id="end_process" name="process" /> <!-- Hidden but still sent -->
 
                         <p>Please confirm ending the skid run for the following:</p>
                         <p><strong>Prod Number:</strong> <span id="end_displayProdNumber"></span></p>
                         <p><strong>Part:</strong> <span id="end_displayPart"></span></p>
                         <p><strong>Skid Number:</strong> <span id="end_displaySkidNumber"></span></p>
                         <p><strong>Pcs:</strong> <span id="end_displayPcs"></span></p>
+
+                        <!-- Editable Notes Field -->
+                        <div class="mb-3">
+                            <label for="end_notes" class="form-label">Notes</label>
+                            <textarea id="end_notes" name="notes" class="form-control"></textarea>
+                        </div>
 
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -385,25 +397,25 @@
         </div>
     </div>
 
+
+
     <script>
-                  document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             var endSkidModal = document.getElementById('endSkidModal');
             endSkidModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget; // Button that triggered the modal
+                var button = event.relatedTarget;
 
-                // Extract the required data attributes, including the computed pcs difference
                 var prodNumber = button.getAttribute('data-prodnumber');
                 var part = button.getAttribute('data-part');
                 var skidNumber = button.getAttribute('data-skidnumber');
                 var pcs = button.getAttribute('data-pcs');
-
-                var run = button.getAttribute('data-run') || "";
-                var oper = button.getAttribute('data-operator') || "";
-                var oven = button.getAttribute('data-machine') || "";
-                var process = button.getAttribute('data-process') || "";
+                var run = button.getAttribute('data-run');
+                var oper = button.getAttribute('data-operator');
+                var oven = button.getAttribute('data-machine');
+                var process = button.getAttribute('data-process') || ""; // Still sending, but not shown
                 var notes = button.getAttribute('data-notes') || "";
 
-                // Populate hidden inputs in the modal form
+                // Populate hidden inputs
                 endSkidModal.querySelector('#end_prodNumber').value = prodNumber;
                 endSkidModal.querySelector('#end_part').value = part;
                 endSkidModal.querySelector('#end_skidNumber').value = skidNumber;
@@ -414,38 +426,36 @@
                 endSkidModal.querySelector('#end_process').value = process;
                 endSkidModal.querySelector('#end_notes').value = notes;
 
-                // Populate visible confirmation spans
+                // Populate visible elements
                 endSkidModal.querySelector('#end_displayProdNumber').textContent = prodNumber;
                 endSkidModal.querySelector('#end_displayPart').textContent = part;
                 endSkidModal.querySelector('#end_displaySkidNumber').textContent = skidNumber;
                 endSkidModal.querySelector('#end_displayPcs').textContent = pcs;
             });
         });
-
-
     </script>
 
-    <!-- Modal for Logging Out (Stopping) a Skid Run -->
-    <!-- Modal for Logging Out (Stopping) a Skid Run -->
-    <div class="modal fade" id="stopSinteringModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
+
+
+    <!-- Modal for Logging Out of Skid Run -->
+    <div class="modal fade" id="logoutSkidModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Stop Sintering Run</h5>
+                    <h5 class="modal-title">Logout of Skid Run</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="stopSinteringForm" method="post" action="/SinterRunLog/LogoutOfSkid">
-                        <!-- Hidden fields for required data -->
-                        <input type="hidden" id="modalRunId" name="run" />
-                        <input type="hidden" id="modalStartTime" name="startTime" />
-                        <input type="hidden" id="modalSkidNumber" name="skidNumber" />
-                        <!-- Display Part as read-only -->
-                        <div class="mb-3">
-                            <label class="form-label">Part Number</label>
-                            <input type="text" id="modalPart" class="form-control" name="part" readonly />
-                        </div>
-                        <p class="text-danger">Are you sure you want to logout of this sintering skid run?</p>
+                    <form id="logoutSkidForm" method="post" action="/SinterRunLog/LogoutOfSkid">
+                        <!-- Hidden Fields: Ensuring All Data is Sent -->
+                        <input type="hidden" id="logout_part" name="part" />
+                        <input type="hidden" id="logout_run" name="run" />
+                        <input type="hidden" id="logout_skidNumber" name="skidNumber" />
+
+                        <p>Please confirm logging out of the skid run:</p>
+                        <p><strong>Run:</strong> <span id="logout_displayRun"></span></p>
+                        <p><strong>Skid Number:</strong> <span id="logout_displaySkidNumber"></span></p>
+
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                             <button type="submit" class="btn btn-danger">Logout of Skid Run</button>
@@ -456,28 +466,29 @@
         </div>
     </div>
 
-
     <script>
-               document.addEventListener("DOMContentLoaded", function() {
-            var stopSinteringModal = document.getElementById('stopSinteringModal');
-            stopSinteringModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget; // Button that triggered the modal
+        document.addEventListener("DOMContentLoaded", function () {
+            var logoutSkidModal = document.getElementById('logoutSkidModal');
+            logoutSkidModal.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget;
 
-                // Extract data from the button's data-* attributes
+                // Extract data attributes
                 var part = button.getAttribute('data-part');
                 var run = button.getAttribute('data-run');
-                var startTime = button.getAttribute('data-starttime');
                 var skidNumber = button.getAttribute('data-skidnumber');
 
-                // Populate the modal fields
-                stopSinteringModal.querySelector('#modalPart').value = part;
-                stopSinteringModal.querySelector('#modalRunId').value = run;
-                stopSinteringModal.querySelector('#modalStartTime').value = startTime;
-                stopSinteringModal.querySelector('#modalSkidNumber').value = skidNumber;
+                // Populate hidden form fields
+                logoutSkidModal.querySelector('#logout_part').value = part;
+                logoutSkidModal.querySelector('#logout_run').value = run;
+                logoutSkidModal.querySelector('#logout_skidNumber').value = skidNumber;
+
+                // Populate visible confirmation fields
+                logoutSkidModal.querySelector('#logout_displayRun').textContent = run;
+                logoutSkidModal.querySelector('#logout_displaySkidNumber').textContent = skidNumber;
             });
         });
-
     </script>
+
 
     <script>
         function openStopSinteringModal(runId, part, run, startDateTime) {

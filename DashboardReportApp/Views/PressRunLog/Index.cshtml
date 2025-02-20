@@ -12,7 +12,6 @@
     var openParts = ViewData["OpenParts"] as List<DashboardReportApp.Models.PressSetupModel>
                       ?? new List<DashboardReportApp.Models.PressSetupModel>();
 
-
     // All open records (records with EndDateTime == null)
     var openRecords = ViewBag.OpenRuns as List<DashboardReportApp.Models.PressRunLogModel>
                       ?? new List<DashboardReportApp.Models.PressRunLogModel>();
@@ -62,12 +61,9 @@
                             <td>@(item.EndDateTime.HasValue ? item.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm") : "Open")</td>
                             <td>
                                 <button class="btn btn-primary btn-sm"
-                                        onclick="openLoginCountModalForRun('@item.Part', '@item.Run', '@item.Machine', '@item.ProdNumber')">
+                                        onclick="openLoginModalForRun('@item.Part', '@item.Run', '@item.Machine', '@item.ProdNumber')">
                                     Login to Run
                                 </button>
-
-
-
                             </td>
                         </tr>
                     }
@@ -75,7 +71,6 @@
             </table>
         </div>
     </div>
-
 
     <!-- Open Mold Production Operator Runs -->
     <h2 class="text-center mb-4">Open Mold Production Operator Runs</h2>
@@ -112,19 +107,18 @@
                                 <td>
                                     <button class="btn btn-danger btn-sm"
                                             onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
-                                        Logout (Count)
+                                        Logout
                                     </button>
                                     <span>&nbsp;</span>
                                     <button class="btn btn-secondary btn-sm"
                                             onclick="openEndRunModal('@rec.Id', '@rec.Machine')">
-                                        End Run (Count)
+                                        End Run
                                     </button>
                                     <span>&nbsp;</span>
                                     <button class="btn btn-info btn-sm"
                                             onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
                                         Start Skid
                                     </button>
-
                                 </td>
                             </tr>
                         }
@@ -137,7 +131,6 @@
             }
         </div>
     </div>
-
 
     <!-- Open Skid Records -->
     <h2 class="text-center mb-4">Open Skids</h2>
@@ -186,7 +179,6 @@
         </div>
     </div>
 
-
     <!-- React Table of All Runs (Optional) -->
     <h2 class="text-center">All Runs</h2>
     <div class="card shadow mb-4">
@@ -204,108 +196,109 @@
         if (!container) return;
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData);
-           const columns = [
-        { key: "Id", label: "ID" },
-        { key: "Part", label: "Part" },
-        { key: "ProdNumber", label: "Prod Number" },
-        { key: "Run", label: "Run" },
-        { key: "Machine", label: "Machine" },
-        { key: "Operator", label: "Operator" },
-        { key: "SkidNumber", label: "SkidNumber" },
-        { key: "StartDateTime", label: "Start Time" },
-        { key: "EndDateTime", label: "End Time" },
-        { key: "PcsStart", label: "Pcs Start" },
-        { key: "PcsEnd", label: "Pcs End" },
-        { key: "Scrap", label: "Scrap" },
-        { key: "Notes", label: "Notes" }
-    ];
+        const columns = [
+            { key: "Id", label: "ID" },
+            { key: "Part", label: "Part" },
+            { key: "ProdNumber", label: "Prod Number" },
+            { key: "Run", label: "Run" },
+            { key: "Machine", label: "Machine" },
+            { key: "Operator", label: "Operator" },
+            { key: "SkidNumber", label: "SkidNumber" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
+            { key: "PcsStart", label: "Pcs Start" },
+            { key: "PcsEnd", label: "Pcs End" },
+            { key: "Scrap", label: "Scrap" },
+            { key: "Notes", label: "Notes" }
+        ];
 
         if (window.renderMyDataTable) {
             window.renderMyDataTable("myReactPressRunTableRoot", data, columns, true);
         }
     });
-</script>
 
-<!-- JavaScript Functions for Modals -->
-<script>
-    // Opens the Login modal.
-       // Opens the Login modal.
-        function openLoginCountModalForRun(part, run, machine, prodNumber) {
-        console.log("openLoginCountModalForRun called with", part, run, machine, prodNumber);
+    // LOGIN: Simply set hidden values and open the modal (no device count fetch)
+    function openLoginModalForRun(part, run, machine, prodNumber) {
+        console.log("openLoginModalForRun called with", part, run, machine, prodNumber);
         document.getElementById("loginPartHidden").value = part;
         document.getElementById("loginRunHidden").value = run;
         document.getElementById("loginMachineHidden").value = machine;
-        document.getElementById("loginProdHidden").value = prodNumber; // Set the ProdNumber
+        document.getElementById("loginProdHidden").value = prodNumber;
         document.getElementById("loginOperatorSelect").selectedIndex = 0;
-        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("loginFinalCountInput").value = data.deviceCount || 0;
-                let modal = new bootstrap.Modal(document.getElementById("LoginCountModal"));
-                modal.show();
-            })
-            .catch(err => console.error("Error fetching device count:", err));
+        let modal = new bootstrap.Modal(document.getElementById("LoginModal"));
+        modal.show();
     }
 
-
-    // Opens the Logout modal.
+    // LOGOUT: Set hidden value and open modal (no device count fetch)
     function openLogoutModal(runId, machine) {
-        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("logoutRunId").value = runId;
-                document.getElementById("logoutFinalCount").value = data.deviceCount || 0;
-                let modal = new bootstrap.Modal(document.getElementById("LogoutCountModal"));
-                modal.show();
-            })
-            .catch(err => console.error("Error fetching device count:", err));
+        document.getElementById("logoutRunId").value = runId;
+        let modal = new bootstrap.Modal(document.getElementById("LogoutModal"));
+        modal.show();
     }
 
-    // Opens the End Run modal.
-    function openEndRunModal(runId, machine) {
-        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("endRunId").value = runId;
-                document.getElementById("endRunFinalCount").value = data.deviceCount || 0;
-                document.getElementById("endRunScrap").value = "0";
-                document.getElementById("endRunNotes").value = "";
-                let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
-                modal.show();
-            })
-            .catch(err => console.error("Error fetching device count:", err));
-    }
+    // END RUN remains unchanged (if used for skid-ending or run-ending, it still asks for count)
+   function openEndRunModal(runId, machine) {
+    document.getElementById("endRunId").value = runId;
+    document.getElementById("endRunScrap").value = "0";
+    document.getElementById("endRunNotes").value = "";
+    
+    const endCountInput = document.getElementById("endRunFinalCount");
+    const defaultValue = endCountInput.value; // usually "0"
+    
+    let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
+    modal.show();
+    
+    fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+        .then(response => response.json())
+        .then(data => {
+            if(endCountInput.value === defaultValue) {
+                endCountInput.value = data.deviceCount || 0;
+            }
+        })
+        .catch(err => console.error("Error fetching device count:", err));
+}
 
-    // Opens the Start Skid modal.
-        function openStartSkidModal(runId, machine, part, operator, run, prodNumber) {
+    // START SKID: Still asks for a count override
+             function openStartSkidModal(runId, machine, part, operator, run, prodNumber) {
         console.log("openStartSkidModal called with", runId, machine, part, operator, run, prodNumber);
+
         document.getElementById("startSkidRunId").value = runId;
         document.getElementById("startSkidRunValue").value = run;
         document.getElementById("startSkidMachineHidden").value = machine;
         document.getElementById("startSkidPartHidden").value = part;
         document.getElementById("startSkidOperatorHidden").value = operator;
-        document.getElementById("startSkidProdHidden").value = prodNumber;  // Set the prodNumber
+        document.getElementById("startSkidProdHidden").value = prodNumber;
+
+        const pcsStartInput = document.getElementById("startSkidPcsStart");
+        const defaultValue = pcsStartInput.value;
+
+        console.log("Initial Pcs Start Value:", pcsStartInput.value);
+
+        let modal = new bootstrap.Modal(document.getElementById("StartSkidModal"));
+        modal.show();
 
         fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
             .then(response => response.json())
             .then(data => {
-                document.getElementById("startSkidSkidNumber").value = data.deviceCount || 0;
-                let modal = new bootstrap.Modal(document.getElementById("StartSkidModal"));
-                modal.show();
+                if (pcsStartInput.value === defaultValue) {
+                    pcsStartInput.value = data.deviceCount || 0;
+                    console.log("Updated Pcs Start Value from API:", pcsStartInput.value);
+                }
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
 
+
+
 </script>
 
 <!-- Inline Modals -->
-<!-- (A) Login Count Modal -->
-<!-- (A) Login Count Modal -->
-<div id="LoginCountModal" class="modal fade" tabindex="-1">
+<!-- (A) Login Modal (without count) -->
+<div id="LoginModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Login (Device Count)</h5>
+                <h5 class="modal-title">Login</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -324,10 +317,6 @@
                             }
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Count (Override if needed):</label>
-                        <input type="number" id="loginFinalCountInput" name="finalCount" class="form-control" value="0" />
-                    </div>
                     <button type="submit" class="btn btn-primary w-100">Confirm Login</button>
                 </form>
             </div>
@@ -335,22 +324,18 @@
     </div>
 </div>
 
-
-<!-- (B) Logout Count Modal -->
-<div id="LogoutCountModal" class="modal fade" tabindex="-1">
+<!-- (B) Logout Modal (without count) -->
+<div id="LogoutModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Logout (Device Count)</h5>
+                <h5 class="modal-title">Logout</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
                     <input type="hidden" id="logoutRunId" name="runId" />
-                    <div class="mb-3">
-                        <label class="form-label">Final Count (Override if needed):</label>
-                        <input type="number" id="logoutFinalCount" name="finalCount" class="form-control" value="0" />
-                    </div>
+                    <!-- Removed count input -->
                     <div class="mb-3">
                         <label class="form-label">Scrap:</label>
                         <input type="number" id="logoutScrap" name="scrap" class="form-control" value="0" />
@@ -366,7 +351,7 @@
     </div>
 </div>
 
-<!-- (C) End Run Count Modal -->
+<!-- (C) End Run Modal (still asks for count; use this modal if it applies to skid-ending or run-ending as needed) -->
 <div id="EndRunCountModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -396,7 +381,7 @@
     </div>
 </div>
 
-<!-- (D) Start Skid Modal -->
+<!-- (D) Start Skid Modal (still asks for skid count) -->
 <div id="StartSkidModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -416,9 +401,10 @@
                     <input type="hidden" id="startSkidProdHidden" name="prodNumber" />
 
                     <div class="mb-3">
-                        <label class="form-label">Skid Count (Override if needed):</label>
-                        <input type="number" id="startSkidSkidNumber" name="skidnumber" class="form-control" value="0" />
+                        <label class="form-label">Pcs Start (Override if needed):</label>
+                        <input type="number" id="startSkidPcsStart" name="pcsStart" class="form-control" value="0" />
                     </div>
+
                     <button type="submit" class="btn btn-primary w-100">Confirm Start Skid</button>
                 </form>
             </div>
