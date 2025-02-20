@@ -1,4 +1,5 @@
-﻿@model DashboardReportApp.Models.SecondarySetupLogModel
+﻿@model List<DashboardReportApp.Models.SecondarySetupLogModel>
+@using System.Text.Json
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Secondary Setup Log</h1>
@@ -26,7 +27,7 @@
                     <label for="Operator" class="form-label">Operator:</label>
                     <select id="Operator" name="Operator" class="form-control bg-black text-goldenrod border-goldenrod" required>
                         <option value="">-- Select Operator --</option>
-                        @foreach (var op in Model.Operators)
+                        @foreach (var op in (IEnumerable<string>)ViewBag.Operators)
                         {
                             <option value="@op">@op</option>
                         }
@@ -37,7 +38,7 @@
                     <label for="Machine" class="form-label">Machine:</label>
                     <select id="Machine" name="Machine" class="form-control bg-black text-goldenrod border-goldenrod" required>
                         <option value="">-- Select Machine --</option>
-                        @foreach (var machine in Model.Equipment)
+                        @foreach (var machine in (IEnumerable<string>)ViewBag.Machines)
                         {
                             <option value="@machine">@machine</option>
                         }
@@ -87,3 +88,49 @@
     </div>
 </div>
 
+
+<!-- All Runs Table (React Component) -->
+<div class="container mt-4">
+    <h3 class="text-center mt-4">All Runs</h3>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <!-- The React table will use the JSON data from the entire model -->
+            <div id="myReactTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+        </div>
+    </div>
+</div>
+</div>
+<!-- Load your React bundle -->
+<script src="/js/mydatatable.bundle.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const container = document.getElementById("myReactTableRoot");
+        if (!container) return;
+
+        // Retrieve JSON data (the model is a list of runs)
+        const rawData = container.getAttribute("data-records");
+        const data = JSON.parse(rawData);
+
+        // Define columns for the React table (adjust keys as needed)
+        const columns = [
+            { key: "Id", label: "ID" },
+            { key: "Timestamp", label: "Timestamp" },
+            { key: "ProdNumber", label: "ProdNumber"},
+            { key: "Run", label: "Run #" },
+            { key: "Part", label: "Part" },
+            { key: "Op", label: "Op" },
+            { key: "Operator", label: "Operator" },
+            { key: "SetupHours", label: "Setup Hours" },
+            { key: "Machine", label: "Machine" },
+            { key: "Notes", label: "Notes" }
+        ];
+
+        // Render the React table using your MyDataTable component's render function
+        if (window.renderMyDataTable) {
+            window.renderMyDataTable("myReactTableRoot", data, columns, true);
+        } else {
+            console.error("React table render function not found!");
+        }
+    });
+</script>
+}

@@ -1,17 +1,13 @@
 ﻿using MySql.Data.MySqlClient;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using DashboardReportApp.Models;
+using System.Data;
 
 namespace DashboardReportApp.Services
 {
-    public interface ISecondarySetupLogService
-    {
-        Task<List<string>> GetEquipmentAsync();
-        Task<List<string>> GetOperatorsAsync();
-        Task<List<dynamic>> GetOpenSetupsAsync();
-        Task AddSetupAsync(string op, string part, string machine, string run, int? pcs, int? scrapMach, int? scrapNonMach, string notes, decimal setupHours);
-        Task<string> LookupPartNumberAsync(int? run);
-    }
-
-    public class SecondarySetupLogService : ISecondarySetupLogService
+    public class SecondarySetupLogService
     {
         private readonly string _connectionStringMySQL;
 
@@ -19,6 +15,7 @@ namespace DashboardReportApp.Services
         {
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
         }
+
         public async Task<List<string>> GetEquipmentAsync()
         {
             var equipment = new List<string>();
@@ -36,7 +33,6 @@ namespace DashboardReportApp.Services
                     }
                 }
             }
-
             return equipment;
         }
 
@@ -57,30 +53,42 @@ namespace DashboardReportApp.Services
                     }
                 }
             }
-
             return operators;
         }
 
-        public async Task<List<dynamic>> GetOpenSetupsAsync()
+        public async Task<List<SecondarySetupLogModel>> GetAllRecords()
         {
-            var setups = new List<dynamic>();
-            string query = "SELECT part, machine, startDateTime, operator FROM secondarysetup WHERE endDateTime IS NULL";
+            var setups = new List<SecondarySetupLogModel>();
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
+                string query = "Select * from secondarysetup order by id desc";
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
                 using (var reader = await command.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())
                     {
-                        setups.Add(new
+                        // Map to your model's properties
+                        var record = new SecondarySetupLogModel
                         {
-                            Part = reader["part"],
-                            Machine = reader["machine"],
-                            StartDateTime = reader["startDateTime"],
-                            Operator = reader["operator"]
-                        });
+                            Id = Convert.ToInt32(reader["id"]),
+                            ProdNumber = reader["prodNumber"].ToString(),
+                            Run = reader["run"].ToString(),
+                            Part = reader["part"].ToString(),
+                            Operator = reader["operator"].ToString(),
+                            Op = reader["op"].ToString(),
+                            Machine = reader["machine"].ToString(),
+                            Pcs = reader["pcs"] as int?,
+                            ScrapMach = reader["scrapMach"] as int?,
+                            ScrapNonMach = reader["scrapNonMach"] as int?,
+                            SetupHours = reader["setupHours"] == DBNull.Value ? 0 : Convert.ToDecimal(reader["setupHours"]),
+                            Notes = reader["notes"].ToString(),
+                            Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+
+
+                        };
+                        setups.Add(record);
                     }
                 }
             }
@@ -88,16 +96,18 @@ namespace DashboardReportApp.Services
             return setups;
         }
 
-        public async Task AddSetupAsync(string op, string part, string machine, string run, int? pcs, int? scrapMach, int? scrapNonMach, string notes, decimal setupHours)
+
+        public async Task AddSetupAsync(string operatorName, string op, string part, string machine, string run, int? pcs, int? scrapMach, int? scrapNonMach, string notes, decimal setupHours)
         {
-            string query = "INSERT INTO secondarysetup (operator, part, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours) " +
-                           "VALUES (@op, @part, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours)";
+            string query = "INSERT INTO secondarysetup (operator, op, part, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours) " +
+                           "VALUES (@operator, @op, @part, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours)";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
                 {
+                    command.Parameters.AddWithValue("@operator", operatorName);
                     command.Parameters.AddWithValue("@op", op);
                     command.Parameters.AddWithValue("@part", part);
                     command.Parameters.AddWithValue("@machine", machine);
@@ -123,11 +133,9 @@ namespace DashboardReportApp.Services
                 using (var command = new MySqlCommand(query, connection))
                 {
                     command.Parameters.AddWithValue("@run", run);
-
                     return (await command.ExecuteScalarAsync())?.ToString();
                 }
             }
         }
     }
-
 }

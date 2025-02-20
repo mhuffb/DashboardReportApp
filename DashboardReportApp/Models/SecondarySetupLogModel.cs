@@ -11,14 +11,14 @@ namespace DashboardReportApp.Models
 
         [Required]
         public string Machine { get; set; }
-
+        public string ProdNumber { get; set; }
         [Required]
         public string Run { get; set; }
 
         [Required]
         public string Op { get; set; } // Added Op field
-        
-
+        public string Part { get; set; }
+        public int? Id { get; set; }
         public int? Pcs { get; set; }
         public int? ScrapMach { get; set; }
         public int? ScrapNonMach { get; set; }
@@ -30,6 +30,7 @@ namespace DashboardReportApp.Models
         // Properties for populating dropdowns
         public List<string> Operators { get; set; } = new List<string>();
         public List<string> Equipment { get; set; } = new List<string>();
+        public DateTime Timestamp { get; set; }
 
     }
 

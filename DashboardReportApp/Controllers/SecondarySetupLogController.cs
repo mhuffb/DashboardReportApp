@@ -6,30 +6,30 @@ namespace DashboardReportApp.Controllers
 {
     public class SecondarySetupLogController : Controller
     {
-        private readonly ISecondarySetupLogService _service;
+        private readonly SecondarySetupLogService _service;
 
-        public SecondarySetupLogController(ISecondarySetupLogService service)
+        public SecondarySetupLogController(SecondarySetupLogService service)
         {
             _service = service;
         }
 
         public async Task<IActionResult> Index()
         {
-            var model = new SecondarySetupLogModel
-            {
-                Operators = await _service.GetOperatorsAsync(),
-                Equipment = await _service.GetEquipmentAsync()
-            };
+            ViewBag.Operators = await _service.GetOperatorsAsync();
+            ViewBag.Machines = await _service.GetEquipmentAsync();
 
-            return View(model);
+            // This call now returns List<SecondarySetupLogModel>
+            var allRuns = await _service.GetAllRecords();
+
+            return View(allRuns); // Pass the typed list to the view
         }
+
 
         [HttpPost]
         public async Task<IActionResult> CreateSetup(SecondarySetupLogModel model)
         {
             if (ModelState.IsValid)
             {
-                // Look up the part number using the run number
                 int? runNumber = int.TryParse(model.Run, out var run) ? run : null;
                 string partNumber = await _service.LookupPartNumberAsync(runNumber);
 
@@ -39,10 +39,10 @@ namespace DashboardReportApp.Controllers
                     return RedirectToAction("Index");
                 }
 
-                // Save the setup
                 await _service.AddSetupAsync(
                     model.Operator,
-                    partNumber, // Use the looked-up part number
+                    model.Op,
+                    partNumber,
                     model.Machine,
                     model.Run,
                     model.Pcs,
@@ -61,8 +61,5 @@ namespace DashboardReportApp.Controllers
 
             return RedirectToAction("Index");
         }
-
     }
-
-
 }

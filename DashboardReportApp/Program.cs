@@ -32,7 +32,7 @@ try
     builder.Services.AddTransient<ScheduleService>();
     builder.Services.AddScoped<SecondaryRunLogService>();
 
-    builder.Services.AddScoped<ISecondarySetupLogService, SecondarySetupLogService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.SecondarySetupLogService>();
     builder.Services.AddScoped<MaintenanceRequestService>();
     builder.Services.AddScoped<EmailAttachmentService>();
     //builder.Services.AddHostedService<EmailProcessingBackgroundService>();
