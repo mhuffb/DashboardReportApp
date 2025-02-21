@@ -1,5 +1,4 @@
 ﻿@model DashboardReportApp.Models.HoldTagIndexViewModel
-
 @using System.Text.Json
 
 <div class="container-fluid px-3 mt-4">
@@ -13,7 +12,7 @@
 
                     <p class="text-center">For immediate assistance, call/text until you get an answer:</p>
                     <ul class="list-group mb-3">
-                        <li class="form-control">Tom Grieneisen 814-591-2704</li>
+                        <li class="form-control">Tom Grieneasen 814-591-2704</li>
                         <li class="form-control">Chico Almendarez 814-541-1181</li>
                         <li class="form-control">Roy Seltzer 814-335-7239</li>
                         <li class="form-control">Roger Jones 814-939-9412</li>
@@ -71,44 +70,229 @@
     </div>
 </div>
 
-<div class="container mt-4">
-    <h3 class="text-center mt-4">All Hold Tags</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div id="holdTagTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model.Records))'></div>
+<!-- READ-ONLY TABLE OF HOLD TAG RECORDS -->
+<div class="container-fluid px-3 mt-4">
+    <h2 class="text-center mb-4">Hold Tag Records</h2>
+
+    <!-- Filters for the table -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" id="recordSearchInput" class="form-control" placeholder="Search records..." />
+        </div>
+        <div class="col-md-6">
+            <input type="date" id="recordDateFilter" class="form-control" />
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table" style="width:100%; border-collapse:collapse;">
+            <thead class="table-dark">
+                <tr>
+                    <th class="sortable" data-label="ID" style="width: 3%;">ID</th>
+                    <th class="sortable" data-label="Part" style="width: 7%;">Part</th>
+                    <th class="sortable" data-label="Discrepancy" style="width: 10%;">Discrepancy</th>
+                    <th class="sortable" data-label="Date" style="width: 7%;">Date</th>
+                    <th class="sortable" data-label="Issued By" style="width: 7%;">Issued By</th>
+                    <th class="sortable" data-label="Disposition" style="width: 10%;">Disposition</th>
+                    <th class="sortable" data-label="Disposition By" style="width: 6%;">Disposition By</th>
+                    <th class="sortable" data-label="Rework Instructions" style="width: 10%;">Rework Instructions</th>
+                    <th class="sortable" data-label="Rework Instr By" style="width: 7%;">Rework Instr By</th>
+                    <th class="sortable" data-label="Quantity" style="width: 4%;">Quantity</th>
+                    <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
+                    <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
+                    <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
+                    <th style="width: 4%;">File</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in Model.Records)
+                {
+                    <tr>
+                        <td>@record.Id</td>
+                        <td>@record.Part</td>
+                        <td>@record.Discrepancy</td>
+                        <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@record.IssuedBy</td>
+                        <td>@record.Disposition</td>
+                        <td>@record.DispositionBy</td>
+                        <td>@record.ReworkInstr</td>
+                        <td>@record.ReworkInstrBy</td>
+                        <td>@record.Quantity</td>
+                        <td>@record.Unit</td>
+                        <td>@record.PcsScrapped</td>
+                        <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(record.FileAddress))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@record.FileAddress">
+                                    Preview File
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Bootstrap Modal for File Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+                <iframe id="modalFile" class="w-100" style="height:500px; display:none;"></iframe>
+            </div>
         </div>
     </div>
 </div>
 
-<script src="/js/mydatatable.bundle.js"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const container = document.getElementById("holdTagTableRoot");
-        if (!container) return;
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // ----------------------------
+            // File Preview Logic
+            const imageModalElement = document.getElementById('imageModal');
+            document.querySelectorAll('.fetch-image-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const filePath = this.dataset.filePath;
+                    if (!filePath) {
+                        console.error("File path is missing.");
+                        alert("No file path provided.");
+                        return;
+                    }
+                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error("Failed to fetch the image.");
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                const modalImage = document.getElementById('modalImage');
+                                const modalFile = document.getElementById('modalFile');
+                                if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                                    modalImage.src = data.url;
+                                    modalImage.style.display = "block";
+                                    modalFile.style.display = "none";
+                                } else {
+                                    modalFile.src = data.url;
+                                    modalFile.style.display = "block";
+                                    modalImage.style.display = "none";
+                                }
+                                new bootstrap.Modal(imageModalElement).show();
+                            } else {
+                                alert(`Error: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching file:', error);
+                            alert('An error occurred while fetching the file.');
+                        });
+                });
+            });
 
-        const rawData = container.getAttribute("data-records");
-        const data = JSON.parse(rawData);
+            imageModalElement.addEventListener('hidden.bs.modal', function () {
+                document.getElementById('modalImage').src = '';
+                document.getElementById('modalFile').src = '';
+            });
 
-        const columns = [
-            { key: "Id", label: "ID" },
-            { key: "Part", label: "Part" },
-            { key: "Discrepancy", label: "Discrepancy" },
-            { key: "Date", label: "Date" },
-            { key: "IssuedBy", label: "Issued By" },
-            { key: "Disposition", label: "Disposition" },
-            { key: "DispositionBy", label: "Disposition By" },
-            { key: "ReworkInstrBy", label: "Rework Instructions By" },
-            { key: "Quantity", label: "Quantity" },
-            { key: "Unit", label: "Unit" },
-            { key: "PcsScrapped", label: "pcsScrapped" },
-            { key: "DateCompleted", label: "Date Completed" },
-            { key: "FileAddress", label: "FileAddress" },
-        ];
+            // ----------------------------
+            // Filtering and Sorting Logic for the Records Table
 
-        if (window.renderMyDataTable) {
-            window.renderMyDataTable("holdTagTableRoot", data, columns, true);
-        } else {
-            console.error("React table render function not found!");
-        }
-    });
-</script>
+            let currentSortColumn = null;
+            let currentSortDir = 'asc';
+            const table = document.querySelector('.custom-table');
+            const tbody = table.querySelector('tbody');
+
+            // Attach click event to sortable headers
+            document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                if (!th.dataset.label) {
+                    th.dataset.label = th.innerText.trim();
+                }
+                th.addEventListener('click', () => {
+                    if (currentSortColumn === index) {
+                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = index;
+                        currentSortDir = 'asc';
+                    }
+                    updateTable();
+                    updateSortIndicators();
+                });
+            });
+
+            function updateTable() {
+                const searchQuery = document.getElementById('recordSearchInput').value.trim().toLowerCase();
+                const selectedDate = document.getElementById('recordDateFilter').value;
+                let rows = Array.from(tbody.querySelectorAll('tr'));
+
+                // Sort rows if a column is selected
+                if (currentSortColumn !== null) {
+                    rows.sort((a, b) => {
+                        const aCells = a.querySelectorAll('td');
+                        const bCells = b.querySelectorAll('td');
+                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
+                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+
+                        // Attempt numeric sort if possible
+                        const aNum = parseFloat(aText);
+                        const bNum = parseFloat(bText);
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+                        } else {
+                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                        }
+                    });
+                }
+
+                // Re-append sorted rows
+                rows.forEach(row => tbody.appendChild(row));
+
+                // Apply filtering to each row
+                rows.forEach(row => {
+                    let show = true;
+                    const cells = row.querySelectorAll('td');
+
+                    // Search filter: check all cells except the last (File)
+                    if (searchQuery) {
+                        let found = false;
+                        for (let i = 0; i < cells.length - 1; i++) {
+                            if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) { show = false; }
+                    }
+
+                    // Date filter: assume Date column is at index 3 (ID:0, Part:1, Discrepancy:2, Date:3)
+                    if (selectedDate) {
+                        const dateCell = cells[3];
+                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
+                            show = false;
+                        }
+                    }
+                    row.style.display = show ? '' : 'none';
+                });
+            }
+
+            function updateSortIndicators() {
+                document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                    th.innerText = th.dataset.label; // reset to original text
+                    if (index === currentSortColumn) {
+                        th.innerText += currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+                    }
+                });
+            }
+
+            document.getElementById('recordSearchInput').addEventListener('input', updateTable);
+            document.getElementById('recordDateFilter').addEventListener('change', updateTable);
+            updateTable();
+        });
+    </script>
+}
