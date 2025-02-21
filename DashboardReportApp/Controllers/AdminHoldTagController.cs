@@ -17,23 +17,26 @@ namespace DashboardReportApp.Controllers
             _holdtagservice = service;
         }
 
-     
+
 
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
-
-            // Fetch all hold records from your service
             List<AdminHoldTagModel> records = await _holdtagservice.GetAllHoldRecordsAsync();
 
-            // Return the "AdminView" (i.e., AdminView.cshtml) with the list
+            // Get operator lists for the dropdowns
+            ViewBag.IssuedByOperators = await _holdtagservice.GetIssuedByOperatorsAsync();
+            ViewBag.DispositionOperators = await _holdtagservice.GetDispositionOperatorsAsync();
+            ViewBag.ReworkOperators = await _holdtagservice.GetReworkOperatorsAsync();
+
             return View(records);
         }
 
 
 
-      
-       
+
+
+
         [HttpPost("UpdateRequest")]
         public IActionResult UpdateRequest(AdminHoldTagModel model, IFormFile? FileUpload)
         {
@@ -56,12 +59,12 @@ namespace DashboardReportApp.Controllers
                 // Call the service to update the request
                 _holdtagservice.UpdateRequest(model, FileUpload);
 
-                return RedirectToAction("AdminView");
+                return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
-                return View("AdminView", _holdtagservice.GetAllHoldRecordsAsync());
+                return View("Index", _holdtagservice.GetAllHoldRecordsAsync());
             }
         }
     }

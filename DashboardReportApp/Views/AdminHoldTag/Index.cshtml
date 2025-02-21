@@ -18,23 +18,33 @@
         </div>
     }
 
+    <!-- Filters: Search and Date -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search..." />
+        </div>
+        <div class="col-md-6">
+            <input type="date" id="dateFilter" class="form-control" />
+        </div>
+    </div>
+
     <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm w-100">
+        <table class="custom-table" style="width:100%; border-collapse:collapse;">
             <thead class="table-dark">
                 <tr>
-                    <th style="width: 3%;">ID</th>
-                    <th style="width: 7%;">Part</th>
-                    <th style="width: 10%;">Discrepancy</th>
-                    <th style="width: 7%;">Date</th>
-                    <th style="width: 7%;">Issued By</th>
-                    <th style="width: 10%;">Disposition</th>
-                    <th style="width: 6%;">Disposition By</th>
-                    <th style="width: 10%;">Rework Instructions</th>
-                    <th style="width: 7%;">Rework Instr By</th>
-                    <th style="width: 4%;">Quantity</th>
-                    <th style="width: 7%;">Unit</th>
-                    <th style="width: 4%;">Pcs Scrapped</th>
-                    <th style="width: 7%;">Date Completed</th>
+                    <th class="sortable" data-label="ID" style="width: 3%;">ID</th>
+                    <th class="sortable" data-label="Part" style="width: 7%;">Part</th>
+                    <th class="sortable" data-label="Discrepancy" style="width: 10%;">Discrepancy</th>
+                    <th class="sortable" data-label="Date" style="width: 7%;">Date</th>
+                    <th class="sortable" data-label="Issued By" style="width: 7%;">Issued By</th>
+                    <th class="sortable" data-label="Disposition" style="width: 10%;">Disposition</th>
+                    <th class="sortable" data-label="Disposition By" style="width: 6%;">Disposition By</th>
+                    <th class="sortable" data-label="Rework Instructions" style="width: 10%;">Rework Instructions</th>
+                    <th class="sortable" data-label="Rework Instr By" style="width: 7%;">Rework Instr By</th>
+                    <th class="sortable" data-label="Quantity" style="width: 4%;">Quantity</th>
+                    <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
+                    <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
+                    <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
                     <th style="width: 4%;">File</th>
                     <th style="width: 4%;">Actions</th>
                 </tr>
@@ -43,35 +53,46 @@
                 @foreach (var record in Model)
                 {
                     <tr>
-                        <form asp-controller="AdminHoldTag" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
-                            <input type="hidden" name="Id" value="@record.Id" />
                         <td>@record.Id</td>
-                        <td><input type="text" name="Part" value="@record.Part" class="form-control w-100" /></td>
-                        <td><textarea name="Discrepancy" class="form-control w-100 text-area-large">@record.Discrepancy</textarea></td>
-                        <td><input type="date" name="Date" value="@(record.Date?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
-                        <td><input type="text" name="IssuedBy" value="@record.IssuedBy" class="form-control w-100" /></td>
-                        <td><textarea name="Disposition" class="form-control w-100 text-area-large">@record.Disposition</textarea></td>
-                        <td><input type="text" name="DispositionBy" value="@record.DispositionBy" class="form-control w-100" /></td>
-                        <td><textarea name="ReworkInstr" class="form-control w-100 text-area-large">@record.ReworkInstr</textarea></td>
-                        <td><input type="text" name="ReworkInstrBy" value="@record.ReworkInstrBy" class="form-control w-100" /></td>
-                        <td><input type="number" name="Quantity" value="@record.Quantity" class="form-control w-100" /></td>
-                        <td><input type="text" name="Unit" value="@record.Unit" class="form-control w-100" /></td>
-                        <td><input type="number" name="PcsScrapped" value="@(record.PcsScrapped?.ToString() ?? "")" class="form-control w-100" /></td>
-                        <td><input type="date" name="DateCompleted" value="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
+                        <td>@record.Part</td>
+                        <td>@record.Discrepancy</td>
+                        <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@record.IssuedBy</td>
+                        <td>@record.Disposition</td>
+                        <td>@record.DispositionBy</td>
+                        <td>@record.ReworkInstr</td>
+                        <td>@record.ReworkInstrBy</td>
+                        <td>@record.Quantity</td>
+                        <td>@record.Unit</td>
+                        <td>@record.PcsScrapped</td>
+                        <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>
-                            <input type="hidden" name="FileAddress" value="@record.FileAddress" />
-                            <input type="file" name="FileUpload" class="form-control w-100" accept="image/*,.pdf,.doc,.docx" />
-                                @if (!string.IsNullOrEmpty(record.FileAddress))
-                                {
-                                <button type="button" class="btn btn-info btn-sm mt-2 fetch-image-btn w-100" data-file-path="@record.FileAddress">
+                            @if (!string.IsNullOrEmpty(record.FileAddress))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@record.FileAddress">
                                     Preview File
                                 </button>
-                                }
+                            }
                         </td>
                         <td>
-                            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-save"></i> Save</button>
+                            <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                    data-id="@record.Id"
+                                    data-part="@record.Part"
+                                    data-discrepancy="@record.Discrepancy"
+                                    data-date="@(record.Date?.ToString("yyyy-MM-dd") ?? "")"
+                                    data-issuedby="@record.IssuedBy"
+                                    data-disposition="@record.Disposition"
+                                    data-dispositionby="@record.DispositionBy"
+                                    data-reworkinstr="@record.ReworkInstr"
+                                    data-reworkinstrby="@record.ReworkInstrBy"
+                                    data-quantity="@record.Quantity"
+                                    data-unit="@record.Unit"
+                                    data-pcsscrapped="@(record.PcsScrapped?.ToString() ?? "")"
+                                    data-datecompleted="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")"
+                                    data-fileaddress="@record.FileAddress">
+                                Edit
+                            </button>
                         </td>
-                        </form>
                     </tr>
                 }
             </tbody>
@@ -79,39 +100,113 @@
     </div>
 </div>
 
-<!-- Custom Styles -->
-<style>
-    /* Force full width */
-    .full-width-table {
-        width: 100% !important;
-    }
+<!-- Edit Record Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Edit Record</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-controller="AdminHoldTag" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="Id" id="edit-id" />
+                    <div class="mb-3">
+                        <label for="edit-part" class="form-label">Part</label>
+                        <input type="text" name="Part" id="edit-part" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-discrepancy" class="form-label">Discrepancy</label>
+                        <textarea name="Discrepancy" id="edit-discrepancy" class="form-control"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-date" class="form-label">Date</label>
+                        <input type="date" name="Date" id="edit-date" class="form-control" />
+                    </div>
+                    <!-- Issued By Dropdown -->
+                    <div class="mb-3">
+                        <label for="edit-issuedby" class="form-label">Issued By</label>
+                        <select name="IssuedBy" id="edit-issuedby" class="form-control">
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewBag.IssuedByOperators != null)
+                            {
+                                foreach (var op in (List<string>)ViewBag.IssuedByOperators)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-disposition" class="form-label">Disposition</label>
+                        <textarea name="Disposition" id="edit-disposition" class="form-control"></textarea>
+                    </div>
+                    <!-- Disposition By Dropdown -->
+                    <div class="mb-3">
+                        <label for="edit-dispositionby" class="form-label">Disposition By</label>
+                        <select name="DispositionBy" id="edit-dispositionby" class="form-control">
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewBag.DispositionOperators != null)
+                            {
+                                foreach (var op in (List<string>)ViewBag.DispositionOperators)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <!-- Rework Instructions -->
+                    <div class="mb-3">
+                        <label for="edit-reworkinstr" class="form-label">Rework Instructions</label>
+                        <textarea name="ReworkInstr" id="edit-reworkinstr" class="form-control"></textarea>
+                    </div>
+                    <!-- Rework Instr By Dropdown -->
+                    <div class="mb-3">
+                        <label for="edit-reworkinstrby" class="form-label">Rework Instr By</label>
+                        <select name="ReworkInstrBy" id="edit-reworkinstrby" class="form-control">
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewBag.ReworkOperators != null)
+                            {
+                                foreach (var op in (List<string>)ViewBag.ReworkOperators)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-quantity" class="form-label">Quantity</label>
+                        <input type="number" name="Quantity" id="edit-quantity" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-unit" class="form-label">Unit</label>
+                        <input type="text" name="Unit" id="edit-unit" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-pcsscrapped" class="form-label">Pcs Scrapped</label>
+                        <input type="number" name="PcsScrapped" id="edit-pcsscrapped" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-datecompleted" class="form-label">Date Completed</label>
+                        <input type="date" name="DateCompleted" id="edit-datecompleted" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-file" class="form-label">File</label>
+                        <input type="hidden" name="FileAddress" id="edit-fileaddress" />
+                        <input type="file" name="FileUpload" id="edit-file" class="form-control" accept="image/*,.pdf,.doc,.docx" />
+                        <div id="current-file" class="mt-2"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-    /* Ensures table doesn't shrink */
-    .table {
-        table-layout: fixed;
-    }
-
-    /* Keep table responsive with horizontal scrolling */
-    .table-responsive {
-        overflow-x: auto;
-        display: block;
-    }
-
-    /* Increase text area size */
-    .text-area-large {
-        min-height: 150px !important;
-    }
-
-    /* Improve button animations */
-    .btn {
-        transition: 0.3s ease-in-out;
-    }
-
-        .btn:hover {
-            transform: scale(1.05);
-        }
-</style>
-<!-- Bootstrap Modal for File Preview -->
+<!-- Bootstrap Modal for File Preview (Unchanged) -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -127,73 +222,20 @@
     </div>
 </div>
 
-<!-- CSS for Proper Word Wrapping and Readability -->
-<!-- Custom Styles -->
-<style>
-    body {
-        background-color: black !important;
-        color: goldenrod !important;
-    }
-
-    .card {
-        background-color: black !important;
-        color: goldenrod !important;
-        border: 1px solid goldenrod;
-    }
-
-    .table {
-        color: goldenrod !important;
-        background-color: black !important;
-    }
-
-        .table th, .table td {
-            border-color: goldenrod !important;
-        }
-
-    .table-dark {
-        background-color: black !important;
-        color: goldenrod !important;
-    }
-
-    .form-control {
-        background-color: black !important;
-        color: goldenrod !important;
-        border: 1px solid goldenrod !important;
-    }
-
-        .form-control::placeholder {
-            color: goldenrod !important;
-        }
-
-    .btn:hover {
-        transform: scale(1.05);
-    }
-
-    .text-area-large {
-        min-height: 150px !important;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-        display: block;
-    }
-</style>
-
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            const modalElement = document.getElementById('imageModal');
-
+            // ----------------------------
+            // File Preview Logic (Unchanged)
+            const imageModalElement = document.getElementById('imageModal');
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const filePath = this.dataset.filePath;
-
                     if (!filePath) {
                         console.error("File path is missing.");
                         alert("No file path provided.");
                         return;
                     }
-
                     fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
                             if (!response.ok) throw new Error("Failed to fetch the image.");
@@ -203,8 +245,7 @@
                             if (data.success) {
                                 const modalImage = document.getElementById('modalImage');
                                 const modalFile = document.getElementById('modalFile');
-
-                                if (data.url.endsWith(".jpg") || data.url.endsWith(".png") || data.url.endsWith(".jpeg") || data.url.endsWith(".gif")) {
+                                if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
                                     modalImage.src = data.url;
                                     modalImage.style.display = "block";
                                     modalFile.style.display = "none";
@@ -213,9 +254,7 @@
                                     modalFile.style.display = "block";
                                     modalImage.style.display = "none";
                                 }
-
-                                const bootstrapModal = new bootstrap.Modal(modalElement);
-                                bootstrapModal.show();
+                                new bootstrap.Modal(imageModalElement).show();
                             } else {
                                 alert(`Error: ${data.message}`);
                             }
@@ -227,10 +266,142 @@
                 });
             });
 
-            modalElement.addEventListener('hidden.bs.modal', function () {
+            imageModalElement.addEventListener('hidden.bs.modal', function () {
                 document.getElementById('modalImage').src = '';
                 document.getElementById('modalFile').src = '';
             });
+
+            // ----------------------------
+            // Edit Record Modal Logic
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const part = this.getAttribute('data-part');
+                    const discrepancy = this.getAttribute('data-discrepancy');
+                    const date = this.getAttribute('data-date');
+                    const issuedBy = this.getAttribute('data-issuedby');
+                    const disposition = this.getAttribute('data-disposition');
+                    const dispositionBy = this.getAttribute('data-dispositionby');
+                    const reworkInstr = this.getAttribute('data-reworkinstr');
+                    const reworkInstrBy = this.getAttribute('data-reworkinstrby');
+                    const quantity = this.getAttribute('data-quantity');
+                    const unit = this.getAttribute('data-unit');
+                    const pcsScrapped = this.getAttribute('data-pcsscrapped');
+                    const dateCompleted = this.getAttribute('data-datecompleted');
+                    const fileAddress = this.getAttribute('data-fileaddress');
+
+                    document.getElementById('edit-id').value = id;
+                    document.getElementById('edit-part').value = part;
+                    document.getElementById('edit-discrepancy').value = discrepancy;
+                    document.getElementById('edit-date').value = date;
+
+                    // Set dropdown values
+                    document.getElementById('edit-issuedby').value = issuedBy;
+                    document.getElementById('edit-disposition').value = disposition;
+                    document.getElementById('edit-dispositionby').value = dispositionBy;
+                    document.getElementById('edit-reworkinstr').value = reworkInstr;
+                    document.getElementById('edit-reworkinstrby').value = reworkInstrBy;
+
+                    document.getElementById('edit-quantity').value = quantity;
+                    document.getElementById('edit-unit').value = unit;
+                    document.getElementById('edit-pcsscrapped').value = pcsScrapped;
+                    document.getElementById('edit-datecompleted').value = dateCompleted;
+                    document.getElementById('edit-fileaddress').value = fileAddress;
+                    if (fileAddress) {
+                        document.getElementById('current-file').innerHTML = '<a href="' + fileAddress + '" target="_blank">Current File</a>';
+                    } else {
+                        document.getElementById('current-file').innerHTML = 'No file uploaded';
+                    }
+                    new bootstrap.Modal(document.getElementById('editModal')).show();
+                });
+            });
+
+            // ----------------------------
+            // Filtering and Sorting Logic
+
+            // Global sort variables
+            let currentSortColumn = null;
+            let currentSortDir = 'asc';
+
+            const table = document.querySelector('.custom-table');
+            const tbody = table.querySelector('tbody');
+
+            // Attach click event to all sortable headers
+            document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                if (!th.dataset.label) {
+                    th.dataset.label = th.innerText.trim();
+                }
+                th.addEventListener('click', () => {
+                    if(currentSortColumn === index) {
+                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = index;
+                        currentSortDir = 'asc';
+                    }
+                    updateTable();
+                    updateSortIndicators();
+                });
+            });
+
+            function updateTable() {
+                const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+                const selectedDate = document.getElementById('dateFilter').value;
+
+                let rows = Array.from(tbody.querySelectorAll('tr'));
+
+                if (currentSortColumn !== null) {
+                    rows.sort((a, b) => {
+                        const aCells = a.querySelectorAll('td');
+                        const bCells = b.querySelectorAll('td');
+                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
+                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+                        const aNum = parseFloat(aText);
+                        const bNum = parseFloat(bText);
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+                        } else {
+                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                        }
+                    });
+                }
+
+                rows.forEach(row => tbody.appendChild(row));
+
+                rows.forEach(row => {
+                    let show = true;
+                    const cells = row.querySelectorAll('td');
+                    if (searchQuery) {
+                        let found = false;
+                        for (let i = 0; i < cells.length - 1; i++) {
+                            if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) { show = false; }
+                    }
+                    if (selectedDate) {
+                        const dateCell = cells[3]; // Date column (0:ID,1:Part,2:Discrepancy,3:Date)
+                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
+                            show = false;
+                        }
+                    }
+                    row.style.display = show ? '' : 'none';
+                });
+            }
+
+            function updateSortIndicators() {
+                document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                    th.innerText = th.dataset.label;
+                    if (index === currentSortColumn) {
+                        th.innerText += currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+                    }
+                });
+            }
+
+            document.getElementById('searchInput').addEventListener('input', updateTable);
+            document.getElementById('dateFilter').addEventListener('change', updateTable);
+            updateTable();
         });
     </script>
 }

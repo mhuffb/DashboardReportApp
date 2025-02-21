@@ -42,7 +42,7 @@ namespace DashboardReportApp.Services
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            string query = "SELECT * FROM HoldRecords"; // or your actual table name
+            string query = "SELECT * FROM HoldRecords order by id desc"; // or your actual table name
 
             using var command = new MySqlCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
@@ -198,6 +198,50 @@ namespace DashboardReportApp.Services
             return rowsAffected > 0; // true if at least one row was updated
         }
 
+        public async Task<List<string>> GetIssuedByOperatorsAsync()
+        {
+            var operators = new List<string>();
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            string query = "SELECT name FROM operators"; // Returns all names for Issued By
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                operators.Add(reader.IsDBNull(0) ? "" : reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetDispositionOperatorsAsync()
+        {
+            var operators = new List<string>();
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            string query = "SELECT name FROM operators WHERE allowHoldDisp = 1";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                operators.Add(reader.IsDBNull(0) ? "" : reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetReworkOperatorsAsync()
+        {
+            var operators = new List<string>();
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            string query = "SELECT name FROM operators WHERE allowHoldRework = 1";
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                operators.Add(reader.IsDBNull(0) ? "" : reader.GetString(0));
+            }
+            return operators;
+        }
 
     }
 }
