@@ -92,7 +92,7 @@ namespace DashboardReportApp.Services
                 }
                 // Generate a unique name for the file
                 var fileName = Path.GetFileName(file.FileName);
-                filePath = Path.Combine(_uploadFolder, "ProcessChangeRequestFile1_" + fileName);
+                filePath = Path.Combine(_uploadFolder, $"ProcessChangeRequestFile1_{ request.Id}");
 
                 try
                 {

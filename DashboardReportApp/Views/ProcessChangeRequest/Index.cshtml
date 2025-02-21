@@ -192,7 +192,8 @@
 
 <!-- File Preview Modal (Image or PDF) -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <!-- Use "modal-xl" for extra-wide modal -->
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
@@ -201,11 +202,13 @@
             <div class="modal-body text-center">
                 <!-- If the file is PDF, show iframe; otherwise show image -->
                 <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
-                <iframe id="modalPDF" class="w-100" style="height:600px; display:none;" frameborder="0"></iframe>
+                <!-- Increase the iframe height -->
+                <iframe id="modalPDF" class="w-100" style="height:900px; display:none;" frameborder="0"></iframe>
             </div>
         </div>
     </div>
 </div>
+
 
 @section Scripts {
     <script>
