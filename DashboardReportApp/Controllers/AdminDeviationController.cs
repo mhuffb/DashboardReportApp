@@ -17,24 +17,27 @@ namespace DashboardReportApp.Controllers
             _deviationService = deviationService;
         }
 
-        [HttpGet("List")]
-        public IActionResult List()
+        [HttpGet("Index")]
+        public IActionResult Index()
         {
             List<AdminDeviationModel> deviations = _deviationService.GetAllDeviations();
+            ViewBag.OperatorNames = _deviationService.GetAllOperatorNames();
+            ViewBag.ApprovedByOperators = _deviationService.GetApprovedByOperators();
             return View(deviations);
         }
+
 
         [HttpPost("Update")]
         public IActionResult Update(AdminDeviationModel model)
         {
             if (!ModelState.IsValid)
             {
-                return RedirectToAction("List");
+                return RedirectToAction("Index");
             }
 
             _deviationService.UpdateDeviation(model);
             TempData["Success"] = "Deviation updated successfully!";
-            return RedirectToAction("List");
+            return RedirectToAction("Index");
         }
     }
 }
