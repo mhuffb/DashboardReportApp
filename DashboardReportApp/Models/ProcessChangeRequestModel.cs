@@ -25,10 +25,10 @@ namespace DashboardReportApp.Models
         public string? UpdatedBy { get; set; }
         public string? UpdateResult { get; set; }
 
-        public string? FileAddress { get; set; }
 
-        [Display(Name = "Media Link")]
-        public string? FileAddressMediaLink { get; set; }
+        public string? FileAddress1 { get; set; }
+
+        public string? FileAddress2 { get; set; }
 
         public string? TestRequested { get; set; }
     }

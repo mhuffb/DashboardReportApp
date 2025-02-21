@@ -1,8 +1,10 @@
 ﻿using DashboardReportApp.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
+using System.IO;
 
 namespace DashboardReportApp.Services
 {
@@ -15,13 +17,13 @@ namespace DashboardReportApp.Services
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
-
         }
 
+        // Gets all ProcessChangeRequest rows
         public List<ProcessChangeRequestModel> GetAllRequests()
         {
             var requests = new List<ProcessChangeRequestModel>();
-            string query = "SELECT * FROM ProcessChangeRequest ORDER BY id DESC";
+            string query = "SELECT * FROM ProcessChangeRequest ORDER BY Id DESC";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -42,174 +44,129 @@ namespace DashboardReportApp.Services
                             UpdateDateTime = reader["UpdateDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["UpdateDateTime"]),
                             UpdatedBy = reader["UpdatedBy"]?.ToString(),
                             UpdateResult = reader["UpdateResult"]?.ToString(),
-                            FileAddress = reader["FileAddress"]?.ToString(),
-                            FileAddressMediaLink = reader["FileAddressMediaLink"]?.ToString(),
+                            // The DB columns might differ. 
+                            // Use the correct column names for file addresses if not "FileAddress1" or "FileAddress"
+                            FileAddress1 = reader["FileAddress1"]?.ToString(),
+                            FileAddress2 = reader["FileAddress2"]?.ToString(),
                             TestRequested = reader["TestRequested"]?.ToString()
                         });
                     }
                 }
             }
-
             return requests;
         }
+        public List<string> GetOperators()
+        {
+            var operatorNames = new List<string>();
+            string query = "SELECT DISTINCT name FROM operators ORDER BY name";
 
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new MySqlCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        // Assuming column 0 contains the 'name' string
+                        operatorNames.Add(reader.GetString(0));
+                    }
+                }
+            }
+
+            return operatorNames;
+        }
+
+        // Add a new request + optional single file
         public void AddRequest(ProcessChangeRequestModel request, IFormFile file)
         {
-            // Initialize file path
-            string fileAddressMediaLink = null;
+            // If a file is uploaded, store it
             string filePath = null;
-            // Handle file upload
+            string FileAddress1 = null;
+
             if (file != null && file.Length > 0)
             {
+                if (!Directory.Exists(_uploadFolder))
+                {
+                    Directory.CreateDirectory(_uploadFolder);
+                }
+                // Generate a unique name for the file
                 var fileName = Path.GetFileName(file.FileName);
-                 filePath = Path.Combine(_uploadFolder, $"ProcessChangeRequestMedia_{request.Id}");
+                filePath = Path.Combine(_uploadFolder, "ProcessChangeRequestFile1_" + fileName);
 
                 try
                 {
-                    // Save the file to the specified folder
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
                         file.CopyTo(stream);
                     }
-
-                    // Save relative file path for database
-                    //fileAddressMediaLink = $"/uploads/ProcessChangeRequestMedia_{fileName}";
+                    Console.WriteLine($"File uploaded to: {filePath}");
+                    // If you want a relative path, set FileAddress1 accordingly
+                    // e.g. FileAddress1 = "/Uploads/ProcessChangeRequestFile1_" + fileName;
                 }
                 catch (Exception ex)
                 {
-                    // Log or handle the file save error
                     Console.WriteLine($"Error saving file: {ex.Message}");
                     throw new Exception("File upload failed.");
                 }
             }
 
-            // Insert data into the database
-            string insertQuery = @"INSERT INTO ProcessChangeRequest (Part, Requester, ReqDate, Request, FileAddressMediaLink, TestRequested) 
-                           VALUES (@Part, @Requester, @ReqDate, @Request, @FileAddressMediaLink, @TestRequested)";
+            // Insert the new request record
+            const string insertQuery = @"
+                INSERT INTO ProcessChangeRequest 
+                (Part, Requester, ReqDate, Request, FileAddress1, TestRequested)
+                VALUES (@Part, @Requester, @ReqDate, @Request, @FileAddress1, @TestRequested)";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-
                 using (var command = new MySqlCommand(insertQuery, connection))
                 {
-                    // Add parameters for the INSERT query
                     command.Parameters.AddWithValue("@Part", request.Part);
                     command.Parameters.AddWithValue("@Requester", request.Requester);
                     command.Parameters.AddWithValue("@ReqDate", request.ReqDate ?? DateTime.Today);
                     command.Parameters.AddWithValue("@Request", request.Request);
-                    command.Parameters.AddWithValue("@FileAddressMediaLink", string.IsNullOrEmpty(filePath) ? DBNull.Value : fileAddressMediaLink);
+                    command.Parameters.AddWithValue("@FileAddress1",
+                        string.IsNullOrEmpty(filePath) ? (object)DBNull.Value : FileAddress1);
                     command.Parameters.AddWithValue("@TestRequested",
-    string.IsNullOrWhiteSpace(request.TestRequested) ? DBNull.Value : int.Parse(request.TestRequested));
+                        string.IsNullOrWhiteSpace(request.TestRequested) ? (object)DBNull.Value : int.Parse(request.TestRequested));
 
-
-                    // Execute the query
                     command.ExecuteNonQuery();
 
-                    // Retrieve the ID of the inserted record
                     int newId = (int)command.LastInsertedId;
+                    Console.WriteLine($"Inserted new ProcessChangeRequest with Id = {newId}");
 
-                    // If a file was uploaded, update the record with the file path
-                    if (!string.IsNullOrEmpty(fileAddressMediaLink))
+                    // If a file was uploaded, update the record with the actual path in DB
+                    if (!string.IsNullOrEmpty(filePath))
                     {
-                        string updateQuery = @"UPDATE ProcessChangeRequest SET FileAddressMediaLink = @FileAddressMediaLink WHERE Id = @Id";
-
-                        using (var updateCommand = new MySqlCommand(updateQuery, connection))
+                        const string updateQuery = @"
+                            UPDATE ProcessChangeRequest 
+                            SET FileAddress1 = @FileAddress1
+                            WHERE Id = @Id";
+                        using (var updateCmd = new MySqlCommand(updateQuery, connection))
                         {
-                            updateCommand.Parameters.AddWithValue("@Id", newId);
-                            updateCommand.Parameters.AddWithValue("@FileAddressMediaLink", fileAddressMediaLink);
-                            updateCommand.ExecuteNonQuery();
+                            // You can store the absolute path or a relative one, depending on your approach
+                            updateCmd.Parameters.AddWithValue("@Id", newId);
+                            updateCmd.Parameters.AddWithValue("@FileAddress1", filePath);
+                            updateCmd.ExecuteNonQuery();
+                            Console.WriteLine($"Updated 'FileAddress1' for request {newId}");
                         }
                     }
                 }
             }
         }
 
-        public void UpdateRequest(ProcessChangeRequestModel model, IFormFile? file)
+        // We do NOT provide an UpdateRequest method, 
+        // so no editing of existing requests except for file uploads
+
+        // Update an existing request's FileAddress1 link
+        public void UpdateFileAddress1(int id, string FileAddress1)
         {
-            string filePath = model.FileAddress; // Use the existing address if no new file is uploaded
-            Console.WriteLine("Previous File Address: " + model.FileAddress);
+            Console.WriteLine($"Updating Request ID = {id}, FileAddress1 = {FileAddress1}");
 
-            if (file != null && file.Length > 0)
-            {
-                if (!Directory.Exists(_uploadFolder))
-                {
-                    Directory.CreateDirectory(_uploadFolder); // Ensure the folder exists
-                }
-
-                // Generate the file name with extension
-                var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"ProcessChangeRequest_{model.Id}{fileExtension}";
-
-                // Full physical path for saving the file
-                filePath = Path.Combine(_uploadFolder, fileName);
-
-
-                Console.WriteLine("Physical Path (for saving): " + filePath);
-
-                try
-                {
-                    // Save the file to the physical location
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        file.CopyTo(stream);
-                    }
-
-                    Console.WriteLine("File saved successfully at: " + filePath);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving file: {ex.Message}");
-                    throw new Exception("File upload failed.");
-                }
-            }
-            else
-            {
-                Console.WriteLine("No new file uploaded.");
-            }
-
-            // Update the database with the relative file path
-            string query = @"UPDATE ProcessChangeRequest 
-                     SET Part = @Part, Requester = @Requester, ReqDate = @ReqDate, 
-                         Request = @Request, UpdatedBy = @UpdatedBy, 
-                         UpdateResult = @UpdateResult, FileAddress = @FileAddress, 
-                         TestRequested = @TestRequested
-                     WHERE Id = @Id";
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                connection.Open();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@Id", model.Id);
-                    command.Parameters.AddWithValue("@Part", model.Part);
-                    command.Parameters.AddWithValue("@Requester", model.Requester);
-                    command.Parameters.AddWithValue("@ReqDate", model.ReqDate);
-                    command.Parameters.AddWithValue("@Request", model.Request);
-                    command.Parameters.AddWithValue("@UpdatedBy", model.UpdatedBy);
-                    command.Parameters.AddWithValue("@UpdateResult", model.UpdateResult);
-
-                    // Save the relative path in the database
-                    command.Parameters.AddWithValue("@FileAddress", string.IsNullOrEmpty(filePath) ? DBNull.Value : filePath);
-
-                    command.Parameters.AddWithValue("@TestRequested",
-                        string.IsNullOrWhiteSpace(model.TestRequested) ? DBNull.Value : int.Parse(model.TestRequested));
-
-                    command.ExecuteNonQuery();
-                }
-            }
-
-            Console.WriteLine("Database updated with relative path: " + filePath);
-        }
-
-
-
-        public void UpdateMediaLinkFile(int id, string fileAddressMediaLink)
-        {
-            
-            Console.WriteLine($"Updating Request ID = {id}, FileAddressMediaLink = {fileAddressMediaLink}");
-
-            string query = @"UPDATE ProcessChangeRequest SET FileAddressMediaLink = @FileAddressMediaLink WHERE Id = @Id";
+            const string query = @"UPDATE ProcessChangeRequest 
+                                   SET FileAddress1 = @FileAddress1 
+                                   WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -217,15 +174,11 @@ namespace DashboardReportApp.Services
                 using (var command = new MySqlCommand(query, connection))
                 {
                     command.Parameters.AddWithValue("@Id", id);
-                    command.Parameters.AddWithValue("@FileAddressMediaLink", fileAddressMediaLink);
-
-                    var rowsAffected = command.ExecuteNonQuery();
+                    command.Parameters.AddWithValue("@FileAddress1", FileAddress1);
+                    int rowsAffected = command.ExecuteNonQuery();
                     Console.WriteLine($"Rows Affected: {rowsAffected}");
                 }
             }
         }
-
-
-
     }
 }

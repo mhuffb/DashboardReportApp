@@ -152,17 +152,6 @@ namespace DashboardReportApp.Controllers
 
 
 
-
-        [HttpGet("GenerateQRCode/{id}")]
-        public IActionResult GenerateQRCode(int id)
-        {
-            var mailToLink = $"mailto:fixit@sintergy.net?subject=Maintenance Order #{id}";
-            var qrCodeService = new QRCodeService();
-            var qrCodeImage = qrCodeService.GenerateQRCode(mailToLink);
-
-            return File(qrCodeImage, "image/png");
-        }
-
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {

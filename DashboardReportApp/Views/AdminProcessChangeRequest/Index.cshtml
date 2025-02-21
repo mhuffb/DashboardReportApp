@@ -20,50 +20,85 @@
         </div>
     }
 
+    <!-- Search and Date Filter -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" id="processChangeSearchInput" class="form-control" placeholder="Search Process Change Requests..." />
+        </div>
+        <div class="col-md-6">
+            <input type="date" id="processChangeDateFilter" class="form-control" placeholder="Filter by Request Date" />
+        </div>
+    </div>
+
+    <!-- Table with FileAddress1 and FileAddress2 columns -->
     <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm w-100">
-            <thead class="table-dark">
+        <table class="custom-table">
+            <thead>
                 <tr>
-                    <th style="width: 5%;">ID</th>
-                    <th style="width: 15%;">Part</th>
-                    <th style="width: 10%;">Requester</th>
-                    <th style="width: 10%;">Request Date</th>
-                    <th style="width: 20%;">Request</th>
-                    <th style="width: 10%;">Updated By</th>
-                    <th style="width: 20%;">Update Result</th>
-                    <th style="width: 12%;">File</th>
-                    <th style="width: 7%;">Test Requested</th>
-                    <th style="width: 10%;">Actions</th>
+                    <th class="sortable">ID</th>
+                    <th class="sortable">Part</th>
+                    <th class="sortable">Requester</th>
+                    <th class="sortable">Request Date</th>
+                    <th class="sortable">Request</th>
+                    <th class="sortable">Updated By</th>
+                    <th class="sortable">Update Result</th>
+                    <th class="sortable">File Address 1</th>
+                    <th class="sortable">File Address 2</th>
+                    <th class="sortable">Test Requested</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var item in Model)
                 {
                     <tr>
-                        <form asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
-                            <input type="hidden" name="Id" value="@item.Id" />
                         <td>@item.Id</td>
-                        <td><input type="text" name="Part" value="@item.Part" class="form-control w-100" required /></td>
-                        <td><input type="text" name="Requester" value="@item.Requester" class="form-control w-100" required /></td>
-                        <td><input type="date" name="ReqDate" value="@(item.ReqDate?.ToString("yyyy-MM-dd") ?? "")" class="form-control w-100" /></td>
-                        <td><textarea name="Request" class="form-control w-100 text-area-large">@item.Request</textarea></td>
-                        <td><input type="text" name="UpdatedBy" value="@item.UpdatedBy" class="form-control w-100" /></td>
-                        <td><textarea name="UpdateResult" class="form-control w-100 text-area-large">@item.UpdateResult</textarea></td>
+                        <td>@item.Part</td>
+                        <td>@item.Requester</td>
+                        <td>@(item.ReqDate?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@item.Request</td>
+                        <td>@item.UpdatedBy</td>
+                        <td>@item.UpdateResult</td>
                         <td>
-                            <input type="hidden" name="FileAddress" value="@item.FileAddress" />
-                            <input type="file" name="FileUpload" class="form-control w-100" accept="image/*,.pdf,.doc,.docx" />
-                                @if (!string.IsNullOrEmpty(item.FileAddress))
-                                {
-                                <button type="button" class="btn btn-info btn-sm mt-2 fetch-image-btn w-100" data-file-path="@item.FileAddress">
-                                    Preview File
+                            @if (!string.IsNullOrEmpty(item.FileAddress1))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress1" data-label="File 1">
+                                    Preview File 1
                                 </button>
-                                }
+                            }
+                            else
+                            {
+                                <span>No file</span>
+                            }
                         </td>
-                        <td><input type="text" name="TestRequested" value="@item.TestRequested" class="form-control w-100" /></td>
                         <td>
-                            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-save"></i> Save</button>
+                            @if (!string.IsNullOrEmpty(item.FileAddress2))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress2" data-label="File 2">
+                                    Preview File 2
+                                </button>
+                            }
+                            else
+                            {
+                                <span>No file</span>
+                            }
                         </td>
-                        </form>
+                        <td>@item.TestRequested</td>
+                        <td>
+                            <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                    data-id="@item.Id"
+                                    data-part="@item.Part"
+                                    data-requester="@item.Requester"
+                                    data-reqdate="@(item.ReqDate?.ToString("yyyy-MM-dd") ?? "")"
+                                    data-request="@item.Request"
+                                    data-updatedby="@item.UpdatedBy"
+                                    data-updateresult="@item.UpdateResult"
+                                    data-fileaddress1="@item.FileAddress1"
+                                    data-fileaddress2="@item.FileAddress2"
+                                    data-testrequested="@item.TestRequested">
+                                Edit
+                            </button>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -71,58 +106,71 @@
     </div>
 </div>
 
-<!-- Custom Styles -->
-<!-- Custom Styles -->
-<style>
-    body {
-        background-color: black !important;
-        color: goldenrod !important;
-    }
+<!-- Edit Process Change Request Modal -->
+<div class="modal fade" id="editProcessChangeModal" tabindex="-1" aria-labelledby="editProcessChangeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editProcessChangeModalLabel">Edit Process Change Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <!-- The form posts to the UpdateRequest endpoint -->
+            <form asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="Id" id="edit-id" />
+                    <div class="mb-3">
+                        <label for="edit-part" class="form-label">Part</label>
+                        <input type="text" name="Part" id="edit-part" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-requester" class="form-label">Requester</label>
+                        <input type="text" name="Requester" id="edit-requester" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-reqdate" class="form-label">Request Date</label>
+                        <input type="date" name="ReqDate" id="edit-reqdate" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-request" class="form-label">Request</label>
+                        <textarea name="Request" id="edit-request" class="form-control text-area-large"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-updatedby" class="form-label">Updated By</label>
+                        <input type="text" name="UpdatedBy" id="edit-updatedby" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-updateresult" class="form-label">Update Result</label>
+                        <textarea name="UpdateResult" id="edit-updateresult" class="form-control text-area-large"></textarea>
+                    </div>
+                    <!-- File Upload for FileAddress1 -->
+                    <div class="mb-3">
+                        <label for="edit-file1" class="form-label">File 1</label>
+                        <input type="hidden" name="FileAddress1" id="edit-fileaddress1" />
+                        <input type="file" name="FileUpload1" id="edit-file1" class="form-control" accept="image/*,.pdf,.doc,.docx" />
+                        <div id="current-file1" class="mt-2"></div>
+                    </div>
+                    <!-- File Upload for FileAddress2 -->
+                    <div class="mb-3">
+                        <label for="edit-file2" class="form-label">File 2</label>
+                        <input type="hidden" name="FileAddress2" id="edit-fileaddress2" />
+                        <input type="file" name="FileUpload2" id="edit-file2" class="form-control" accept="image/*,.pdf,.doc,.docx" />
+                        <div id="current-file2" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-testrequested" class="form-label">Test Requested</label>
+                        <input type="text" name="TestRequested" id="edit-testrequested" class="form-control" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-    .card {
-        background-color: black !important;
-        color: goldenrod !important;
-        border: 1px solid goldenrod;
-    }
-
-    .table {
-        color: goldenrod !important;
-        background-color: black !important;
-    }
-
-        .table th, .table td {
-            border-color: goldenrod !important;
-        }
-
-    .table-dark {
-        background-color: black !important;
-        color: goldenrod !important;
-    }
-
-    .form-control {
-        background-color: black !important;
-        color: goldenrod !important;
-        border: 1px solid goldenrod !important;
-    }
-
-        .form-control::placeholder {
-            color: goldenrod !important;
-        }
-
-    .btn:hover {
-        transform: scale(1.05);
-    }
-
-    .text-area-large {
-        min-height: 150px !important;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-        display: block;
-    }
-</style>
-<!-- Bootstrap Modal for Image Preview -->
+<!-- File Preview Modal -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -140,34 +188,25 @@
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // File Preview Logic
             const modalElement = document.getElementById('imageModal');
-
-            // For each "Preview Image" button
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const filePath = this.dataset.filePath;
-
                     if (!filePath) {
                         console.error("File path is missing.");
                         alert("No file path provided.");
                         return;
                     }
-
-                    // Fetch image data from your endpoint
-                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    fetch(`/AdminProcessChangeRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
                             if (!response.ok) throw new Error("Failed to fetch the image.");
                             return response.json();
                         })
                         .then(data => {
                             if (data.success) {
-                                // Set the modal image source to the returned URL
-                                const modalImage = document.getElementById('modalImage');
-                                modalImage.src = data.url;
-
-                                // Show the modal (using Bootstrap 5)
-                                const bootstrapModal = new bootstrap.Modal(modalElement);
-                                bootstrapModal.show();
+                                document.getElementById('modalImage').src = data.url;
+                                new bootstrap.Modal(modalElement).show();
                             } else {
                                 alert(`Error: ${data.message}`);
                             }
@@ -178,18 +217,139 @@
                         });
                 });
             });
-
-            // Cleanup the modal when hidden
             modalElement.addEventListener('hidden.bs.modal', function () {
-                const modalImage = document.getElementById('modalImage');
-                modalImage.src = '';
+                document.getElementById('modalImage').src = '';
+            });
 
-                // Remove any leftover backdrop (rare, but just in case)
-                const modalBackdrop = document.querySelector('.modal-backdrop');
-                if (modalBackdrop) modalBackdrop.remove();
+            // Sorting and Filtering
+            let currentSortColumn = null;
+            let currentSortDir = 'asc';
+            const table = document.querySelector('.custom-table');
+            const tbody = table.querySelector('tbody');
 
-                document.body.classList.remove('modal-open');
-                document.body.style = ''; // Clear any inline styles
+            // Attach click event to sortable headers
+            document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                if (!th.dataset.label) {
+                    th.dataset.label = th.innerText.trim();
+                }
+                th.addEventListener('click', () => {
+                    if (currentSortColumn === index) {
+                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = index;
+                        currentSortDir = 'asc';
+                    }
+                    updateTable();
+                    updateSortIndicators();
+                });
+            });
+
+            // Filter event listeners
+            document.getElementById('processChangeSearchInput').addEventListener('input', updateTable);
+            document.getElementById('processChangeDateFilter').addEventListener('change', updateTable);
+
+            function updateTable() {
+                const searchQuery = document.getElementById('processChangeSearchInput').value.trim().toLowerCase();
+                const selectedDate = document.getElementById('processChangeDateFilter').value;
+                let rows = Array.from(tbody.querySelectorAll('tr'));
+
+                // Sorting
+                if (currentSortColumn !== null) {
+                    rows.sort((a, b) => {
+                        const aCells = a.querySelectorAll('td');
+                        const bCells = b.querySelectorAll('td');
+                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
+                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+                        const aNum = parseFloat(aText);
+                        const bNum = parseFloat(bText);
+                        if (!isNaN(aNum) && !isNaN(bNum)) {
+                            return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+                        } else {
+                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                        }
+                    });
+                }
+
+                // Re-append sorted rows
+                rows.forEach(row => tbody.appendChild(row));
+
+                // Filtering: search filter (checks all cells except last Actions column) and date filter (Request Date is at index 3)
+                rows.forEach(row => {
+                    let show = true;
+                    const cells = row.querySelectorAll('td');
+
+                    // Search filter
+                    if (searchQuery) {
+                        let found = false;
+                        for (let i = 0; i < cells.length - 1; i++) {
+                            if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) show = false;
+                    }
+
+                    // Date filter (Request Date is column index 3)
+                    if (selectedDate) {
+                        const dateCell = cells[3];
+                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
+                            show = false;
+                        }
+                    }
+
+                    row.style.display = show ? '' : 'none';
+                });
+            }
+
+            function updateSortIndicators() {
+                document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                    th.innerText = th.dataset.label;
+                    if (index === currentSortColumn) {
+                        th.innerText += currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+                    }
+                });
+            }
+
+            updateTable();
+
+            // Edit Modal Logic
+            document.querySelectorAll('.edit-btn').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const part = this.getAttribute('data-part');
+                    const requester = this.getAttribute('data-requester');
+                    const reqdate = this.getAttribute('data-reqdate');
+                    const request = this.getAttribute('data-request');
+                    const updatedby = this.getAttribute('data-updatedby');
+                    const updateresult = this.getAttribute('data-updateresult');
+                    const fileaddress1 = this.getAttribute('data-fileaddress1');
+                    const fileaddress2 = this.getAttribute('data-fileaddress2');
+                    const testrequested = this.getAttribute('data-testrequested');
+
+                    document.getElementById('edit-id').value = id;
+                    document.getElementById('edit-part').value = part;
+                    document.getElementById('edit-requester').value = requester;
+                    document.getElementById('edit-reqdate').value = reqdate;
+                    document.getElementById('edit-request').value = request;
+                    document.getElementById('edit-updatedby').value = updatedby;
+                    document.getElementById('edit-updateresult').value = updateresult;
+                    document.getElementById('edit-fileaddress1').value = fileaddress1;
+                    document.getElementById('edit-fileaddress2').value = fileaddress2;
+                    document.getElementById('edit-testrequested').value = testrequested;
+
+                    if (fileaddress1) {
+                        document.getElementById('current-file1').innerHTML = '<a href="' + fileaddress1 + '" target="_blank">Current File 1</a>';
+                    } else {
+                        document.getElementById('current-file1').innerHTML = 'No file uploaded';
+                    }
+                    if (fileaddress2) {
+                        document.getElementById('current-file2').innerHTML = '<a href="' + fileaddress2 + '" target="_blank">Current File 2</a>';
+                    } else {
+                        document.getElementById('current-file2').innerHTML = 'No file uploaded';
+                    }
+                    new bootstrap.Modal(document.getElementById('editProcessChangeModal')).show();
+                });
             });
         });
     </script>
