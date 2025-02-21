@@ -1,6 +1,7 @@
 ﻿using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
@@ -14,44 +15,58 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpGet]
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
+            // Get operators for the dropdown (synchronously in this example)
             ViewData["Operators"] = _service.GetOperators();
-            return View();
-        }
 
-        
+            // Retrieve all deviation records asynchronously
+            var records = await _service.GetAllDeviationsAsync();
+
+            // Create a composite view model
+            var model = new DeviationIndexViewModel
+            {
+                FormModel = new DeviationModel(), // New instance for the form
+                Records = records
+            };
+
+            return View(model);
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Create(DeviationModel model)
+        public async Task<IActionResult> Create(DeviationModel model)
         {
             if (ModelState.IsValid)
             {
-                _service.SaveDeviation(model);
+                // Save the new deviation (asynchronously)
+                await _service.SaveDeviationAsync(model);
 
-                // Generate the PDF
+                // Generate and print PDF
                 string pdfPath = _service.GenerateAndPrintDeviationPdf(model);
 
                 TempData["SuccessMessage"] = "Deviation successfully created!";
                 return RedirectToAction("Index");
             }
 
-            // Log validation errors
+            // Log errors if any (for debugging)
             foreach (var key in ModelState.Keys)
             {
-                var errors = ModelState[key].Errors;
-                foreach (var error in errors)
+                foreach (var error in ModelState[key].Errors)
                 {
-                    Console.WriteLine($"Key: {key}, Error: {error.ErrorMessage}");
+                    System.Console.WriteLine($"Key: {key}, Error: {error.ErrorMessage}");
                 }
             }
 
             TempData["ErrorMessage"] = "Please correct the errors and try again.";
             ViewData["Operators"] = _service.GetOperators();
-            return View("Index", model); // Ensure the view name is correct
+            var records = await _service.GetAllDeviationsAsync();
+            var viewModel = new DeviationIndexViewModel
+            {
+                FormModel = model,
+                Records = records
+            };
+            return View("Index", viewModel);
         }
-
-
     }
 }

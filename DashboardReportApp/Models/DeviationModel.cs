@@ -5,11 +5,15 @@ namespace DashboardReportApp.Models
 {
     public class DeviationModel
     {
+        public int Id { get; set; } // Primary Key
+
         [Required(ErrorMessage = "Part is required.")]
         public string Part { get; set; }
 
         [Required(ErrorMessage = "Discrepancy is required.")]
         public string Discrepancy { get; set; }
+
+        public DateTime? SentDateTime { get; set; }
 
         [Required(ErrorMessage = "Operator is required.")]
         public string Operator { get; set; }
@@ -22,4 +26,10 @@ namespace DashboardReportApp.Models
         public string? ApprovedBy { get; set; }
         public DateTime? DateTimeCASTReview { get; set; }
     }
+    public class DeviationIndexViewModel
+    {
+        public DeviationModel FormModel { get; set; }
+        public List<DeviationModel> Records { get; set; }
+    }
 }
+
