@@ -199,11 +199,13 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+                <!-- We'll show an <img> if it's an image, otherwise an <iframe> for PDFs -->
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
+                <iframe id="modalPDF" class="w-100" style="height:600px; display:none;" frameborder="0"></iframe>
             </div>
         </div>
     </div>
@@ -213,8 +215,11 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // ----------------------------------
-            // File Preview Logic
+            // File Preview Logic (Image or PDF)
             const modalElement = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalPDF = document.getElementById('modalPDF');
+
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const filePath = this.dataset.filePath;
@@ -223,28 +228,49 @@
                         alert("No file path provided.");
                         return;
                     }
-                    // Assumes the preview route is at /AdminProcessChangeRequest/FetchImage
+
                     fetch(`/AdminProcessChangeRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
-                            if (!response.ok) throw new Error("Failed to fetch the image.");
+                            if (!response.ok) throw new Error("Failed to fetch the file.");
                             return response.json();
                         })
                         .then(data => {
                             if (data.success) {
-                                document.getElementById('modalImage').src = data.url;
+                                // Check file extension to see if it's a PDF or an image
+                                if (data.url.toLowerCase().endsWith('.pdf')) {
+                                    modalImage.style.display = 'none';
+                                    modalPDF.style.display = 'block';
+                                    modalPDF.src = data.url; // display PDF in iframe
+                                }
+                                else {
+                                    modalPDF.style.display = 'none';
+                                    modalImage.style.display = 'block';
+                                    modalImage.src = data.url; // display image
+                                }
                                 new bootstrap.Modal(modalElement).show();
                             } else {
                                 alert(`Error: ${data.message}`);
                             }
                         })
                         .catch(error => {
-                            console.error('Error fetching image:', error);
-                            alert('An error occurred while fetching the image.');
+                            console.error('Error fetching file:', error);
+                            alert('An error occurred while fetching the file.');
                         });
                 });
             });
+
+            // Cleanup the modal when hidden
             modalElement.addEventListener('hidden.bs.modal', function () {
-                document.getElementById('modalImage').src = '';
+                modalImage.src = '';
+                modalPDF.src = '';
+                modalImage.style.display = 'none';
+                modalPDF.style.display = 'none';
+
+                // Remove leftover backdrop
+                const modalBackdrop = document.querySelector('.modal-backdrop');
+                if (modalBackdrop) modalBackdrop.remove();
+                document.body.classList.remove('modal-open');
+                document.body.style = '';
             });
 
             // ----------------------------------
@@ -254,7 +280,6 @@
             const table = document.querySelector('.custom-table');
             const tbody = table.querySelector('tbody');
 
-            // Sortable headers
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
                 if(!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
@@ -271,7 +296,6 @@
                 });
             });
 
-            // Filter inputs
             document.getElementById('processChangeSearchInput').addEventListener('input', updateTable);
             document.getElementById('processChangeDateFilter').addEventListener('change', updateTable);
 
@@ -280,7 +304,7 @@
                 const selectedDate = document.getElementById('processChangeDateFilter').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
-                // Sort
+                // Sorting
                 if (currentSortColumn !== null) {
                     rows.sort((a, b) => {
                         const aCells = a.querySelectorAll('td');
@@ -299,14 +323,15 @@
                         }
                     });
                 }
+
+                // Re-append sorted rows
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filter
+                // Filtering: search across all columns except last (Actions), date is col index 3
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
-                    // Search all columns except the last (Actions)
                     if (searchQuery) {
                         let found = false;
                         for (let i = 0; i < cells.length - 1; i++) {
@@ -317,7 +342,6 @@
                         }
                         if (!found) show = false;
                     }
-                    // Date filter => "Request Date" is column index 3
                     if (selectedDate) {
                         const dateCell = cells[3];
                         if (dateCell && dateCell.innerText.trim() !== selectedDate) {
@@ -355,14 +379,11 @@
 
                     document.getElementById('edit-id').value = id;
                     document.getElementById('edit-part').value = part;
-
                     // Requester dropdown
                     const reqDropdown = document.getElementById('edit-requester');
-                    reqDropdown.value = requester; // set selected to the existing value
-
+                    reqDropdown.value = requester;
                     document.getElementById('edit-reqdate').value = reqdate;
                     document.getElementById('edit-request').value = request;
-
                     // UpdatedBy dropdown
                     const updDropdown = document.getElementById('edit-updatedby');
                     updDropdown.value = updatedby;

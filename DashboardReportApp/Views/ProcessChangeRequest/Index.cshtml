@@ -70,8 +70,7 @@
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn"
-                                        data-file-path="@item.FileAddress1">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress1">
                                     Preview 1
                                 </button>
                             }
@@ -83,8 +82,7 @@
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress2))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn"
-                                        data-file-path="@item.FileAddress2">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress2">
                                     Preview 2
                                 </button>
                             }
@@ -144,7 +142,7 @@
                         <textarea name="Request" id="new-request" class="form-control" required></textarea>
                     </div>
 
-                    <!-- "TestRequested" checkbox: uses hidden input + checkbox so it yields "0" or "1" -->
+                    <!-- "TestRequested" checkbox: hidden input + checkbox so it yields "0" or "1" -->
                     <div class="mb-3">
                         <label class="form-label">Test Requested?</label><br />
                         <input type="hidden" name="TestRequested" value="0" />
@@ -192,16 +190,18 @@
     </div>
 </div>
 
-<!-- File Preview Modal -->
+<!-- File Preview Modal (Image or PDF) -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
+                <!-- If the file is PDF, show iframe; otherwise show image -->
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
+                <iframe id="modalPDF" class="w-100" style="height:600px; display:none;" frameborder="0"></iframe>
             </div>
         </div>
     </div>
@@ -262,7 +262,7 @@
                 }
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filtering: search all columns except the last (Actions)
+                // Filtering: search all columns except last (Actions)
                 // Date filter on "Req Date" at index 4
                 rows.forEach(row => {
                     let show = true;
@@ -300,8 +300,11 @@
             updateTable();
 
             //---------------------------------------------------------
-            // 2) File Preview Logic
+            // 2) File Preview Logic (PDF or Image)
             const modalElement = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalPDF = document.getElementById('modalPDF');
+
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const filePath = this.dataset.filePath;
@@ -316,7 +319,18 @@
                         })
                         .then(data => {
                             if (data.success) {
-                                document.getElementById('modalImage').src = data.url;
+                                // Check file extension
+                                if (data.url.toLowerCase().endsWith(".pdf")) {
+                                    modalImage.style.display = 'none';
+                                    modalImage.src = '';
+                                    modalPDF.style.display = 'block';
+                                    modalPDF.src = data.url;
+                                } else {
+                                    modalPDF.style.display = 'none';
+                                    modalPDF.src = '';
+                                    modalImage.style.display = 'block';
+                                    modalImage.src = data.url;
+                                }
                                 new bootstrap.Modal(modalElement).show();
                             } else {
                                 alert(`Error: ${data.message}`);
@@ -328,8 +342,12 @@
                         });
                 });
             });
+
             modalElement.addEventListener('hidden.bs.modal', function() {
-                document.getElementById('modalImage').src = '';
+                modalImage.src = '';
+                modalPDF.src = '';
+                modalImage.style.display = 'none';
+                modalPDF.style.display = 'none';
                 const backdrop = document.querySelector('.modal-backdrop');
                 if (backdrop) backdrop.remove();
                 document.body.classList.remove('modal-open');
