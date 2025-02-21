@@ -1,5 +1,9 @@
 ﻿@model IEnumerable<DashboardReportApp.Models.ProcessChangeRequestModel>
 
+@{
+    ViewData["Title"] = "Admin View - Process Change Requests";
+}
+
 <div class="container-fluid px-3">
     <h2 class="text-center mb-4">Admin View - Process Change Requests</h2>
     <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
@@ -62,7 +66,7 @@
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress1" data-label="File 1">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress1">
                                     Preview File 1
                                 </button>
                             }
@@ -74,7 +78,7 @@
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress2))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress2" data-label="File 2">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress2">
                                     Preview File 2
                                 </button>
                             }
@@ -124,7 +128,17 @@
                     </div>
                     <div class="mb-3">
                         <label for="edit-requester" class="form-label">Requester</label>
-                        <input type="text" name="Requester" id="edit-requester" class="form-control" required />
+                        <!-- Dropdown for Requester -->
+                        <select name="Requester" id="edit-requester" class="form-control" required>
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewBag.OperatorNames is List<string> operatorList)
+                            {
+                                foreach (var op in operatorList)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            }
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label for="edit-reqdate" class="form-label">Request Date</label>
@@ -136,7 +150,17 @@
                     </div>
                     <div class="mb-3">
                         <label for="edit-updatedby" class="form-label">Updated By</label>
-                        <input type="text" name="UpdatedBy" id="edit-updatedby" class="form-control" />
+                        <!-- Dropdown for UpdatedBy -->
+                        <select name="UpdatedBy" id="edit-updatedby" class="form-control">
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewBag.OperatorNames is List<string> operatorList2)
+                            {
+                                foreach (var op2 in operatorList2)
+                                {
+                                    <option value="@op2">@op2</option>
+                                }
+                            }
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label for="edit-updateresult" class="form-label">Update Result</label>
@@ -188,6 +212,7 @@
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // ----------------------------------
             // File Preview Logic
             const modalElement = document.getElementById('imageModal');
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
@@ -198,6 +223,7 @@
                         alert("No file path provided.");
                         return;
                     }
+                    // Assumes the preview route is at /AdminProcessChangeRequest/FetchImage
                     fetch(`/AdminProcessChangeRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
                             if (!response.ok) throw new Error("Failed to fetch the image.");
@@ -221,15 +247,16 @@
                 document.getElementById('modalImage').src = '';
             });
 
-            // Sorting and Filtering
+            // ----------------------------------
+            // Sorting & Filtering
             let currentSortColumn = null;
             let currentSortDir = 'asc';
             const table = document.querySelector('.custom-table');
             const tbody = table.querySelector('tbody');
 
-            // Attach click event to sortable headers
+            // Sortable headers
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                if (!th.dataset.label) {
+                if(!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
                 }
                 th.addEventListener('click', () => {
@@ -244,7 +271,7 @@
                 });
             });
 
-            // Filter event listeners
+            // Filter inputs
             document.getElementById('processChangeSearchInput').addEventListener('input', updateTable);
             document.getElementById('processChangeDateFilter').addEventListener('change', updateTable);
 
@@ -253,32 +280,33 @@
                 const selectedDate = document.getElementById('processChangeDateFilter').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
-                // Sorting
+                // Sort
                 if (currentSortColumn !== null) {
                     rows.sort((a, b) => {
                         const aCells = a.querySelectorAll('td');
                         const bCells = b.querySelectorAll('td');
-                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
-                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+                        const aText = aCells[currentSortColumn]?.innerText.trim() ?? '';
+                        const bText = bCells[currentSortColumn]?.innerText.trim() ?? '';
                         const aNum = parseFloat(aText);
                         const bNum = parseFloat(bText);
+
                         if (!isNaN(aNum) && !isNaN(bNum)) {
                             return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
                         } else {
-                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                            return currentSortDir === 'asc'
+                                ? aText.localeCompare(bText)
+                                : bText.localeCompare(aText);
                         }
                     });
                 }
-
-                // Re-append sorted rows
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filtering: search filter (checks all cells except last Actions column) and date filter (Request Date is at index 3)
+                // Filter
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
-                    // Search filter
+                    // Search all columns except the last (Actions)
                     if (searchQuery) {
                         let found = false;
                         for (let i = 0; i < cells.length - 1; i++) {
@@ -289,15 +317,13 @@
                         }
                         if (!found) show = false;
                     }
-
-                    // Date filter (Request Date is column index 3)
+                    // Date filter => "Request Date" is column index 3
                     if (selectedDate) {
                         const dateCell = cells[3];
                         if (dateCell && dateCell.innerText.trim() !== selectedDate) {
                             show = false;
                         }
                     }
-
                     row.style.display = show ? '' : 'none';
                 });
             }
@@ -310,11 +336,11 @@
                     }
                 });
             }
-
             updateTable();
 
+            // ----------------------------------
             // Edit Modal Logic
-            document.querySelectorAll('.edit-btn').forEach(function (button) {
+            document.querySelectorAll('.edit-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const id = this.getAttribute('data-id');
                     const part = this.getAttribute('data-part');
@@ -329,10 +355,18 @@
 
                     document.getElementById('edit-id').value = id;
                     document.getElementById('edit-part').value = part;
-                    document.getElementById('edit-requester').value = requester;
+
+                    // Requester dropdown
+                    const reqDropdown = document.getElementById('edit-requester');
+                    reqDropdown.value = requester; // set selected to the existing value
+
                     document.getElementById('edit-reqdate').value = reqdate;
                     document.getElementById('edit-request').value = request;
-                    document.getElementById('edit-updatedby').value = updatedby;
+
+                    // UpdatedBy dropdown
+                    const updDropdown = document.getElementById('edit-updatedby');
+                    updDropdown.value = updatedby;
+
                     document.getElementById('edit-updateresult').value = updateresult;
                     document.getElementById('edit-fileaddress1').value = fileaddress1;
                     document.getElementById('edit-fileaddress2').value = fileaddress2;
@@ -348,6 +382,7 @@
                     } else {
                         document.getElementById('current-file2').innerHTML = 'No file uploaded';
                     }
+
                     new bootstrap.Modal(document.getElementById('editProcessChangeModal')).show();
                 });
             });

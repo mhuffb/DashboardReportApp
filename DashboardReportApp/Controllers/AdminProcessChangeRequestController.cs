@@ -25,6 +25,11 @@ namespace DashboardReportApp.Controllers
         [Route("Index")]
         public IActionResult Index()
         {
+            // Load operator names from the DB
+            // e.g. _operatorService.GetAllOperatorNames() => List<string>
+            var operators = _service.GetOperators();
+            ViewBag.OperatorNames = operators;
+
             var requests = _service.GetAllRequests();
             return View(requests);
         }

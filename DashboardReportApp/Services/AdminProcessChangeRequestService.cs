@@ -52,7 +52,27 @@ namespace DashboardReportApp.Services
 
             return requests;
         }
+        public List<string> GetOperators()
+        {
+            var operatorNames = new List<string>();
+            string query = "SELECT name FROM operators ORDER BY name";
 
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new MySqlCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        // Assuming column 0 contains the 'name' string
+                        operatorNames.Add(reader.GetString(0));
+                    }
+                }
+            }
+
+            return operatorNames;
+        }
         public void AddRequest(ProcessChangeRequestModel request, IFormFile file)
         {
             // Initialize file path
