@@ -32,7 +32,12 @@ namespace DashboardReportApp.Services
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
-                    Run = reader["run"]?.ToString() ?? "N/A",
+                    Run = reader.IsDBNull(reader.GetOrdinal("run"))
+    ? 0
+    : int.TryParse(reader["run"]?.ToString(), out int runValue)
+        ? runValue
+        : 0,
+
                     Part = reader["part"]?.ToString() ?? "N/A",
                     Machine = reader["machine"]?.ToString(),
                     Operator = reader["operator"]?.ToString(),
@@ -70,7 +75,7 @@ namespace DashboardReportApp.Services
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
-                    Run = reader["run"]?.ToString() ?? "N/A",
+                    Run = reader.IsDBNull(reader.GetOrdinal("run")) ? 0 : reader.GetInt32(reader.GetOrdinal("run")),
                     Part = reader["part"]?.ToString() ?? "N/A",
                     Machine = reader["machine"]?.ToString(),
                     Operator = reader["operator"]?.ToString(),
@@ -135,7 +140,7 @@ namespace DashboardReportApp.Services
         }
 
        
-        public async Task HandleLoginAsync(string operatorName, string machine, string runNumber, string op)
+        public async Task HandleLoginAsync(string operatorName, string machine, int runNumber, string op)
         {
             string part = await LookupPartNumberAsync(runNumber); // Use helper method to fetch the part
 
@@ -160,7 +165,7 @@ namespace DashboardReportApp.Services
             }
         }
 
-        private async Task<string> LookupPartNumberAsync(string runNumber)
+        private async Task<string> LookupPartNumberAsync(int runNumber)
         {
             string query = "SELECT part FROM schedule WHERE run = @run";
             string part = null;

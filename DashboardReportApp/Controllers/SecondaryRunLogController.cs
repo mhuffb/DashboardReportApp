@@ -33,7 +33,7 @@ namespace DashboardReportApp.Controllers
         
 
         [HttpPost]
-        public async Task<IActionResult> Login(string runNumber, string operatorName, string machine, string op)
+        public async Task<IActionResult> Login(int runNumber, string operatorName, string machine, string op)
         {
             await _secondaryRunLogService.HandleLoginAsync(operatorName, machine, runNumber, op);
             return RedirectToAction("Index");
