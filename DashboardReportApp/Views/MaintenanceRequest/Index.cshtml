@@ -1,6 +1,6 @@
 ﻿@model IEnumerable<MaintenanceRequestModel>
 @using System.Text.Json;
-
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <div class="container-fluid px-3 mt-4">
     <h1 class="text-center mb-4">Maintenance Requests</h1>
 
@@ -18,6 +18,26 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
+
+    <!-- Combined QR Codes -->
+    <div class="row justify-content-center">
+
+        <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
+    </div>
+    <div class="d-flex justify-content-evenly align-items-center mb-4">
+        <!-- Wi‑Fi QR Code -->
+        <div class="text-center">
+            <canvas id="wifi-qr" style="width:128px; height:128px;"></canvas>
+            <div class="mt-2">Connect to Wifi</div>
+        </div>
+        <!-- Current Page QR Code -->
+        <div class="text-center">
+            <canvas id="current-page-qr" style="width:128px; height:128px;"></canvas>
+            <div class="mt-2">View on your device</div>
+        </div>
+    </div>
+
+
 </div>
 
 <!-- Container for the non-admin React component -->
@@ -40,5 +60,33 @@
       } else {
         console.error("renderNonAdminMaintenanceTable is not defined!");
       }
+    });
+</script>
+<!-- QR Code Generation for Both QR Codes -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Generate QR code for the current page
+        var currentUrl = window.location.href;
+        QRCode.toCanvas(document.getElementById('current-page-qr'), currentUrl, {
+            width: 128
+        }, function (error) {
+            if (error) {
+                console.error(error);
+            } else {
+                console.log("Current page QR code generated!");
+            }
+        });
+
+        // Generate QR code for Wi‑Fi connection
+        var wifiData = `WIFI:T:WPA;S:Sintergy-WiFi;P:5intergyW1F1;;`;
+        QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, {
+            width: 128
+        }, function (error) {
+            if (error) {
+                console.error(error);
+            } else {
+                console.log("Wi‑Fi QR code generated!");
+            }
+        });
     });
 </script>

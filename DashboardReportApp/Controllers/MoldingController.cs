@@ -7,19 +7,16 @@ namespace DashboardReportApp.Controllers
     {
         private readonly MoldingService _moldingService;
 
-        public MoldingController(MoldingService MoldingService)
+        public MoldingController(MoldingService moldingService)
         {
-            _moldingService = MoldingService;
+            _moldingService = moldingService;
         }
 
         [HttpGet]
-        public IActionResult Index(string searchTerm, string sortColumn = "Id", bool sortDescending = true)
+        public IActionResult Index()
         {
-            var viewModel = _moldingService.GetFilteredData(searchTerm, sortColumn, sortDescending);
+            var viewModel = _moldingService.GetData();
             return View(viewModel);
         }
-
-
-
     }
 }

@@ -12,105 +12,79 @@ namespace DashboardReportApp.Services
             _connectionString = configuration.GetConnectionString("MySQLConnection");
         }
 
-        public MoldingModel GetFilteredData(string searchTerm, string sortColumn, bool sortDescending)
+        // Now returns all data without applying filtering/sorting on the server
+        public MoldingModel GetData()
         {
-            var pressRuns = GetPressRuns(searchTerm);
-            var pressSetups = GetPressSetups(searchTerm);
-            var pressLotChanges = GetPressLotChanges(searchTerm);
-
-            // Apply sorting if a sort column is selected
-            if (!string.IsNullOrEmpty(sortColumn))
-            {
-                pressRuns = SortData(pressRuns, sortColumn, sortDescending).ToList();
-                pressSetups = SortData(pressSetups, sortColumn, sortDescending).ToList();
-                pressLotChanges = SortData(pressLotChanges, sortColumn, sortDescending).ToList();
-            }
+            var pressRuns = GetPressRuns();
+            var pressSetups = GetPressSetups();
+            var pressLotChanges = GetPressLotChanges();
 
             return new MoldingModel
             {
                 PressRuns = pressRuns,
                 PressSetups = pressSetups,
-                PressLotChanges = pressLotChanges,
-                SearchTerm = searchTerm,
-                SortColumn = sortColumn,
-                SortDescending = sortDescending
+                PressLotChanges = pressLotChanges
             };
         }
-        private IEnumerable<T> SortData<T>(IEnumerable<T> data, string sortColumn, bool sortDescending)
-        {
-            var prop = typeof(T).GetProperty(sortColumn);
-            if (prop == null) return data;
 
-            return sortDescending ? data.OrderByDescending(x => prop.GetValue(x)) : data.OrderBy(x => prop.GetValue(x));
+        private List<PressRunLogModel> GetPressRuns()
+        {
+            return QueryTable<PressRunLogModel>("pressrun");
         }
 
-        private List<PressRunLogModel> GetPressRuns(string searchTerm)
+        private List<PressSetupModel> GetPressSetups()
         {
-            return QueryTable<PressRunLogModel>("pressrun", searchTerm);
+            return QueryTable<PressSetupModel>("presssetup");
         }
 
-        private List<PressSetupModel> GetPressSetups(string searchTerm)
+        private List<PressMixBagChangeModel> GetPressLotChanges()
         {
-            return QueryTable<PressSetupModel>("presssetup", searchTerm);
+            return QueryTable<PressMixBagChangeModel>("presslotchange");
         }
 
-        private List<PressMixBagChangeModel> GetPressLotChanges(string searchTerm)
-        {
-            return QueryTable<PressMixBagChangeModel>("presslotchange", searchTerm);
-        }
-
-        private List<T> QueryTable<T>(string tableName, string searchTerm) where T : new()
+        private List<T> QueryTable<T>(string tableName) where T : new()
         {
             var results = new List<T>();
-            bool isDateSearch = DateTime.TryParse(searchTerm, out DateTime searchDate);
-
-            // Default query (adds "notes" column to search)
-            string query = $"SELECT * FROM {tableName} WHERE operator LIKE @Search OR part LIKE @Search OR machine LIKE @Search OR notes LIKE @Search";
-
-            // Handling Date Searches
-            if (isDateSearch)
-            {
-                if (tableName == "pressrun" || tableName == "presssetup")
-                {
-                    query += " OR (startDateTime >= @SearchDate AND startDateTime < @SearchDateEnd) " +
-                             " OR (endDateTime >= @SearchDate AND endDateTime < @SearchDateEnd)";
-                }
-                else if (tableName == "presslotchange")
-                {
-                    query += " OR (sentDateTime >= @SearchDate AND sentDateTime < @SearchDateEnd)";
-                }
-            }
+            string query = $"SELECT * FROM {tableName}";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@Search", $"%{searchTerm}%");
-
-                    if (isDateSearch)
-                    {
-                        command.Parameters.AddWithValue("@SearchDate", searchDate);
-                        command.Parameters.AddWithValue("@SearchDateEnd", searchDate.AddDays(1)); // Search full day
-                    }
-
                     using (var reader = command.ExecuteReader())
                     {
+                        // Build a list of column names available in the result set (using lower-case for comparison)
+                        var columnNames = new List<string>();
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            columnNames.Add(reader.GetName(i).ToLower());
+                        }
+
                         while (reader.Read())
                         {
                             var obj = Activator.CreateInstance<T>();
                             foreach (var prop in typeof(T).GetProperties())
                             {
-                                if (!reader.IsDBNull(reader.GetOrdinal(prop.Name)))
+                                // Use case-insensitive comparison: check if any column matches the property name
+                                string matchingColumn = columnNames
+                                    .FirstOrDefault(c => c.Equals(prop.Name.ToLower(), StringComparison.OrdinalIgnoreCase));
+
+                                if (matchingColumn != null)
                                 {
-                                    object value = reader[prop.Name];
-
-                                    if (value is long && prop.PropertyType == typeof(int))
+                                    int ordinal = reader.GetOrdinal(matchingColumn);
+                                    if (!reader.IsDBNull(ordinal))
                                     {
-                                        value = Convert.ToInt32(value);
-                                    }
+                                        object value = reader[ordinal];
 
-                                    prop.SetValue(obj, value);
+                                        // Convert long to int if needed
+                                        if (value is long && prop.PropertyType == typeof(int))
+                                        {
+                                            value = Convert.ToInt32(value);
+                                        }
+
+                                        prop.SetValue(obj, value);
+                                    }
                                 }
                             }
                             results.Add(obj);
@@ -120,7 +94,6 @@ namespace DashboardReportApp.Services
             }
             return results;
         }
-
 
     }
 }
