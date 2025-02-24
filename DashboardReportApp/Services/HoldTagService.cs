@@ -57,8 +57,8 @@ namespace DashboardReportApp.Services
         public async Task AddHoldRecordAsync(HoldTagModel record)
         {
             string query = @"INSERT INTO holdrecords 
-                (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress)
-                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress)";
+                (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1)
+                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1)";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -78,7 +78,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@unit", record.Unit);
                     command.Parameters.AddWithValue("@pcsScrapped", record.PcsScrapped ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@dateCompleted", record.DateCompleted ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@fileAddress", record.FileAddress ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@fileAddress1", record.FileAddress1 ?? (object)DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -370,9 +370,9 @@ ORDER BY
                     DateCompleted = reader.IsDBNull(reader.GetOrdinal("DateCompleted"))
                         ? null
                         : reader.GetDateTime(reader.GetOrdinal("DateCompleted")),
-                    FileAddress = reader.IsDBNull(reader.GetOrdinal("FileAddress"))
+                    FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1"))
                         ? null
-                        : reader.GetString(reader.GetOrdinal("FileAddress"))
+                        : reader.GetString(reader.GetOrdinal("FileAddress1"))
                 };
 
                 records.Add(record);
@@ -381,7 +381,50 @@ ORDER BY
             return records;
         }
 
-      
+        public string SaveHoldTagFile(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                throw new ArgumentException("File is null or empty.", nameof(file));
+            }
+
+            // Ensure the upload folder exists
+            if (!Directory.Exists(_uploadFolder))
+            {
+                Directory.CreateDirectory(_uploadFolder);
+            }
+
+            // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
+            var extension = Path.GetExtension(file.FileName);
+            var uniqueName = "HoldTagFile_" + DateTime.Now.Ticks + extension;
+            var finalPath = Path.Combine(_uploadFolder, uniqueName);
+
+            // Copy the file to disk
+            using (var stream = new FileStream(finalPath, FileMode.Create))
+            {
+                file.CopyTo(stream);
+            }
+
+            // Return the path so we can save it in record.FileAddress1
+            return finalPath;
+        }
+        public async Task UpdateFileAddress1Async(int id, string filePath)
+        {
+            string query = @"UPDATE holdrecords
+                     SET FileAddress1 = @FileAddress1
+                     WHERE Id = @Id";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@Id", id);
+                    command.Parameters.AddWithValue("@FileAddress1", filePath);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+        }
 
     }
 }

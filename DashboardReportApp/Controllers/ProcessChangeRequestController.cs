@@ -55,8 +55,15 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                // Add the new request (and optionally a file)
-                _service.AddRequest(model, file);
+                // 1) Create the request row (no file yet).
+                int newRequestId = _service.AddRequest(model);
+
+                // 2) If a file was uploaded, call the same logic as "update file"
+                if (file != null && file.Length > 0)
+                {
+                    _service.UpdateFileAddress1(newRequestId, file);
+                }
+
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
@@ -79,40 +86,8 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                var uploadsFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                    Console.WriteLine($"Created uploads folder at: {uploadsFolder}");
-                }
 
-                // Construct the file name and path
-                var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"ProcessChangeRequestFile1_{id}{fileExtension}";
-                var filePath = Path.Combine(uploadsFolder, fileName);
-
-                Console.WriteLine($"File details: Name = {fileName}, Extension = {fileExtension}");
-                Console.WriteLine($"Physical path: {filePath}");
-
-                // Save the file
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    file.CopyTo(stream);
-                }
-                Console.WriteLine($"File successfully saved at: {filePath}");
-
-                // Update DB
-                var request = _service.GetAllRequests().FirstOrDefault(r => r.Id == id);
-                if (request != null)
-                {
-                    request.FileAddress1 = filePath;
-                    _service.UpdateFileAddress1(id, filePath);
-                    Console.WriteLine($"Database updated for Request ID = {id}, FileAddress1 = {filePath}");
-                }
-                else
-                {
-                    Console.WriteLine($"Request with ID = {id} not found.");
-                }
+                _service.UpdateFileAddress1(id, file);
 
                 TempData["Success"] = "File uploaded and link updated successfully.";
             }

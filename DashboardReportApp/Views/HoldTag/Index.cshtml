@@ -1,4 +1,5 @@
 ﻿@model DashboardReportApp.Models.HoldTagIndexViewModel
+
 @using System.Text.Json
 
 <div class="container-fluid px-3 mt-4">
@@ -34,11 +35,15 @@
                         </div>
                     }
 
-                    <form asp-action="Submit" method="post">
+                    <!-- Submit new Hold Tag -->
+                    <!-- Note: enctype="multipart/form-data" is REQUIRED for file uploads -->
+                    <form asp-action="Submit" method="post" enctype="multipart/form-data">
                         @Html.AntiForgeryToken()
 
+                        <!-- PART Selection (Dropdown + Custom Text) -->
                         <div class="mb-3">
                             <label for="Part" class="form-label">Part</label>
+                            <!-- Dropdown with parts -->
                             <select id="PartDropdown" class="form-control">
                                 <option value="">-- Select or Enter Part --</option>
                                 @foreach (var part in (ViewData["Parts"] as List<string>) ?? new List<string>())
@@ -46,23 +51,71 @@
                                     <option value="@part">@part</option>
                                 }
                             </select>
-                            <input type="text" id="CustomPartInput" name="Part" asp-for="FormModel.Part" class="form-control mt-2" placeholder="Type a custom part number if not listed" />
+                            <!-- The text input that actually binds to FormModel.Part -->
+                            <input type="text"
+                                   id="CustomPartInput"
+                                   name="Part"
+                                   asp-for="FormModel.Part"
+                                   class="form-control mt-2"
+                                   placeholder="Type a custom part number if not listed" />
                             <span asp-validation-for="FormModel.Part" class="text-danger"></span>
                         </div>
 
+                        <!-- OPERATOR Selection (Issued By) -->
+                        <div class="mb-3">
+                            <label for="IssuedBy" class="form-label">Issued By (Operator)</label>
+                            <select id="IssuedBy"
+                                    name="IssuedBy"
+                                    asp-for="FormModel.IssuedBy"
+                                    class="form-control">
+                                <option value="">-- Select Operator --</option>
+                                @if (ViewData["Operators"] is List<string> opList)
+                                {
+                                    foreach (var op in opList)
+                                    {
+                                        <option value="@op">@op</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="FormModel.IssuedBy" class="text-danger"></span>
+                        </div>
+
+                        <!-- DISCREPANCY -->
                         <div class="mb-3">
                             <label for="Discrepancy" class="form-label">Discrepancy</label>
-                            <textarea id="Discrepancy" name="Discrepancy" asp-for="FormModel.Discrepancy" class="form-control text-area-large" required></textarea>
+                            <textarea id="Discrepancy"
+                                      name="Discrepancy"
+                                      asp-for="FormModel.Discrepancy"
+                                      class="form-control text-area-large"
+                                      required>
+                            </textarea>
                             <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
                         </div>
 
+                        <!-- QUANTITY -->
                         <div class="mb-3">
                             <label for="Quantity" class="form-label">Quantity</label>
-                            <input type="number" id="Quantity" name="Quantity" asp-for="FormModel.Quantity" class="form-control" required />
+                            <input type="number"
+                                   id="Quantity"
+                                   name="Quantity"
+                                   asp-for="FormModel.Quantity"
+                                   class="form-control"
+                                   required />
                             <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
                         </div>
 
-                        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send"></i> Submit</button>
+                        <!-- File Upload (Optional) -->
+                        <div class="mb-3">
+                            <label for="File" class="form-label">Attach File (Optional)</label>
+                            <input type="file"
+                                   name="file"
+                                   id="File"
+                                   class="form-control" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-send"></i> Submit
+                        </button>
                     </form>
                 </div>
             </div>
@@ -101,7 +154,8 @@
                     <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
                     <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
                     <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
-                    <th style="width: 4%;">File</th>
+                    <th class="sortable" data-label="File" style="width: 4%;">File</th>
+                    <th style="width: 6%;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -122,17 +176,55 @@
                         <td>@record.PcsScrapped</td>
                         <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>
-                            @if (!string.IsNullOrEmpty(record.FileAddress))
+                            @if (!string.IsNullOrEmpty(record.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@record.FileAddress">
+                                <!-- Show a preview button if a file is present -->
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
+                                        data-file-path="@record.FileAddress1">
                                     Preview File
                                 </button>
                             }
+                        </td>
+                        <td>
+                            <!-- "Add / Update File" button for existing record -->
+                            <button type="button"
+                                    class="btn btn-secondary btn-sm add-file-btn"
+                                    data-id="@record.Id">
+                                Add / Update File
+                            </button>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Modal: Add / Update File -->
+<div class="modal fade" id="addFileModal" tabindex="-1" aria-labelledby="addFileModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addFileModalLabel">Attach File</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <!-- This form posts to "UpdateFile" in the HoldTagController -->
+            <form asp-action="UpdateFile" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <!-- The hidden field to hold the record ID -->
+                    <input type="hidden" name="id" id="add-file-id" />
+                    <div class="mb-3">
+                        <label for="add-fileinput" class="form-label">Select File</label>
+                        <input type="file" name="file" id="add-fileinput" class="form-control" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Attach File</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -145,8 +237,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Preview" class="img-fluid" />
-                <iframe id="modalFile" class="w-100" style="height:500px; display:none;"></iframe>
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
+                <iframe id="modalFile" class="w-100" style="height:500px; display:none;" frameborder="0"></iframe>
             </div>
         </div>
     </div>
@@ -154,35 +246,61 @@
 
 @section Scripts {
     <script>
+        // 1) Copy the selected part from the dropdown into the text input
         document.addEventListener('DOMContentLoaded', function () {
-            // ----------------------------
-            // File Preview Logic
+            const partDropdown = document.getElementById('PartDropdown');
+            const customPartInput = document.getElementById('CustomPartInput');
+
+            // When user picks a part from the dropdown, copy it into the text input
+            partDropdown.addEventListener('change', () => {
+                customPartInput.value = partDropdown.value;
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            //---------------------------------------------------------
+            // 1) Show "Add / Update File" Modal
+            const addFileModal = new bootstrap.Modal(document.getElementById('addFileModal'));
+            document.querySelectorAll('.add-file-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const holdRecordId = btn.dataset.id;
+                    // Put the ID in the hidden input inside the modal
+                    document.getElementById('add-file-id').value = holdRecordId;
+                    addFileModal.show();
+                });
+            });
+
+            //---------------------------------------------------------
+            // 2) File Preview Logic
             const imageModalElement = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalFile = document.getElementById('modalFile');
+
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const filePath = this.dataset.filePath;
                     if (!filePath) {
-                        console.error("File path is missing.");
                         alert("No file path provided.");
                         return;
                     }
-                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    // Adjust route as needed:
+                    fetch(`/HoldTag/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
-                            if (!response.ok) throw new Error("Failed to fetch the image.");
+                            if (!response.ok) throw new Error("Failed to fetch the file.");
                             return response.json();
                         })
                         .then(data => {
                             if (data.success) {
-                                const modalImage = document.getElementById('modalImage');
-                                const modalFile = document.getElementById('modalFile');
-                                if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                                    modalImage.src = data.url;
-                                    modalImage.style.display = "block";
-                                    modalFile.style.display = "none";
-                                } else {
+                                if (data.url.toLowerCase().endsWith(".pdf")) {
                                     modalFile.src = data.url;
                                     modalFile.style.display = "block";
                                     modalImage.style.display = "none";
+                                } else {
+                                    modalImage.src = data.url;
+                                    modalImage.style.display = "block";
+                                    modalFile.style.display = "none";
                                 }
                                 new bootstrap.Modal(imageModalElement).show();
                             } else {
@@ -197,13 +315,14 @@
             });
 
             imageModalElement.addEventListener('hidden.bs.modal', function () {
-                document.getElementById('modalImage').src = '';
-                document.getElementById('modalFile').src = '';
+                modalImage.src = '';
+                modalFile.src = '';
+                modalImage.style.display = 'none';
+                modalFile.style.display = 'none';
             });
 
-            // ----------------------------
-            // Filtering and Sorting Logic for the Records Table
-
+            //---------------------------------------------------------
+            // 3) Filtering & Sorting Logic for the Records Table
             let currentSortColumn = null;
             let currentSortDir = 'asc';
             const table = document.querySelector('.custom-table');
@@ -211,6 +330,7 @@
 
             // Attach click event to sortable headers
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
+                // Store original label text
                 if (!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
                 }
@@ -236,16 +356,20 @@
                     rows.sort((a, b) => {
                         const aCells = a.querySelectorAll('td');
                         const bCells = b.querySelectorAll('td');
-                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
-                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+                        const aText = aCells[currentSortColumn]?.innerText.trim() || '';
+                        const bText = bCells[currentSortColumn]?.innerText.trim() || '';
 
-                        // Attempt numeric sort if possible
                         const aNum = parseFloat(aText);
                         const bNum = parseFloat(bText);
+
+                        // Numeric sort if possible
                         if (!isNaN(aNum) && !isNaN(bNum)) {
                             return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
                         } else {
-                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                            // Otherwise string sort
+                            return currentSortDir === 'asc'
+                                ? aText.localeCompare(bText)
+                                : bText.localeCompare(aText);
                         }
                     });
                 }
@@ -253,30 +377,31 @@
                 // Re-append sorted rows
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Apply filtering to each row
+                // Apply filtering
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
-                    // Search filter: check all cells except the last (File)
+                    // Search filter: check all columns except last (Actions)
                     if (searchQuery) {
                         let found = false;
-                        for (let i = 0; i < cells.length - 1; i++) {
+                        for (let i = 0; i < cells.length; i++) {
                             if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
                                 found = true;
                                 break;
                             }
                         }
-                        if (!found) { show = false; }
+                        if (!found) show = false;
                     }
 
-                    // Date filter: assume Date column is at index 3 (ID:0, Part:1, Discrepancy:2, Date:3)
+                    // Date filter: assume the "Date" column is at index 3
                     if (selectedDate) {
                         const dateCell = cells[3];
                         if (dateCell && dateCell.innerText.trim() !== selectedDate) {
                             show = false;
                         }
                     }
+
                     row.style.display = show ? '' : 'none';
                 });
             }
@@ -290,8 +415,11 @@
                 });
             }
 
+            // Hook up search & date filter
             document.getElementById('recordSearchInput').addEventListener('input', updateTable);
             document.getElementById('recordDateFilter').addEventListener('change', updateTable);
+
+            // Initial table load
             updateTable();
         });
     </script>

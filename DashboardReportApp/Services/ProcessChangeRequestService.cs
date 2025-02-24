@@ -78,40 +78,9 @@ namespace DashboardReportApp.Services
         }
 
         // Add a new request + optional single file
-        public void AddRequest(ProcessChangeRequestModel request, IFormFile file)
+        public int AddRequest(ProcessChangeRequestModel request)
         {
-            // If a file is uploaded, store it
-            string filePath = null;
-            string FileAddress1 = null;
-
-            if (file != null && file.Length > 0)
-            {
-                if (!Directory.Exists(_uploadFolder))
-                {
-                    Directory.CreateDirectory(_uploadFolder);
-                }
-                // Generate a unique name for the file
-                var fileName = Path.GetFileName(file.FileName);
-                filePath = Path.Combine(_uploadFolder, $"ProcessChangeRequestFile1_{ request.Id}");
-
-                try
-                {
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        file.CopyTo(stream);
-                    }
-                    Console.WriteLine($"File uploaded to: {filePath}");
-                    // If you want a relative path, set FileAddress1 accordingly
-                    // e.g. FileAddress1 = "/Uploads/ProcessChangeRequestFile1_" + fileName;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving file: {ex.Message}");
-                    throw new Exception("File upload failed.");
-                }
-            }
-
-            // Insert the new request record
+            int newId;
             const string insertQuery = @"
                 INSERT INTO ProcessChangeRequest 
                 (Part, Requester, ReqDate, Request, FileAddress1, TestRequested)
@@ -126,57 +95,72 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@Requester", request.Requester);
                     command.Parameters.AddWithValue("@ReqDate", request.ReqDate ?? DateTime.Today);
                     command.Parameters.AddWithValue("@Request", request.Request);
-                    command.Parameters.AddWithValue("@FileAddress1",
-                        string.IsNullOrEmpty(filePath) ? (object)DBNull.Value : FileAddress1);
+
+                    // We haven't saved any file yet, so set FileAddress1 to NULL
+                    command.Parameters.AddWithValue("@FileAddress1", DBNull.Value);
+
+                    // Convert "1"/"0" or null string to int or DB null
                     command.Parameters.AddWithValue("@TestRequested",
-                        string.IsNullOrWhiteSpace(request.TestRequested) ? (object)DBNull.Value : int.Parse(request.TestRequested));
+                        string.IsNullOrWhiteSpace(request.TestRequested)
+                            ? (object)DBNull.Value
+                            : int.Parse(request.TestRequested));
 
                     command.ExecuteNonQuery();
-
-                    int newId = (int)command.LastInsertedId;
-                    Console.WriteLine($"Inserted new ProcessChangeRequest with Id = {newId}");
-
-                    // If a file was uploaded, update the record with the actual path in DB
-                    if (!string.IsNullOrEmpty(filePath))
-                    {
-                        const string updateQuery = @"
-                            UPDATE ProcessChangeRequest 
-                            SET FileAddress1 = @FileAddress1
-                            WHERE Id = @Id";
-                        using (var updateCmd = new MySqlCommand(updateQuery, connection))
-                        {
-                            // You can store the absolute path or a relative one, depending on your approach
-                            updateCmd.Parameters.AddWithValue("@Id", newId);
-                            updateCmd.Parameters.AddWithValue("@FileAddress1", filePath);
-                            updateCmd.ExecuteNonQuery();
-                            Console.WriteLine($"Updated 'FileAddress1' for request {newId}");
-                        }
-                    }
+                    newId = (int)command.LastInsertedId;
                 }
             }
+
+            Console.WriteLine($"[AddRequest] Inserted new ProcessChangeRequest with Id = {newId}");
+            return newId;
         }
 
-        // We do NOT provide an UpdateRequest method, 
-        // so no editing of existing requests except for file uploads
-
-        // Update an existing request's FileAddress1 link
-        public void UpdateFileAddress1(int id, string FileAddress1)
+        // -------------------------------------------------
+        // (B) UpdateFileAddress1: Upload the file + Update DB
+        //     If you want to reuse this for "AddRequest",
+        //     just call it once you have the new Id.
+        // -------------------------------------------------
+        public void UpdateFileAddress1(int id, IFormFile file)
         {
-            Console.WriteLine($"Updating Request ID = {id}, FileAddress1 = {FileAddress1}");
+            if (file == null || file.Length == 0)
+            {
+                throw new ArgumentException("File is missing or empty.", nameof(file));
+            }
 
-            const string query = @"UPDATE ProcessChangeRequest 
-                                   SET FileAddress1 = @FileAddress1 
-                                   WHERE Id = @Id";
+            // Ensure the upload folder exists
+            if (!Directory.Exists(_uploadFolder))
+            {
+                Directory.CreateDirectory(_uploadFolder);
+                Console.WriteLine($"Created folder: {_uploadFolder}");
+            }
+
+            // Construct unique file path: e.g. "ProcessChangeRequestFile1_12.png"
+            var fileExtension = Path.GetExtension(file.FileName);
+            var fileName = $"ProcessChangeRequestFile1_{id}{fileExtension}";
+            var filePath = Path.Combine(_uploadFolder, fileName);
+
+            // Save the file on disk
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                file.CopyTo(stream);
+            }
+            Console.WriteLine($"[UpdateFileAddress1] File saved to: {filePath}");
+
+            // Update the DB record's FileAddress1
+            const string updateQuery = @"
+                UPDATE ProcessChangeRequest 
+                SET FileAddress1 = @FileAddress1
+                WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new MySqlCommand(query, connection))
+                using (var command = new MySqlCommand(updateQuery, connection))
                 {
+                    command.Parameters.AddWithValue("@FileAddress1", filePath);
                     command.Parameters.AddWithValue("@Id", id);
-                    command.Parameters.AddWithValue("@FileAddress1", FileAddress1);
+
                     int rowsAffected = command.ExecuteNonQuery();
-                    Console.WriteLine($"Rows Affected: {rowsAffected}");
+                    Console.WriteLine($"[UpdateFileAddress1] Rows affected: {rowsAffected}");
                 }
             }
         }

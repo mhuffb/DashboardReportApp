@@ -40,76 +40,133 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Submit(HoldTagModel record)
+        public async Task<IActionResult> Submit(HoldTagModel record, IFormFile? file)
         {
-            if (ModelState.IsValid)
-            {
-                // Assign default values
-                record.Date = DateTime.Now;
-
-                // Generate the PDF 
-                string pdfPath = _service.GenerateHoldTagPdf(record);
-
-                // Save to the database
-                await _service.AddHoldRecordAsync(record);
-
-                // Print the PDF
-                try
-                {
-                    _service.PrintPdf(pdfPath);
-                    TempData["SuccessMessage"] = "Hold record submitted, email sent, and printed successfully!";
-                }
-                catch (Exception ex)
-                {
-                    TempData["ErrorMessage"] = $"Hold record submitted but failed to print: {ex.Message}";
-                }
-
-                // Send email with the generated PDF
-                try
-                {
-                    _service.SendEmailWithAttachment(
-                        "notifications@sintergy.net",
-                        "$inT15851",
-                        "holdtag@sintergy.net",
-                        "smtp.sintergy.net",
-                        pdfPath,
-                        record
-                    );
-                }
-                catch (Exception ex)
-                {
-                    TempData["ErrorMessage"] = $"Failed to send email: {ex.Message}";
-                    return RedirectToAction("Index");
-                }
-
-                // Provide success feedback and redirect
-                TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
-                return RedirectToAction("Index");
-            }
-
             if (!ModelState.IsValid)
             {
-                foreach (var error in ModelState)
-                {
-                    Console.WriteLine($"Key: {error.Key}");
-                    foreach (var subError in error.Value.Errors)
-                    {
-                        Console.WriteLine($" - ErrorMessage: {subError.ErrorMessage}");
-                    }
-                }
-
+                // Handle validation errors, reload needed data, etc.
                 TempData["ErrorMessage"] = "Please correct the errors and try again.";
                 ViewData["Operators"] = await _service.GetOperatorsAsync();
                 return View("Index", record);
             }
 
-            // Reload operators if validation fails
-            ViewData["Operators"] = await _service.GetOperatorsAsync();
-            TempData["ErrorMessage"] = "Please correct the errors and try again.";
-            return View("Index", record);
+            try
+            {
+                // 1) If a file was uploaded, save it and set FileAddress1
+                if (file != null && file.Length > 0)
+                {
+                    // We'll call a new service method to do the file saving
+                    string savedPath = _service.SaveHoldTagFile(file);
+                    record.FileAddress1 = savedPath;
+                }
+
+                // 2) Set default date
+                record.Date = DateTime.Now;
+
+                // 3) Insert the DB record
+                await _service.AddHoldRecordAsync(record);
+
+                // 4) Generate and print PDF (existing code)
+                string pdfPath = _service.GenerateHoldTagPdf(record);
+                _service.PrintPdf(pdfPath);
+
+                 //5) Send email (existing code)
+                _service.SendEmailWithAttachment(
+                    "notifications@sintergy.net",
+                    "$inT15851",
+                    "holdtag@sintergy.net",
+                    "smtp.sintergy.net",
+                    pdfPath,
+                    record
+                );
+
+                TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error: {ex.Message}";
+                return RedirectToAction("Index");
+            }
         }
 
-       
+
+        [HttpGet("FetchImage")]
+        public IActionResult FetchImage(string filePath)
+        {
+            try
+            {
+
+
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    return Json(new { success = false, message = "No file path provided." });
+                }
+
+                if (!System.IO.File.Exists(filePath))
+                {
+                    return Json(new { success = false, message = $"File not found: {filePath}" });
+                }
+
+
+                // Ensure the directory exists
+                var fileName = System.IO.Path.GetFileName(filePath);
+                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/Uploads");
+                var destinationPath = Path.Combine(destinationDir, fileName);
+
+                if (!Directory.Exists(destinationDir))
+                {
+                    Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
+                }
+                if (System.IO.File.Exists(destinationPath))
+                {
+                    System.IO.File.Delete(destinationPath);
+                }
+                Console.WriteLine($"[DEBUG] Copying from '{filePath}' to '{destinationPath}'...");
+                // Copy the file to the destination path
+                if (!System.IO.File.Exists(destinationPath))
+                {
+                    System.IO.File.Copy(filePath, destinationPath, overwrite: true);
+                }
+
+                // Return the relative path to the image
+                var relativePath = $"/Uploads/{fileName}";
+                return Json(new { success = true, url = relativePath });
+            }
+            catch (Exception ex)
+            {
+                // Log exception so you see EXACT error cause
+                Console.WriteLine($"[ERROR] FetchImage exception: {ex}");
+                // Return an appropriate error response
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        [HttpPost("UpdateFile")]
+        public async Task<IActionResult> UpdateFile(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a valid file.";
+                return RedirectToAction("Index");
+            }
+
+            try
+            {
+                // 1) Save the file on disk
+                var savedPath = _service.SaveHoldTagFile(file);
+
+                // 2) Update the DB record with this path
+                await _service.UpdateFileAddress1Async(id, savedPath);
+
+                TempData["SuccessMessage"] = "File uploaded and updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error updating file: {ex.Message}";
+            }
+
+            return RedirectToAction("Index");
+        }
 
     }
 
