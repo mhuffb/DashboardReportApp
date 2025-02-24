@@ -57,8 +57,8 @@ namespace DashboardReportApp.Services
         public async Task AddHoldRecordAsync(HoldTagModel record)
         {
             string query = @"INSERT INTO holdrecords 
-                (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1)
-                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1)";
+                (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
+                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2)";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -79,6 +79,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@pcsScrapped", record.PcsScrapped ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@dateCompleted", record.DateCompleted ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@fileAddress1", record.FileAddress1 ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@fileAddress2", record.FileAddress2 ?? (object)DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -372,7 +373,11 @@ ORDER BY
                         : reader.GetDateTime(reader.GetOrdinal("DateCompleted")),
                     FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1"))
                         ? null
-                        : reader.GetString(reader.GetOrdinal("FileAddress1"))
+                        : reader.GetString(reader.GetOrdinal("FileAddress1")),
+                    FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2"))
+                        ? null
+                        : reader.GetString(reader.GetOrdinal("FileAddress2"))
+
                 };
 
                 records.Add(record);

@@ -32,7 +32,8 @@ namespace DashboardReportApp.Models
 
         public DateTime? DateCompleted { get; set; } // Nullable DateTime
 
-        public string? FileAddress { get; set; } // Nullable string
+        public string? FileAddress1 { get; set; } // Nullable string
+        public string? FileAddress2 { get; set; } // Nullable string
     }
 
 

@@ -11,7 +11,9 @@
                 <div class="card-body">
                     <h4 class="text-center mb-3">Submit a Hold Tag</h4>
 
-                    <p class="text-center">For immediate assistance, call/text until you get an answer:</p>
+                    <p class="text-center">
+                        For immediate assistance, call/text until you get an answer:
+                    </p>
                     <ul class="list-group mb-3">
                         <li class="form-control">Tom Grieneasen 814-591-2704</li>
                         <li class="form-control">Chico Almendarez 814-541-1181</li>
@@ -104,7 +106,7 @@
                             <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
                         </div>
 
-                        <!-- File Upload (Optional) -->
+                        <!-- File Upload (Optional) - Only for FileAddress1 -->
                         <div class="mb-3">
                             <label for="File" class="form-label">Attach File (Optional)</label>
                             <input type="file"
@@ -154,7 +156,10 @@
                     <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
                     <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
                     <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
-                    <th class="sortable" data-label="File" style="width: 4%;">File</th>
+                    <!-- Column for FileAddress1 -->
+                    <th class="sortable" data-label="File1" style="width: 5%;">File 1</th>
+                    <!-- Column for FileAddress2 (read-only preview) -->
+                    <th class="sortable" data-label="File2" style="width: 5%;">File 2</th>
                     <th style="width: 6%;">Actions</th>
                 </tr>
             </thead>
@@ -175,23 +180,37 @@
                         <td>@record.Unit</td>
                         <td>@record.PcsScrapped</td>
                         <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
+
+                        <!-- File 1 Preview Button -->
                         <td>
                             @if (!string.IsNullOrEmpty(record.FileAddress1))
                             {
-                                <!-- Show a preview button if a file is present -->
                                 <button type="button"
                                         class="btn btn-info btn-sm fetch-image-btn"
                                         data-file-path="@record.FileAddress1">
-                                    Preview File
+                                    Preview 1
                                 </button>
                             }
                         </td>
+
+                        <!-- File 2 Preview Button (READ ONLY) -->
                         <td>
-                            <!-- "Add / Update File" button for existing record -->
+                            @if (!string.IsNullOrEmpty(record.FileAddress2))
+                            {
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
+                                        data-file-path="@record.FileAddress2">
+                                    Preview 2
+                                </button>
+                            }
+                        </td>
+
+                        <td>
+                            <!-- "Add / Update File 1" button for existing record -->
                             <button type="button"
                                     class="btn btn-secondary btn-sm add-file-btn"
                                     data-id="@record.Id">
-                                Add / Update File
+                                Add / Update File1
                             </button>
                         </td>
                     </tr>
@@ -201,15 +220,15 @@
     </div>
 </div>
 
-<!-- Modal: Add / Update File -->
+<!-- Modal: Add / Update File1 -->
 <div class="modal fade" id="addFileModal" tabindex="-1" aria-labelledby="addFileModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-md">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addFileModalLabel">Attach File</h5>
+                <h5 class="modal-title" id="addFileModalLabel">Attach File 1</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <!-- This form posts to "UpdateFile" in the HoldTagController -->
+            <!-- This form posts to "UpdateFile" (only updates FileAddress1) -->
             <form asp-action="UpdateFile" method="post" enctype="multipart/form-data">
                 <div class="modal-body">
                     <!-- The hidden field to hold the record ID -->
@@ -261,7 +280,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             //---------------------------------------------------------
-            // 1) Show "Add / Update File" Modal
+            // 1) Show "Add / Update File1" Modal
             const addFileModal = new bootstrap.Modal(document.getElementById('addFileModal'));
             document.querySelectorAll('.add-file-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
