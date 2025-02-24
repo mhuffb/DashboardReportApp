@@ -16,7 +16,7 @@ namespace DashboardReportApp.Services
         public ProcessChangeRequestService(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
         }
 
         // Gets all ProcessChangeRequest rows

@@ -34,7 +34,6 @@ try
 
     builder.Services.AddScoped<DashboardReportApp.Services.SecondarySetupLogService>();
     builder.Services.AddScoped<MaintenanceRequestService>();
-    builder.Services.AddScoped<EmailAttachmentService>();
     //builder.Services.AddHostedService<EmailProcessingBackgroundService>();
 
     builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();

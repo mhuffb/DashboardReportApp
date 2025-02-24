@@ -27,7 +27,7 @@ namespace DashboardReportApp.Services
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
             // For example, save deviation files in wwwroot\DeviationUploads
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             if (!Directory.Exists(_uploadFolder))
             {
                 Directory.CreateDirectory(_uploadFolder);

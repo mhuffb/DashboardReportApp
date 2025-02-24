@@ -10,11 +10,9 @@ namespace DashboardReportApp.Controllers
     public class MaintenanceRequestController : Controller
     {
         private readonly MaintenanceRequestService _service;
-        private readonly EmailAttachmentService _emailAttachmentService;
 
-        public MaintenanceRequestController(EmailAttachmentService emailAttachmentService, MaintenanceRequestService service)
+        public MaintenanceRequestController( MaintenanceRequestService service)
         {
-            //_emailAttachmentService = emailAttachmentService;
             _service = service;
         }
 

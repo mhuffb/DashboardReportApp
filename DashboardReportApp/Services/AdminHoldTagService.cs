@@ -33,7 +33,7 @@ namespace DashboardReportApp.Services
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
         }
 
         // 1. Get all HoldRecord rows

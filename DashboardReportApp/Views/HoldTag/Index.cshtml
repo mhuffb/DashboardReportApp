@@ -280,12 +280,7 @@
         });
     </script>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Modal and table scripts here...
-            // (your existing modal and filtering/sorting scripts)
-        });
-    </script>
+   
 
     <!-- QR Code Generation for Both QR Codes -->
     <script>
@@ -303,7 +298,7 @@
             });
 
             // Generate QR code for Wi‑Fi connection
-            var wifiData = `WIFI:T:WPA;S:guest-WiFi;P:Sintergyguest;;`;
+            var wifiData = `WIFI:T:WPA;S:Sintergy-WiFi;P:5intergyW1F1;;`;
             QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, {
                 width: 128
             }, function (error) {
@@ -315,4 +310,152 @@
             });
         });
     </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const searchInput = document.getElementById("recordSearchInput");
+            const dateFilter = document.getElementById("recordDateFilter");
+            const table = document.querySelector(".custom-table tbody");
+            const rows = Array.from(table.querySelectorAll("tr"));
+            const headers = document.querySelectorAll(".sortable");
+
+            // SEARCH FUNCTION
+            searchInput.addEventListener("keyup", function () {
+                const searchTerm = searchInput.value.toLowerCase();
+                rows.forEach(row => {
+                    const rowText = row.textContent.toLowerCase();
+                    row.style.display = rowText.includes(searchTerm) ? "" : "none";
+                });
+            });
+
+            // DATE FILTER FUNCTION
+            dateFilter.addEventListener("change", function () {
+                const selectedDate = dateFilter.value; // Format: YYYY-MM-DD
+                rows.forEach(row => {
+                    const dateCell = row.children[3]; // Assuming Date is in the 4th column (index 3)
+                    const rowDate = dateCell.textContent.trim();
+                    row.style.display = selectedDate === "" || rowDate === selectedDate ? "" : "none";
+                });
+            });
+
+            // SORTING FUNCTION
+            headers.forEach((header, index) => {
+                header.addEventListener("click", function () {
+                    const order = header.dataset.order = -(header.dataset.order || -1);
+                    const type = header.dataset.label;
+
+                    rows.sort((rowA, rowB) => {
+                        const cellA = rowA.children[index].textContent.trim();
+                        const cellB = rowB.children[index].textContent.trim();
+
+                        if (type === "Date") {
+                            return order * (new Date(cellA) - new Date(cellB));
+                        } else if (!isNaN(cellA) && !isNaN(cellB)) {
+                            return order * (Number(cellA) - Number(cellB));
+                        } else {
+                            return order * cellA.localeCompare(cellB);
+                        }
+                    });
+
+                    table.innerHTML = "";
+                    rows.forEach(row => table.appendChild(row));
+                });
+            });
+        });
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const addFileButtons = document.querySelectorAll(".add-file-btn");
+            const fileInput = document.getElementById("add-fileinput");
+            const modal = new bootstrap.Modal(document.getElementById("addFileModal"));
+            const form = document.querySelector("#addFileModal form");
+            const recordIdField = document.getElementById("add-file-id");
+
+            // Attach click event to all "Add / Update File1" buttons
+            addFileButtons.forEach(button => {
+                button.addEventListener("click", function () {
+                    const recordId = button.getAttribute("data-id");
+                    recordIdField.value = recordId; // Set the hidden input field value
+                    modal.show();
+                });
+            });
+
+            // Ensure file input is reset when modal is closed
+            document.getElementById("addFileModal").addEventListener("hidden.bs.modal", function () {
+                fileInput.value = "";
+            });
+
+            // Ensure form submits with the correct ID
+            form.addEventListener("submit", function (e) {
+                if (!fileInput.value) {
+                    e.preventDefault();
+                    alert("Please select a file before submitting.");
+                }
+            });
+        });
+    </script>
+    <script>
+           document.addEventListener("DOMContentLoaded", function () {
+            const previewButtons = document.querySelectorAll(".fetch-image-btn");
+            const modal = new bootstrap.Modal(document.getElementById("imageModal"));
+            const modalImage = document.getElementById("modalImage");
+            const modalFile = document.getElementById("modalFile");
+
+            previewButtons.forEach(button => {
+                button.addEventListener("click", function () {
+                    const filePath = button.getAttribute("data-file-path");
+                    if (!filePath) {
+                        alert("File not found.");
+                        return;
+                    }
+
+                    // Call the endpoint to fetch the image URL
+                    fetch(`/HoldTag/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error("Failed to fetch the file.");
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (!data.success) {
+                                alert(`Error: ${data.message}`);
+                                return;
+                            }
+
+                            const previewUrl = data.url;
+                            // Determine file type based on the original file path extension
+                            const fileExtension = filePath.split('.').pop().toLowerCase();
+
+                            // Hide both elements before showing the proper one
+                            modalImage.style.display = "none";
+                            modalFile.style.display = "none";
+
+                            if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(fileExtension)) {
+                                modalImage.src = previewUrl;
+                                modalImage.style.display = "block";
+                            } else if (fileExtension === "pdf") {
+                                modalFile.src = previewUrl;
+                                modalFile.style.display = "block";
+                            } else {
+                                alert("Unsupported file type.");
+                                return;
+                            }
+                            modal.show();
+                        })
+                        .catch(error => {
+                            console.error("Error fetching file:", error);
+                            alert("An error occurred while fetching the file.");
+                        });
+                });
+            });
+
+            // Reset the modal content on close
+            document.getElementById("imageModal").addEventListener("hidden.bs.modal", function () {
+                modalImage.src = "";
+                modalFile.src = "";
+            });
+        });
+
+</script>
+
 }
