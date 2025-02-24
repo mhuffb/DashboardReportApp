@@ -3,10 +3,26 @@
 @{
     ViewData["Title"] = "Process Change Requests";
 }
-
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <div class="container-fluid mt-4">
     <h2 class="text-center mb-4">Process Change Requests</h2>
+    <!-- Combined QR Codes -->
+    <div class="row justify-content-center">
 
+        <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
+    </div>
+    <div class="d-flex justify-content-evenly align-items-center mb-4">
+        <!-- Wi‑Fi QR Code -->
+        <div class="text-center">
+            <canvas id="wifi-qr" style="width:128px; height:128px;"></canvas>
+            <div class="mt-2">Connect to Wifi</div>
+        </div>
+        <!-- Current Page QR Code -->
+        <div class="text-center">
+            <canvas id="current-page-qr" style="width:128px; height:128px;"></canvas>
+            <div class="mt-2">View on your device</div>
+        </div>
+    </div>
     <!-- Button to open the "Add New Request" modal -->
     <div class="mb-3 text-end">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRequestModal">
@@ -211,6 +227,34 @@
 
 
 @section Scripts {
+    <!-- QR Code Generation for Both QR Codes -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Generate QR code for the current page
+            var currentUrl = window.location.href;
+            QRCode.toCanvas(document.getElementById('current-page-qr'), currentUrl, {
+                width: 128
+            }, function (error) {
+                if (error) {
+                    console.error(error);
+                } else {
+                    console.log("Current page QR code generated!");
+                }
+            });
+
+            // Generate QR code for Wi‑Fi connection
+            var wifiData = `WIFI:T:WPA;S:Sintergy-WiFi;P:5intergyW1F1;;`;
+            QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, {
+                width: 128
+            }, function (error) {
+                if (error) {
+                    console.error(error);
+                } else {
+                    console.log("Wi‑Fi QR code generated!");
+                }
+            });
+        });
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             //---------------------------------------------------------

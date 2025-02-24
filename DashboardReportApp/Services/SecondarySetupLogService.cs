@@ -74,7 +74,12 @@ namespace DashboardReportApp.Services
                         {
                             Id = Convert.ToInt32(reader["id"]),
                             ProdNumber = reader["prodNumber"].ToString(),
-                            Run = reader["run"].ToString(),
+                            Run = reader.IsDBNull(reader.GetOrdinal("run"))
+    ? 0
+    : int.TryParse(reader["run"]?.ToString(), out int runValue)
+        ? runValue
+        : 0,
+
                             Part = reader["part"].ToString(),
                             Operator = reader["operator"].ToString(),
                             Op = reader["op"].ToString(),
@@ -97,7 +102,7 @@ namespace DashboardReportApp.Services
         }
 
 
-        public async Task AddSetupAsync(string operatorName, string op, string part, string machine, string run, int? pcs, int? scrapMach, int? scrapNonMach, string notes, decimal setupHours)
+        public async Task AddSetupAsync(SecondarySetupLogModel model)
         {
             string query = "INSERT INTO secondarysetup (operator, op, part, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours) " +
                            "VALUES (@operator, @op, @part, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours)";
@@ -107,16 +112,16 @@ namespace DashboardReportApp.Services
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@operator", operatorName);
-                    command.Parameters.AddWithValue("@op", op);
-                    command.Parameters.AddWithValue("@part", part);
-                    command.Parameters.AddWithValue("@machine", machine);
-                    command.Parameters.AddWithValue("@run", run);
-                    command.Parameters.AddWithValue("@pcs", pcs);
-                    command.Parameters.AddWithValue("@scrapMach", scrapMach);
-                    command.Parameters.AddWithValue("@scrapNonMach", scrapNonMach);
-                    command.Parameters.AddWithValue("@notes", notes);
-                    command.Parameters.AddWithValue("@setupHours", setupHours);
+                    command.Parameters.AddWithValue("@operator", model.Operator);
+                    command.Parameters.AddWithValue("@op", model.Op);
+                    command.Parameters.AddWithValue("@part", model.Part);
+                    command.Parameters.AddWithValue("@machine", model.Machine);
+                    command.Parameters.AddWithValue("@run", model.Run);
+                    command.Parameters.AddWithValue("@pcs", model.Pcs);
+                    command.Parameters.AddWithValue("@scrapMach", model.ScrapMach);
+                    command.Parameters.AddWithValue("@scrapNonMach", model.ScrapNonMach);
+                    command.Parameters.AddWithValue("@notes", model.Notes);
+                    command.Parameters.AddWithValue("@setupHours", model.SetupHours);
 
                     await command.ExecuteNonQueryAsync();
                 }

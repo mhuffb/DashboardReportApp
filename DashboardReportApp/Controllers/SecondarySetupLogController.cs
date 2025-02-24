@@ -30,8 +30,8 @@ namespace DashboardReportApp.Controllers
         {
             if (ModelState.IsValid)
             {
-                int? runNumber = int.TryParse(model.Run, out var run) ? run : null;
-                string partNumber = await _service.LookupPartNumberAsync(runNumber);
+                string partNumber = await _service.LookupPartNumberAsync(model.Run);
+                model.Part = partNumber;
 
                 if (string.IsNullOrWhiteSpace(partNumber))
                 {
@@ -39,18 +39,7 @@ namespace DashboardReportApp.Controllers
                     return RedirectToAction("Index");
                 }
 
-                await _service.AddSetupAsync(
-                    model.Operator,
-                    model.Op,
-                    partNumber,
-                    model.Machine,
-                    model.Run,
-                    model.Pcs,
-                    model.ScrapMach,
-                    model.ScrapNonMach,
-                    model.Notes,
-                    model.SetupHours
-                );
+                await _service.AddSetupAsync(model);
 
                 TempData["Message"] = "Setup added successfully!";
             }
