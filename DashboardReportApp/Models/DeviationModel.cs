@@ -25,6 +25,8 @@ namespace DashboardReportApp.Models
         public string? Disposition { get; set; }
         public string? ApprovedBy { get; set; }
         public DateTime? DateTimeCASTReview { get; set; }
+        public string? FileAddress1 { get; set; } // Nullable string
+        public string? FileAddress2 { get; set; } // Nullable string
     }
     public class DeviationIndexViewModel
     {

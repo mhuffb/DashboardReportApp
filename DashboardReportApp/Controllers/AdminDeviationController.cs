@@ -1,6 +1,7 @@
 ﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 
@@ -26,16 +27,18 @@ namespace DashboardReportApp.Controllers
             return View(deviations);
         }
 
-
+        // Update the entire deviation record, including both file uploads.
+        // This mirrors the Hold Tag UpdateFileAddress method.
         [HttpPost("Update")]
-        public IActionResult Update(AdminDeviationModel model)
+        [ValidateAntiForgeryToken]
+        public IActionResult Update(AdminDeviationModel model, IFormFile? file1, IFormFile? file2)
         {
             if (!ModelState.IsValid)
             {
                 return RedirectToAction("Index");
             }
 
-            _deviationService.UpdateDeviation(model);
+            _deviationService.UpdateDeviation(model, file1, file2);
             TempData["Success"] = "Deviation updated successfully!";
             return RedirectToAction("Index");
         }

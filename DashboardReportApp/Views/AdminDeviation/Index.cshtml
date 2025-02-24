@@ -34,6 +34,8 @@
                     <th class="sortable">Disposition</th>
                     <th class="sortable">Approved By</th>
                     <th class="sortable">CAST Review Date</th>
+                    <th class="sortable">File 1</th>
+                    <th class="sortable">File 2</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -51,6 +53,22 @@
                         <td>@deviation.ApprovedBy</td>
                         <td>@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>
+                            @if (!string.IsNullOrEmpty(deviation.FileAddress1))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@deviation.FileAddress1">
+                                    Preview 1
+                                </button>
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(deviation.FileAddress2))
+                            {
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@deviation.FileAddress2">
+                                    Preview 2
+                                </button>
+                            }
+                        </td>
+                        <td>
                             <button type="button" class="btn btn-primary btn-sm edit-btn"
                                     data-id="@deviation.Id"
                                     data-part="@deviation.Part"
@@ -60,7 +78,9 @@
                                     data-commmethod="@deviation.CommMethod"
                                     data-disposition="@deviation.Disposition"
                                     data-approvedby="@deviation.ApprovedBy"
-                                    data-castreview="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")">
+                                    data-castreview="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")"
+                                    data-fileaddress1="@deviation.FileAddress1"
+                                    data-fileaddress2="@deviation.FileAddress2">
                                 Edit
                             </button>
                         </td>
@@ -79,9 +99,12 @@
                 <h5 class="modal-title" id="editDeviationModalLabel">Edit Deviation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="@Url.Action("Update", "AdminDeviation")">
+            <!-- Form posts to Update action -->
+            <form method="post" action="@Url.Action("Update", "AdminDeviation")" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
                 <div class="modal-body">
                     <input type="hidden" name="Id" id="edit-id" />
+
                     <div class="mb-3">
                         <label for="edit-part" class="form-label">Part</label>
                         <input type="text" name="Part" id="edit-part" class="form-control" required />
@@ -140,26 +163,151 @@
                         <label for="edit-castreview" class="form-label">CAST Review Date</label>
                         <input type="date" name="DateTimeCASTReview" id="edit-castreview" class="form-control" />
                     </div>
+
+                    <!-- File Upload Section for File 1 -->
+                    <div class="mb-3">
+                        <label class="form-label">File 1 (Editable)</label>
+                        <!-- Hidden input stores current FileAddress1 -->
+                        <input type="hidden" name="FileAddress1" id="edit-fileaddress1" />
+                        <div id="current-file1" class="mb-2"></div>
+                        <input type="file" name="file1" id="edit-file1" class="form-control" accept="image/*,.pdf" />
+                    </div>
+                    <!-- File Upload Section for File 2 -->
+                    <div class="mb-3">
+                        <label class="form-label">File 2 (Editable)</label>
+                        <!-- Hidden input stores current FileAddress2 -->
+                        <input type="hidden" name="FileAddress2" id="edit-fileaddress2" />
+                        <div id="current-file2" class="mb-2"></div>
+                        <input type="file" name="file2" id="edit-file2" class="form-control" accept="image/*,.pdf" />
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-save"></i> Save Changes
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<!-- Bootstrap Modal for File Preview -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
+                <iframe id="modalFile" class="w-100" style="height:500px; display:none;" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        // ----------------------------
+        // Edit Modal Logic: Populate fields when an Edit button is clicked
         document.addEventListener('DOMContentLoaded', function () {
-            // Sorting and Filtering Variables
+            document.querySelectorAll('.edit-btn').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const part = this.getAttribute('data-part');
+                    const sentDate = this.getAttribute('data-sentdate');
+                    const discrepancy = this.getAttribute('data-discrepancy');
+                    const operator = this.getAttribute('data-operator');
+                    const commMethod = this.getAttribute('data-commmethod');
+                    const disposition = this.getAttribute('data-disposition');
+                    const approvedBy = this.getAttribute('data-approvedby');
+                    const castReview = this.getAttribute('data-castreview');
+                    const fileAddress1 = this.getAttribute('data-fileaddress1');
+                    const fileAddress2 = this.getAttribute('data-fileaddress2');
+
+                    document.getElementById('edit-id').value = id;
+                    document.getElementById('edit-part').value = part;
+                    document.getElementById('edit-sentdate').value = sentDate;
+                    document.getElementById('edit-discrepancy').value = discrepancy;
+                    document.getElementById('edit-operator').value = operator;
+                    document.getElementById('edit-commmethod').value = commMethod;
+                    document.getElementById('edit-disposition').value = disposition;
+                    document.getElementById('edit-approvedby').value = approvedBy;
+                    document.getElementById('edit-castreview').value = castReview;
+
+                    // Set current file links for FileAddress1 and FileAddress2
+                    document.getElementById('edit-fileaddress1').value = fileAddress1 || "";
+                    document.getElementById('current-file1').innerHTML = fileAddress1
+                        ? `<a href="${fileAddress1}" target="_blank">Current File 1</a>`
+                        : "No file uploaded for File 1";
+
+                    document.getElementById('edit-fileaddress2').value = fileAddress2 || "";
+                    document.getElementById('current-file2').innerHTML = fileAddress2
+                        ? `<a href="${fileAddress2}" target="_blank">Current File 2</a>`
+                        : "No file uploaded for File 2";
+
+                    new bootstrap.Modal(document.getElementById('editDeviationModal')).show();
+                });
+            });
+        });
+
+        // ----------------------------
+        // File Preview Logic for table preview buttons
+        document.addEventListener('DOMContentLoaded', function () {
+            const imageModalElement = document.getElementById('imageModal');
+            document.querySelectorAll('.fetch-image-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const filePath = this.dataset.filePath;
+                    if (!filePath) {
+                        alert("No file path provided.");
+                        return;
+                    }
+                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error("Failed to fetch the file.");
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                const modalImage = document.getElementById('modalImage');
+                                const modalFile = document.getElementById('modalFile');
+                                if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                                    modalImage.src = data.url;
+                                    modalImage.style.display = "block";
+                                    modalFile.style.display = "none";
+                                } else {
+                                    modalFile.src = data.url;
+                                    modalFile.style.display = "block";
+                                    modalImage.style.display = "none";
+                                }
+                                new bootstrap.Modal(imageModalElement).show();
+                            } else {
+                                alert(`Error: ${data.message}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching file:', error);
+                            alert('An error occurred while fetching the file.');
+                        });
+                });
+            });
+
+            imageModalElement.addEventListener('hidden.bs.modal', function () {
+                document.getElementById('modalImage').src = '';
+                document.getElementById('modalFile').src = '';
+            });
+        });
+
+        // ----------------------------
+        // Filtering & Sorting Logic for the Table
+        document.addEventListener('DOMContentLoaded', function () {
             let currentSortColumn = null;
             let currentSortDir = 'asc';
             const table = document.querySelector('.custom-table');
             const tbody = table.querySelector('tbody');
 
-            // Attach click events to sortable headers
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
                 if (!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
@@ -176,7 +324,6 @@
                 });
             });
 
-            // Filter event listeners
             document.getElementById('deviationSearchInput').addEventListener('input', updateTable);
             document.getElementById('deviationDateFilter').addEventListener('change', updateTable);
 
@@ -185,13 +332,12 @@
                 const selectedDate = document.getElementById('deviationDateFilter').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
-                // Sorting
                 if (currentSortColumn !== null) {
                     rows.sort((a, b) => {
                         const aCells = a.querySelectorAll('td');
                         const bCells = b.querySelectorAll('td');
-                        const aText = aCells[currentSortColumn] ? aCells[currentSortColumn].innerText.trim() : '';
-                        const bText = bCells[currentSortColumn] ? bCells[currentSortColumn].innerText.trim() : '';
+                        const aText = aCells[currentSortColumn]?.innerText.trim() || '';
+                        const bText = bCells[currentSortColumn]?.innerText.trim() || '';
                         const aNum = parseFloat(aText);
                         const bNum = parseFloat(bText);
                         if (!isNaN(aNum) && !isNaN(bNum)) {
@@ -201,16 +347,12 @@
                         }
                     });
                 }
-
-                // Re-append sorted rows
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filtering rows
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
-                    // Search filter: check all cells except Actions (last cell)
                     if (searchQuery) {
                         let found = false;
                         for (let i = 0; i < cells.length - 1; i++) {
@@ -221,58 +363,26 @@
                         }
                         if (!found) show = false;
                     }
-
-                    // Date filter: assuming "Sent Date" is at index 2 (ID:0, Part:1, Sent Date:2)
                     if (selectedDate) {
-                        const dateCell = cells[2];
+                        const dateCell = cells[2]; // Sent Date column
                         if (dateCell && dateCell.innerText.trim() !== selectedDate) {
                             show = false;
                         }
                     }
-
                     row.style.display = show ? '' : 'none';
                 });
             }
 
             function updateSortIndicators() {
                 document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                    th.innerText = th.dataset.label; // reset to original label
+                    th.innerText = th.dataset.label;
                     if (index === currentSortColumn) {
                         th.innerText += currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
                     }
                 });
             }
 
-            // Initial table update
             updateTable();
-
-            // ----------------------------
-            // Edit Modal Logic
-            document.querySelectorAll('.edit-btn').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    const id = this.getAttribute('data-id');
-                    const part = this.getAttribute('data-part');
-                    const sentDate = this.getAttribute('data-sentdate');
-                    const discrepancy = this.getAttribute('data-discrepancy');
-                    const operator = this.getAttribute('data-operator');
-                    const commMethod = this.getAttribute('data-commmethod');
-                    const disposition = this.getAttribute('data-disposition');
-                    const approvedBy = this.getAttribute('data-approvedby');
-                    const castReview = this.getAttribute('data-castreview');
-
-                    document.getElementById('edit-id').value = id;
-                    document.getElementById('edit-part').value = part;
-                    document.getElementById('edit-sentdate').value = sentDate;
-                    document.getElementById('edit-discrepancy').value = discrepancy;
-                    document.getElementById('edit-operator').value = operator;
-                    document.getElementById('edit-commmethod').value = commMethod;
-                    document.getElementById('edit-disposition').value = disposition;
-                    document.getElementById('edit-approvedby').value = approvedBy;
-                    document.getElementById('edit-castreview').value = castReview;
-
-                    new bootstrap.Modal(document.getElementById('editDeviationModal')).show();
-                });
-            });
         });
     </script>
 }

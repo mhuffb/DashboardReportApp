@@ -401,7 +401,7 @@ ORDER BY
 
             // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
             var extension = Path.GetExtension(file.FileName);
-            var uniqueName = "HoldTagFile_" + DateTime.Now.Ticks + extension;
+            var uniqueName = "HoldTagFile1_" + DateTime.Now.Ticks + extension;
             var finalPath = Path.Combine(_uploadFolder, uniqueName);
 
             // Copy the file to disk

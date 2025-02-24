@@ -1,10 +1,7 @@
 ﻿using DashboardReportApp.Models;
 using MySql.Data.MySqlClient;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using iText.IO.Font.Constants;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
@@ -12,7 +9,11 @@ using iText.Layout;
 using iText.Layout.Borders;
 using iText.Layout.Element;
 using iText.Layout.Properties;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 using System.Data;
 
 namespace DashboardReportApp.Services
@@ -20,13 +21,20 @@ namespace DashboardReportApp.Services
     public class DeviationService
     {
         private readonly string _connectionString;
+        private readonly string _uploadFolder;
 
         public DeviationService(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
+            // For example, save deviation files in wwwroot\DeviationUploads
+            _uploadFolder = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\VSP\Uploads";
+            if (!Directory.Exists(_uploadFolder))
+            {
+                Directory.CreateDirectory(_uploadFolder);
+            }
         }
 
-        // Retrieves a list of operators (for the dropdown)
+        // Retrieves a list of operators for the dropdown.
         public List<string> GetOperators()
         {
             var operators = new List<string>();
@@ -44,17 +52,25 @@ namespace DashboardReportApp.Services
                     }
                 }
             }
-
             return operators;
         }
 
-        // Saves a new deviation record asynchronously
-        public async Task SaveDeviationAsync(DeviationModel model)
+        // Saves a new deviation record.
+        // If a file is uploaded, saves it and stores its path in FileAddress1.
+        public async Task SaveDeviationAsync(DeviationModel model, IFormFile? file)
         {
+            if (file != null && file.Length > 0)
+            {
+                // Use the same file-saving logic as the hold tag.
+                string filePath = SaveDeviationFile(file);
+                model.FileAddress1 = filePath;
+            }
+            // FileAddress2 remains untouched (read-only)
+
             string query = @"
                 INSERT INTO deviation 
-                (part, sentDateTime, discrepancy, operator, commMethod, disposition, approvedBy, dateTimeCASTReview)
-                VALUES (@part, @sentDateTime, @discrepancy, @operator, @commMethod, @disposition, @approvedBy, @dateTimeCASTReview)";
+                (part, sentDateTime, discrepancy, operator, commMethod, disposition, approvedBy, dateTimeCASTReview, FileAddress1, FileAddress2)
+                VALUES (@part, @sentDateTime, @discrepancy, @operator, @commMethod, @disposition, @approvedBy, @dateTimeCASTReview, @FileAddress1, @FileAddress2)";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -69,13 +85,46 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@disposition", model.Disposition ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@approvedBy", model.ApprovedBy ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@dateTimeCASTReview", model.DateTimeCASTReview ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@FileAddress1", model.FileAddress1 ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@FileAddress2", model.FileAddress2 ?? (object)DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
             }
         }
 
-        // Retrieves all deviation records asynchronously
+        // Synchronous file-saving method modeled after the hold tag version.
+        public string SaveDeviationFile(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                throw new ArgumentException("File is null or empty.", nameof(file));
+            }
+
+            // Ensure the upload folder exists
+            if (!Directory.Exists(_uploadFolder))
+            {
+                Directory.CreateDirectory(_uploadFolder);
+            }
+
+            // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
+            var extension = Path.GetExtension(file.FileName);
+            var uniqueName = "DeviationFile1_" + DateTime.Now.Ticks + extension;
+            var finalPath = Path.Combine(_uploadFolder, uniqueName);
+
+            // Copy the file to disk
+            using (var stream = new FileStream(finalPath, FileMode.Create))
+            {
+                file.CopyTo(stream);
+            }
+
+            // Return the path so we can save it in record.FileAddress1
+            return finalPath;
+        }
+
+
+
+        // Retrieves all deviation records.
         public async Task<List<DeviationModel>> GetAllDeviationsAsync()
         {
             var records = new List<DeviationModel>();
@@ -99,23 +148,22 @@ namespace DashboardReportApp.Services
                             CommMethod = reader.IsDBNull(reader.GetOrdinal("commMethod")) ? null : reader.GetString("commMethod"),
                             Disposition = reader.IsDBNull(reader.GetOrdinal("disposition")) ? null : reader.GetString("disposition"),
                             ApprovedBy = reader.IsDBNull(reader.GetOrdinal("approvedBy")) ? null : reader.GetString("approvedBy"),
-                            DateTimeCASTReview = reader.IsDBNull(reader.GetOrdinal("dateTimeCASTReview")) ? (DateTime?)null : reader.GetDateTime("dateTimeCASTReview")
+                            DateTimeCASTReview = reader.IsDBNull(reader.GetOrdinal("dateTimeCASTReview")) ? (DateTime?)null : reader.GetDateTime("dateTimeCASTReview"),
+                            FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1")) ? null : reader.GetString("FileAddress1"),
+                            FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2")) ? null : reader.GetString("FileAddress2")
                         };
                         records.Add(record);
                     }
                 }
             }
-
             return records;
         }
 
-        // Generates a deviation PDF, prints it, and returns the PDF file path.
+        // Generates a PDF for the deviation, prints it, and returns its file path.
         public string GenerateAndPrintDeviationPdf(DeviationModel model)
         {
-            // Create a file path for the PDF (e.g., under wwwroot)
             string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", $"Deviation_{model.Part}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
 
-            // Load fonts
             PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
             PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
@@ -123,7 +171,6 @@ namespace DashboardReportApp.Services
             using (var pdf = new PdfDocument(writer))
             using (var document = new Document(pdf))
             {
-                // Title with bottom border
                 Paragraph title = new Paragraph("IN-HOUSE TEMPORARY DEVIATION REQUEST")
                     .SetFont(boldFont)
                     .SetFontSize(18)
@@ -132,7 +179,6 @@ namespace DashboardReportApp.Services
                 document.Add(title);
                 document.Add(new Paragraph("\n"));
 
-                // Create table for key details
                 Table table = new Table(2).UseAllAvailableWidth();
                 table.AddCell(new Cell().Add(new Paragraph("Part:").SetFont(boldFont)).SetBorderBottom(new SolidBorder(1)));
                 table.AddCell(new Cell().Add(new Paragraph(model.Part).SetFont(normalFont)).SetBorderBottom(new SolidBorder(1)));
@@ -155,7 +201,6 @@ namespace DashboardReportApp.Services
                     .SetTextAlignment(TextAlignment.CENTER));
             }
 
-            // Print the PDF using SumatraPDF
             PrintPdfWithSumatraPDF(filePath);
             return filePath;
         }
@@ -164,6 +209,7 @@ namespace DashboardReportApp.Services
         {
             string sumatraPdfPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe";
             string printerName = "QC1"; // Change to your target printer
+
             if (!File.Exists(sumatraPdfPath))
             {
                 throw new FileNotFoundException("SumatraPDF.exe not found. Please provide the correct path.");
@@ -188,6 +234,27 @@ namespace DashboardReportApp.Services
             catch (Exception ex)
             {
                 throw new Exception($"Failed to print PDF: {ex.Message}");
+            }
+        }
+
+        // Updates FileAddress1 for an existing deviation record.
+        // Uses the same file-saving logic as in Create.
+        public async Task<bool> UpdateFileAddress1Async(int id, IFormFile file)
+        {
+            // Save the new file (same as with Hold Tag)
+            string filePath = SaveDeviationFile(file);
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string query = "UPDATE deviation SET FileAddress1 = @FileAddress1 WHERE id = @id";
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@FileAddress1", filePath);
+                    command.Parameters.AddWithValue("@id", id);
+                    int rowsAffected = await command.ExecuteNonQueryAsync();
+                    return rowsAffected > 0;
+                }
             }
         }
     }

@@ -154,7 +154,15 @@ namespace DashboardReportApp.Services
 
             // Example: "HoldTag_123_File1.pdf"
             var extension = Path.GetExtension(file.FileName);
-            var fileName = $"HoldTag_{holdTagId}_{suffix}{extension}";
+            var fileName = "";
+            if(suffix == "File1")
+            {
+                fileName = $"HoldTag1_{holdTagId}_{extension}";
+            }
+            else if (suffix == "File2")
+            {
+                fileName = $"HoldTag2_{holdTagId}_{extension}";
+            }
             var finalPath = Path.Combine(_uploadFolder, fileName);
 
             using (var stream = new FileStream(finalPath, FileMode.Create))
@@ -164,7 +172,7 @@ namespace DashboardReportApp.Services
 
             return finalPath;
         }
-
+       
         // -- Additional queries for operator dropdowns
         public async Task<List<string>> GetIssuedByOperatorsAsync()
         {

@@ -1,5 +1,6 @@
 ﻿using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
@@ -17,16 +18,12 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            // Get operators for the dropdown (synchronously in this example)
             ViewData["Operators"] = _service.GetOperators();
-
-            // Retrieve all deviation records asynchronously
             var records = await _service.GetAllDeviationsAsync();
 
-            // Create a composite view model
             var model = new DeviationIndexViewModel
             {
-                FormModel = new DeviationModel(), // New instance for the form
+                FormModel = new DeviationModel(), // New instance for the create form
                 Records = records
             };
 
@@ -35,21 +32,16 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(DeviationModel model)
+        public async Task<IActionResult> Create(DeviationModel model, IFormFile? file)
         {
             if (ModelState.IsValid)
             {
-                // Save the new deviation (asynchronously)
-                await _service.SaveDeviationAsync(model);
-
-                // Generate and print PDF
+                await _service.SaveDeviationAsync(model, file);
                 string pdfPath = _service.GenerateAndPrintDeviationPdf(model);
-
                 TempData["SuccessMessage"] = "Deviation successfully created!";
                 return RedirectToAction("Index");
             }
 
-            // Log errors if any (for debugging)
             foreach (var key in ModelState.Keys)
             {
                 foreach (var error in ModelState[key].Errors)
@@ -67,6 +59,22 @@ namespace DashboardReportApp.Controllers
                 Records = records
             };
             return View("Index", viewModel);
+        }
+
+        // New action to update FileAddress1
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateFile(int id, IFormFile? file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a valid file.";
+                return RedirectToAction("Index");
+            }
+
+            bool success = await _service.UpdateFileAddress1Async(id, file);
+            TempData["SuccessMessage"] = success ? "File updated successfully!" : "Update failed.";
+            return RedirectToAction("Index");
         }
     }
 }
