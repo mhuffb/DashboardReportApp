@@ -14,13 +14,18 @@
         </div>
     </div>
 
-    <!-- Smaller Machine and Date Filter Inputs -->
+    <!-- Machine and Date Range Filter Inputs -->
     <div class="row mb-3">
         <div class="col-auto">
-            <input type="text" id="machineFilter" placeholder="Machine" class="form-control" style="max-width:150px;" />
+            <select id="machineFilter" class="form-control" style="max-width:150px;">
+                <option value="">All Machines</option>
+            </select>
         </div>
         <div class="col-auto">
-            <input type="date" id="dateFilter" placeholder="Date" class="form-control" style="max-width:150px;" />
+            <input type="date" id="startDateFilter" placeholder="Start Date" class="form-control" style="max-width:150px;" />
+        </div>
+        <div class="col-auto">
+            <input type="date" id="endDateFilter" placeholder="End Date" class="form-control" style="max-width:150px;" />
         </div>
     </div>
 
@@ -62,10 +67,27 @@
       const originalPressSetups = JSON.parse(pressSetupsEl.getAttribute('data-presssetups'));
       const originalPressLots = JSON.parse(pressLotsEl.getAttribute('data-presslots'));
 
-      // C) Define columns for each table (column widths remain as defined previously)
+      // C) Combine machine values from all data arrays into a unique, sorted list (sort as ints)
+      const machineSet = new Set();
+      [...originalPressRuns, ...originalPressSetups, ...originalPressLots].forEach(row => {
+          if (row.Machine) {
+              machineSet.add(row.Machine);
+          }
+      });
+      const machineOptions = Array.from(machineSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+      // D) Populate the machine filter dropdown
+      const machineFilterSelect = document.getElementById('machineFilter');
+      machineOptions.forEach(machine => {
+          const option = document.createElement('option');
+          option.value = machine;
+          option.text = machine;
+          machineFilterSelect.appendChild(option);
+      });
+
+      // E) Define columns for each table (removed the Timestamp column)
       const pressRunsColumns = [
         { key: 'Id', label: 'ID' },
-        { key: 'Timestamp', label: 'Timestamp', width: '100px' },
         { key: 'Part', label: 'Part' },
         { key: 'Run', label: 'Run' },
         { key: 'Operator', label: 'Operator' },
@@ -79,7 +101,6 @@
       ];
       const pressSetupsColumns = [
         { key: 'Id', label: 'ID' },
-        { key: 'Timestamp', label: 'Timestamp', width: '100px' },
         { key: 'Part', label: 'Part' },
         { key: 'Run', label: 'Run' },
         { key: 'Operator', label: 'Operator' },
@@ -106,68 +127,83 @@
         { key: 'SupplierItemNumber', label: 'Supplier Item #' }
       ];
 
-      // D) Function to render tables
+      // F) Function to render tables
       function renderTables(runsData, setupsData, lotsData) {
         window.renderMyDataTable('pressRunsReactRoot', runsData, pressRunsColumns, false);
         window.renderMyDataTable('pressSetupsReactRoot', setupsData, pressSetupsColumns, false);
         window.renderMyDataTable('pressLotChangesReactRoot', lotsData, pressLotsColumns, false);
       }
 
-      // E) Initial render without filtering
+      // G) Initial render without filtering
       renderTables(originalPressRuns, originalPressSetups, originalPressLots);
 
-      // F) Listen for filter changes on all inputs
+      // H) Grab filter input elements
       const globalSearchInput = document.getElementById('globalSearch');
-      const machineFilterInput = document.getElementById('machineFilter');
-      const dateFilterInput = document.getElementById('dateFilter');
+      const startDateFilterInput = document.getElementById('startDateFilter');
+      const endDateFilterInput = document.getElementById('endDateFilter');
+      // machineFilterSelect is already available from step D
+
       const clearFiltersButton = document.getElementById('clearFiltersButton');
 
-      // Apply filters on input changes
+      // I) Listen for filter changes on all inputs
       globalSearchInput.addEventListener('input', applyFilters);
-      machineFilterInput.addEventListener('input', applyFilters);
-      dateFilterInput.addEventListener('input', applyFilters);
+      machineFilterSelect.addEventListener('change', applyFilters);
+      startDateFilterInput.addEventListener('input', applyFilters);
+      endDateFilterInput.addEventListener('input', applyFilters);
 
-      // G) Function to combine filter logic
+      // J) Function to combine filter logic
       function applyFilters() {
         const globalTerm = globalSearchInput.value.toLowerCase().trim();
-        const machineTerm = machineFilterInput.value.toLowerCase().trim();
-        const dateTerm = dateFilterInput.value; // date in YYYY-MM-DD
+        const machineTerm = machineFilterSelect.value.toLowerCase().trim();
+        const startDateTerm = startDateFilterInput.value; // YYYY-MM-DD
+        const endDateTerm = endDateFilterInput.value;     // YYYY-MM-DD
 
-        const filteredPressRuns = filterRows(originalPressRuns, globalTerm, machineTerm, dateTerm);
-        const filteredPressSetups = filterRows(originalPressSetups, globalTerm, machineTerm, dateTerm);
-        const filteredPressLots = filterRows(originalPressLots, globalTerm, machineTerm, dateTerm);
+        const filteredPressRuns = filterRows(originalPressRuns, globalTerm, machineTerm, startDateTerm, endDateTerm);
+        const filteredPressSetups = filterRows(originalPressSetups, globalTerm, machineTerm, startDateTerm, endDateTerm);
+        const filteredPressLots = filterRows(originalPressLots, globalTerm, machineTerm, startDateTerm, endDateTerm);
 
         renderTables(filteredPressRuns, filteredPressSetups, filteredPressLots);
       }
 
-      // H) Clear Filters button resets all filter inputs and renders original data
+      // K) Clear Filters button resets all filter inputs and renders original data
       clearFiltersButton.addEventListener('click', function () {
         globalSearchInput.value = '';
-        machineFilterInput.value = '';
-        dateFilterInput.value = '';
+        machineFilterSelect.value = '';
+        startDateFilterInput.value = '';
+        endDateFilterInput.value = '';
         renderTables(originalPressRuns, originalPressSetups, originalPressLots);
       });
 
-      // I) Helper function for filtering rows using all three filters
-      function filterRows(dataArray, globalTerm, machineTerm, dateTerm) {
+      // L) Helper function: returns true if dateStr is within the given date range (inclusive)
+      function isWithinDateRange(dateStr, start, end) {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        if (start && date < new Date(start)) return false;
+        if (end && date > new Date(end)) return false;
+        return true;
+      }
+
+      // M) Helper function for filtering rows using all filters including the date range
+      function filterRows(dataArray, globalTerm, machineTerm, startDateTerm, endDateTerm) {
         return dataArray.filter(row => {
-          // Global search: check every property
+          // Global search: check all properties for the search term
           let matchesGlobal = true;
           if (globalTerm) {
             matchesGlobal = Object.values(row).some(val => val && val.toString().toLowerCase().includes(globalTerm));
           }
-          // Machine filter: check the 'Machine' property if it exists
+          // Machine filter: match if the row's Machine equals the selected machine (if any)
           let matchesMachine = true;
-          if (machineTerm && row.Machine) {
-            matchesMachine = row.Machine.toString().toLowerCase().includes(machineTerm);
+          if (machineTerm) {
+            matchesMachine = row.Machine && row.Machine.toString().toLowerCase() === machineTerm;
           }
-          // Date filter: check if any relevant date field contains the selected date
+          // Date range filter: check if at least one relevant date field is within the range
           let matchesDate = true;
-          if (dateTerm) {
-            const dateFields = ['Timestamp', 'StartDateTime', 'EndDateTime', 'SentDateTime'];
+          if (startDateTerm || endDateTerm) {
+            // Removed "Timestamp" from the list of date fields
+            const dateFields = ['StartDateTime', 'EndDateTime', 'SentDateTime'];
             matchesDate = dateFields.some(field => {
               if (row[field]) {
-                return row[field].toString().includes(dateTerm);
+                return isWithinDateRange(row[field], startDateTerm, endDateTerm);
               }
               return false;
             });
