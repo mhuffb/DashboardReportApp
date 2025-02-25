@@ -18,5 +18,13 @@ namespace DashboardReportApp.Controllers
             var viewModel = _moldingService.GetData();
             return View(viewModel);
         }
+        [HttpGet]
+        public async Task<IActionResult> ApiGetAllMachineCounts()
+        {
+            // Returns JSON: { "1": 123, "2": 456, ... }
+            Dictionary<string, int?> allCounts = await _moldingService.GetAllMachineCountsAsync();
+            return Json(allCounts);
+        }
     }
+
 }

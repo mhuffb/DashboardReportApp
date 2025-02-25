@@ -103,6 +103,12 @@ namespace DashboardReportApp.Services
                 document.Add(new Paragraph("\n")); // Spacing
 
                 // Part Number
+                string id = string.IsNullOrWhiteSpace(record.Id.ToString()) ? "N/A" : record.Id.ToString();
+                document.Add(new Paragraph("ID:").SetFont(boldFont).SetFontSize(12));
+                document.Add(new Paragraph(id).SetFont(normalFont).SetFontSize(12));
+                document.Add(new Paragraph("\n")); // Spacing
+
+                // Part Number
                 string partNumber = string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part;
                 document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
                 document.Add(new Paragraph(partNumber).SetFont(normalFont).SetFontSize(12));

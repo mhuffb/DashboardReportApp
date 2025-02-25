@@ -84,7 +84,12 @@ namespace DashboardReportApp.Services
 
             try
             {
-                using var httpClient = new HttpClient();
+                // Configure a 5-second timeout (adjust as needed)
+                using var httpClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+
                 string url = $"http://{deviceIp}/api/picodata";
                 HttpResponseMessage response = await httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
@@ -92,7 +97,7 @@ namespace DashboardReportApp.Services
                 string json = (await response.Content.ReadAsStringAsync()).Trim();
                 Console.WriteLine("Device JSON: " + json);
 
-                // If the response appears to be a JSON object, try to extract "count_value"
+                // Attempt to parse "count_value" from a JSON object
                 if (json.StartsWith("{"))
                 {
                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -115,7 +120,7 @@ namespace DashboardReportApp.Services
                     }
                 }
 
-                // Fallback: if the JSON is just a plain integer (unlikely in our new format)
+                // Fallback: check if JSON is just a plain integer
                 if (int.TryParse(json, out int plainCount))
                 {
                     return plainCount;
@@ -127,6 +132,7 @@ namespace DashboardReportApp.Services
             }
             return null;
         }
+
 
 
         #endregion

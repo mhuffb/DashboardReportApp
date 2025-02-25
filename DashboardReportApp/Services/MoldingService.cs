@@ -6,11 +6,14 @@ namespace DashboardReportApp.Services
     public class MoldingService
     {
         private readonly string _connectionString;
+        private readonly PressRunLogService _pressRunLogService; // We'll reuse its method
 
-        public MoldingService(IConfiguration configuration)
+        public MoldingService(IConfiguration configuration, PressRunLogService pressRunLogService)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
+            _pressRunLogService = pressRunLogService;
         }
+
 
         // Now returns all data without applying filtering/sorting on the server
         public MoldingModel GetData()
@@ -45,7 +48,7 @@ namespace DashboardReportApp.Services
         private List<T> QueryTable<T>(string tableName) where T : new()
         {
             var results = new List<T>();
-            string query = $"SELECT * FROM {tableName}";
+            string query = $"SELECT * FROM {tableName} ORDER BY ID DESC";
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -94,6 +97,30 @@ namespace DashboardReportApp.Services
             }
             return results;
         }
+        /// <summary>
+        /// Returns a dictionary of { "machineNumber": countValue } for all mapped machines.
+        /// </summary>
+        public async Task<Dictionary<string, int?>> GetAllMachineCountsAsync()
+        {
+            // List out the machines you want to poll. 
+            // Alternatively, you could get them from pressSetups or some table.
+            var machineList = new List<string> {
+            //"1","2","41","45","50","51","57","59","70","74",
+            //"92","95","102","112","124","125","154","156","175"
+            "1","102"
+        };
 
+            var results = new Dictionary<string, int?>();
+
+            // Reuse your existing logic from PressRunLogService
+            foreach (var machine in machineList)
+            {
+                int? count = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+                // If null, we’ll store 0 (or you can store -1 as an error indicator)
+                results[machine] = count;
+            }
+
+            return results;
+        }
     }
 }
