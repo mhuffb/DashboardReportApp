@@ -47,6 +47,7 @@ try
     builder.Services.AddScoped<DashboardReportApp.Services.AdminHoldTagService>();
     builder.Services.AddScoped<DashboardReportApp.Services.MoldingService>();
     builder.Services.AddScoped<DashboardReportApp.Services.AdminProcessChangeRequestService>();
+    builder.Services.AddScoped<DashboardReportApp.Services.SharedService>();
 
     // Add session services
     builder.Services.AddSession(options =>

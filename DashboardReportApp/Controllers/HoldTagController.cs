@@ -8,19 +8,22 @@ namespace DashboardReportApp.Controllers
     [Route("HoldTag")]
     public class HoldTagController : Controller
     {
-        private readonly HoldTagService _service;
+        private readonly HoldTagService _holdTagService;
+        private readonly SharedService _sharedService;
 
-        public HoldTagController(HoldTagService service)
+
+        public HoldTagController(HoldTagService service, SharedService sharedService)
         {
-            _service = service;
+            _holdTagService = service;
+            _sharedService = sharedService;
         }
 
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
-            var parts = await _service.GetPartsAsync();
-            var operators = await _service.GetOperatorsAsync();
-            var records = await _service.GetAllHoldRecordsAsync();
+            var parts = await _sharedService.GetActiveProlinkParts();
+            var operators = await _sharedService.GetAllOperators();
+            var records = await _holdTagService.GetAllHoldRecordsAsync();
 
             ViewData["Parts"] = parts ?? new List<string>();
             ViewData["Operators"] = operators;
@@ -46,7 +49,7 @@ namespace DashboardReportApp.Controllers
             {
                 // Handle validation errors, reload needed data, etc.
                 TempData["ErrorMessage"] = "Please correct the errors and try again.";
-                ViewData["Operators"] = await _service.GetOperatorsAsync();
+                ViewData["Operators"] = await _sharedService.GetAllOperators();
                 return View("Index", record);
             }
 
@@ -56,7 +59,7 @@ namespace DashboardReportApp.Controllers
                 if (file != null && file.Length > 0)
                 {
                     // We'll call a new service method to do the file saving
-                    string savedPath = _service.SaveHoldTagFile(file);
+                    string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1");
                     record.FileAddress1 = savedPath;
                 }
 
@@ -64,21 +67,21 @@ namespace DashboardReportApp.Controllers
                 record.Date = DateTime.Now;
 
                 // 3) Insert the DB record
-                await _service.AddHoldRecordAsync(record);
+                await _holdTagService.AddHoldRecordAsync(record);
 
                 // 4) Generate and print PDF (existing code)
-                string pdfPath = _service.GenerateHoldTagPdf(record);
-                _service.PrintPdf(pdfPath);
+                string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
+                _sharedService.PrintFile("QAHoldTags", pdfPath);
 
-                 //5) Send email (existing code)
-                _service.SendEmailWithAttachment(
-                    "notifications@sintergy.net",
-                    "$inT15851",
-                    "holdtag@sintergy.net",
-                    "smtp.sintergy.net",
-                    pdfPath,
-                    record
-                );
+                string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
+                string body = $"Discrepancy: {record.Discrepancy}\n" +
+                              $"Quantity: {record.Quantity} {record.Unit}\n" +
+                              $"Issued By: {record.IssuedBy}\n" +
+                              $"Issued Date: {record.Date:MM/dd/yyyy}";
+
+                //5) Send email 
+                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, subject, body);
+
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
@@ -153,10 +156,10 @@ namespace DashboardReportApp.Controllers
             try
             {
                 // 1) Save the file on disk
-                var savedPath = _service.SaveHoldTagFile(file);
+                var savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1");
 
                 // 2) Update the DB record with this path
-                await _service.UpdateFileAddress1Async(id, savedPath);
+                await _holdTagService.UpdateFileAddress1Async(id, savedPath);
 
                 TempData["SuccessMessage"] = "File uploaded and updated successfully.";
             }
