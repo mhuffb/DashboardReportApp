@@ -20,12 +20,10 @@
     public class MaintenanceRequestService
     {
         private readonly string _connectionString;
-        private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly string _uploadFolder;
-        public MaintenanceRequestService(IConfiguration configuration, IWebHostEnvironment webHostEnvironment)
+        public MaintenanceRequestService(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _webHostEnvironment = webHostEnvironment;
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
         }
 
@@ -76,8 +74,11 @@
 
         public string GeneratePdf(MaintenanceRequestModel request)
         {
+
             // Path to the input PDF template in wwwroot
-            string inputFilePath = Path.Combine(_webHostEnvironment.WebRootPath, "workorderinput.pdf");
+            string inputFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "workorderinput.pdf");
+
+            Console.WriteLine("InputPdf: " + inputFilePath);
 
             string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequestFile1_{request.Id}_{request.Equipment}.pdf";
 
@@ -160,6 +161,8 @@
             var departmentEmailRecipients = new Dictionary<string, List<string>>
     {
         { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "rseltzer@sintergy.net" } },
+        //{ "Finishing", new List<string> {"mhuff@sintergy.net" } },
+
         { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
         { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
         { "Molding", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "bklebacha@sintergy.net" } },

@@ -24,18 +24,13 @@ try
     builder.Services.AddControllersWithViews();
     builder.Services.AddControllers();
     builder.Services.AddScoped<PressMixBagChangeService>();
-    // Register the PressRunLogService
     builder.Services.AddScoped<PressRunLogService>();
-    // Register SinteringService
     builder.Services.AddTransient<SinterRunLogService>();
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
     builder.Services.AddTransient<ScheduleService>();
     builder.Services.AddScoped<SecondaryRunLogService>();
-
     builder.Services.AddScoped<DashboardReportApp.Services.SecondarySetupLogService>();
-    builder.Services.AddScoped<MaintenanceRequestService>();
-    //builder.Services.AddHostedService<EmailProcessingBackgroundService>();
-
+    builder.Services.AddScoped<DashboardReportApp.Services.MaintenanceRequestService>();
     builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();
     builder.Services.AddScoped<DashboardReportApp.Services.DeviationService>();
     builder.Services.AddScoped<DashboardReportApp.Services.QCSecondaryHoldReturnService>();
@@ -80,7 +75,6 @@ try
         name: "default",
         pattern: "{controller=Home}/{action=Index}/{id?}");
 
-    Log.Information("Application startup completed successfully.");
 
     app.UseEndpoints(endpoints =>
     {
