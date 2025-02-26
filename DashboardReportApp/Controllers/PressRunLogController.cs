@@ -140,5 +140,7 @@ namespace DashboardReportApp.Controllers
             await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes);
             return RedirectToAction("Index");
         }
+
+
     }
 }
