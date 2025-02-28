@@ -107,7 +107,7 @@ namespace DashboardReportApp.Services
             var machineList = new List<string> {
             //"1","2","41","45","50","51","57","59","70","74",
             //"92","95","102","112","124","125","154","156","175"
-            "175","102"
+            "156","102"
         };
 
             var results = new Dictionary<string, int?>();

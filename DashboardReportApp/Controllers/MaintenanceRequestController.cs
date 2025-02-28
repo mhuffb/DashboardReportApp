@@ -235,8 +235,8 @@ namespace DashboardReportApp.Controllers
             }
         }
 
-        [HttpPost("UpdateMaintenanceRequestFile1")]
-        public async Task<IActionResult> UpdateMaintenanceRequestFile1(int id, IFormFile file)
+        [HttpPost("UpdateFileAddress1")]
+        public async Task<IActionResult> UpdateFileAddress1(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
             {
@@ -254,7 +254,7 @@ namespace DashboardReportApp.Controllers
                 }
 
                 var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"MaintenanceRequestFile1_{id}{fileExtension}";
+                var fileName = $"MaintenanceRequestDoc_{id}{fileExtension}";
                 var filePath = Path.Combine(uploadsFolder, fileName);
 
                 Console.WriteLine($"[DEBUG] Saving file at: {filePath}");

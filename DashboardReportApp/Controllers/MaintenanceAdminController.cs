@@ -45,59 +45,81 @@ namespace DashboardReportApp.Controllers
 
         [Route("UpdateRequest")]
         [HttpPost]
-        public async Task<IActionResult> UpdateRequest(MaintenanceRequestModel model, IFormFile? FileUpload)
+        public async Task<IActionResult> UpdateRequest(
+           MaintenanceRequestModel model,
+           IFormFile? FileAddress1,
+           IFormFile? FileAddress2
+       )
         {
-         
             try
             {
-                if (FileUpload != null && FileUpload.Length > 0)
+                // We will store both files in the same folder:
+                var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+                if (!Directory.Exists(uploadsFolder))
                 {
-                    var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-                    if (!Directory.Exists(uploadsFolder))
-                    {
-                        Directory.CreateDirectory(uploadsFolder);
-                    }
+                    Directory.CreateDirectory(uploadsFolder);
+                }
 
-                    var fileExtension = Path.GetExtension(FileUpload.FileName);
-                    var fileName = $"MaintenanceRequestFile2_{model.Id}{fileExtension}";
+                // == FILE 1 ==
+                if (FileAddress1 != null && FileAddress1.Length > 0)
+                {
+                    var fileExtension = Path.GetExtension(FileAddress1.FileName);
+                    var fileName = $"MaintenanceRequestFile1_{model.Id}{fileExtension}";
                     var filePath = Path.Combine(uploadsFolder, fileName);
 
-                    // 🔥 Check if the file already exists and delete it
+                    // If a file with that name already exists, delete it
                     if (System.IO.File.Exists(filePath))
                     {
                         System.IO.File.Delete(filePath);
                     }
 
+                    // Save the uploaded file to the server
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
-                        await FileUpload.CopyToAsync(stream);
+                        await FileAddress1.CopyToAsync(stream);
                     }
 
-                    model.MaintenanceRequestFile2 = filePath; // Save new file path in database
+                    // Store in model so it can be updated in DB
+                    model.FileAddress1 = filePath;
                 }
 
-                // 1) Grab the old StatusDesc (already in model from form post, or re-fetch from DB if needed)
+                // == FILE 2 ==
+                if (FileAddress2 != null && FileAddress2.Length > 0)
+                {
+                    var fileExtension2 = Path.GetExtension(FileAddress2.FileName);
+                    var fileName2 = $"MaintenanceRequestFile2_{model.Id}{fileExtension2}";
+                    var filePath2 = Path.Combine(uploadsFolder, fileName2);
+
+                    if (System.IO.File.Exists(filePath2))
+                    {
+                        System.IO.File.Delete(filePath2);
+                    }
+
+                    using (var stream = new FileStream(filePath2, FileMode.Create))
+                    {
+                        await FileAddress2.CopyToAsync(stream);
+                    }
+
+                    model.FileAddress2 = filePath2;
+                }
+
+                // Merge new status text with old
                 string oldDesc = model.StatusDesc ?? "";
                 string nowString = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-                // e.g. "Closed 2025-02-05 14:32:55 Bob This is new text"
                 string newLine = $"{model.Status} {nowString} {model.StatusUpdatedBy} {model.NewStatusDesc}".Trim();
 
-                // If we want a newline in between old and new
                 model.StatusDesc = string.IsNullOrEmpty(oldDesc)
                     ? newLine
                     : (oldDesc + "\n" + newLine);
 
-
-                // 1) Automatically set ClosedDateTime when status is "Closed"
+                // If status is "Closed," set ClosedDateTime
                 if (model.Status == "Closed")
                 {
                     model.ClosedDateTime = DateTime.Now;
                 }
 
-
-                // Now update in the DB
-                _adminService.UpdateRequest(model, FileUpload);
+                // Update in DB (adjust your method signature if needed)
+                _adminService.UpdateRequest(model);
 
                 TempData["Success"] = "Request updated successfully.";
                 return RedirectToAction("AdminView");
@@ -109,11 +131,8 @@ namespace DashboardReportApp.Controllers
 
                 // Re-fetch requests...
                 var requests = _adminService.GetAllRequests();
-
-                // MISSING: We must also re-fetch operator names
                 ViewBag.OperatorNames = _adminService.GetAllOperatorNames();
 
-                // Then return the same view
                 return View("AdminView", requests);
             }
         }

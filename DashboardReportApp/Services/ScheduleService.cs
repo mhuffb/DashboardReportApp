@@ -9,15 +9,15 @@ namespace DashboardReportApp.Services
 {
     public class ScheduleService
     {
-        private readonly IConfiguration _configuration;
+        private readonly string _connectionStringMySQL;
+        private readonly string _connectionStringDataflex;
 
-        public ScheduleService(IConfiguration configuration)
+        public ScheduleService(IConfiguration config)
         {
-            _configuration = configuration;
+            _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
+            _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
         }
 
-        public string MySQLConnectionString => _configuration.GetConnectionString("MySQLConnection");
-        public string DataflexConnectionString => _configuration.GetConnectionString("DataflexConnection");
 
         public List<SintergyComponent> GetComponentsForMasterId(string masterId, int quantity)
         {
@@ -40,7 +40,7 @@ namespace DashboardReportApp.Services
 
                 visitedMasterIds.Add(currentMasterId);
 
-                using (var connection = new OdbcConnection(DataflexConnectionString))
+                using (var connection = new OdbcConnection(_connectionStringDataflex))
                 {
                     string componentQuery = @"
                         SELECT masteras.master_id, masteras.cmaster_id, masteras.qty 
@@ -143,7 +143,7 @@ namespace DashboardReportApp.Services
             var openParts = new List<SintergyComponent>();
             string query = "SELECT date, part, component, subcomponent, quantity, run, open FROM schedule WHERE open = 1";
 
-            using (var connection = new MySqlConnection(MySQLConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 connection.Open();
                 using (var command = new MySqlCommand(query, connection))
@@ -177,7 +177,7 @@ namespace DashboardReportApp.Services
             string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open, prodNumber) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open, @ProdNumber)";
             string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber)";
 
-            using (var connection = new MySqlConnection(MySQLConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 connection.Open();
                 foreach (var component in viewModel.AllComponents)
@@ -209,7 +209,7 @@ namespace DashboardReportApp.Services
         {
             int nextRunNumber = 0;
 
-            using (var connection = new MySqlConnection(MySQLConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 string query = "SELECT MAX(run) + 1 AS NextRun FROM schedule";
                 connection.Open();
@@ -227,7 +227,7 @@ namespace DashboardReportApp.Services
         {
             int nextProdNumber = 0;
 
-            using (var connection = new MySqlConnection(MySQLConnectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 string query = "SELECT MAX(prodNumber) + 1 AS NextProdNumber FROM schedule";
                 connection.Open();
@@ -245,7 +245,7 @@ namespace DashboardReportApp.Services
         {
             try
             {
-                using (var connection = new MySqlConnection(MySQLConnectionString))
+                using (var connection = new MySqlConnection(_connectionStringMySQL))
                 {
                     connection.Open();
                     foreach (var part in viewModel.OpenParts)

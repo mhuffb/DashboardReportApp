@@ -66,7 +66,8 @@ namespace DashboardReportApp.Services
                             HoldReason = reader["HoldReason"]?.ToString(),
                             HoldResult = reader["HoldResult"]?.ToString(),
                             HoldBy = reader["HoldBy"]?.ToString(),
-                            MaintenanceRequestFile2 = reader["MaintenanceRequestFile2"] == DBNull.Value ? null : reader["MaintenanceRequestFile2"].ToString(),
+                            FileAddress1 = reader["FileAddress1"] == DBNull.Value ? null : reader["FileAddress1"].ToString(),
+                            FileAddress2 = reader["FileAddress2"] == DBNull.Value ? null : reader["FileAddress2"].ToString(),
                             StatusHistory = reader["StatusHistory"]?.ToString(),
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString(),
@@ -81,7 +82,7 @@ namespace DashboardReportApp.Services
         }
 
 
-        public bool UpdateRequest(MaintenanceRequestModel model, IFormFile? file)
+        public bool UpdateRequest(MaintenanceRequestModel model)
         {
             Console.WriteLine($"[DEBUG] Updating request ID: {model.Id}");
 
@@ -94,7 +95,8 @@ namespace DashboardReportApp.Services
             Problem = @Problem,
             ClosedDateTime = @ClosedDateTime,
             HourMeter = @HourMeter,
-            MaintenanceRequestFile2 = @MaintenanceRequestFile2,
+            FileAddress1 = @FileAddress1,
+            FileAddress2 = @FileAddress2,
             Department = @Department,
             StatusDesc = @StatusDesc, 
             Status = @Status
@@ -111,7 +113,8 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@RequestedDate", model.RequestedDate ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Problem", model.Problem);
                     command.Parameters.AddWithValue("@ClosedDateTime", model.ClosedDateTime ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@MaintenanceRequestFile2", model.MaintenanceRequestFile2 ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@FileAddress1", model.FileAddress1 ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@FileAddress2", model.FileAddress2 ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@StatusDesc", model.StatusDesc);
                     command.Parameters.AddWithValue("@Status", model.Status);

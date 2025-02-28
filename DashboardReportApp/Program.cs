@@ -23,26 +23,26 @@ try
     // Add services to the container
     builder.Services.AddControllersWithViews();
     builder.Services.AddControllers();
+    builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
     builder.Services.AddScoped<PressMixBagChangeService>();
     builder.Services.AddScoped<PressRunLogService>();
-    builder.Services.AddTransient<SinterRunLogService>();
-    builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
-    builder.Services.AddTransient<ScheduleService>();
+    builder.Services.AddScoped<SinterRunLogService>();
+    builder.Services.AddScoped<ScheduleService>();
     builder.Services.AddScoped<SecondaryRunLogService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.SecondarySetupLogService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.MaintenanceRequestService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.HoldTagService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.DeviationService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.QCSecondaryHoldReturnService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.ToolingHistoryService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.ProcessChangeRequestService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.MaintenanceAdminService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.AdminDeviationService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.PressSetupService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.AdminHoldTagService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.MoldingService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.AdminProcessChangeRequestService>();
-    builder.Services.AddScoped<DashboardReportApp.Services.SharedService>();
+    builder.Services.AddScoped<SecondarySetupLogService>();
+    builder.Services.AddScoped<MaintenanceRequestService>();
+    builder.Services.AddScoped<HoldTagService>();
+    builder.Services.AddScoped<DeviationService>();
+    builder.Services.AddScoped<QCSecondaryHoldReturnService>();
+    builder.Services.AddScoped<ToolingHistoryService>();
+    builder.Services.AddScoped<ProcessChangeRequestService>();
+    builder.Services.AddScoped<MaintenanceAdminService>();
+    builder.Services.AddScoped<AdminDeviationService>();
+    builder.Services.AddScoped<PressSetupService>();
+    builder.Services.AddScoped<AdminHoldTagService>();
+    builder.Services.AddScoped<MoldingService>();
+    builder.Services.AddScoped<AdminProcessChangeRequestService>();
+    builder.Services.AddScoped<SharedService>();
 
     // Add session services
     builder.Services.AddSession(options =>

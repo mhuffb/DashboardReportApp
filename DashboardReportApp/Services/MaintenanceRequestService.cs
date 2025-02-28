@@ -30,8 +30,8 @@
       
         public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
         {
-            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, MaintenanceRequestFile1, department, downStartDateTime, status) 
-                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @MaintenanceRequestFile1, @department, @downStartDateTime, @status);
+            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, FileAddress1, department, downStartDateTime, status) 
+                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @FileAddress1, @department, @downStartDateTime, @status);
                      SELECT LAST_INSERT_ID();"; // Retrieve the last inserted ID
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -45,7 +45,7 @@
                     command.Parameters.AddWithValue("@problem", request.Problem);
                     command.Parameters.AddWithValue("@downStatus", (bool)request.DownStatus ? 1 : 0);
                     command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@MaintenanceRequestFile1", request.MaintenanceRequestFile1 ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@FileAddress1", request.FileAddress1 ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@status", request.Status);
@@ -80,7 +80,7 @@
 
             Console.WriteLine("InputPdf: " + inputFilePath);
 
-            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequestFile1_{request.Id}_{request.Equipment}.pdf";
+            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequestDoc_{request.Id}_{request.Equipment}.pdf";
 
             try
             {
@@ -136,7 +136,7 @@
                             }
 
                             // Image Attached Note
-                            if (!string.IsNullOrEmpty(request.MaintenanceRequestFile1))
+                            if (!string.IsNullOrEmpty(request.FileAddress1))
                             {
                                 document.Add(new Paragraph("Image Attached").SetFixedPosition(450, 460, 200));
                             }
@@ -160,17 +160,17 @@
             // Define the mapping of departments to email recipients
             var departmentEmailRecipients = new Dictionary<string, List<string>>
     {
-        { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "rseltzer@sintergy.net" } },
-        //{ "Finishing", new List<string> {"mhuff@sintergy.net" } },
+       // { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "rseltzer@sintergy.net" } },
+        { "Finishing", new List<string> {"mhuff@sintergy.net" } },
 
-        { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
-        { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
-        { "Molding", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "bklebacha@sintergy.net" } },
-        { "Packing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "shipping@sintergy.net", "dalmendarez@sintergy.net" } },
-        { "Quality", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net", "jemery@sintergy.net" } },
-        { "Secondary", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jkramer@sintergy.net" } },
-        { "Sintering", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "rseltzer@sintergy.net", "ameholick@sintergy.net" } },
-        { "Tooling", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "cschuckers@sintergy.net" } }
+       // { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
+      //  { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" } },
+       // { "Molding", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "bklebacha@sintergy.net" } },
+       // { "Packing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "shipping@sintergy.net", "dalmendarez@sintergy.net" } },
+       // { "Quality", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net", "jemery@sintergy.net" } },
+       // { "Secondary", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jkramer@sintergy.net" } },
+       // { "Sintering", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "rseltzer@sintergy.net", "ameholick@sintergy.net" } },
+       // { "Tooling", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "cschuckers@sintergy.net" } }
     };
 
             // Validate the department and get recipients
@@ -183,7 +183,7 @@
             var recipients = departmentEmailRecipients[request.Department];
 
             // Add an additional recipient for all emails
-            recipients.Add("mhuff@sintergy.net");
+          //  recipients.Add("mhuff@sintergy.net");
 
             // Send emails to all recipients
             foreach (var recipient in recipients)
@@ -336,7 +336,8 @@ Problem: {request.Problem}"
                             HoldResult = reader["HoldResult"]?.ToString(),
                             HoldBy = reader["HoldBy"]?.ToString(),
                             FileAddress = reader["FileAddress"]?.ToString(),
-                            MaintenanceRequestFile1 = reader["MaintenanceRequestFile1"] == DBNull.Value ? null : reader["MaintenanceRequestFile1"].ToString(),
+                            FileAddress1 = reader["FileAddress1"] == DBNull.Value ? null : reader["FileAddress1"].ToString(),
+                            FileAddress2 = reader["FileAddress2"] == DBNull.Value ? null : reader["FileAddress2"].ToString(),
                             StatusHistory = reader["StatusHistory"]?.ToString(),
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString(),
@@ -356,16 +357,16 @@ Problem: {request.Problem}"
             {
                 using (var connection = new MySqlConnection(_connectionString))
                 {
-                    string query = "UPDATE maintenance SET MaintenanceRequestFile1 = @MaintenanceRequestFile1 WHERE Id = @id";
+                    string query = "UPDATE maintenance SET FileAddress1 = @FileAddress1 WHERE Id = @id";
 
                     await connection.OpenAsync();
                     using (var command = new MySqlCommand(query, connection))
                     {
-                        Console.WriteLine($"[DEBUG] Updating MaintenanceRequestFile1 for ID: {id}");
+                        Console.WriteLine($"[DEBUG] Updating FileAddress1 for ID: {id}");
                         Console.WriteLine($"[DEBUG] File Path: {imagePath}");
 
                         // Ensure NULL safety
-                        command.Parameters.AddWithValue("@MaintenanceRequestFile1", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
+                        command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
                         command.Parameters.AddWithValue("@id", id);
 
                         int rowsAffected = await command.ExecuteNonQueryAsync();
@@ -377,7 +378,7 @@ Problem: {request.Problem}"
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERROR] UpdateMaintenanceRequestFile1 failed: {ex.Message}");
+                Console.WriteLine($"[ERROR] UpdateFileAddress1 failed: {ex.Message}");
                 return false;
             }
         }
@@ -418,25 +419,7 @@ Problem: {request.Problem}"
             }
         }
 
-        public async Task<string> SaveFileAsync(int requestId, IFormFile file)
-        {
-            // Construct a folder path (example: a network share or local folder):
-            var uploadsFolder = Path.Combine("C:", "Uploads");
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
-
-            var fileExtension = Path.GetExtension(file.FileName);
-            var fileName = $"MaintenanceRequestFile1_{requestId}{fileExtension}";
-            var filePath = Path.Combine(uploadsFolder, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // Return the physical path or any path you want to store
-            return filePath;
-        }
+       
 
 
     }
