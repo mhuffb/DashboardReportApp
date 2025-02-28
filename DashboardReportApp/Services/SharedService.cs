@@ -24,7 +24,7 @@ namespace DashboardReportApp.Services
         {
         }
 
-        public void PrintFile(string printerName, string pdfPath)
+        public static void PrintFile(string printerName, string pdfPath)
         {
             if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
             {

@@ -71,7 +71,8 @@ namespace DashboardReportApp.Controllers
 
                 // 4) Generate and print PDF (existing code)
                 string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
-                _sharedService.PrintFile("QAHoldTags", pdfPath);
+
+                SharedService.PrintFile("QAHoldTags", pdfPath);
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
                 string body = $"Discrepancy: {record.Discrepancy}\n" +
