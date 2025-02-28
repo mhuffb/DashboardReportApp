@@ -6,9 +6,16 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <div class="container-fluid mt-4">
     <h2 class="text-center mb-4">Process Change Requests</h2>
+
+    <!-- Moved "Add New Request" button right below the header -->
+    <div class="text-center mb-4">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRequestModal">
+            + Add New Request
+        </button>
+    </div>
+
     <!-- Combined QR Codes -->
     <div class="row justify-content-center">
-
         <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
     </div>
     <div class="d-flex justify-content-evenly align-items-center mb-4">
@@ -22,12 +29,6 @@
             <canvas id="current-page-qr" style="width:128px; height:128px;"></canvas>
             <div class="mt-2">View on your device</div>
         </div>
-    </div>
-    <!-- Button to open the "Add New Request" modal -->
-    <div class="mb-3 text-end">
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRequestModal">
-            + Add New Request
-        </button>
     </div>
 
     @if (!ViewData.ModelState.IsValid)
@@ -46,13 +47,13 @@
         </div>
     }
 
-    <!-- Search and Date Filter -->
-    <div class="row mb-3">
-        <div class="col-md-6">
+    <!-- Centered Search and Date Range Filter with Clear Filters button -->
+    <div class="d-flex justify-content-center mb-3">
+        <div class="input-group" style="max-width: 500px;">
             <input type="text" id="pcrSearchInput" class="form-control" placeholder="Search requests..." />
-        </div>
-        <div class="col-md-6">
-            <input type="date" id="pcrDateFilter" class="form-control" placeholder="Filter by Req Date" />
+            <input type="date" id="pcrStartDateFilter" class="form-control" placeholder="From" />
+            <input type="date" id="pcrEndDateFilter" class="form-control" placeholder="To" />
+            <button class="btn btn-secondary" id="clearFiltersBtn" type="button">Clear Filters</button>
         </div>
     </div>
 
@@ -265,11 +266,11 @@
             const tbody = table.querySelector('tbody');
 
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                if(!th.dataset.label) {
+                if (!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
                 }
                 th.addEventListener('click', () => {
-                    if(currentSortColumn === index) {
+                    if (currentSortColumn === index) {
                         currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
                     } else {
                         currentSortColumn = index;
@@ -281,11 +282,19 @@
             });
 
             document.getElementById('pcrSearchInput').addEventListener('input', updateTable);
-            document.getElementById('pcrDateFilter').addEventListener('change', updateTable);
+            document.getElementById('pcrStartDateFilter').addEventListener('change', updateTable);
+            document.getElementById('pcrEndDateFilter').addEventListener('change', updateTable);
+            document.getElementById('clearFiltersBtn').addEventListener('click', function () {
+                document.getElementById('pcrSearchInput').value = '';
+                document.getElementById('pcrStartDateFilter').value = '';
+                document.getElementById('pcrEndDateFilter').value = '';
+                updateTable();
+            });
 
             function updateTable() {
                 const searchQuery = document.getElementById('pcrSearchInput').value.trim().toLowerCase();
-                const selectedDate = document.getElementById('pcrDateFilter').value;
+                const startDateValue = document.getElementById('pcrStartDateFilter').value;
+                const endDateValue = document.getElementById('pcrEndDateFilter').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
                 // Sorting
@@ -309,8 +318,7 @@
                 }
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filtering: search all columns except last (Actions)
-                // Date filter on "Req Date" at index 4
+                // Filtering: search all columns except the last (Actions)
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
@@ -323,11 +331,28 @@
                                 break;
                             }
                         }
-                        if(!found) show = false;
+                        if (!found) show = false;
                     }
-                    if (selectedDate) {
-                        const dateCell = cells[4];
-                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
+
+                    // Date range filter on "Req Date" at index 4
+                    let rowDateStr = cells[4].innerText.trim();
+                    if (rowDateStr) {
+                        let rowDate = new Date(rowDateStr);
+                        if (startDateValue) {
+                            let startDate = new Date(startDateValue);
+                            if (rowDate < startDate) {
+                                show = false;
+                            }
+                        }
+                        if (endDateValue) {
+                            let endDate = new Date(endDateValue);
+                            if (rowDate > endDate) {
+                                show = false;
+                            }
+                        }
+                    } else {
+                        // If there's no date but a date filter is applied, hide the row
+                        if (startDateValue || endDateValue) {
                             show = false;
                         }
                     }
@@ -390,7 +415,7 @@
                 });
             });
 
-            modalElement.addEventListener('hidden.bs.modal', function() {
+            modalElement.addEventListener('hidden.bs.modal', function () {
                 modalImage.src = '';
                 modalPDF.src = '';
                 modalImage.style.display = 'none';

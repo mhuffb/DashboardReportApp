@@ -4,26 +4,17 @@
     <h2 class="text-center mb-4">Admin Panel - Edit Hold Records</h2>
     <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
 
-    @if (TempData["ErrorMessage"] != null)
-    {
-        <div class="alert alert-danger fade show" role="alert">
-            @TempData["ErrorMessage"]
+    <!-- Filters: Search and Date Range with Clear Filters Button -->
+    <div class="row mb-3 justify-content-center">
+        <div class="col-auto">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="max-width: 200px;" />
         </div>
-    }
-    @if (TempData["SuccessMessage"] != null)
-    {
-        <div class="alert alert-success fade show" role="alert">
-            @TempData["SuccessMessage"]
+        <div class="col-auto d-flex">
+            <input type="date" id="startDateFilter" class="form-control me-2" style="max-width: 150px;" />
+            <input type="date" id="endDateFilter" class="form-control" style="max-width: 150px;" />
         </div>
-    }
-
-    <!-- Filters: Search and Date -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <input type="text" id="searchInput" class="form-control" placeholder="Search..." />
-        </div>
-        <div class="col-md-6">
-            <input type="date" id="dateFilter" class="form-control" />
+        <div class="col-auto">
+            <button id="clearFilters" class="btn btn-secondary">Clear Filters</button>
         </div>
     </div>
 
@@ -44,9 +35,8 @@
                     <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
                     <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
                     <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
-                    <!-- Show both FileAddress1 and FileAddress2 in separate columns -->
-                    <th style="width: 5%;">File 1</th>
-                    <th style="width: 5%;">File 2</th>
+                    <th class="sortable" data-label="File1" style="width: 5%;">File 1</th>
+                    <th class="sortable" data-label="File2" style="width: 5%;">File 2</th>
                     <th style="width: 4%;">Actions</th>
                 </tr>
             </thead>
@@ -68,20 +58,20 @@
                         <td>@record.PcsScrapped</td>
                         <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>
-                            <!-- Preview button for FileAddress1 if present -->
                             @if (!string.IsNullOrEmpty(record.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn"
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
                                         data-file-path="@record.FileAddress1">
                                     Preview 1
                                 </button>
                             }
                         </td>
                         <td>
-                            <!-- Preview button for FileAddress2 if present -->
                             @if (!string.IsNullOrEmpty(record.FileAddress2))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn"
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
                                         data-file-path="@record.FileAddress2">
                                     Preview 2
                                 </button>
@@ -123,11 +113,9 @@
                 <h5 class="modal-title" id="editModalLabel">Edit Record</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <!-- Make sure your POST method can handle the two file uploads (FileUpload1, FileUpload2) -->
             <form asp-controller="AdminHoldTag" asp-action="UpdateRequest" method="post" enctype="multipart/form-data">
                 <div class="modal-body">
                     <input type="hidden" name="Id" id="edit-id" />
-
                     <div class="mb-3">
                         <label for="edit-part" class="form-label">Part</label>
                         <input type="text" name="Part" id="edit-part" class="form-control" />
@@ -140,7 +128,6 @@
                         <label for="edit-date" class="form-label">Date</label>
                         <input type="date" name="Date" id="edit-date" class="form-control" />
                     </div>
-
                     <!-- Issued By Dropdown -->
                     <div class="mb-3">
                         <label for="edit-issuedby" class="form-label">Issued By</label>
@@ -155,7 +142,6 @@
                             }
                         </select>
                     </div>
-
                     <div class="mb-3">
                         <label for="edit-disposition" class="form-label">Disposition</label>
                         <textarea name="Disposition" id="edit-disposition" class="form-control"></textarea>
@@ -174,8 +160,6 @@
                             }
                         </select>
                     </div>
-
-                    <!-- Rework Instructions -->
                     <div class="mb-3">
                         <label for="edit-reworkinstr" class="form-label">Rework Instructions</label>
                         <textarea name="ReworkInstr" id="edit-reworkinstr" class="form-control"></textarea>
@@ -194,7 +178,6 @@
                             }
                         </select>
                     </div>
-
                     <div class="mb-3">
                         <label for="edit-quantity" class="form-label">Quantity</label>
                         <input type="number" name="Quantity" id="edit-quantity" class="form-control" />
@@ -211,23 +194,17 @@
                         <label for="edit-datecompleted" class="form-label">Date Completed</label>
                         <input type="date" name="DateCompleted" id="edit-datecompleted" class="form-control" />
                     </div>
-
-                    <!-- FileAddress1 / File 1 -->
+                    <!-- File 1 -->
                     <div class="mb-3">
                         <label class="form-label">File 1</label>
-                        <!-- Hidden input to store existing path -->
                         <input type="hidden" name="FileAddress1" id="edit-fileaddress1" />
-                        <!-- File upload for new or updated file -->
                         <input type="file" name="FileUpload1" id="edit-file1" class="form-control" accept="image/*,.pdf" />
                         <div id="current-file1" class="mt-2 text-break"></div>
                     </div>
-
-                    <!-- FileAddress2 / File 2 -->
+                    <!-- File 2 -->
                     <div class="mb-3">
                         <label class="form-label">File 2</label>
-                        <!-- Hidden input to store existing path -->
                         <input type="hidden" name="FileAddress2" id="edit-fileaddress2" />
-                        <!-- File upload for new or updated file -->
                         <input type="file" name="FileUpload2" id="edit-file2" class="form-control" accept="image/*,.pdf" />
                         <div id="current-file2" class="mt-2 text-break"></div>
                     </div>
@@ -242,6 +219,13 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden Form for Direct File Upload (replaces modal for file updates) -->
+<form id="hiddenUpdateFileForm" asp-action="UpdateFile" method="post" enctype="multipart/form-data" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="hiddenRecordId" value="" />
+    <input type="file" name="file" id="hiddenFileInput" />
+</form>
 
 <!-- Bootstrap Modal for File Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
@@ -261,210 +245,245 @@
 
 @section Scripts {
     <script>
+        // (Optional) Copy selected part from dropdown into text input for modal
         document.addEventListener('DOMContentLoaded', function () {
-            //---------------------------------------------------------
-            // 1) File Preview Logic
-            const imageModalElement = document.getElementById('imageModal');
-            const modalImage = document.getElementById('modalImage');
-            const modalFile = document.getElementById('modalFile');
+            const partDropdown = document.getElementById('PartDropdown');
+            const customPartInput = document.getElementById('ModalCustomPartInput');
+            if (partDropdown && customPartInput) {
+                partDropdown.addEventListener('change', () => {
+                    customPartInput.value = partDropdown.value;
+                });
+            }
+        });
+    </script>
 
-            document.querySelectorAll('.fetch-image-btn').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    const filePath = this.dataset.filePath;
+    <!-- QR Code Generation for Both QR Codes -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var currentUrl = window.location.href;
+            QRCode.toCanvas(document.getElementById('current-page-qr'), currentUrl, { width: 128 }, function (error) {
+                if (error) console.error(error);
+                else console.log("Current page QR code generated!");
+            });
+            var wifiData = `WIFI:T:WPA;S:Sintergy-WiFi;P:5intergyW1F1;;`;
+            QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, { width: 128 }, function (error) {
+                if (error) console.error(error);
+                else console.log("Wi‑Fi QR code generated!");
+            });
+        });
+    </script>
+
+    <!-- Table Filtering & Sorting with Clear Filters -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const searchInput = document.getElementById("searchInput");
+            const startDateInput = document.getElementById("startDateFilter");
+            const endDateInput = document.getElementById("endDateFilter");
+            const clearBtn = document.getElementById("clearFilters");
+            const tbody = document.querySelector(".custom-table tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            const headers = document.querySelectorAll(".sortable");
+
+            // Search and date range event listeners
+            searchInput.addEventListener("input", updateTable);
+            startDateInput.addEventListener("change", updateTable);
+            endDateInput.addEventListener("change", updateTable);
+
+            // Clear Filters Button
+            clearBtn.addEventListener("click", function () {
+                searchInput.value = "";
+                startDateInput.value = "";
+                endDateInput.value = "";
+                rows.forEach(row => row.style.display = "");
+            });
+
+            // Sorting function for headers
+            headers.forEach((header, index) => {
+                header.addEventListener("click", function () {
+                    const order = header.dataset.order = -(header.dataset.order || -1);
+                    const type = header.dataset.label;
+                    rows.sort((a, b) => {
+                        const cellA = a.children[index].textContent.trim();
+                        const cellB = b.children[index].textContent.trim();
+                        if (type === "Date") {
+                            return order * (new Date(cellA) - new Date(cellB));
+                        } else if (!isNaN(cellA) && !isNaN(cellB)) {
+                            return order * (Number(cellA) - Number(cellB));
+                        } else {
+                            return order * cellA.localeCompare(cellB);
+                        }
+                    });
+                    tbody.innerHTML = "";
+                    rows.forEach(row => tbody.appendChild(row));
+                });
+            });
+
+            function updateTable() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const startDateValue = startDateInput.value;
+                const endDateValue = endDateInput.value;
+                rows.forEach(row => {
+                    let show = true;
+                    // Search filter: Check entire row text
+                    if (searchTerm && !row.textContent.toLowerCase().includes(searchTerm)) {
+                        show = false;
+                    }
+                    // Date range filter (assuming Date is in column index 3)
+                    const dateCell = row.children[3];
+                    if (dateCell && dateCell.textContent.trim()) {
+                        const rowDate = new Date(dateCell.textContent.trim());
+                        if (startDateValue) {
+                            const startDate = new Date(startDateValue);
+                            if (rowDate < startDate) show = false;
+                        }
+                        if (endDateValue) {
+                            const endDate = new Date(endDateValue);
+                            if (rowDate > endDate) show = false;
+                        }
+                    }
+                    row.style.display = show ? "" : "none";
+                });
+            }
+        });
+    </script>
+
+    <!-- Direct File Upload Script for "Add / Update File1" -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const addFileButtons = document.querySelectorAll(".add-file-btn");
+            const hiddenFileInput = document.getElementById("hiddenFileInput");
+            const hiddenRecordId = document.getElementById("hiddenRecordId");
+            const hiddenUpdateFileForm = document.getElementById("hiddenUpdateFileForm");
+
+            addFileButtons.forEach(button => {
+                button.addEventListener("click", function () {
+                    const recordId = button.getAttribute("data-id");
+                    hiddenRecordId.value = recordId;
+                    hiddenFileInput.click();
+                });
+            });
+
+            hiddenFileInput.addEventListener("change", function () {
+                if (hiddenFileInput.files.length > 0) {
+                    hiddenUpdateFileForm.submit();
+                }
+            });
+        });
+    </script>
+
+    <!-- Event Delegation for Edit Buttons -->
+    <script>
+        // Use event delegation so that newly sorted/filtered rows still respond
+        document.querySelector(".custom-table tbody").addEventListener("click", function(e) {
+            const btn = e.target.closest(".edit-btn");
+            if (!btn) return;
+            // Gather data from button's dataset
+            const id = btn.dataset.id;
+            const part = btn.dataset.part;
+            const discrepancy = btn.dataset.discrepancy;
+            const date = btn.dataset.date;
+            const issuedBy = btn.dataset.issuedby;
+            const disposition = btn.dataset.disposition;
+            const dispositionBy = btn.dataset.dispositionby;
+            const reworkInstr = btn.dataset.reworkinstr;
+            const reworkInstrBy = btn.dataset.reworkinstrby;
+            const quantity = btn.dataset.quantity;
+            const unit = btn.dataset.unit;
+            const pcsScrapped = btn.dataset.pcsscrapped;
+            const dateCompleted = btn.dataset.datecompleted;
+            const fileAddress1 = btn.dataset.fileaddress1;
+            const fileAddress2 = btn.dataset.fileaddress2;
+
+            // Populate modal fields
+            document.getElementById("edit-id").value = id;
+            document.getElementById("edit-part").value = part;
+            document.getElementById("edit-discrepancy").value = discrepancy;
+            document.getElementById("edit-date").value = date;
+            document.getElementById("edit-issuedby").value = issuedBy;
+            document.getElementById("edit-disposition").value = disposition;
+            document.getElementById("edit-dispositionby").value = dispositionBy;
+            document.getElementById("edit-reworkinstr").value = reworkInstr;
+            document.getElementById("edit-reworkinstrby").value = reworkInstrBy;
+            document.getElementById("edit-quantity").value = quantity;
+            document.getElementById("edit-unit").value = unit;
+            document.getElementById("edit-pcsscrapped").value = pcsScrapped;
+            document.getElementById("edit-datecompleted").value = dateCompleted;
+
+            // File 1
+            document.getElementById("edit-fileaddress1").value = fileAddress1 || "";
+            const currentFile1Div = document.getElementById("current-file1");
+            if (fileAddress1) {
+                currentFile1Div.innerHTML = `<a href="${fileAddress1}" target="_blank">Current File 1</a>`;
+            } else {
+                currentFile1Div.innerHTML = "No file uploaded for File 1";
+            }
+
+            // File 2
+            document.getElementById("edit-fileaddress2").value = fileAddress2 || "";
+            const currentFile2Div = document.getElementById("current-file2");
+            if (fileAddress2) {
+                currentFile2Div.innerHTML = `<a href="${fileAddress2}" target="_blank">Current File 2</a>`;
+            } else {
+                currentFile2Div.innerHTML = "No file uploaded for File 2";
+            }
+
+            // Show edit modal
+            new bootstrap.Modal(document.getElementById("editModal")).show();
+        });
+    </script>
+
+    <!-- File Preview Script -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const previewButtons = document.querySelectorAll(".fetch-image-btn");
+            const modal = new bootstrap.Modal(document.getElementById("imageModal"));
+            const modalImage = document.getElementById("modalImage");
+            const modalFile = document.getElementById("modalFile");
+
+            previewButtons.forEach(button => {
+                button.addEventListener("click", function () {
+                    const filePath = button.getAttribute("data-file-path");
                     if (!filePath) {
-                        alert("No file path provided.");
+                        alert("File not found.");
                         return;
                     }
-                    // Adjust this route as needed. You might have:
-                    // /AdminHoldTag/FetchFile?filePath=...
-                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
+                    fetch(`/HoldTag/FetchImage?filePath=${encodeURIComponent(filePath)}`)
                         .then(response => {
-                            if (!response.ok) throw new Error("Failed to fetch file.");
+                            if (!response.ok) throw new Error("Failed to fetch the file.");
                             return response.json();
                         })
                         .then(data => {
-                            if (data.success) {
-                                // Check extension
-                                if (data.url.toLowerCase().endsWith(".pdf")) {
-                                    modalFile.src = data.url;
-                                    modalFile.style.display = 'block';
-                                    modalImage.style.display = 'none';
-                                    modalImage.src = '';
-                                } else {
-                                    modalImage.src = data.url;
-                                    modalImage.style.display = 'block';
-                                    modalFile.style.display = 'none';
-                                    modalFile.src = '';
-                                }
-                                new bootstrap.Modal(imageModalElement).show();
-                            } else {
+                            if (!data.success) {
                                 alert(`Error: ${data.message}`);
+                                return;
                             }
+                            const previewUrl = data.url;
+                            const fileExtension = filePath.split('.').pop().toLowerCase();
+                            modalImage.style.display = "none";
+                            modalFile.style.display = "none";
+                            if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(fileExtension)) {
+                                modalImage.src = previewUrl;
+                                modalImage.style.display = "block";
+                            } else if (fileExtension === "pdf") {
+                                modalFile.src = previewUrl;
+                                modalFile.style.display = "block";
+                            } else {
+                                alert("Unsupported file type.");
+                                return;
+                            }
+                            modal.show();
                         })
                         .catch(error => {
-                            console.error('Error fetching file:', error);
+                            console.error("Error fetching file:", error);
                             alert("An error occurred while fetching the file.");
                         });
                 });
             });
 
-            imageModalElement.addEventListener('hidden.bs.modal', function () {
-                // Reset
-                modalImage.src = '';
-                modalImage.style.display = 'none';
-                modalFile.src = '';
-                modalFile.style.display = 'none';
+            document.getElementById("imageModal").addEventListener("hidden.bs.modal", function () {
+                modalImage.src = "";
+                modalFile.src = "";
             });
-
-            //---------------------------------------------------------
-            // 2) Edit Record Modal Setup
-            document.querySelectorAll('.edit-btn').forEach(button => {
-                button.addEventListener('click', function () {
-                    // Gather data from button attributes
-                    const id            = this.dataset.id;
-                    const part          = this.dataset.part;
-                    const discrepancy   = this.dataset.discrepancy;
-                    const date          = this.dataset.date;
-                    const issuedBy      = this.dataset.issuedby;
-                    const disposition   = this.dataset.disposition;
-                    const dispositionBy = this.dataset.dispositionby;
-                    const reworkInstr   = this.dataset.reworkinstr;
-                    const reworkInstrBy = this.dataset.reworkinstrby;
-                    const quantity      = this.dataset.quantity;
-                    const unit          = this.dataset.unit;
-                    const pcsScrapped   = this.dataset.pcsscrapped;
-                    const dateCompleted = this.dataset.datecompleted;
-                    const fileAddress1  = this.dataset.fileaddress1;
-                    const fileAddress2  = this.dataset.fileaddress2;
-
-                    // Populate modal fields
-                    document.getElementById('edit-id').value = id;
-                    document.getElementById('edit-part').value = part;
-                    document.getElementById('edit-discrepancy').value = discrepancy;
-                    document.getElementById('edit-date').value = date;
-                    document.getElementById('edit-issuedby').value = issuedBy;
-                    document.getElementById('edit-disposition').value = disposition;
-                    document.getElementById('edit-dispositionby').value = dispositionBy;
-                    document.getElementById('edit-reworkinstr').value = reworkInstr;
-                    document.getElementById('edit-reworkinstrby').value = reworkInstrBy;
-                    document.getElementById('edit-quantity').value = quantity;
-                    document.getElementById('edit-unit').value = unit;
-                    document.getElementById('edit-pcsscrapped').value = pcsScrapped;
-                    document.getElementById('edit-datecompleted').value = dateCompleted;
-
-                    // File 1
-                    document.getElementById('edit-fileaddress1').value = fileAddress1 || '';
-                    const currentFile1Div = document.getElementById('current-file1');
-                    if (fileAddress1) {
-                        currentFile1Div.innerHTML = `<a href="${fileAddress1}" target="_blank">Current File 1</a>`;
-                    } else {
-                        currentFile1Div.innerHTML = 'No file uploaded for File 1';
-                    }
-
-                    // File 2
-                    document.getElementById('edit-fileaddress2').value = fileAddress2 || '';
-                    const currentFile2Div = document.getElementById('current-file2');
-                    if (fileAddress2) {
-                        currentFile2Div.innerHTML = `<a href="${fileAddress2}" target="_blank">Current File 2</a>`;
-                    } else {
-                        currentFile2Div.innerHTML = 'No file uploaded for File 2';
-                    }
-
-                    // Show modal
-                    new bootstrap.Modal(document.getElementById('editModal')).show();
-                });
-            });
-
-            //---------------------------------------------------------
-            // 3) Filtering & Sorting Logic
-            let currentSortColumn = null;
-            let currentSortDir = 'asc';
-
-            const table = document.querySelector('.custom-table');
-            const tbody = table.querySelector('tbody');
-
-            // Click event for sortable headers
-            document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                if (!th.dataset.label) {
-                    th.dataset.label = th.innerText.trim();
-                }
-                th.addEventListener('click', () => {
-                    if (currentSortColumn === index) {
-                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
-                    } else {
-                        currentSortColumn = index;
-                        currentSortDir = 'asc';
-                    }
-                    updateTable();
-                    updateSortIndicators();
-                });
-            });
-
-            function updateTable() {
-                const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
-                const selectedDate = document.getElementById('dateFilter').value;
-                let rows = Array.from(tbody.querySelectorAll('tr'));
-
-                // Sorting
-                if (currentSortColumn !== null) {
-                    rows.sort((a, b) => {
-                        const aCells = a.querySelectorAll('td');
-                        const bCells = b.querySelectorAll('td');
-                        const aText = aCells[currentSortColumn]?.innerText.trim() || '';
-                        const bText = bCells[currentSortColumn]?.innerText.trim() || '';
-                        const aNum = parseFloat(aText);
-                        const bNum = parseFloat(bText);
-
-                        if (!isNaN(aNum) && !isNaN(bNum)) {
-                            return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
-                        } else {
-                            return currentSortDir === 'asc'
-                                ? aText.localeCompare(bText)
-                                : bText.localeCompare(aText);
-                        }
-                    });
-                }
-                rows.forEach(row => tbody.appendChild(row));
-
-                // Filtering
-                rows.forEach(row => {
-                    let show = true;
-                    const cells = row.querySelectorAll('td');
-                    if (searchQuery) {
-                        let found = false;
-                        for (let i = 0; i < cells.length; i++) {
-                            if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) show = false;
-                    }
-                    if (selectedDate) {
-                        // Assuming Date is at column index 3
-                        const dateCell = cells[3];
-                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
-                            show = false;
-                        }
-                    }
-                    row.style.display = show ? '' : 'none';
-                });
-            }
-
-            function updateSortIndicators() {
-                document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                    th.innerText = th.dataset.label;
-                    if (index === currentSortColumn) {
-                        th.innerText += currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
-                    }
-                });
-            }
-
-            document.getElementById('searchInput').addEventListener('input', updateTable);
-            document.getElementById('dateFilter').addEventListener('change', updateTable);
-
-            // Initial table load
-            updateTable();
         });
     </script>
 }

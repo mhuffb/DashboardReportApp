@@ -10,15 +10,23 @@
         </div>
     }
 
-    <!-- Filter Section -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <input type="text" id="deviationSearchInput" class="form-control" placeholder="Search deviations..." />
+    <!-- Filter Section: Shrunk and Centered with Date Range and Clear Filters Button -->
+    <div class="row mb-3 justify-content-center">
+        <div class="col-auto">
+            <input type="text" id="deviationSearchInput" class="form-control"
+                   placeholder="Search deviations..." style="max-width:200px;" />
         </div>
-        <div class="col-md-6">
-            <input type="date" id="deviationDateFilter" class="form-control" placeholder="Filter by Sent Date" />
+        <div class="col-auto d-flex">
+            <input type="date" id="deviationStartDate" class="form-control me-2"
+                   style="max-width:150px;" />
+            <input type="date" id="deviationEndDate" class="form-control"
+                   style="max-width:150px;" />
+        </div>
+        <div class="col-auto">
+            <button id="clearFilters" class="btn btn-secondary">Clear Filters</button>
         </div>
     </div>
+
 
     <!-- Table -->
     <div class="table-responsive">
@@ -300,18 +308,16 @@
             });
         });
 
-        // ----------------------------
-        // Filtering & Sorting Logic for the Table
-        document.addEventListener('DOMContentLoaded', function () {
+        // Filtering & Sorting Logic for the Table with Date Range Filtering
+                document.addEventListener('DOMContentLoaded', function () {
             let currentSortColumn = null;
             let currentSortDir = 'asc';
             const table = document.querySelector('.custom-table');
             const tbody = table.querySelector('tbody');
 
+            // Attach click events to sortable headers
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                if (!th.dataset.label) {
-                    th.dataset.label = th.innerText.trim();
-                }
+                if (!th.dataset.label) { th.dataset.label = th.innerText.trim(); }
                 th.addEventListener('click', () => {
                     if (currentSortColumn === index) {
                         currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
@@ -324,14 +330,26 @@
                 });
             });
 
+            // Listen for input changes on the search and date range fields
             document.getElementById('deviationSearchInput').addEventListener('input', updateTable);
-            document.getElementById('deviationDateFilter').addEventListener('change', updateTable);
+            document.getElementById('deviationStartDate').addEventListener('change', updateTable);
+            document.getElementById('deviationEndDate').addEventListener('change', updateTable);
+
+            // Clear Filters Button
+            document.getElementById('clearFilters').addEventListener('click', function () {
+                document.getElementById('deviationSearchInput').value = '';
+                document.getElementById('deviationStartDate').value = '';
+                document.getElementById('deviationEndDate').value = '';
+                updateTable();
+            });
 
             function updateTable() {
                 const searchQuery = document.getElementById('deviationSearchInput').value.trim().toLowerCase();
-                const selectedDate = document.getElementById('deviationDateFilter').value;
+                const startDateValue = document.getElementById('deviationStartDate').value;
+                const endDateValue = document.getElementById('deviationEndDate').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
+                // Sorting
                 if (currentSortColumn !== null) {
                     rows.sort((a, b) => {
                         const aCells = a.querySelectorAll('td');
@@ -343,30 +361,42 @@
                         if (!isNaN(aNum) && !isNaN(bNum)) {
                             return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
                         } else {
-                            return currentSortDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                            return currentSortDir === 'asc'
+                                ? aText.localeCompare(bText)
+                                : bText.localeCompare(aText);
                         }
                     });
                 }
                 rows.forEach(row => tbody.appendChild(row));
 
+                // Filtering: Check search query and date range (Sent Date in column index 2)
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
+                    // Search filter
                     if (searchQuery) {
                         let found = false;
-                        for (let i = 0; i < cells.length - 1; i++) {
+                        for (let i = 0; i < cells.length; i++) {
                             if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
                                 found = true;
                                 break;
                             }
                         }
-                        if (!found) show = false;
+                        if (!found) { show = false; }
                     }
-                    if (selectedDate) {
-                        const dateCell = cells[2]; // Sent Date column
-                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
-                            show = false;
+
+                    // Date range filter on Sent Date (assumed to be column index 2)
+                    const dateCell = cells[2];
+                    if (dateCell && dateCell.innerText.trim() !== "") {
+                        const rowDate = new Date(dateCell.innerText.trim());
+                        if (startDateValue) {
+                            const startDate = new Date(startDateValue);
+                            if (rowDate < startDate) { show = false; }
+                        }
+                        if (endDateValue) {
+                            const endDate = new Date(endDateValue);
+                            if (rowDate > endDate) { show = false; }
                         }
                     }
                     row.style.display = show ? '' : 'none';
@@ -384,5 +414,6 @@
 
             updateTable();
         });
+
     </script>
 }

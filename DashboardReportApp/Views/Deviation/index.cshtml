@@ -1,12 +1,22 @@
 ﻿@model DashboardReportApp.Models.DeviationIndexViewModel
 @using System.Text.Json
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
 <div class="container-fluid px-3 mt-4">
     <h2 class="text-center mb-4">Deviations</h2>
+
+    <!-- NEW: Add Request Button -->
+    <div class="text-center mb-4">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRequestModal">
+            Add Request
+        </button>
+    </div>
+
     <!-- Combined QR Codes -->
     <div class="row justify-content-center">
-
-        <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
+        <h8 class="text-center mb-4">
+            You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.
+        </h8>
     </div>
     <div class="d-flex justify-content-evenly align-items-center mb-4">
         <!-- Wi‑Fi QR Code -->
@@ -20,102 +30,81 @@
             <div class="mt-2">View on your device</div>
         </div>
     </div>
-    <!-- Deviation Creation Form -->
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h4 class="text-center mb-3">Create a New Deviation</h4>
 
-                    <form asp-action="Create" method="post" enctype="multipart/form-data">
-                        @Html.AntiForgeryToken()
+    <!-- (Existing Deviation Creation Form Removed) -->
+</div>
 
-                        <div class="mb-3">
-                            <label for="Part" class="form-label">Part</label>
-                            <input type="text" class="form-control" id="Part" name="Part"
-                                   asp-for="FormModel.Part" required />
-                            <span asp-validation-for="FormModel.Part" class="text-danger"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="Discrepancy" class="form-label">Discrepancy</label>
-                            <textarea class="form-control text-area-large" id="Discrepancy" name="Discrepancy"
-                                      asp-for="FormModel.Discrepancy" required></textarea>
-                            <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="Operator" class="form-label">Operator</label>
-                            <select class="form-select" id="Operator" name="Operator"
-                                    asp-for="FormModel.Operator" required>
-                                <option value="">-- Select an Operator --</option>
-                                @if (ViewData["Operators"] != null)
-                                {
-                                    foreach (var operatorName in (List<string>)ViewData["Operators"])
-                                    {
-                                        <option value="@operatorName">@operatorName</option>
-                                    }
-                                }
-                            </select>
-                            <span asp-validation-for="FormModel.Operator" class="text-danger"></span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="CommMethod" class="form-label">Communication Method</label>
-                            <select class="form-select" id="CommMethod" name="CommMethod"
-                                    asp-for="FormModel.CommMethod" required>
-                                <option value="">-- Select --</option>
-                                <option value="Phone Call">Phone Call</option>
-                                <option value="Text Message">Text Message</option>
-                                <option value="Email">Email</option>
-                                <option value="In Person">In Person</option>
-                            </select>
-                            <span asp-validation-for="FormModel.CommMethod" class="text-danger"></span>
-                        </div>
-
-                        <!-- File Upload for FileAddress1 -->
-                        <div class="mb-3">
-                            <label for="FileAddress1" class="form-label">Attach File 1 (Optional)</label>
-                            <input type="file" class="form-control" id="FileAddress1" name="file" />
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-send"></i> Submit Deviation
-                        </button>
-                    </form>
-                </div>
+<!-- Modal: Add Request -->
+<div class="modal fade" id="addRequestModal" tabindex="-1" aria-labelledby="addRequestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addRequestModalLabel">Add Deviation Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+            <form asp-action="Create" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="NewPart" class="form-label">Part</label>
+                        <input type="text" class="form-control" id="NewPart" name="Part" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="NewDiscrepancy" class="form-label">Discrepancy</label>
+                        <textarea class="form-control" id="NewDiscrepancy" name="Discrepancy" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="NewOperator" class="form-label">Operator</label>
+                        <select class="form-select" id="NewOperator" name="Operator" required>
+                            <option value="">-- Select an Operator --</option>
+                            @if (ViewData["Operators"] != null)
+                            {
+                                foreach (var operatorName in (List<string>)ViewData["Operators"])
+                                {
+                                    <option value="@operatorName">@operatorName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="NewCommMethod" class="form-label">Communication Method</label>
+                        <select class="form-select" id="NewCommMethod" name="CommMethod" required>
+                            <option value="">-- Select --</option>
+                            <option value="Phone Call">Phone Call</option>
+                            <option value="Text Message">Text Message</option>
+                            <option value="Email">Email</option>
+                            <option value="In Person">In Person</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="NewFile" class="form-label">Attach File (Optional)</label>
+                        <input type="file" class="form-control" id="NewFile" name="file" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
         </div>
     </div>
-
-    <!-- Feedback Messages -->
-    @if (TempData["SuccessMessage"] != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show mt-3 text-center" role="alert">
-            @TempData["SuccessMessage"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-    @if (TempData["ErrorMessage"] != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show mt-3 text-center" role="alert">
-            @TempData["ErrorMessage"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
 </div>
 
 <!-- Read-Only Table of Deviation Records -->
 <div class="container-fluid px-3 mt-4">
     <h3 class="text-center mb-4">Deviation Records</h3>
 
-    <!-- Filters for the records table -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <input type="text" id="deviationSearchInput" class="form-control" placeholder="Search records..." />
+    <!-- Filters for the records table: Search and Date Range with Clear Filters Button -->
+    <div class="row mb-3 justify-content-center">
+        <div class="col-auto">
+            <input type="text" id="deviationSearchInput" class="form-control" placeholder="Search records..." style="max-width: 200px;" />
         </div>
-        <div class="col-md-6">
-            <input type="date" id="deviationDateFilter" class="form-control" />
+        <div class="col-auto d-flex">
+            <input type="date" id="deviationStartDate" class="form-control me-2" style="max-width: 150px;" />
+            <input type="date" id="deviationEndDate" class="form-control" style="max-width: 150px;" />
+        </div>
+        <div class="col-auto">
+            <button id="clearDeviationFilters" class="btn btn-secondary">Clear Filters</button>
         </div>
     </div>
 
@@ -132,10 +121,8 @@
                     <th class="sortable" data-label="Disposition" style="width: 10%;">Disposition</th>
                     <th class="sortable" data-label="Approved By" style="width: 10%;">Approved By</th>
                     <th class="sortable" data-label="CAST Review" style="width: 10%;">CAST Review</th>
-                    <!-- New columns for file previews -->
                     <th class="sortable" data-label="File 1" style="width: 10%;">File 1</th>
                     <th class="sortable" data-label="File 2" style="width: 10%;">File 2</th>
-                    <!-- Actions column -->
                     <th style="width: 8%;">Actions</th>
                 </tr>
             </thead>
@@ -152,8 +139,6 @@
                         <td>@record.Disposition</td>
                         <td>@record.ApprovedBy</td>
                         <td>@(record.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")</td>
-
-                        <!-- FileAddress1 Preview -->
                         <td>
                             @if (!string.IsNullOrEmpty(record.FileAddress1))
                             {
@@ -163,8 +148,6 @@
                                 </button>
                             }
                         </td>
-
-                        <!-- FileAddress2 Preview (read-only) -->
                         <td>
                             @if (!string.IsNullOrEmpty(record.FileAddress2))
                             {
@@ -174,11 +157,9 @@
                                 </button>
                             }
                         </td>
-
-                        <!-- Actions column: Button to update FileAddress1 -->
                         <td>
-                            <button type="button" class="btn btn-secondary btn-sm add-file-btn"
-                                    data-id="@record.Id">
+                            <!-- UPDATED: Clicking this button opens the file browser directly -->
+                            <button type="button" class="btn btn-secondary btn-sm add-file-btn" data-id="@record.Id">
                                 Add/Update File 1
                             </button>
                         </td>
@@ -189,33 +170,12 @@
     </div>
 </div>
 
-<!-- Modal: Add / Update File 1 -->
-<div class="modal fade" id="addFileModal" tabindex="-1" aria-labelledby="addFileModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-md">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addFileModalLabel">Attach File 1</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <!-- This form posts to UpdateFile in the DeviationController -->
-            <form asp-action="UpdateFile" method="post" enctype="multipart/form-data">
-                @Html.AntiForgeryToken()
-                <div class="modal-body">
-                    <!-- Hidden field to hold the record ID -->
-                    <input type="hidden" name="id" id="add-file-id" />
-                    <div class="mb-3">
-                        <label for="add-fileinput" class="form-label">Select File</label>
-                        <input type="file" name="file" id="add-fileinput" class="form-control" required />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Attach File</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<!-- Hidden Form for Direct File Upload (replaces modal for file updates) -->
+<form id="hiddenUpdateFileForm" asp-action="UpdateFile" method="post" enctype="multipart/form-data" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="hiddenRecordId" value="" />
+    <input type="file" name="file" id="hiddenFileInput" />
+</form>
 
 <!-- Bootstrap Modal for File Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
@@ -234,66 +194,53 @@
 </div>
 
 @section Scripts {
-    <!-- QR Code Generation for Both QR Codes -->
     <script>
+        // QR Code Generation for Both QR Codes
         document.addEventListener('DOMContentLoaded', function () {
-            // Generate QR code for the current page
             var currentUrl = window.location.href;
-            QRCode.toCanvas(document.getElementById('current-page-qr'), currentUrl, {
-                width: 128
-            }, function (error) {
-                if (error) {
-                    console.error(error);
-                } else {
-                    console.log("Current page QR code generated!");
-                }
+            QRCode.toCanvas(document.getElementById('current-page-qr'), currentUrl, { width: 128 }, function (error) {
+                if (error) console.error(error);
+                else console.log("Current page QR code generated!");
             });
-
-            // Generate QR code for Wi‑Fi connection
             var wifiData = `WIFI:T:WPA;S:Sintergy-WiFi;P:5intergyW1F1;;`;
-            QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, {
-                width: 128
-            }, function (error) {
-                if (error) {
-                    console.error(error);
-                } else {
-                    console.log("Wi‑Fi QR code generated!");
+            QRCode.toCanvas(document.getElementById('wifi-qr'), wifiData, { width: 128 }, function (error) {
+                if (error) console.error(error);
+                else console.log("Wi‑Fi QR code generated!");
+            });
+        });
+    </script>
+
+    <script>
+        // Direct File Upload: Open file browser directly
+        document.addEventListener("DOMContentLoaded", function () {
+            const addFileButtons = document.querySelectorAll(".add-file-btn");
+            const hiddenFileInput = document.getElementById("hiddenFileInput");
+            const hiddenRecordId = document.getElementById("hiddenRecordId");
+            const hiddenUpdateFileForm = document.getElementById("hiddenUpdateFileForm");
+
+            addFileButtons.forEach(button => {
+                button.addEventListener("click", function () {
+                    const recordId = button.getAttribute("data-id");
+                    hiddenRecordId.value = recordId;
+                    hiddenFileInput.click();
+                });
+            });
+
+            hiddenFileInput.addEventListener("change", function () {
+                if (hiddenFileInput.files.length > 0) {
+                    hiddenUpdateFileForm.submit();
                 }
             });
         });
     </script>
-    <script>
-        // If you use a Part dropdown (not needed here if create form is plain text)
-        document.addEventListener('DOMContentLoaded', function () {
-            const partDropdown = document.getElementById('PartDropdown');
-            const customPartInput = document.getElementById('CustomPartInput');
-            if (partDropdown && customPartInput) {
-                partDropdown.addEventListener('change', () => {
-                    customPartInput.value = partDropdown.value;
-                });
-            }
-        });
-    </script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            //---------------------------------------------------------
-            // 1) Show "Add / Update File 1" Modal
-            const addFileModal = new bootstrap.Modal(document.getElementById('addFileModal'));
-            document.querySelectorAll('.add-file-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const deviationId = btn.dataset.id;
-                    document.getElementById('add-file-id').value = deviationId;
-                    addFileModal.show();
-                });
-            });
-
-            //---------------------------------------------------------
-            // 2) File Preview Logic
-            const imageModalElement = document.getElementById('imageModal');
-            document.querySelectorAll('.fetch-image-btn').forEach(button => {
-                button.addEventListener('click', function () {
-                    const filePath = this.dataset.filePath;
+        // File Preview Logic
+        document.addEventListener("DOMContentLoaded", function () {
+            const imageModalElement = document.getElementById("imageModal");
+            document.querySelectorAll(".fetch-image-btn").forEach(button => {
+                button.addEventListener("click", function () {
+                    const filePath = button.getAttribute("data-file-path");
                     if (!filePath) {
                         alert("No file path provided.");
                         return;
@@ -305,8 +252,8 @@
                         })
                         .then(data => {
                             if (data.success) {
-                                const modalImage = document.getElementById('modalImage');
-                                const modalFile = document.getElementById('modalFile');
+                                const modalImage = document.getElementById("modalImage");
+                                const modalFile = document.getElementById("modalFile");
                                 if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
                                     modalImage.src = data.url;
                                     modalImage.style.display = "block";
@@ -322,19 +269,22 @@
                             }
                         })
                         .catch(error => {
-                            console.error('Error fetching file:', error);
-                            alert('An error occurred while fetching the file.');
+                            console.error("Error fetching file:", error);
+                            alert("An error occurred while fetching the file.");
                         });
                 });
             });
 
-            imageModalElement.addEventListener('hidden.bs.modal', function () {
-                document.getElementById('modalImage').src = '';
-                document.getElementById('modalFile').src = '';
+            document.getElementById("imageModal").addEventListener("hidden.bs.modal", function () {
+                document.getElementById("modalImage").src = "";
+                document.getElementById("modalFile").src = "";
             });
+        });
+    </script>
 
-            //---------------------------------------------------------
-            // 3) Filtering & Sorting Logic for the Records Table
+    <script>
+        // Filtering & Sorting Logic for Deviation Records Table with Date Range Filtering and Clear Filters
+        document.addEventListener("DOMContentLoaded", function () {
             let currentSortColumn = null;
             let currentSortDir = 'asc';
             const table = document.querySelector('.custom-table');
@@ -356,55 +306,46 @@
                 });
             });
 
+            const searchInput = document.getElementById('deviationSearchInput');
+            const startDateInput = document.getElementById('deviationStartDate');
+            const endDateInput = document.getElementById('deviationEndDate');
+            const clearBtn = document.getElementById('clearDeviationFilters');
+
+            searchInput.addEventListener('input', updateTable);
+            startDateInput.addEventListener('change', updateTable);
+            endDateInput.addEventListener('change', updateTable);
+
+            clearBtn.addEventListener('click', function () {
+                searchInput.value = "";
+                startDateInput.value = "";
+                endDateInput.value = "";
+                Array.from(tbody.querySelectorAll("tr")).forEach(row => row.style.display = "");
+            });
+
             function updateTable() {
-                const searchQuery = document.getElementById('deviationSearchInput').value.trim().toLowerCase();
-                const selectedDate = document.getElementById('deviationDateFilter').value;
-                let rows = Array.from(tbody.querySelectorAll('tr'));
-
-                if (currentSortColumn !== null) {
-                    rows.sort((a, b) => {
-                        const aCells = a.querySelectorAll('td');
-                        const bCells = b.querySelectorAll('td');
-                        const aText = aCells[currentSortColumn]?.innerText.trim() || '';
-                        const bText = bCells[currentSortColumn]?.innerText.trim() || '';
-                        const aNum = parseFloat(aText);
-                        const bNum = parseFloat(bText);
-                        if (!isNaN(aNum) && !isNaN(bNum)) {
-                            return currentSortDir === 'asc' ? aNum - bNum : bNum - aNum;
-                        } else {
-                            return currentSortDir === 'asc'
-                                ? aText.localeCompare(bText)
-                                : bText.localeCompare(aText);
-                        }
-                    });
-                }
-
-                rows.forEach(row => tbody.appendChild(row));
-
-                rows.forEach(row => {
+                const searchTerm = searchInput.value.toLowerCase();
+                const startDateValue = startDateInput.value;
+                const endDateValue = endDateInput.value;
+                Array.from(tbody.querySelectorAll("tr")).forEach(row => {
                     let show = true;
-                    const cells = row.querySelectorAll('td');
-
-                    if (searchQuery) {
-                        let found = false;
-                        for (let i = 0; i < cells.length; i++) {
-                            if (cells[i].innerText.toLowerCase().includes(searchQuery)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) show = false;
+                    // Search filter: Check entire row text
+                    if (searchTerm && !row.textContent.toLowerCase().includes(searchTerm)) {
+                        show = false;
                     }
-
-                    if (selectedDate) {
-                        // Assuming Sent Date is in column index 2
-                        const dateCell = cells[2];
-                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
-                            show = false;
+                    // Date range filter (assuming Sent Date is in column index 2)
+                    const dateCell = row.children[2];
+                    if (dateCell && dateCell.textContent.trim()) {
+                        const rowDate = new Date(dateCell.textContent.trim());
+                        if (startDateValue) {
+                            const startDate = new Date(startDateValue);
+                            if (rowDate < startDate) show = false;
+                        }
+                        if (endDateValue) {
+                            const endDate = new Date(endDateValue);
+                            if (rowDate > endDate) show = false;
                         }
                     }
-
-                    row.style.display = show ? '' : 'none';
+                    row.style.display = show ? "" : "none";
                 });
             }
 
@@ -417,8 +358,6 @@
                 });
             }
 
-            document.getElementById('deviationSearchInput').addEventListener('input', updateTable);
-            document.getElementById('deviationDateFilter').addEventListener('change', updateTable);
             updateTable();
         });
     </script>

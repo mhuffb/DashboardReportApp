@@ -10,22 +10,24 @@ namespace DashboardReportApp.Controllers
     [Route("ProcessChangeRequest")]
     public class ProcessChangeRequestController : Controller
     {
-        private readonly ProcessChangeRequestService _service;
+        private readonly ProcessChangeRequestService _serviceProcessChangeRequest;
+        private readonly SharedService _sharedService;
 
-        public ProcessChangeRequestController(ProcessChangeRequestService service)
+        public ProcessChangeRequestController(ProcessChangeRequestService service, SharedService sharedService)
         {
-            _service = service;
+            _serviceProcessChangeRequest = service;
+            _sharedService = sharedService;
         }
 
         // Display table of existing requests (read-only) + an "Add" row
         [Route("Index")]
         public IActionResult Index()
         {
-            var requests = _service.GetAllRequests();
+            var requests = _serviceProcessChangeRequest.GetAllRequests();
 
             // Load operator names from the DB
             // e.g. _operatorService.GetAllOperatorNames() => List<string>
-            var operators = _service.GetOperators();
+            var operators = _serviceProcessChangeRequest.GetOperators();
             ViewBag.Operators = operators;
 
             return View(requests);
@@ -50,26 +52,29 @@ namespace DashboardReportApp.Controllers
 
                 // Show same view with error
                 ViewData["Error"] = "Please fix the validation errors.";
-                return View("Index", _service.GetAllRequests());
+                return View("Index", _serviceProcessChangeRequest.GetAllRequests());
             }
 
             try
             {
                 // 1) Create the request row (no file yet).
-                int newRequestId = _service.AddRequest(model);
+                int newRequestId = _serviceProcessChangeRequest.AddRequest(model);
+                string filePath = null;
 
                 // 2) If a file was uploaded, call the same logic as "update file"
                 if (file != null && file.Length > 0)
                 {
-                    _service.UpdateFileAddress1(newRequestId, file);
+                    filePath = _serviceProcessChangeRequest.UpdateFileAddress1(newRequestId, file);
                 }
+
+                _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", filePath, "Process Change Request", model.Request);
 
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
                 ViewData["Error"] = $"An error occurred: {ex.Message}";
-                return View("Index", _service.GetAllRequests());
+                return View("Index", _serviceProcessChangeRequest.GetAllRequests());
             }
         }
 
@@ -87,7 +92,7 @@ namespace DashboardReportApp.Controllers
             try
             {
 
-                _service.UpdateFileAddress1(id, file);
+                _serviceProcessChangeRequest.UpdateFileAddress1(id, file);
 
                 TempData["Success"] = "File uploaded and link updated successfully.";
             }

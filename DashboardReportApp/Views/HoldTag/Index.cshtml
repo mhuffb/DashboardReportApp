@@ -2,142 +2,47 @@
 @using System.Text.Json
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <h1 class="text-center mb-4">Hold Tag</h1>
+
+<!-- NEW: Add Request Button -->
+<div class="text-center mb-4">
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRequestModal">
+        Add Request
+    </button>
+</div>
+
 <div class="container-fluid px-3 mt-4">
-    <!-- Combined QR Codes -->
+    <!-- Instructional Message -->
     <div class="row justify-content-center">
-       
-    <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
+        <h8 class="text-center mb-4">You can upload pictures from your phone by connecting to wifi then viewing this page on your phone.</h8>
     </div>
-    <div class="d-flex justify-content-evenly align-items-center mb-4">
+
+    <!-- QR Codes and Immediate Assistance Card in one row -->
+    <div class="d-flex justify-content-evenly align-items-center mb-4 flex-wrap">
         <!-- Wi‑Fi QR Code -->
-        <div class="text-center">
+        <div class="text-center mb-3">
             <canvas id="wifi-qr" style="width:128px; height:128px;"></canvas>
             <div class="mt-2">Connect to Wifi</div>
         </div>
+
+        <!-- Immediate Assistance Card -->
+        <div class="card shadow mb-3" style="max-width: 300px;">
+            <div class="card-body p-2">
+                <p class="text-center mb-2" style="font-size: 0.9rem;">
+                    For immediate assistance, call/text until you get an answer:
+                </p>
+                <ul class="list-group" style="font-size: 0.8rem;">
+                    <li class="list-group-item p-1">Tom Grieneisen 814-591-2704</li>
+                    <li class="list-group-item p-1">Chico Almendarez 814-541-1181</li>
+                    <li class="list-group-item p-1">Roy Seltzer 814-335-7239</li>
+                    <li class="list-group-item p-1">Roger Jones 814-939-9412</li>
+                </ul>
+            </div>
+        </div>
+
         <!-- Current Page QR Code -->
-        <div class="text-center">
+        <div class="text-center mb-3">
             <canvas id="current-page-qr" style="width:128px; height:128px;"></canvas>
             <div class="mt-2">View on your device</div>
-        </div>
-    </div>
-
-
-   
-
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h4 class="text-center mb-3">Submit a Hold Tag</h4>
-
-                    <p class="text-center">
-                        For immediate assistance, call/text until you get an answer:
-                    </p>
-                    <ul class="list-group mb-3">
-                        <li class="form-control">Tom Grieneisen 814-591-2704</li>
-                        <li class="form-control">Chico Almendarez 814-541-1181</li>
-                        <li class="form-control">Roy Seltzer 814-335-7239</li>
-                        <li class="form-control">Roger Jones 814-939-9412</li>
-                    </ul>
-
-                    @if (TempData["SuccessMessage"] != null)
-                    {
-                        <div class="alert alert-success alert-dismissible fade show text-center" role="alert">
-                            @TempData["SuccessMessage"]
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    }
-
-                    @if (TempData["ErrorMessage"] != null)
-                    {
-                        <div class="alert alert-danger alert-dismissible fade show text-center" role="alert">
-                            @TempData["ErrorMessage"]
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    }
-
-                    <!-- Submit new Hold Tag -->
-                    <!-- Note: enctype="multipart/form-data" is REQUIRED for file uploads -->
-                    <form asp-action="Submit" method="post" enctype="multipart/form-data">
-                        @Html.AntiForgeryToken()
-
-                        <!-- PART Selection (Dropdown + Custom Text) -->
-                        <div class="mb-3">
-                            <label for="Part" class="form-label">Part</label>
-                            <select id="PartDropdown" class="form-control">
-                                <option value="">-- Select or Enter Part --</option>
-                                @foreach (var part in (ViewData["Parts"] as List<string>) ?? new List<string>())
-                                {
-                                    <option value="@part">@part</option>
-                                }
-                            </select>
-                            <input type="text"
-                                   id="CustomPartInput"
-                                   name="Part"
-                                   asp-for="FormModel.Part"
-                                   class="form-control mt-2"
-                                   placeholder="Type a custom part number if not listed" />
-                            <span asp-validation-for="FormModel.Part" class="text-danger"></span>
-                        </div>
-
-                        <!-- OPERATOR Selection (Issued By) -->
-                        <div class="mb-3">
-                            <label for="IssuedBy" class="form-label">Issued By (Operator)</label>
-                            <select id="IssuedBy"
-                                    name="IssuedBy"
-                                    asp-for="FormModel.IssuedBy"
-                                    class="form-control">
-                                <option value="">-- Select Operator --</option>
-                                @if (ViewData["Operators"] is List<string> opList)
-                                {
-                                    foreach (var op in opList)
-                                    {
-                                        <option value="@op">@op</option>
-                                    }
-                                }
-                            </select>
-                            <span asp-validation-for="FormModel.IssuedBy" class="text-danger"></span>
-                        </div>
-
-                        <!-- DISCREPANCY -->
-                        <div class="mb-3">
-                            <label for="Discrepancy" class="form-label">Discrepancy</label>
-                            <textarea id="Discrepancy"
-                                      name="Discrepancy"
-                                      asp-for="FormModel.Discrepancy"
-                                      class="form-control text-area-large"
-                                      required>
-                            </textarea>
-                            <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
-                        </div>
-
-                        <!-- QUANTITY -->
-                        <div class="mb-3">
-                            <label for="Quantity" class="form-label">Quantity</label>
-                            <input type="number"
-                                   id="Quantity"
-                                   name="Quantity"
-                                   asp-for="FormModel.Quantity"
-                                   class="form-control"
-                                   required />
-                            <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
-                        </div>
-
-                        <!-- File Upload (Optional) - Only for FileAddress1 -->
-                        <div class="mb-3">
-                            <label for="File" class="form-label">Attach File (Optional)</label>
-                            <input type="file"
-                                   name="file"
-                                   id="File"
-                                   class="form-control" />
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-send"></i> Submit
-                        </button>
-                    </form>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -146,14 +51,19 @@
 <div class="container-fluid px-3 mt-4">
     <h2 class="text-center mb-4">Hold Tag Records</h2>
     <!-- Filters for the table -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <input type="text" id="recordSearchInput" class="form-control" placeholder="Search records..." />
+    <div class="row mb-3 justify-content-center">
+        <div class="col-auto">
+            <input type="text" id="recordSearchInput" class="form-control" placeholder="Search records..." style="max-width: 200px;" />
         </div>
-        <div class="col-md-6">
-            <input type="date" id="recordDateFilter" class="form-control" />
+        <div class="col-auto d-flex">
+            <input type="date" id="recordStartDate" class="form-control me-2" style="max-width: 150px;" />
+            <input type="date" id="recordEndDate" class="form-control" style="max-width: 150px;" />
+        </div>
+        <div class="col-auto">
+            <button id="clearFilters" class="btn btn-secondary">Clear Filters</button>
         </div>
     </div>
+
     <div class="table-responsive">
         <table class="custom-table" style="width:100%; border-collapse:collapse;">
             <thead class="table-dark">
@@ -214,6 +124,7 @@
                             }
                         </td>
                         <td>
+                            <!-- UPDATED: Instead of showing a modal, this button now triggers a hidden file input -->
                             <button type="button"
                                     class="btn btn-secondary btn-sm add-file-btn"
                                     data-id="@record.Id">
@@ -227,30 +138,78 @@
     </div>
 </div>
 
-<!-- Modal: Add / Update File1 -->
-<div class="modal fade" id="addFileModal" tabindex="-1" aria-labelledby="addFileModalLabel" aria-hidden="true">
+<!-- NEW: Modal for "Add Request" -->
+<div class="modal fade" id="addRequestModal" tabindex="-1" aria-labelledby="addRequestModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-md">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addFileModalLabel">Attach File 1</h5>
+                <h5 class="modal-title" id="addRequestModalLabel">Add Request</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form asp-action="UpdateFile" method="post" enctype="multipart/form-data">
+            <form asp-action="Submit" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
                 <div class="modal-body">
-                    <input type="hidden" name="id" id="add-file-id" />
+                    <!-- PART -->
                     <div class="mb-3">
-                        <label for="add-fileinput" class="form-label">Select File</label>
-                        <input type="file" name="file" id="add-fileinput" class="form-control" required />
+                        <label for="ModalPartDropdown" class="form-label">Part</label>
+                        <select id="ModalPartDropdown" class="form-control">
+                            <option value="">-- Select or Enter Part --</option>
+                            @foreach (var part in (ViewData["Parts"] as List<string>) ?? new List<string>())
+                            {
+                                <option value="@part">@part</option>
+                            }
+                        </select>
+                        <input type="text" id="ModalCustomPartInput" name="Part" class="form-control mt-2" placeholder="Type a custom part number if not listed" />
+                        <span asp-validation-for="FormModel.Part" class="text-danger"></span>
+                    </div>
+                    <!-- OPERATOR -->
+                    <div class="mb-3">
+                        <label for="ModalIssuedBy" class="form-label">Issued By (Operator)</label>
+                        <select id="ModalIssuedBy" name="IssuedBy" class="form-control">
+                            <option value="">-- Select Operator --</option>
+                            @if (ViewData["Operators"] is List<string> opList1)
+                            {
+                                foreach (var op in opList1)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            }
+                        </select>
+                        <span asp-validation-for="FormModel.IssuedBy" class="text-danger"></span>
+                    </div>
+                    <!-- DISCREPANCY -->
+                    <div class="mb-3">
+                        <label for="ModalDiscrepancy" class="form-label">Discrepancy</label>
+                        <textarea id="ModalDiscrepancy" name="Discrepancy" class="form-control text-area-large" required></textarea>
+                        <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
+                    </div>
+                    <!-- QUANTITY -->
+                    <div class="mb-3">
+                        <label for="ModalQuantity" class="form-label">Quantity</label>
+                        <input type="number" id="ModalQuantity" name="Quantity" class="form-control" required />
+                        <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
+                    </div>
+                    <!-- File Upload -->
+                    <div class="mb-3">
+                        <label for="ModalFile" class="form-label">Attach File (Optional)</label>
+                        <input type="file" name="file" id="ModalFile" class="form-control" />
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Attach File</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- NEW: Hidden Form for Direct File Upload (replaces the modal for Add/Update File1) -->
+<form id="hiddenUpdateFileForm" asp-action="UpdateFile" method="post" enctype="multipart/form-data" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="hiddenRecordId" value="" />
+    <input type="file" name="file" id="hiddenFileInput" />
+</form>
 
 <!-- Bootstrap Modal for File Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
@@ -270,7 +229,7 @@
 
 @section Scripts {
     <script>
-        // Copy selected part from the dropdown into the text input
+        // Copy selected part from the dropdown into the text input for the main form
         document.addEventListener('DOMContentLoaded', function () {
             const partDropdown = document.getElementById('PartDropdown');
             const customPartInput = document.getElementById('CustomPartInput');
@@ -279,8 +238,6 @@
             });
         });
     </script>
-
-   
 
     <!-- QR Code Generation for Both QR Codes -->
     <script>
@@ -310,10 +267,14 @@
             });
         });
     </script>
+
+    <!-- Table Filtering and Sorting Scripts -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const searchInput = document.getElementById("recordSearchInput");
-            const dateFilter = document.getElementById("recordDateFilter");
+            const startDateInput = document.getElementById("recordStartDate");
+            const endDateInput = document.getElementById("recordEndDate");
+            const clearBtn = document.getElementById("clearFilters");
             const table = document.querySelector(".custom-table tbody");
             const rows = Array.from(table.querySelectorAll("tr"));
             const headers = document.querySelectorAll(".sortable");
@@ -327,14 +288,43 @@
                 });
             });
 
-            // DATE FILTER FUNCTION
-            dateFilter.addEventListener("change", function () {
-                const selectedDate = dateFilter.value; // Format: YYYY-MM-DD
+            // DATE FILTER FUNCTION: Filter rows between start and end dates
+            function filterByDate() {
+                const startDateValue = startDateInput.value;
+                const endDateValue = endDateInput.value;
                 rows.forEach(row => {
                     const dateCell = row.children[3]; // Assuming Date is in the 4th column (index 3)
-                    const rowDate = dateCell.textContent.trim();
-                    row.style.display = selectedDate === "" || rowDate === selectedDate ? "" : "none";
+                    const rowDateStr = dateCell.textContent.trim();
+                    if (rowDateStr === "") {
+                        row.style.display = "";
+                        return;
+                    }
+                    const rowDate = new Date(rowDateStr);
+                    let showRow = true;
+                    if (startDateValue) {
+                        const startDate = new Date(startDateValue);
+                        if (rowDate < startDate) {
+                            showRow = false;
+                        }
+                    }
+                    if (endDateValue) {
+                        const endDate = new Date(endDateValue);
+                        if (rowDate > endDate) {
+                            showRow = false;
+                        }
+                    }
+                    row.style.display = showRow ? "" : "none";
                 });
+            }
+            startDateInput.addEventListener("change", filterByDate);
+            endDateInput.addEventListener("change", filterByDate);
+
+            // Clear Filters Button
+            clearBtn.addEventListener("click", function () {
+                searchInput.value = "";
+                startDateInput.value = "";
+                endDateInput.value = "";
+                rows.forEach(row => row.style.display = "");
             });
 
             // SORTING FUNCTION
@@ -362,39 +352,45 @@
             });
         });
     </script>
+
+    <!-- NEW: Direct file upload script for "Add / Update File1" -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const addFileButtons = document.querySelectorAll(".add-file-btn");
-            const fileInput = document.getElementById("add-fileinput");
-            const modal = new bootstrap.Modal(document.getElementById("addFileModal"));
-            const form = document.querySelector("#addFileModal form");
-            const recordIdField = document.getElementById("add-file-id");
+            const hiddenFileInput = document.getElementById("hiddenFileInput");
+            const hiddenRecordId = document.getElementById("hiddenRecordId");
+            const hiddenUpdateFileForm = document.getElementById("hiddenUpdateFileForm");
 
-            // Attach click event to all "Add / Update File1" buttons
             addFileButtons.forEach(button => {
                 button.addEventListener("click", function () {
                     const recordId = button.getAttribute("data-id");
-                    recordIdField.value = recordId; // Set the hidden input field value
-                    modal.show();
+                    hiddenRecordId.value = recordId; // Set the record id in the hidden form
+                    hiddenFileInput.click(); // Directly open the file browser
                 });
             });
 
-            // Ensure file input is reset when modal is closed
-            document.getElementById("addFileModal").addEventListener("hidden.bs.modal", function () {
-                fileInput.value = "";
-            });
-
-            // Ensure form submits with the correct ID
-            form.addEventListener("submit", function (e) {
-                if (!fileInput.value) {
-                    e.preventDefault();
-                    alert("Please select a file before submitting.");
+            hiddenFileInput.addEventListener("change", function () {
+                if (hiddenFileInput.files.length > 0) {
+                    hiddenUpdateFileForm.submit(); // Auto-submit the form once a file is selected
                 }
             });
         });
     </script>
+
+    <!-- Copy selected part for the Add Request modal -->
     <script>
-           document.addEventListener("DOMContentLoaded", function () {
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalPartDropdown = document.getElementById('ModalPartDropdown');
+            const modalCustomPartInput = document.getElementById('ModalCustomPartInput');
+            modalPartDropdown.addEventListener('change', () => {
+                modalCustomPartInput.value = modalPartDropdown.value;
+            });
+        });
+    </script>
+
+    <!-- File Preview Script -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
             const previewButtons = document.querySelectorAll(".fetch-image-btn");
             const modal = new bootstrap.Modal(document.getElementById("imageModal"));
             const modalImage = document.getElementById("modalImage");
@@ -455,7 +451,5 @@
                 modalFile.src = "";
             });
         });
-
-</script>
-
+    </script>
 }

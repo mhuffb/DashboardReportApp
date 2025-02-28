@@ -24,13 +24,13 @@
         </div>
     }
 
-    <!-- Search and Date Filter -->
-    <div class="row mb-3">
-        <div class="col-md-6">
+    <!-- Centered Search and Date Range Filter with Clear Filters button -->
+    <div class="d-flex justify-content-center mb-3">
+        <div class="input-group" style="max-width: 500px;">
             <input type="text" id="processChangeSearchInput" class="form-control" placeholder="Search Process Change Requests..." />
-        </div>
-        <div class="col-md-6">
-            <input type="date" id="processChangeDateFilter" class="form-control" placeholder="Filter by Request Date" />
+            <input type="date" id="processChangeStartDateFilter" class="form-control" placeholder="From" />
+            <input type="date" id="processChangeEndDateFilter" class="form-control" placeholder="To" />
+            <button class="btn btn-secondary" id="clearFiltersBtn" type="button">Clear Filters</button>
         </div>
     </div>
 
@@ -238,16 +238,15 @@
                         })
                         .then(data => {
                             if (data.success) {
-                                // Check file extension to see if it's a PDF or an image
+                                // Display PDF or image based on file extension
                                 if (data.url.toLowerCase().endsWith('.pdf')) {
                                     modalImage.style.display = 'none';
                                     modalPDF.style.display = 'block';
-                                    modalPDF.src = data.url; // display PDF in iframe
-                                }
-                                else {
+                                    modalPDF.src = data.url;
+                                } else {
                                     modalPDF.style.display = 'none';
                                     modalImage.style.display = 'block';
-                                    modalImage.src = data.url; // display image
+                                    modalImage.src = data.url;
                                 }
                                 new bootstrap.Modal(modalElement).show();
                             } else {
@@ -261,14 +260,13 @@
                 });
             });
 
-            // Cleanup the modal when hidden
             modalElement.addEventListener('hidden.bs.modal', function () {
                 modalImage.src = '';
                 modalPDF.src = '';
                 modalImage.style.display = 'none';
                 modalPDF.style.display = 'none';
 
-                // Remove leftover backdrop
+                // Cleanup any leftover backdrop
                 const modalBackdrop = document.querySelector('.modal-backdrop');
                 if (modalBackdrop) modalBackdrop.remove();
                 document.body.classList.remove('modal-open');
@@ -283,27 +281,31 @@
             const tbody = table.querySelector('tbody');
 
             document.querySelectorAll('.custom-table th.sortable').forEach((th, index) => {
-                if(!th.dataset.label) {
+                if (!th.dataset.label) {
                     th.dataset.label = th.innerText.trim();
                 }
                 th.addEventListener('click', () => {
-                    if (currentSortColumn === index) {
-                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
-                    } else {
-                        currentSortColumn = index;
-                        currentSortDir = 'asc';
-                    }
+                    currentSortDir = (currentSortColumn === index && currentSortDir === 'asc') ? 'desc' : 'asc';
+                    currentSortColumn = index;
                     updateTable();
                     updateSortIndicators();
                 });
             });
 
             document.getElementById('processChangeSearchInput').addEventListener('input', updateTable);
-            document.getElementById('processChangeDateFilter').addEventListener('change', updateTable);
+            document.getElementById('processChangeStartDateFilter').addEventListener('change', updateTable);
+            document.getElementById('processChangeEndDateFilter').addEventListener('change', updateTable);
+            document.getElementById('clearFiltersBtn').addEventListener('click', function () {
+                document.getElementById('processChangeSearchInput').value = '';
+                document.getElementById('processChangeStartDateFilter').value = '';
+                document.getElementById('processChangeEndDateFilter').value = '';
+                updateTable();
+            });
 
             function updateTable() {
                 const searchQuery = document.getElementById('processChangeSearchInput').value.trim().toLowerCase();
-                const selectedDate = document.getElementById('processChangeDateFilter').value;
+                const startDateValue = document.getElementById('processChangeStartDateFilter').value;
+                const endDateValue = document.getElementById('processChangeEndDateFilter').value;
                 let rows = Array.from(tbody.querySelectorAll('tr'));
 
                 // Sorting
@@ -329,11 +331,12 @@
                 // Re-append sorted rows
                 rows.forEach(row => tbody.appendChild(row));
 
-                // Filtering: search across all columns except last (Actions), date is col index 3
+                // Filtering: search across all columns except last (Actions), date is at column index 3
                 rows.forEach(row => {
                     let show = true;
                     const cells = row.querySelectorAll('td');
 
+                    // Search filter
                     if (searchQuery) {
                         let found = false;
                         for (let i = 0; i < cells.length - 1; i++) {
@@ -344,9 +347,25 @@
                         }
                         if (!found) show = false;
                     }
-                    if (selectedDate) {
-                        const dateCell = cells[3];
-                        if (dateCell && dateCell.innerText.trim() !== selectedDate) {
+
+                    // Date range filter (col index 3)
+                    if (startDateValue || endDateValue) {
+                        let rowDateStr = cells[3].innerText.trim();
+                        if (rowDateStr) {
+                            let rowDate = new Date(rowDateStr);
+                            if (startDateValue) {
+                                let startDate = new Date(startDateValue);
+                                if (rowDate < startDate) {
+                                    show = false;
+                                }
+                            }
+                            if (endDateValue) {
+                                let endDate = new Date(endDateValue);
+                                if (rowDate > endDate) {
+                                    show = false;
+                                }
+                            }
+                        } else {
                             show = false;
                         }
                     }
@@ -362,6 +381,7 @@
                     }
                 });
             }
+
             updateTable();
 
             // ----------------------------------
@@ -381,30 +401,21 @@
 
                     document.getElementById('edit-id').value = id;
                     document.getElementById('edit-part').value = part;
-                    // Requester dropdown
-                    const reqDropdown = document.getElementById('edit-requester');
-                    reqDropdown.value = requester;
+                    document.getElementById('edit-requester').value = requester;
                     document.getElementById('edit-reqdate').value = reqdate;
                     document.getElementById('edit-request').value = request;
-                    // UpdatedBy dropdown
-                    const updDropdown = document.getElementById('edit-updatedby');
-                    updDropdown.value = updatedby;
-
+                    document.getElementById('edit-updatedby').value = updatedby;
                     document.getElementById('edit-updateresult').value = updateresult;
                     document.getElementById('edit-fileaddress1').value = fileaddress1;
                     document.getElementById('edit-fileaddress2').value = fileaddress2;
                     document.getElementById('edit-testrequested').value = testrequested;
 
-                    if (fileaddress1) {
-                        document.getElementById('current-file1').innerHTML = '<a href="' + fileaddress1 + '" target="_blank">Current File 1</a>';
-                    } else {
-                        document.getElementById('current-file1').innerHTML = 'No file uploaded';
-                    }
-                    if (fileaddress2) {
-                        document.getElementById('current-file2').innerHTML = '<a href="' + fileaddress2 + '" target="_blank">Current File 2</a>';
-                    } else {
-                        document.getElementById('current-file2').innerHTML = 'No file uploaded';
-                    }
+                    document.getElementById('current-file1').innerHTML = fileaddress1
+                        ? '<a href="' + fileaddress1 + '" target="_blank">Current File 1</a>'
+                        : 'No file uploaded';
+                    document.getElementById('current-file2').innerHTML = fileaddress2
+                        ? '<a href="' + fileaddress2 + '" target="_blank">Current File 2</a>'
+                        : 'No file uploaded';
 
                     new bootstrap.Modal(document.getElementById('editProcessChangeModal')).show();
                 });

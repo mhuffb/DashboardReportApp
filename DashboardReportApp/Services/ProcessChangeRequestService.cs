@@ -119,7 +119,7 @@ namespace DashboardReportApp.Services
         //     If you want to reuse this for "AddRequest",
         //     just call it once you have the new Id.
         // -------------------------------------------------
-        public void UpdateFileAddress1(int id, IFormFile file)
+        public string UpdateFileAddress1(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
             {
@@ -163,6 +163,7 @@ namespace DashboardReportApp.Services
                     Console.WriteLine($"[UpdateFileAddress1] Rows affected: {rowsAffected}");
                 }
             }
+            return filePath;
         }
     }
 }
