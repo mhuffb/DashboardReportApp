@@ -29,6 +29,7 @@
 }
 
 <div class="container-fluid px-3">
+<div class="table-responsive">
     <h1 class="text-center mb-4">Press Run Log</h1>
 
     <!-- Parts Setup and Ready to Mold -->
@@ -198,6 +199,7 @@
         <div class="card-body">
             <div id="myReactPressRunTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
         </div>
+    </div>
     </div>
 </div>
 

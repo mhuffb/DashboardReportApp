@@ -2,6 +2,7 @@
 @using System.Text.Json;
 
 <div class="container mt-4">
+    <div class="table-responsive">
     <h1 class="text-center mb-4">Secondary Run Log</h1>
 
 
@@ -100,6 +101,7 @@
                 <div id="myReactTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
             </div>
         </div>
+    </div>
     </div>
 </div>
 
