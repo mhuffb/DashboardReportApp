@@ -15,7 +15,7 @@
         public string Operator { get; set; }
         public string Machine { get; set; }
         public int PcsStart { get; set; }
-        public int PcsEnd { get; set; }
+        public int? PcsEnd { get; set; }
         public int Scrap { get; set; }
         public string? Notes { get; set; }
         public sbyte Open { get; set; }

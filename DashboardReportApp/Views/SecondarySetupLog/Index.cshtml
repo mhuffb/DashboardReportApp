@@ -3,78 +3,88 @@
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Secondary Setup Log</h1>
-
-
-    <!-- Add Setup Form -->
-    <div class="card shadow">
-        <div class="card-body">
-            <h3 class="mb-3">Start Setup</h3>
-            <form asp-action="CreateSetup" method="post">
-                <div class="mb-3">
-                    <label for="Operator" class="form-label">Operator:</label>
-                    <select id="Operator" name="Operator" class="form-control bg-black text-goldenrod border-goldenrod" required>
-                        <option value="">-- Select Operator --</option>
-                        @foreach (var op in (IEnumerable<string>)ViewBag.Operators)
-                        {
-                            <option value="@op">@op</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="Machine" class="form-label">Machine:</label>
-                    <select id="Machine" name="Machine" class="form-control bg-black text-goldenrod border-goldenrod" required>
-                        <option value="">-- Select Machine --</option>
-                        @foreach (var machine in (IEnumerable<string>)ViewBag.Machines)
-                        {
-                            <option value="@machine">@machine</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="Run" class="form-label">Run #:</label>
-                    <input type="text" id="Run" name="Run" class="form-control bg-black text-goldenrod border-goldenrod" required />
-                </div>
-
-                <div class="mb-3">
-                    <label for="Op" class="form-label">Op:</label>
-                    <input type="text" id="Op" name="Op" class="form-control bg-black text-goldenrod border-goldenrod" required />
-                </div>
-
-                <div class="mb-3">
-                    <label for="Pcs" class="form-label">Pieces:</label>
-                    <input type="number" id="Pcs" name="Pcs" class="form-control bg-black text-goldenrod border-goldenrod" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="ScrapMach" class="form-label">Machined Scrap:</label>
-                    <input type="number" id="ScrapMach" name="ScrapMach" class="form-control bg-black text-goldenrod border-goldenrod" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="ScrapNonMach" class="form-label">Non-Machined Scrap:</label>
-                    <input type="number" id="ScrapNonMach" name="ScrapNonMach" class="form-control bg-black text-goldenrod border-goldenrod" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="Notes" class="form-label">Notes:</label>
-                    <textarea id="Notes" name="Notes" class="form-control bg-black text-goldenrod border-goldenrod text-area-large"></textarea>
-                </div>
-
-                <div class="mb-3">
-                    <label for="SetupHours" class="form-label">Setup Hours:</label>
-                    <input type="number" step="0.1" id="SetupHours" name="SetupHours" class="form-control bg-black text-goldenrod border-goldenrod" />
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-play-circle"></i> Add Setup
-                </button>
-            </form>
-        </div>
+    <div class="d-flex justify-content-center mb-4">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#setupModal">
+            Add Setup
+        </button>
     </div>
 </div>
 
+<!-- Modal -->
+<div class="modal fade" id="setupModal" tabindex="-1" aria-labelledby="setupModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="setupModalLabel">Start Setup</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form asp-action="CreateSetup" method="post">
+                    <div class="mb-3">
+                        <label for="Operator" class="form-label">Operator:</label>
+                        <select id="Operator" name="Operator" class="form-control bg-black text-goldenrod border-goldenrod" required>
+                            <option value="">-- Select Operator --</option>
+                            @foreach (var op in (IEnumerable<string>)ViewBag.Operators)
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Machine" class="form-label">Machine:</label>
+                        <select id="Machine" name="Machine" class="form-control bg-black text-goldenrod border-goldenrod" required>
+                            <option value="">-- Select Machine --</option>
+                            @foreach (var machine in (IEnumerable<string>)ViewBag.Machines)
+                            {
+                                <option value="@machine">@machine</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Run" class="form-label">Run #:</label>
+                        <input type="text" id="Run" name="Run" class="form-control bg-black text-goldenrod border-goldenrod" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Op" class="form-label">Op:</label>
+                        <input type="text" id="Op" name="Op" class="form-control bg-black text-goldenrod border-goldenrod" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Pcs" class="form-label">Pieces:</label>
+                        <input type="number" id="Pcs" name="Pcs" class="form-control bg-black text-goldenrod border-goldenrod" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ScrapMach" class="form-label">Machined Scrap:</label>
+                        <input type="number" id="ScrapMach" name="ScrapMach" class="form-control bg-black text-goldenrod border-goldenrod" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ScrapNonMach" class="form-label">Non-Machined Scrap:</label>
+                        <input type="number" id="ScrapNonMach" name="ScrapNonMach" class="form-control bg-black text-goldenrod border-goldenrod" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Notes" class="form-label">Notes:</label>
+                        <textarea id="Notes" name="Notes" class="form-control bg-black text-goldenrod border-goldenrod text-area-large"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="SetupHours" class="form-label">Setup Hours:</label>
+                        <input type="number" step="0.1" id="SetupHours" name="SetupHours" class="form-control bg-black text-goldenrod border-goldenrod" />
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-play-circle"></i> Add Setup
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- All Runs Table (React Component) -->
 <div class="container mt-4">
@@ -86,7 +96,7 @@
         </div>
     </div>
 </div>
-</div>
+
 <!-- Load your React bundle -->
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
@@ -102,7 +112,7 @@
         const columns = [
             { key: "Id", label: "ID" },
             { key: "Timestamp", label: "Timestamp" },
-            { key: "ProdNumber", label: "ProdNumber"},
+            { key: "ProdNumber", label: "ProdNumber" },
             { key: "Run", label: "Run #" },
             { key: "Part", label: "Part" },
             { key: "Op", label: "Op" },
@@ -120,4 +130,3 @@
         }
     });
 </script>
-}

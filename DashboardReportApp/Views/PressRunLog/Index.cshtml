@@ -88,7 +88,6 @@
                             <th>Machine</th>
                             <th>Operator</th>
                             <th>Start Time</th>
-                            <th>Pcs Start</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -103,7 +102,6 @@
                                 <td>@rec.Machine</td>
                                 <td>@rec.Operator</td>
                                 <td>@(rec.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
-                                <td>@rec.PcsStart</td>
                                 <td>
                                     <button class="btn btn-danger btn-sm"
                                             onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
@@ -150,7 +148,7 @@
                             <th>SkidNumber</th>
                             <th>Start Time</th>
                             <th>Pcs Start</th>
-                            <th>Pcs End</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -166,7 +164,21 @@
                                 <td>@skid.SkidNumber</td>
                                 <td>@skid.StartDateTime</td>
                                 <td>@skid.PcsStart</td>
-                                <td>@skid.PcsEnd</td>
+                                <td>
+                                    <form method="post" asp-action="GenerateRouterTag" asp-controller="PressRunLog">
+                                        <input type="hidden" name="Id" value="@skid.Id" />
+                                        <input type="hidden" name="Part" value="@skid.Part" />
+                                        <input type="hidden" name="ProdNumber" value="@skid.ProdNumber" />
+                                        <input type="hidden" name="Run" value="@skid.Run" />
+                                        <input type="hidden" name="Machine" value="@skid.Machine" />
+                                        <input type="hidden" name="Operator" value="@skid.Operator" />
+                                        <input type="hidden" name="SkidNumber" value="@skid.SkidNumber" />
+                                        <input type="hidden" name="StartDateTime" value="@skid.StartDateTime" />
+                                        <input type="hidden" name="PcsStart" value="@skid.PcsStart" />
+                                        <input type="hidden" name="PcsEnd" value="@skid.PcsEnd" />
+                                        <button type="submit" class="btn btn-primary btn-sm">Print Router Tag</button>
+                                    </form>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -178,6 +190,7 @@
             }
         </div>
     </div>
+
 
     <!-- React Table of All Runs (Optional) -->
     <h2 class="text-center">All Runs</h2>

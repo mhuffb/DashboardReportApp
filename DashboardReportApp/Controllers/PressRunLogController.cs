@@ -88,6 +88,7 @@ namespace DashboardReportApp.Controllers
 
             await _pressRunLogService.HandleStartSkidAsync(model);
 
+
             Console.WriteLine("Start Skid Processed Successfully");
             return RedirectToAction("Index");
         }
@@ -141,6 +142,30 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        public async Task<IActionResult> GenerateRouterTag(PressRunLogModel model)
+        {
 
+            string filePath = _pressRunLogService.GenerateRouterTag(model);
+
+            string computerName = Environment.MachineName;
+            Console.WriteLine("Computer Name: " + computerName);
+
+            if(computerName == "Mold02")
+            {
+
+            }
+            else if(computerName == "Mold03")
+            {
+
+            }
+            else
+            {
+
+            }
+            //SharedService.PrintFile("HPFRONT", filePath);
+
+            return RedirectToAction("Index");
+        }
     }
 }

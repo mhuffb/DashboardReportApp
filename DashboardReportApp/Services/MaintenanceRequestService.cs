@@ -83,7 +83,7 @@
 
             Console.WriteLine("InputPdf: " + inputFilePath);
 
-            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequestDoc_{request.Id}_{request.Equipment}.pdf";
+            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequest_{request.Id}.pdf";
 
             try
             {

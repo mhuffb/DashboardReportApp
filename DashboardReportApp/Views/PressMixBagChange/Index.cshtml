@@ -1,5 +1,4 @@
 ﻿@{
-
     ViewData["Title"] = "Press Mix Bag Change";
     var operators = ViewData["OperatorList"] as List<string> ?? new List<string>();
     var equipment = ViewData["EquipmentList"] as List<string> ?? new List<string>();
@@ -10,8 +9,8 @@
 
     var allRecords = ViewData["AllRecords"] as List<DashboardReportApp.Models.PressMixBagChangeModel>
                      ?? new List<DashboardReportApp.Models.PressMixBagChangeModel>();
-
 }
+
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -30,34 +29,54 @@
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Mix Bag Change</h1>
-    <h2 class="text-center">Log Mix Change</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <form asp-action="Submit" method="post">
-                <div class="row">
-                    <!-- Part Selection -->
-                    <div class="mb-3">
-                        <label for="partNumber" class="form-label">Part:</label>
-                        <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
-                            <option value="">-- Select Part --</option>
-                            @foreach (var entry in ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel> ?? new List<DashboardReportApp.Models.PressSetupModel>())
-                            {
-                                <option value="@entry.Part"
-                                        data-run="@entry.Run"
-                                        data-operator="@entry.Operator"
-                                        data-machine="@entry.Machine">
-                                    @entry.Part (Run: @entry.Run)
-                                </option>
-                            }
-                        </select>
 
-                        <!-- Hidden Run Number -->
-                        <input type="hidden" id="RunNumber" name="Run" />
+    <!-- Submit Bag Change button at the top center -->
+    <div class="text-center mb-4">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bagChangeModal">
+            Submit Bag Change
+        </button>
+    </div>
 
-                        <!-- Operator Field -->
+    <!-- Modal containing the bag change form -->
+    <div class="modal fade" id="bagChangeModal" tabindex="-1" aria-labelledby="bagChangeModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="bagChangeModalLabel" class="modal-title">Log Mix Change</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form asp-action="Submit" method="post">
+                    <div class="modal-body">
+                        <!-- Part Selection -->
+                        <div class="mb-3">
+                            <label for="partNumber" class="form-label">Part:</label>
+                            <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
+                                <option value="">-- Select Part --</option>
+                                @foreach (var entry in ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel> ?? new List<DashboardReportApp.Models.PressSetupModel>())
+                                {
+                                    <option value="@entry.Part"
+                                            data-run="@entry.Run"
+                                            data-operator="@entry.Operator"
+                                            data-machine="@entry.Machine">
+                                        @entry.Part (Run: @entry.Run)
+                                    </option>
+                                }
+                            </select>
+
+                            <!-- Hidden Run Number -->
+                            <input type="hidden" id="RunNumber" name="Run" />
+                        </div>
+
+                        <!-- Operator Field (dropdown) -->
                         <div class="mb-3">
                             <label for="operatorName" class="form-label">Operator</label>
-                            <input type="text" id="operatorName" name="Operator" class="form-control" readonly />
+                            <select id="operatorName" name="Operator" class="form-control" required>
+                                <option value="">-- Select Operator --</option>
+                                @foreach (var op in operators)
+                                {
+                                    <option value="@op">@op</option>
+                                }
+                            </select>
                         </div>
 
                         <!-- Machine Field -->
@@ -79,35 +98,42 @@
                         </div>
 
                         <!-- Notes -->
-                        <div class="col-md-12 mb-3">
+                        <div class="mb-3">
                             <label for="Note" class="form-label">Notes:</label>
                             <textarea id="Note" name="Notes" class="form-control text-area-large"></textarea>
                         </div>
                     </div>
+                    <div class="modal-footer">
+                        <!-- Cancel Button -->
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <!-- Smaller Submit Button -->
+                        <button type="submit" class="btn btn-primary btn-sm" style="width: auto;">
+                            <i class="bi bi-check-circle"></i> Submit
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Display All Records in React Component -->
+    <h2 class="text-center mt-4">All Mix Bag Change Records</h2>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="container-fluid px-3 mt-4">
+                <div id="mixBagChangeTableRoot"
+                     data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'>
                 </div>
-
-                <button type="submit" class="btn btn-primary w-100 mt-3"><i class="bi bi-check-circle"></i> Submit</button>
-            </form>
-
-    </div>
-    </div>
-</div>
-<!-- Display All Records in React Component -->
-<h2 class="text-center mt-4">All Mix Bag Change Records</h2>
-<div class="card shadow mb-4">
-    <div class="card-body">
-        <div class="container-fluid px-3 mt-4">
-            <div id="mixBagChangeTableRoot"
-                 data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'>
             </div>
         </div>
     </div>
 </div>
+
 <script>
-           function updateFields() {
+    function updateFields() {
         const partSelect = document.getElementById("partNumber");
         const runHidden = document.getElementById("RunNumber");
-        const operatorField = document.getElementById("operatorName");
+        const operatorSelect = document.getElementById("operatorName");
         const machineField = document.getElementById("machine");
 
         const selectedOption = partSelect.options[partSelect.selectedIndex];
@@ -115,13 +141,11 @@
 
         // Get data attributes from the selected option
         runHidden.value = selectedOption.getAttribute("data-run") || "";
-        operatorField.value = selectedOption.getAttribute("data-operator") || "";
+        const opValue = selectedOption.getAttribute("data-operator") || "";
+        // Set the default operator in the dropdown
+        operatorSelect.value = opValue;
         machineField.value = selectedOption.getAttribute("data-machine") || "";
     }
-
-
-    
-
 </script>
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
@@ -129,7 +153,6 @@
         const container = document.getElementById('mixBagChangeTableRoot');
         if (!container) return;
 
-        // Parse the JSON from data-records
         const rawData = container.getAttribute('data-records');
         const data = JSON.parse(rawData); // This is your List<PressMixBagChangeModel>
 

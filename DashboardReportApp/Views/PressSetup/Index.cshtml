@@ -6,11 +6,24 @@
     var machines = ViewData["Machines"] as List<string> ?? new List<string>();
     var trainers = ViewData["Trainers"] as List<string> ?? new List<string>();
     var partsList = ViewData["Parts"] as List<Scheduled>; // Replace with your actual model type
-
 }
+
+<!-- Style to adjust the search filter input size -->
+<style>
+    #myReactTableRoot input[type="search"] {
+        width: 200px; /* adjust as needed */
+    }
+</style>
 
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Setup Log</h1>
+
+    <!-- Smaller Login Button placed under the heading -->
+    <div class="text-center mb-4">
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#loginSetupModal">
+            Login to Setup
+        </button>
+    </div>
 
     @if (ViewData["Message"] != null)
     {
@@ -26,71 +39,6 @@
         </div>
     }
 
-    <!-- Login Form -->
-    <h2 class="text-center">Start Setup</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-<form method="post" asp-action="Login">
-    <!-- Part Selection -->
-    <div class="mb-3">
-        <label for="partNumber" class="form-label">Part Number</label>
-        <select id="partNumber" name="Part" class="form-control" required onchange="updateHiddenFields()">
-            <option value="">-- Select Part --</option>
-            @* Assume you are iterating over your parts list here *@
-            @foreach (var part in ViewData["Parts"] as List<Scheduled> ?? new List<Scheduled>())
-            {
-                var displayText = !string.IsNullOrEmpty(part.Subcomponent) ? part.Subcomponent :
-                                  !string.IsNullOrEmpty(part.Component) ? part.Component :
-                                  part.Part;
-                <option value="@part.Part"
-                        data-prodnumber="@part.ProdNumber"
-                        data-run="@part.Run"
-                        data-component="@part.Component"
-                        data-subcomponent="@part.Subcomponent">
-                    @($"{displayText} (Production Number: {part.ProdNumber} Run Number: {part.Run})")
-                </option>
-            }
-        </select>
-    </div>
-
-    <!-- Hidden Inputs to capture additional values from the selected part -->
-    <input type="hidden" id="RunNumber" name="Run" />
-    <input type="hidden" id="ProdNumber" name="ProdNumber" />
-    <input type="hidden" id="Component" name="Component" />
-    <input type="hidden" id="Subcomponent" name="Subcomponent" />
-
-    <!-- Operator Dropdown -->
-    <div class="mb-3">
-        <label for="operatorName" class="form-label">Operator</label>
-        <select id="operatorName" name="Operator" class="form-control" required>
-            <option value="">-- Select Operator --</option>
-            @foreach (var op in ViewData["Operators"] as List<string> ?? new List<string>())
-            {
-                <option value="@op">@op</option>
-            }
-        </select>
-    </div>
-
-    <!-- Machine Dropdown -->
-    <div class="mb-3">
-        <label for="machine" class="form-label">Machine</label>
-        <select id="machine" name="Machine" class="form-control" required>
-            <option value="">-- Select Machine --</option>
-            @foreach (var machine in ViewData["Machines"] as List<string> ?? new List<string>())
-            {
-                <option value="@machine">@machine</option>
-            }
-        </select>
-    </div>
-
-    <button type="submit" class="btn btn-primary w-100">Login to Setup </button>
-</form>
-
-
-
-        </div>
-    </div>
-
     <!-- Open Setups -->
     <h2 class="text-center mb-4">Open Setups</h2>
     <div class="card shadow mb-4">
@@ -101,7 +49,7 @@
                         <tr>
                             <th>Part</th>
                             <th>Production Number</th>
-                            <th>Run</th>     <!-- NEW COLUMN FOR RUN NUMBER -->
+                            <th>Run</th>
                             <th>Operator</th>
                             <th>Machine</th>
                             <th>Start Time</th>
@@ -114,12 +62,11 @@
                             <tr>
                                 <td>@login.Part</td>
                                 <td>@login.ProdNumber</td>
-                                <td>@login.Run</td>  <!-- MAKE SURE PressSetupModel HAS THIS PROPERTY -->
+                                <td>@login.Run</td>
                                 <td>@login.Operator</td>
                                 <td>@login.Machine</td>
                                 <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
                                 <td>
-                                    <!-- Instead of inline form, use a button that opens the modal -->
                                     <button class="btn btn-danger btn-sm"
                                             onclick="openStopSetupModal('@login.Part', '@login.Run', '@login.StartDateTime')">
                                         Logout of Setup
@@ -138,12 +85,81 @@
     <div class="card shadow mb-4">
         <div class="card-body">
             <div class="container-fluid px-3 mt-4">
-                <!-- REACT Table Container -->
                 <div id="myReactTableRoot"
                      data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model))'>
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Modal for Login to Setup -->
+<div id="loginSetupModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="loginSetupForm" method="post" asp-action="Login">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Login to Setup</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Part Selection -->
+                    <div class="mb-3">
+                        <label for="modalPartNumber" class="form-label">Part Number</label>
+                        <select id="modalPartNumber" name="Part" class="form-control" required onchange="updateHiddenFieldsModal()">
+                            <option value="">-- Select Part --</option>
+                            @foreach (var part in ViewData["Parts"] as List<Scheduled> ?? new List<Scheduled>())
+                            {
+                                var displayText = !string.IsNullOrEmpty(part.Subcomponent) ? part.Subcomponent :
+                                !string.IsNullOrEmpty(part.Component) ? part.Component :
+                                part.Part;
+                                <option value="@part.Part"
+                                        data-prodnumber="@part.ProdNumber"
+                                        data-run="@part.Run"
+                                        data-component="@part.Component"
+                                        data-subcomponent="@part.Subcomponent">
+                                    @($"{displayText} (Production Number: {part.ProdNumber} Run Number: {part.Run})")
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Hidden Inputs for additional part details -->
+                    <input type="hidden" id="modalRunNumber" name="Run" />
+                    <input type="hidden" id="modalProdNumber" name="ProdNumber" />
+                    <input type="hidden" id="modalComponent" name="Component" />
+                    <input type="hidden" id="modalSubcomponent" name="Subcomponent" />
+
+                    <!-- Operator Dropdown -->
+                    <div class="mb-3">
+                        <label for="modalOperatorName" class="form-label">Operator</label>
+                        <select id="modalOperatorName" name="Operator" class="form-control" required>
+                            <option value="">-- Select Operator --</option>
+                            @foreach (var op in operators)
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Machine Dropdown -->
+                    <div class="mb-3">
+                        <label for="modalMachine" class="form-label">Machine</label>
+                        <select id="modalMachine" name="Machine" class="form-control" required>
+                            <option value="">-- Select Machine --</option>
+                            @foreach (var machine in machines)
+                            {
+                                <option value="@machine">@machine</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -162,8 +178,6 @@
                     <input type="hidden" id="modalProdNumber" name="prodNumber" />
                     <input type="hidden" id="modalRun" name="runNumber" />
                     <input type="hidden" id="modalStartDateTime" name="startDateTime" />
-
-                    
 
                     <!-- Assistance Required -->
                     <div class="mb-3">
@@ -211,26 +225,39 @@
         </form>
     </div>
 </div>
+
 <script>
-    
-</script>
-<!-- JS for React Table, etc. -->
-<script src="/js/mydatatable.bundle.js"></script>
-<script>
+    // Function to update hidden fields in the Login Modal
+    function updateHiddenFieldsModal() {
+        const partSelect = document.getElementById("modalPartNumber");
+        const selectedOption = partSelect.options[partSelect.selectedIndex];
+        if (!selectedOption) return;
+        document.getElementById("modalProdNumber").value = selectedOption.getAttribute("data-prodnumber") || "";
+        document.getElementById("modalRunNumber").value = selectedOption.getAttribute("data-run") || "";
+        document.getElementById("modalComponent").value = selectedOption.getAttribute("data-component") || "";
+        document.getElementById("modalSubcomponent").value = selectedOption.getAttribute("data-subcomponent") || "";
+
+        // Optionally fetch updated run number from server
+        const selectedPart = partSelect.value;
+        if (!selectedPart) return;
+        fetch(`/PressSetup/GetRunForPart?part=${encodeURIComponent(selectedPart)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("modalRunNumber").value = data.run || "";
+            })
+            .catch(error => console.error("Error fetching run:", error));
+    }
+
     // ========== REACT TABLE SETUP ==========
     document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('myReactTableRoot');
         if (!container) return;
-
-        // Parse the JSON from data-records
         const rawData = container.getAttribute('data-records');
-        const data = JSON.parse(rawData); // This is your List<PressSetupModel>
-
-        // Define columns to match PressSetupModel's properties
+        const data = JSON.parse(rawData);
         const columns = [
             { key: 'Id', label: 'Id' },
             { key: 'Part', label: 'Part' },
-            {key: 'ProdNumber', label: 'Production Number'},
+            { key: 'ProdNumber', label: 'Production Number' },
             { key: 'Run', label: 'Run' },
             { key: 'Operator', label: 'Operator' },
             { key: 'Machine', label: 'Machine' },
@@ -241,40 +268,14 @@
             { key: 'AssistedBy', label: 'Assisted By' },
             { key: 'Notes', label: 'Notes' }
         ];
-
-        // Render table using a React component from your JS bundle
         window.renderMyDataTable('myReactTableRoot', data, columns, true);
-    });
-
-    // ========== FETCH RUN NUMBER ON PART SELECTION ==========
-    document.addEventListener("DOMContentLoaded", function () {
-        const partDropdown = document.getElementById("partNumber");
-        const runField = document.getElementById("runNumber");
-
-        partDropdown.addEventListener("change", function () {
-            const selectedPart = this.value;
-            if (!selectedPart) {
-                runField.value = "";
-                return;
-            }
-
-            fetch(`/PressSetup/GetRunForPart?part=${encodeURIComponent(selectedPart)}`)
-                .then(response => response.json())
-                .then(data => {
-                    // Expecting: { run: "someRunNumber" }
-                    runField.value = data.run || "";
-                })
-                .catch(error => console.error("Error fetching run:", error));
-        });
     });
 
     // ========== LOGOUT MODAL SCRIPTS ==========
     function openStopSetupModal(part, run, startDateTime) {
-        // Fill hidden fields
         document.getElementById("modalPart").value = part;
         document.getElementById("modalRun").value = run;
         document.getElementById("modalStartDateTime").value = startDateTime;
-
         const modal = new bootstrap.Modal(document.getElementById("stopSetupModal"));
         modal.show();
     }
@@ -289,8 +290,6 @@
     document.addEventListener("DOMContentLoaded", function () {
         const assistanceRequiredSelect = document.getElementById("modalAssistanceRequired");
         const assistedByContainer = document.getElementById("assistedByContainer");
-
-        // Toggle the field on change
         if (assistanceRequiredSelect) {
             assistanceRequiredSelect.addEventListener("change", function () {
                 if (this.value === "Assisted") {
@@ -301,17 +300,5 @@
             });
         }
     });
-
-
-
-        function updateHiddenFields() {
-        const partSelect = document.getElementById("partNumber");
-        const selectedOption = partSelect.options[partSelect.selectedIndex];
-        if (!selectedOption) return;
-        document.getElementById("ProdNumber").value = selectedOption.getAttribute("data-prodnumber") || "";
-        document.getElementById("RunNumber").value = selectedOption.getAttribute("data-run") || "";
-        document.getElementById("Component").value = selectedOption.getAttribute("data-component") || "";
-        document.getElementById("Subcomponent").value = selectedOption.getAttribute("data-subcomponent") || "";
-    }
-
 </script>
+<script src="/js/mydatatable.bundle.js"></script>

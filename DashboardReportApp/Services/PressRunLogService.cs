@@ -10,16 +10,30 @@ using System.Data.Common;
 using System.Data;
 using iText.Layout.Element;
 using System.Reflection.PortableExecutable;
+using iText.IO.Font.Constants;
+using iText.Kernel.Font;
+using iText.Kernel.Pdf;
+using iText.Layout.Properties;
+using iText.Layout;
+using System.Collections;
+using System.Data.Odbc;
+using iText.Forms.Fields.Properties;
+using iText.Layout.Borders;
+using iText.Kernel.Pdf.Canvas.Draw;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Geom;
 
 namespace DashboardReportApp.Services
 {
     public class PressRunLogService
     {
         private readonly string _connectionStringMySQL;
+        private readonly string _connectionStringDataflex;
 
         public PressRunLogService(IConfiguration config)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
+            _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
         }
 
         #region Device Mapping / Count
@@ -361,6 +375,220 @@ LIMIT 1";
             Console.WriteLine("Start Skid Processed Successfully.");
         }
 
+        public string GenerateRouterTag(PressRunLogModel model)
+        {
+            string part = model.Part;
+
+            List<string> result = new List<string>();
+
+            string query = "SELECT mstep.master_id, pstep.\"desc\", mastersg.qc_prior, mastersg.qc_after " +
+                           "FROM (mstep LEFT OUTER JOIN mastersg ON (mstep.master_id = mastersg.master_id AND mstep.pstep = mastersg.pstep)) " +
+                           "LEFT OUTER JOIN pstep ON mstep.pstep = pstep.pcode " +
+                           "WHERE mstep.omit = 0 AND mstep.master_id = ? " +
+                           "AND pstep.\"desc\" IS NOT NULL " +
+                           "AND (mastersg.omit = 0 OR mastersg.omit IS NULL) " +
+                           "ORDER BY mstep.master_id";
+
+            using (OdbcConnection conn = new OdbcConnection(_connectionStringDataflex))
+            using (OdbcCommand cmd = new OdbcCommand(query, conn))
+            {
+                // Set the part number parameter
+                cmd.Parameters.AddWithValue("?", part);
+                conn.Open();
+                using (OdbcDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string desc = reader["desc"].ToString();
+
+                        // Check if qc_prior equals 1 and add "QC Check" before the description if true.
+                        bool qcPriorIsOne = reader["qc_prior"] != DBNull.Value && Convert.ToInt32(reader["qc_prior"]) == 1;
+                        // Check if qc_after equals 1 and add "QC Check" after the description if true.
+                        bool qcAfterIsOne = reader["qc_after"] != DBNull.Value && Convert.ToInt32(reader["qc_after"]) == 1;
+
+                        if (qcPriorIsOne)
+                        {
+                            result.Add("QC Check");
+                        }
+                        result.Add(desc);
+                        if (qcAfterIsOne)
+                        {
+                            result.Add("QC Check");
+                        }
+                    }
+                }
+            }
+
+            string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\RouterTag_" + model.Id + ".pdf";
+
+            // Use predefined fonts
+            PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+            PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+
+            // Create writer and pdf document
+            PdfWriter writer = new PdfWriter(filePath);
+            PdfDocument pdf = new PdfDocument(writer);
+            using (var document = new Document(pdf))
+            {
+                // Set overall document margins (increased bottom margin for footer)
+                document.SetMargins(20, 20, 40, 20);
+
+                // Title at top center
+                document.Add(new Paragraph("Sintergy Tracer Tag")
+                    .SetFont(boldFont)
+                    .SetFontSize(18)
+                    .SetTextAlignment(TextAlignment.CENTER));
+
+                // Prepare formatted StartDateTime
+                string formattedStartDateTime = model.StartDateTime.ToString();
+                string id = string.IsNullOrWhiteSpace(model.Id.ToString()) ? "N/A" : model.Id.ToString();
+
+                
+
+
+
+                // Add a horizontal line separator
+                document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
+
+                // Order of Operations header (centered)
+                document.Add(new Paragraph("Order of Operations:")
+                    .SetFont(boldFont)
+                    .SetFontSize(14)
+                    .SetTextAlignment(TextAlignment.CENTER)
+                    .SetMarginBottom(2));
+
+                // Loop through each order operation item (keeping the same logic)
+                foreach (var item in result)
+                {
+                    document.Add(new Paragraph(processDesc(item))
+                        .SetFont(normalFont)
+                        .SetFontSize(12)
+                        .SetTextAlignment(TextAlignment.CENTER)
+                        .SetMarginBottom(2));
+
+                    if (item.ToLower().Contains("machine"))
+                    {
+                        document.Add(new Paragraph("Machine #: ________________________   Date: __________________")
+                            .SetFont(normalFont)
+                            .SetFontSize(12)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetMarginBottom(5));
+                    }
+                    else if (item.ToLower().Contains("sinter"))
+                    {
+                        document.Add(new Paragraph("Loaded By: __________________   Unloaded By: __________________   Date: __________________")
+                            .SetFont(normalFont)
+                            .SetFontSize(12)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetMarginBottom(5));
+                    }
+                    else if (item.ToLower().Contains("mold"))
+                    {
+                        // Create a header table with 3 columns
+                        Table headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1 }))
+                            .UseAllAvailableWidth()
+                            .SetMarginBottom(10)
+                            .SetBorder(Border.NO_BORDER);
+
+                        
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Part: " + model.Part)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Press Run ID: " + id)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Skid Number: " + model.SkidNumber)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Machine: " + model.Machine)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Prod Number: " + model.ProdNumber)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Starting Pcs: " + model.PcsStart)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Operator: " + model.Operator)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Run: " + model.Run)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Ending Pcs: " + ((model.PcsEnd ?? 0) == 0 ? "" : model.PcsEnd.ToString()))
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+
+                        document.Add(headerTable);
+
+                        // Create a header table with 4 columns
+                        Table headerTable2 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1 }))
+                            .UseAllAvailableWidth()
+                            .SetMarginBottom(10)
+                            .SetBorder(Border.NO_BORDER);
+
+                        headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph("Start DateTime: " + formattedStartDateTime)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+
+
+                        string currentDate = DateTime.Now.ToString("MM/dd/yyyy hh:mm tt");
+                        headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph("End Date Time: " + currentDate)
+                            .SetFont(normalFont)
+                            .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER)
+                            .SetTextAlignment(TextAlignment.LEFT));
+                        document.Add(headerTable2);
+                    }
+                    else
+                    {
+                        document.Add(new Paragraph("Signature: __________________________   Date: __________________")
+                            .SetFont(normalFont)
+                            .SetFontSize(12)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetMarginBottom(5));
+                    }
+                }
+
+                // Now add the footer directly to the last page while the document is still open.
+                PdfPage lastPage = pdf.GetLastPage();
+                Rectangle pageSize = lastPage.GetPageSize();
+                PdfCanvas pdfCanvas = new PdfCanvas(lastPage);
+                Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
+                footerCanvas.ShowTextAligned(
+                    new Paragraph(model.Part)
+                        .SetFont(boldFont)
+                        .SetFontSize(25),
+                    pageSize.GetWidth() / 2,
+                    pageSize.GetBottom() + 33,  // 33 points above the bottom edge
+                    TextAlignment.CENTER);
+                footerCanvas.Close();
+            }
+            // Close the PDF document
+            pdf.Close();
+
+            return filePath; // Return the generated PDF file path
+        }
 
         #endregion
 
@@ -501,7 +729,39 @@ ORDER BY id DESC";
             return model;
         }
 
+        public string processDesc(string input)
+        {
+            switch (input)
+            {
+                case string a when a.Contains("HEAT TREAT-AHT") || a.Contains("HEAT TREAT - US HEAT") || a.Contains("HEAT TREAT - ELK COUNTY"): return "Heat Treat";
 
+                case string st when st.Contains("Steam Treat") || st.Contains("STEAM TREAT"): return "Steam Treat";
+
+                case string lsp when lsp.Contains("LS&PLATE") || lsp.Contains("LS & PLATE") || lsp.Contains("LS & Plate"): return "LS & Plate";
+
+                case string Gr when Gr.Contains("Grind") || Gr.Contains("GRIND"): return "Grind";
+
+                case string mc when mc.Contains("Machin"): return "Machine";
+
+                case string et when et.Contains("Etching") || et.Contains("ETCHING"): return "Etching";
+
+                case string hn when hn.Contains("Honing") || hn.Contains("HONING"): return "Honing";
+
+                case string pl when pl.Contains("Plating") || pl.Contains("PLATING"): return "Plating";
+
+                case string bo when bo.Contains("Black Oxide") || bo.Contains("BLACK OXIDE"): return "Black Oxide";
+
+                case string mg when mg.Contains("Magni-Coat") || mg.Contains("MAGNI-COAT"): return "Magni-Coat";
+
+                case string ls when ls.Contains("Loctite Seal") || ls.Contains("LOCTITE SEAL"): return "Loctite Seal";
+
+                case string tb when tb.Contains("Tumbl") || tb.Contains("TUMBL"): return "Tumble";
+
+            }
+            return input;
+        }
         #endregion
+
+
     }
 }

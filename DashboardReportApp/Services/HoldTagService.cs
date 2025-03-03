@@ -58,7 +58,7 @@ namespace DashboardReportApp.Services
 
         public string GenerateHoldTagPdf(HoldTagModel record)
         {
-            string filePath = @"\\SINTERGYDC2024\Vol1\Visual Studio Programs\reports\HoldTag_" + record.Id + ".pdf";
+            string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\HoldTag_" + record.Id + ".pdf";
 
             // Use predefined fonts
             PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
