@@ -224,10 +224,10 @@ public class SinterRunLogService
         
     }
 
-    public void EndGreenAssemblyRun(string run)
+    public void EndGreenAssemblyRun(string run, string part, string prodNumber)
     {
-        
-        string updateQuery2 = "UPDATE schedule " +
+
+        string updateQuery1 = "UPDATE schedule " +
                              "SET open = 0 " +
                              "WHERE run = @run " +
                              "ORDER BY id DESC LIMIT 1";
@@ -235,7 +235,7 @@ public class SinterRunLogService
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
             connection.Open();
-            using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+            using (var updateCommand = new MySqlCommand(updateQuery1, connection))
             {
                 updateCommand.Parameters.AddWithValue("@run", run);
 
@@ -244,8 +244,29 @@ public class SinterRunLogService
             }
         }
 
+        string updateQuery2 = "UPDATE schedule " +
+                      "SET open = 0 " +
+                      "WHERE prodNumber = @prodNumber " +
+                      "  AND part = @part " +
+                      "  AND component NOT LIKE '%PC%' " +
+                      "ORDER BY id DESC " 
+                      ;
+
+        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        {
+            connection.Open();
+            using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+            {
+                updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
+                updateCommand.Parameters.AddWithValue("@part", part);
+
+                int rowsAffected = updateCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+            }
+        }
 
     }
+
 
 
     // End skids on the same furnace if one is already running
@@ -404,6 +425,7 @@ public class SinterRunLogService
             }
 
             // Determine the final part value based on "Y" conditions:
+            // 1. If subcomponent is not null and contains "Y", use subcomponent.
             // 2. Else if component is not null and contains "Y", use component.
             // 3. Else if part contains "Y", use part.
             string finalPart = null;

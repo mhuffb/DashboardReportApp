@@ -105,9 +105,11 @@
                                             Login to Green Assembly
                                         </button>
 
-                                        <!-- New End Green Assembly Run button -->
+                                        <!-- New End Green Assembly Run button with part and prodNumber -->
                                         <form method="post" action="/SinterRunLog/EndGreenAssemblyRun" style="display: inline;">
                                             <input type="hidden" name="run" value="@sintergyComp.Run" />
+                                            <input type="hidden" name="part" value="@sintergyComp.Part" />
+                                            <input type="hidden" name="prodNumber" value="@sintergyComp.ProdNumber" />
                                             <button type="submit" class="btn btn-danger btn-sm ms-1">
                                                 End Green Assembly Run
                                             </button>
@@ -115,6 +117,7 @@
                                     </td>
                                 </tr>
                             }
+
 
                         </tbody>
                     </table>

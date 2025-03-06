@@ -109,11 +109,11 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
         [HttpPost("EndGreenAssemblyRun")]
-        public IActionResult EndSkid(string run)
+        public IActionResult EndSkid(string run, string part, string prodNumber)
         {
             try
             {
-                _sinterRunLogService.EndGreenAssemblyRun(run);
+                _sinterRunLogService.EndGreenAssemblyRun(run, part, prodNumber);
                 ViewData["Message"] = "Skid run ended successfully.";
             }
             catch (Exception ex)
