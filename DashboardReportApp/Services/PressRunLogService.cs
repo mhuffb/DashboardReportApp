@@ -299,25 +299,7 @@ LIMIT 1";
                     currentSkidNumber = c;
             }
 
-            // 2) Only Fetch API count if `pcsStart` is NOT already provided
-            if (model.PcsStart <= 0)
-            {
-                int? deviceCount = await TryGetDeviceCountOrNull(model.Machine);
-                if (deviceCount.HasValue)
-                {
-                    model.PcsStart = deviceCount.Value;
-                    Console.WriteLine($"Using API Device Count for Pcs Start: {model.PcsStart}");
-                }
-                else
-                {
-                    Console.WriteLine("Device count API failed, keeping original Pcs Start.");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"Using manually entered Pcs Start: {model.PcsStart}");
-            }
-
+           
             // 3) Insert the first skid if no skids exist
             if (currentSkidNumber == 0)
             {

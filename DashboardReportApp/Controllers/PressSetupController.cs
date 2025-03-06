@@ -53,11 +53,11 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost("Logout")]
         public async Task<IActionResult> Logout(string partNumber, DateTime startDateTime, string difficulty,
-                                                string assistanceRequired, string assistedBy, string setupComplete, string notes)
+                                                string assistanceRequired, string assistedBy, string setupComplete, string notes, string runNumber)
         {
             try
             {
-                await _pressSetupService.LogoutAsync(partNumber, startDateTime, difficulty, assistanceRequired, assistedBy, setupComplete, notes);
+                await _pressSetupService.LogoutAsync(partNumber, startDateTime, difficulty, assistanceRequired, assistedBy, setupComplete, notes, runNumber);
                 TempData["Message"] = "Logout successfully recorded!";
             }
             catch (Exception ex)
@@ -67,12 +67,7 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-        [HttpGet("GetRunForPart")]
-        public IActionResult GetRunForPart(string part)
-        {
-            var run = _pressSetupService.GetRunForPart(part);
-            return Json(new { run });
-        }
+       
 
     }
 }

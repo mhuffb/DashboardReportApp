@@ -239,15 +239,6 @@
         document.getElementById("modalComponent").value = selectedOption.getAttribute("data-component") || "";
         document.getElementById("modalSubcomponent").value = selectedOption.getAttribute("data-subcomponent") || "";
 
-        // Optionally fetch updated run number from server
-        const selectedPart = partSelect.value;
-        if (!selectedPart) return;
-        fetch(`/PressSetup/GetRunForPart?part=${encodeURIComponent(selectedPart)}`)
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("modalRunNumber").value = data.run || "";
-            })
-            .catch(error => console.error("Error fetching run:", error));
     }
 
     // ========== REACT TABLE SETUP ==========

@@ -12,6 +12,9 @@
                    ?? new List<DashboardReportApp.Models.PressRunLogModel>();
     // List of furnaces for the modal dropdown
     var furnaces = ViewData["Furnaces"] as List<string> ?? new List<string>();
+
+    var openAssyG = ViewBag.OpenAssyG as List<DashboardReportApp.Models.SintergyComponent>
+                    ?? new List<DashboardReportApp.Models.SintergyComponent>();
 }
 
 <div class="container-fluid px-3">
@@ -22,60 +25,101 @@
     <!-- Green Skids Table -->
     <div class="card shadow mb-4">
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-bordered shadow-sm wider-table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>ID</th>
-                            <th>Prod Number</th>
-                            <th>Run</th>
-                            <th>Part</th>
-                            <th>End DateTime</th>
-                            <th>Operator</th>
-                            <th>Machine</th>
-                            <th>Skid Number</th>
-                            <th>Pcs</th>
-                            <th>Notes</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var pressRun in openGreenSkids)
-                        {
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered shadow-sm wider-table">
+                        <thead class="table-dark">
                             <tr>
-                                <td>@pressRun.Id</td>
-                                <td>@pressRun.ProdNumber</td>
-                                <td>@pressRun.Run</td>
-                                <td>@pressRun.Part</td>
-                                <td>@(pressRun.EndDateTime?.ToString("g") ?? "N/A")</td>
-                                <td>@pressRun.Operator</td>
-                                <td>@pressRun.Machine</td>
-                                <td>@pressRun.SkidNumber</td>
-                                <td>@(pressRun.PcsEnd - pressRun.PcsStart)</td>
-                                <td>@pressRun.Notes</td>
-                                <td>
-                                    <!-- Only Login button is here -->
-                                    <button class="btn btn-primary btn-sm"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#loginSkidModal"
-                                            data-id="@pressRun.Id"
-                                            data-prodnumber="@pressRun.ProdNumber"
-                                            data-run="@pressRun.Run"
-                                            data-part="@pressRun.Part"
-                                            data-machine="@pressRun.Machine"
-                                            data-operator="@pressRun.Operator"
-                                            data-notes="@pressRun.Notes"
-                                            data-pcsstart="@pressRun.PcsStart"
-                                            data-pcsend="@pressRun.PcsEnd"
-                                            data-skidnumber="@pressRun.SkidNumber">
-                                        Login to Skid Run
-                                    </button>
-                                </td>
+                                <th>ID</th>
+                                <th>Prod Number</th>
+                                <th>Run</th>
+                                <th>Part</th>
+                                <th>End DateTime</th>
+                                <th>Operator</th>
+                                <th>Machine</th>
+                                <th>Skid Number</th>
+                                <th>Pcs</th>
+                                <th>Notes</th>
+                                <th>Action</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @foreach (var pressRun in openGreenSkids)
+                            {
+                                <tr>
+                                    <td>@pressRun.Id</td>
+                                    <td>@pressRun.ProdNumber</td>
+                                    <td>@pressRun.Run</td>
+                                    <td>@pressRun.Part</td>
+                                    <td>@(pressRun.EndDateTime?.ToString("g") ?? "N/A")</td>
+                                    <td>@pressRun.Operator</td>
+                                    <td>@pressRun.Machine</td>
+                                    <td>@pressRun.SkidNumber</td>
+                                    <td>@(pressRun.PcsEnd - pressRun.PcsStart)</td>
+                                    <td>@pressRun.Notes</td>
+                                    <td>
+                                        <!-- Only one button will ever appear -->
+                                        <button class="btn btn-primary btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#loginSkidModal"
+                                                data-id="@pressRun.Id"
+                                                data-prodnumber="@pressRun.ProdNumber"
+                                                data-run="@pressRun.Run"
+                                                data-part="@pressRun.Part"
+                                                data-machine="@pressRun.Machine"
+                                                data-operator="@pressRun.Operator"
+                                                data-notes="@pressRun.Notes"
+                                                data-pcsstart="@pressRun.PcsStart"
+                                                data-pcsend="@pressRun.PcsEnd"
+                                                data-skidnumber="@pressRun.SkidNumber">
+                                            Login to Skid Run
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var sintergyComp in openAssyG)
+                            {
+                                <tr>
+                                    <td>@sintergyComp.Id</td>
+                                    <td>@sintergyComp.ProdNumber</td>
+                                    <td>@sintergyComp.Run</td>
+                                    <td>@sintergyComp.Part</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td>
+                                        <!-- Existing Login button -->
+                                        <button class="btn btn-primary btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#loginSkidModal"
+                                                data-id="@sintergyComp.Id"
+                                                data-prodnumber="@sintergyComp.ProdNumber"
+                                                data-run="@sintergyComp.Run"
+                                                data-part="@sintergyComp.Part"
+                                                data-machine=""
+                                                data-operator=""
+                                                data-notes=""
+                                                data-skidnumber="">
+                                            Login to Green Assembly
+                                        </button>
+
+                                        <!-- New End Green Assembly Run button -->
+                                        <form method="post" action="/SinterRunLog/EndGreenAssemblyRun" style="display: inline;">
+                                            <input type="hidden" name="run" value="@sintergyComp.Run" />
+                                            <button type="submit" class="btn btn-danger btn-sm ms-1">
+                                                End Green Assembly Run
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+
+                        </tbody>
+                    </table>
+                </div>
+
         </div>
     </div>
 
@@ -142,24 +186,25 @@
                                 <td>@skid.Operator</td>
                                 <td>@skid.Machine</td>
                                 <td>@skid.SkidNumber</td> <!-- Added -->
-                                <td>@pcsDiff</td> <!-- Updated -->
+                                <td>@skid.Pcs</td> <!-- Updated -->
                                 <td>@skid.Process</td>
                                 <td>@skid.Notes</td>
                                 <td>
-                                    <button class="btn btn-warning btn-sm"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#endSkidModal"
-                                            data-prodnumber="@skid.ProdNumber"
-                                            data-part="@skid.Part"
-                                            data-skidnumber="@skid.SkidNumber"
-                                            data-pcs="@pcsDiff"
-                                            data-run="@skid.Run"
-                                            data-operator="@skid.Operator"
-                                            data-machine="@skid.Machine"
-                                            data-process="@skid.Process"
-                                            data-notes="@skid.Notes">
-                                        End Skid
-                                    </button>
+                                        <button class="btn btn-warning btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#endSkidModal"
+                                                data-prodnumber="@skid.ProdNumber"
+                                                data-part="@skid.Part"
+                                                data-skidnumber="@skid.SkidNumber"
+                                                data-pcs="@skid.Pcs"
+                                                data-run="@skid.Run"
+                                                data-operator="@skid.Operator"
+                                                data-machine="@skid.Machine"
+                                                data-process="@skid.Process"
+                                                data-notes="@skid.Notes">
+                                            End Skid
+                                        </button>
+
                                     <button class="btn btn-danger btn-sm ms-1"
                                             data-bs-toggle="modal"
                                             data-bs-target="#logoutSkidModal"
@@ -310,50 +355,53 @@
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            var loginSkidModal = document.getElementById('loginSkidModal');
-            loginSkidModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
+                    document.addEventListener("DOMContentLoaded", function() {
+                var loginSkidModal = document.getElementById('loginSkidModal');
+                loginSkidModal.addEventListener('show.bs.modal', function(event) {
+                    var button = event.relatedTarget;
+                    var pressRunId = button.getAttribute('data-id');
+                    var prodNumber = button.getAttribute('data-prodnumber');
+                    var run = button.getAttribute('data-run');
+                    var part = button.getAttribute('data-part');
+                    var machine = button.getAttribute('data-machine');
+                    var notes = button.getAttribute('data-notes');
+                    var skidNumber = button.getAttribute('data-skidnumber');
 
-                // Extract data from the button's data-* attributes
-                var pressRunId = button.getAttribute('data-id');
-                var prodNumber = button.getAttribute('data-prodnumber');
-                var run = button.getAttribute('data-run');
-                var part = button.getAttribute('data-part');
-                var machine = button.getAttribute('data-machine');
-                var notes = button.getAttribute('data-notes');
-                var pcsStartStr = button.getAttribute('data-pcsstart');
-                var pcsEndStr = button.getAttribute('data-pcsend');
-                var skidNumber = button.getAttribute('data-skidnumber');
+                    // Try to get pcsStart and pcsEnd for skid runs.
+                    var pcsStartStr = button.getAttribute('data-pcsstart');
+                    var pcsEndStr = button.getAttribute('data-pcsend');
+                    var pcs = 0;
+                    if (pcsStartStr !== null && pcsEndStr !== null && pcsStartStr.trim() !== "" && pcsEndStr.trim() !== "") {
+                        pcs = parseFloat(pcsEndStr) - parseFloat(pcsStartStr);
+                    } else {
+                        // For green assemblies, use the data-pcs attribute
+                        var pcsAttr = button.getAttribute('data-pcs');
+                        pcs = parseFloat(pcsAttr) || 0;
+                    }
 
-                // Calculate the PCS difference using parseFloat
-                var pcs = 0;
-                if (pcsStartStr && pcsEndStr) {
-                    pcs = parseFloat(pcsEndStr) - parseFloat(pcsStartStr);
-                }
+                    // Populate hidden inputs
+                    loginSkidModal.querySelector('#pressRunId').value = pressRunId;
+                    loginSkidModal.querySelector('#ProdNumber').value = prodNumber;
+                    loginSkidModal.querySelector('#Run').value = run;
+                    loginSkidModal.querySelector('#Part').value = part;
+                    loginSkidModal.querySelector('#SkidNumber').value = skidNumber;
+                    loginSkidModal.querySelector('#Pcs').value = pcs;
 
-                // Populate hidden inputs
-                loginSkidModal.querySelector('#pressRunId').value = pressRunId;
-                loginSkidModal.querySelector('#ProdNumber').value = prodNumber;
-                loginSkidModal.querySelector('#Run').value = run;
-                loginSkidModal.querySelector('#Part').value = part;
-                loginSkidModal.querySelector('#SkidNumber').value = skidNumber;
-                loginSkidModal.querySelector('#Pcs').value = pcs;
+                    // Populate visible elements
+                    loginSkidModal.querySelector('#displayPart').textContent = part;
+                    loginSkidModal.querySelector('#displaySkidNumber').textContent = skidNumber;
+                    loginSkidModal.querySelector('#displaySkidNumber').style.color = "#000";
+                    loginSkidModal.querySelector('#displaySkidNumber').style.fontWeight = "bold";
 
-                // Display values in read-only elements
-                loginSkidModal.querySelector('#displayPart').textContent = part;
-                loginSkidModal.querySelector('#displaySkidNumber').textContent = skidNumber;
-                loginSkidModal.querySelector('#displaySkidNumber').style.color = "#000";
-                loginSkidModal.querySelector('#displaySkidNumber').style.fontWeight = "bold";
+                    // Preselect the furnace if possible
+                    var machineSelect = loginSkidModal.querySelector('#Machine');
+                    machineSelect.value = machine || "";
 
-                // Preselect the furnace if possible
-                var machineSelect = loginSkidModal.querySelector('#Machine');
-                machineSelect.value = machine || "";
-
-                // Pre-fill the notes field if provided
-                loginSkidModal.querySelector('#Notes').value = notes || "";
+                    // Pre-fill the notes field if provided
+                    loginSkidModal.querySelector('#Notes').value = notes || "";
+                });
             });
-        });
+
     </script>
 
     <!-- Modal for Ending Skid Run -->
@@ -401,39 +449,52 @@
 
 
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            var endSkidModal = document.getElementById('endSkidModal');
-            endSkidModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
+                             document.addEventListener("DOMContentLoaded", function () {
+                var endSkidModal = document.getElementById('endSkidModal');
+                endSkidModal.addEventListener('show.bs.modal', function (event) {
+                    var button = event.relatedTarget;
 
-                var prodNumber = button.getAttribute('data-prodnumber');
-                var part = button.getAttribute('data-part');
-                var skidNumber = button.getAttribute('data-skidnumber');
-                var pcs = button.getAttribute('data-pcs');
-                var run = button.getAttribute('data-run');
-                var oper = button.getAttribute('data-operator');
-                var oven = button.getAttribute('data-machine');
-                var process = button.getAttribute('data-process') || ""; // Still sending, but not shown
-                var notes = button.getAttribute('data-notes') || "";
+                    // Log the entire dataset for debugging
+                    console.log("Button dataset:", button.dataset);
 
-                // Populate hidden inputs
-                endSkidModal.querySelector('#end_prodNumber').value = prodNumber;
-                endSkidModal.querySelector('#end_part').value = part;
-                endSkidModal.querySelector('#end_skidNumber').value = skidNumber;
-                endSkidModal.querySelector('#end_pcs').value = pcs;
-                endSkidModal.querySelector('#end_run').value = run;
-                endSkidModal.querySelector('#end_oper').value = oper;
-                endSkidModal.querySelector('#end_oven').value = oven;
-                endSkidModal.querySelector('#end_process').value = process;
-                endSkidModal.querySelector('#end_notes').value = notes;
+                    // Retrieve data using the dataset property
+                    var prodNumber = button.dataset.prodnumber;
+                    var part = button.dataset.part;
+                    var skidNumber = button.dataset.skidnumber;
+                    var pcs = button.dataset.pcs; // This should be the value you're expecting
+                    var run = button.dataset.run;
+                    var oper = button.dataset.operator;
+                    var oven = button.dataset.machine;
+                    var process = button.dataset.process || "";
+                    var notes = button.dataset.notes || "";
 
-                // Populate visible elements
-                endSkidModal.querySelector('#end_displayProdNumber').textContent = prodNumber;
-                endSkidModal.querySelector('#end_displayPart').textContent = part;
-                endSkidModal.querySelector('#end_displaySkidNumber').textContent = skidNumber;
-                endSkidModal.querySelector('#end_displayPcs').textContent = pcs;
+                    console.log("Retrieved pcs:", pcs);
+
+                    // Fallback to 0 if pcs is empty or not a number
+                    if (!pcs || isNaN(parseFloat(pcs))) {
+                        pcs = "0";
+                    }
+
+                    // Populate hidden inputs
+                    endSkidModal.querySelector('#end_prodNumber').value = prodNumber;
+                    endSkidModal.querySelector('#end_part').value = part;
+                    endSkidModal.querySelector('#end_skidNumber').value = skidNumber;
+                    endSkidModal.querySelector('#end_pcs').value = pcs;
+                    endSkidModal.querySelector('#end_run').value = run;
+                    endSkidModal.querySelector('#end_oper').value = oper;
+                    endSkidModal.querySelector('#end_oven').value = oven;
+                    endSkidModal.querySelector('#end_process').value = process;
+                    endSkidModal.querySelector('#end_notes').value = notes;
+
+                    // Populate visible elements
+                    endSkidModal.querySelector('#end_displayProdNumber').textContent = prodNumber;
+                    endSkidModal.querySelector('#end_displayPart').textContent = part;
+                    endSkidModal.querySelector('#end_displaySkidNumber').textContent = skidNumber;
+                    endSkidModal.querySelector('#end_displayPcs').textContent = pcs;
+                });
             });
-        });
+
+
     </script>
 
 

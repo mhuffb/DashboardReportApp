@@ -144,12 +144,34 @@ public class SinterRunLogService
                 Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
             }
         }
+
+        string updateQuery2 = "UPDATE pressrun " +
+                             "SET open = 1 " +
+                             "AND run = @run " +
+                             "AND part = @part " +
+                             "AND skidNumber = @skidNumber " +
+                             "ORDER BY id DESC LIMIT 1";
+
+        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        {
+            connection.Open();
+            using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+            {
+                updateCommand.Parameters.AddWithValue("@part", part);
+                updateCommand.Parameters.AddWithValue("@run", run);
+                updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
+
+                int rowsAffected = updateCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+            }
+        }
+
     }
 
     // End the current skid record by updating endDateTime, pcs, and notes,
     // and matching on prodNumber, run, part, and skidNumber.
     public void EndSkid(string prodNumber, string part, string skidNumber, string pcs,
-                      string run, string oper, string oven, string process, string notes)
+                      string run, string oper, string furnace, string process, string notes)
     {
         string updateQuery = "UPDATE " + datatable + " " +
                              "SET endDateTime = NOW(), pcs = @pcs, notes = @notes " +
@@ -176,12 +198,38 @@ public class SinterRunLogService
             }
         }
 
-        string updateQuery2 = "UPDATE pressrun "  +
+            string updateQuery2 = "UPDATE pressrun " +
+                                 "SET open = 0 " +
+                                 "WHERE prodNumber = @prodNumber " +
+                                 "AND run = @run " +
+                                 "AND part = @part " +
+                                 "AND skidNumber = @skidNumber " +
+                                 "ORDER BY id DESC LIMIT 1";
+
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                connection.Open();
+                using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+                {
+                    updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
+                    updateCommand.Parameters.AddWithValue("@part", part);
+                    updateCommand.Parameters.AddWithValue("@run", run);
+                    updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
+
+                    int rowsAffected = updateCommand.ExecuteNonQuery();
+                    Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+                }
+            }
+        
+        
+    }
+
+    public void EndGreenAssemblyRun(string run)
+    {
+        
+        string updateQuery2 = "UPDATE schedule " +
                              "SET open = 0 " +
-                             "WHERE prodNumber = @prodNumber " +
-                             "AND run = @run " +
-                             "AND part = @part " +
-                             "AND skidNumber = @skidNumber " +
+                             "WHERE run = @run " +
                              "ORDER BY id DESC LIMIT 1";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
@@ -189,19 +237,15 @@ public class SinterRunLogService
             connection.Open();
             using (var updateCommand = new MySqlCommand(updateQuery2, connection))
             {
-                updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
-                updateCommand.Parameters.AddWithValue("@part", part);
                 updateCommand.Parameters.AddWithValue("@run", run);
-                updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
 
                 int rowsAffected = updateCommand.ExecuteNonQuery();
                 Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
             }
         }
 
+
     }
-
-
 
 
     // End skids on the same furnace if one is already running
@@ -232,9 +276,10 @@ public class SinterRunLogService
         Console.WriteLine($"➡️ Furnace: {model.Machine}");
         Console.WriteLine($"➡️ Process: {model.Process}");
         Console.WriteLine($"➡️ Notes: {model.Notes}");
+        Console.WriteLine($"Pcs:  {model.Pcs}");
 
-        string query = "INSERT INTO " + datatable + " (prodNumber,  run, part, startDateTime, operator, oven, process, notes, skidNumber ) " +
-                   "VALUES (@prodNumber, @run, @part,  @startDateTime, @operator, @oven, @process, @notes, @skidNumber)";
+        string query = "INSERT INTO " + datatable + " (prodNumber,  run, part, startDateTime, operator, oven, process, notes, skidNumber, pcs ) " +
+                   "VALUES (@prodNumber, @run, @part,  @startDateTime, @operator, @oven, @process, @notes, @skidNumber, @pcs)";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -251,22 +296,46 @@ public class SinterRunLogService
                 command.Parameters.AddWithValue("@process", model.Process);
                 command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(model.Notes) ? DBNull.Value : model.Notes);
                 command.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
+                command.Parameters.AddWithValue("@pcs", model.Pcs);
 
                 command.ExecuteNonQuery();
             }
         }
+        string updateQuery2 = "UPDATE pressrun " +
+                             "SET open = 0 " +
+                             "WHERE prodNumber = @prodNumber " +
+                             "AND run = @run " +
+                             "AND part = @part " +
+                             "AND skidNumber = @skidNumber " +
+                             "ORDER BY id DESC LIMIT 1";
+
+        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        {
+            connection.Open();
+            using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+            {
+                updateCommand.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                updateCommand.Parameters.AddWithValue("@part", model.Part);
+                updateCommand.Parameters.AddWithValue("@run", model.Run);
+                updateCommand.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
+
+                int rowsAffected = updateCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+            }
+        }
+
 
     }
-   
+
     public async Task<List<PressRunLogModel>> GetOpenGreenSkidsAsync()
     {
         var openGreenSkids = new List<PressRunLogModel>();
 
         string query = @"
-        SELECT id, timestamp, prodNumber, run, part, endDateTime, operator, machine, pcsStart, pcsEnd, notes, skidNumber
-        FROM pressrun
-        WHERE open = 1 AND skidNumber > 0
-        ORDER BY startDateTime DESC";
+    SELECT id, timestamp, prodNumber, run, part, endDateTime, operator, machine, pcsStart, pcsEnd, notes, skidNumber
+    FROM pressrun
+    WHERE open = 1 AND skidNumber > 0
+    ORDER BY startDateTime DESC";
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
@@ -275,27 +344,112 @@ public class SinterRunLogService
 
         while (await reader.ReadAsync())
         {
+            // Retrieve the part value
+            string part = reader["part"]?.ToString() ?? "N/A";
+
+            // If the part contains "C", skip this record.
+            if (!string.IsNullOrEmpty(part) && part.IndexOf("C", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                continue;
+            }
+
             openGreenSkids.Add(new PressRunLogModel
             {
                 Id = reader.GetInt32("id"),
                 Timestamp = reader.GetDateTime("timestamp"),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
-                Part = reader["part"]?.ToString() ?? "N/A",
+                Part = part,
                 EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-              ? null
-              : reader.GetDateTime("endDateTime"),
-
+                    ? null
+                    : reader.GetDateTime("endDateTime"),
                 Operator = reader["operator"]?.ToString() ?? "N/A",
                 SkidNumber = reader.GetInt32("skidNumber"),
                 Machine = reader["Machine"]?.ToString() ?? "N/A",
                 PcsStart = reader.IsDBNull(reader.GetOrdinal("pcsStart")) ? 0 : Convert.ToInt32(reader["pcsStart"]),
                 PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd")) ? 0 : Convert.ToInt32(reader["pcsEnd"])
             });
-
         }
 
         return openGreenSkids;
     }
+
+    public async Task<List<SintergyComponent>> GetScheduledAssyG()
+    {
+        var openGreenAssy = new List<SintergyComponent>();
+
+        string query = @"
+    SELECT id, prodNumber, run, part, component, subcomponent, open
+    FROM schedule
+    WHERE open = 1 
+    ";
+
+        await using var connection = new MySqlConnection(_connectionStringMySQL);
+        await connection.OpenAsync();
+        await using var command = new MySqlCommand(query, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            // Retrieve values
+            string partValue = reader["part"]?.ToString() ?? "N/A";
+            string component = reader["component"]?.ToString();
+            string subcomponent = reader["subcomponent"]?.ToString();
+
+            // If subcomponent contains "C", skip this record immediately.
+            if (!string.IsNullOrEmpty(subcomponent) &&
+                subcomponent.IndexOf("C", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                continue;
+            }
+
+            // If component contains "C", skip this record immediately.
+            if (!string.IsNullOrEmpty(component) &&
+                component.IndexOf("C", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                continue;
+            }
+
+            // Determine the final part value based on "Y" conditions:
+            // 1. If subcomponent is not null and contains "Y", use subcomponent.
+            // 2. Else if component is not null and contains "Y", use component.
+            // 3. Else if part contains "Y", use part.
+            string finalPart = null;
+            if (!string.IsNullOrEmpty(subcomponent) &&
+                subcomponent.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                finalPart = subcomponent;
+            }
+            else if (!string.IsNullOrEmpty(component) &&
+                     component.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                finalPart = component;
+            }
+            else if (!string.IsNullOrEmpty(partValue) &&
+                     partValue.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                finalPart = partValue;
+            }
+
+            // If none of the conditions for "Y" are met, skip this record.
+            if (finalPart == null)
+                continue;
+
+            openGreenAssy.Add(new SintergyComponent
+            {
+                Id = reader.GetInt32("id"),
+                ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "N/A",
+                Part = finalPart,
+                Component = component ?? "N/A",
+                SubComponent = subcomponent ?? "N/A",
+                Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+            });
+        }
+
+        return openGreenAssy;
+    }
+
+
 
 }

@@ -11,7 +11,12 @@ namespace DashboardReportApp.Services
 {
     public class PressSetupService
     {
-        private readonly string _connectionString = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
+        private readonly string _connectionStringMySQL;
+
+        public PressSetupService(IConfiguration config)
+        {
+            _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
+        }
 
         public List<PressSetupModel> GetAllRecords(string part, string operatorName, string machine, string setupComplete,
                                                    string assistanceRequired, string search, string startDate,
@@ -21,7 +26,7 @@ namespace DashboardReportApp.Services
             string query = "SELECT * FROM presssetup order by id desc";
 
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             using (var command = new MySqlCommand(query, connection))
             {
 
@@ -57,7 +62,7 @@ namespace DashboardReportApp.Services
 
         public async Task LoginAsync(PressSetupLoginViewModel model)
         {
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime, open, prodNumber) 
@@ -93,9 +98,9 @@ namespace DashboardReportApp.Services
 
 
         public async Task LogoutAsync(string partNumber, DateTime startDateTime, string difficulty, string assistanceRequired,
-                                      string assistedBy, string setupComplete, string notes)
+                                      string assistedBy, string setupComplete, string notes, string run)
         {
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 string query = @"UPDATE presssetup 
@@ -119,6 +124,7 @@ namespace DashboardReportApp.Services
                     if (setupComplete == "Yes")
                     {
                         command.Parameters.AddWithValue("@open", 1);
+                        CloseOnScheduleAsync(run);
                     }
                     else
                     {
@@ -137,7 +143,7 @@ namespace DashboardReportApp.Services
             var operators = new List<string>();
             string query = "SELECT name FROM operators WHERE dept = 'molding' ORDER BY name";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             using (var command = new MySqlCommand(query, connection))
             {
                 connection.Open();
@@ -158,7 +164,7 @@ namespace DashboardReportApp.Services
             var equipment = new List<string>();
             string query = "SELECT equipment FROM equipment WHERE department = 'molding' ORDER BY equipment";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             using (var command = new MySqlCommand(query, connection))
             {
                 connection.Open();
@@ -179,7 +185,7 @@ namespace DashboardReportApp.Services
             var trainers = new List<string>();
             string query = "SELECT name FROM operators WHERE dept = 'molding' AND level = 'trainer' ORDER BY name";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             using (var command = new MySqlCommand(query, connection))
             {
                 connection.Open();
@@ -194,56 +200,82 @@ namespace DashboardReportApp.Services
 
             return trainers;
         }
-        public string GetRunForPart(string part)
-        {
-            string run = "";
-            string query = "SELECT run FROM schedule WHERE part = @part AND open = 1";
+      
 
-            using (var connection = new MySqlConnection(_connectionString))
-            using (var command = new MySqlCommand(query, connection))
-            {
-                command.Parameters.AddWithValue("@part", part);
-                connection.Open();
-                var result = command.ExecuteScalar();
-                if (result != null)
-                {
-                    run = result.ToString();
-                }
-            }
-            return run;
-        }
-
-       
         public List<Scheduled> GetScheduledParts()
         {
             var records = new List<Scheduled>();
             string query = "SELECT * FROM schedule where open = 1 order by id desc";
 
-
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
             using (var command = new MySqlCommand(query, connection))
             {
-
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
+                        // Retrieve values
+                        var component = reader["component"].ToString();
+                        var subcomponent = reader["Subcomponent"]?.ToString(); // may be null or empty
+
+                        // If subcomponent exists and contains "PC" or "Y", skip this record.
+                        if (!string.IsNullOrWhiteSpace(subcomponent))
+                        {
+                            if (subcomponent.IndexOf("PC", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                subcomponent.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            // If subcomponent is null/empty and component contains "Y", skip.
+                            if (!string.IsNullOrWhiteSpace(component) &&
+                                component.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                continue;
+                            }
+                        }
+
+                        // If component contains "PC", skip this record.
+                        if (!string.IsNullOrWhiteSpace(component) &&
+                            component.IndexOf("PC", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            continue;
+                        }
+
+                        // If none of the conditions met, add the record.
                         records.Add(new Scheduled
                         {
                             Id = Convert.ToInt32(reader["id"]),
                             Part = reader["part"].ToString(),
-                            Component = reader["component"].ToString(),
-                            Subcomponent = reader["Subcomponent"].ToString(),
+                            Component = component,
+                            Subcomponent = subcomponent,
                             ProdNumber = reader["ProdNumber"].ToString(),
                             Run = reader["run"].ToString(),
-
-
                         });
                     }
                 }
             }
             return records;
+        }
+
+        public async Task CloseOnScheduleAsync(string currentRun)
+        {
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                await connection.OpenAsync();
+                string query = @"UPDATE Schedule 
+                         SET open = 0 
+                         WHERE run = @run";
+
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@run", currentRun);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
         }
 
     }

@@ -21,7 +21,7 @@ namespace DashboardReportApp.Controllers
             var viewModel = new ScheduleModel
             {
                 AllComponents = new List<SintergyComponent>(),
-                OpenParts = _scheduleService.GetOpenParts()
+                AllParts = _scheduleService.GetAllSchedParts()
             };
 
             if (!string.IsNullOrEmpty(masterId) && quantity > 0)
@@ -62,19 +62,19 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpPost]
-        public IActionResult UpdateOpenParts(ScheduleModel viewModel)
+        public IActionResult UpdatePart(SintergyComponent updatedPart)
         {
             try
             {
-                _scheduleService.UpdateOpenParts(viewModel);
-                TempData["Success"] = "Open parts updated successfully!";
+                _scheduleService.UpdatePart(updatedPart);
+                TempData["Success"] = "Part updated successfully!";
             }
             catch (Exception ex)
             {
-                TempData["Error"] = $"An error occurred while updating open parts: {ex.Message}";
+                TempData["Error"] = $"An error occurred while updating part: {ex.Message}";
             }
-
             return RedirectToAction("Index");
         }
+
     }
 }

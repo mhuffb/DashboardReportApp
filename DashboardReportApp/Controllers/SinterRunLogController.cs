@@ -38,6 +38,9 @@ namespace DashboardReportApp.Controllers
                 Console.WriteLine($"Part: {partRun.Key.Item1}, Run: {partRun.Key.Item2}, Furnace: {partRun.Value}");
             }
 
+            var openAssyG = await _sinterRunLogService.GetScheduledAssyG();
+            ViewData["OpenAssyG"] = openAssyG;
+
             // 4) Get all sinter run records for the React table
             var allRuns = await _sinterRunLogService.GetAllRunsAsync();
             return View(allRuns);
@@ -105,6 +108,20 @@ namespace DashboardReportApp.Controllers
             }
             return RedirectToAction("Index");
         }
-
+        [HttpPost("EndGreenAssemblyRun")]
+        public IActionResult EndSkid(string run)
+        {
+            try
+            {
+                _sinterRunLogService.EndGreenAssemblyRun(run);
+                ViewData["Message"] = "Skid run ended successfully.";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error Ending Skid Run: {ex.Message}");
+                ViewData["Error"] = $"An error occurred: {ex.Message}";
+            }
+            return RedirectToAction("Index");
+        }
     }
 }

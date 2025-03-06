@@ -76,16 +76,7 @@ namespace DashboardReportApp.Controllers
             Console.WriteLine($"Prod Number: {model.ProdNumber}");
             Console.WriteLine($"Pcs Start Received: {pcsStart}");
 
-            if (pcsStart > 0)
-            {
-                model.PcsStart = pcsStart;  // Keep manually entered pcsStart
-                Console.WriteLine("Using manually entered pcsStart: " + model.PcsStart);
-            }
-            else
-            {
-                Console.WriteLine("No valid pcsStart entered, will try fetching from API.");
-            }
-
+           
             await _pressRunLogService.HandleStartSkidAsync(model);
 
 
