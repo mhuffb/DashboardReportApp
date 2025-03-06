@@ -66,13 +66,16 @@ namespace DashboardReportApp.Controllers
                 // 2) Set default date
                 record.Date = DateTime.Now;
 
-                // 3) Insert the DB record
-                await _holdTagService.AddHoldRecordAsync(record);
+                // 3) Insert the DB record and update the model with its new ID.
+                int newId = await _holdTagService.AddHoldRecordAsync(record);
 
-                // 4) Generate and print PDF (existing code)
+                record.Id = newId;
+
+                // 4) Generate PDF using the record that now contains the ID.
                 string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
 
-                SharedService.PrintFile("QAHoldTags", pdfPath);
+
+                _sharedService.PrintFile("QAHoldTags", pdfPath);
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
                 string body = $"Discrepancy: {record.Discrepancy}\n" +

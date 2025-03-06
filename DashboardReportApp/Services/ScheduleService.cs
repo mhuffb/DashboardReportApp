@@ -11,11 +11,13 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringDataflex;
+        private readonly SharedService _sharedService;
 
-        public ScheduleService(IConfiguration config)
+        public ScheduleService(IConfiguration config, SharedService sharedService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
+            _sharedService = sharedService;
         }
 
 
@@ -106,8 +108,7 @@ namespace DashboardReportApp.Services
         public List<SintergyComponent> GetAllSchedParts()
         {
             var openParts = new List<SintergyComponent>();
-            string query = "SELECT id, date, part, component, subcomponent, quantity, run, prodNumber, open FROM schedule ORDER BY id desc";
-
+            string query = "SELECT id, date, part, component, quantity, run, prodNumber, open FROM schedule ORDER BY id desc";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -121,14 +122,13 @@ namespace DashboardReportApp.Services
                             var component = new SintergyComponent
                             {
                                 Id = reader.GetInt32("id"),
-                                Date = reader["date"] as DateTime?,
-                                MasterId = reader["part"].ToString(),
-                                Component = reader["component"]?.ToString(),
-                                SubComponent = reader["subcomponent"]?.ToString(),
-                                QtyToSchedule = Convert.ToInt32(reader["quantity"]),
-                                Run = reader["run"].ToString(),
-                                ProdNumber = reader["prodNumber"].ToString(),
-                                Open = Convert.ToInt32(reader["open"])
+                                Date = reader["date"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["date"]),
+                                MasterId = reader["part"] == DBNull.Value ? string.Empty : reader["part"].ToString(),
+                                Component = reader["component"] == DBNull.Value ? null : reader["component"].ToString(),
+                                QtyToSchedule = reader["quantity"] == DBNull.Value ? 0 : Convert.ToInt32(reader["quantity"]),
+                                Run = reader["run"] == DBNull.Value ? string.Empty : reader["run"].ToString(),
+                                ProdNumber = reader["prodNumber"] == DBNull.Value ? string.Empty : reader["prodNumber"].ToString(),
+                                Open = reader["open"] == DBNull.Value ? 0 : Convert.ToInt32(reader["open"])
                             };
                             openParts.Add(component);
                         }
@@ -139,11 +139,69 @@ namespace DashboardReportApp.Services
             return openParts;
         }
 
+
+        public bool CheckIfPartGetsSintergySecondary(string part)
+        {
+            List<string> result = _sharedService.GetOrderOfOps(part);
+
+            bool honingFound = false;
+            bool inHouseFound = false;
+            bool machinFound = false;
+            bool sintergyFound = false;
+            bool tapFound = false;
+
+            foreach (var op in result)
+            {
+                Console.WriteLine("Checking: " + op);
+                if (op.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    honingFound = true;
+                }
+                if (op.IndexOf("In House", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    inHouseFound = true;
+                }
+                if (op.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    machinFound = true;
+                }
+                if (op.IndexOf("Sintergy", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    sintergyFound = true;
+                }
+                if (op.IndexOf("Tap", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    tapFound = true;
+                }
+            }
+
+            bool condition1 = honingFound && inHouseFound;
+            bool condition2 = machinFound && sintergyFound;
+            bool condition3 = tapFound;
+
+            Console.WriteLine("HoningFound: " + honingFound);
+            Console.WriteLine("InHouseFound: " + inHouseFound);
+            Console.WriteLine("MachinFound: " + machinFound);
+            Console.WriteLine("SintergyFound: " + sintergyFound);
+            Console.WriteLine("TapFound: " + tapFound);
+            Console.WriteLine("Condition1 (Honing & In House): " + condition1);
+            Console.WriteLine("Condition2 (Machin & Sintergy): " + condition2);
+            Console.WriteLine("Condition3 (Tap): " + condition3);
+
+            return condition1 || condition2 || condition3;
+        }
+
+
+
+
+
         public void ScheduleComponents(ScheduleModel viewModel)
         {
+            Console.WriteLine("Scheduling...");
             int nextProdNumber = GetNextProdNumber();
-            string queryWithComponent = "INSERT INTO schedule (part, component, subcomponent, quantity, run, date, open, prodNumber, qtyNeededFor1Assy) VALUES (@Part, @Component, @SubComponent, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy)";
-            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy)";
+            
+            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, getsSintergySecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @GetsSintergySecondary)";
+            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, getsSintergySecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @GetsSintergySecondary)";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -151,7 +209,6 @@ namespace DashboardReportApp.Services
                 foreach (var component in viewModel.AllComponents)
                 {
                     bool hasComponent = !string.IsNullOrWhiteSpace(component.Component);
-                    bool hasSubComponent = !string.IsNullOrWhiteSpace(component.SubComponent);
 
                     using (var command = new MySqlCommand(hasComponent ? queryWithComponent : queryWithoutComponent, connection))
                     {
@@ -163,10 +220,20 @@ namespace DashboardReportApp.Services
                         command.Parameters.AddWithValue("@ProdNumber", nextProdNumber);
                         command.Parameters.AddWithValue("@QtyNeededFor1Assy", component.QtyNeededFor1Assy);
 
+                        bool getsSintergySecondaryMasterID = CheckIfPartGetsSintergySecondary(component.MasterId);
+                        bool getsSintergySecondaryComponent = CheckIfPartGetsSintergySecondary(component.MasterId);
+                        if (getsSintergySecondaryMasterID || getsSintergySecondaryComponent)
+                        {
+                            command.Parameters.AddWithValue("@GetsSintergySecondary", 1);
+                        }
+                        else
+                        {
+                            command.Parameters.AddWithValue("@GetsSintergySecondary", 0);
+                        }
+
                         if (hasComponent)
                         {
                             command.Parameters.AddWithValue("@Component", component.Component);
-                            command.Parameters.AddWithValue("@SubComponent", hasSubComponent ? component.SubComponent : (object)DBNull.Value);
                         }
 
                         command.ExecuteNonQuery();
@@ -219,7 +286,7 @@ namespace DashboardReportApp.Services
                 connection.Open();
                 string query = @"
             UPDATE schedule 
-            SET date = @Date, part = @Part, component = @Component, subcomponent = @SubComponent, 
+            SET date = @Date, part = @Part, component = @Component, 
                 quantity = @Quantity, run = @Run, open = @Open, prodNumber = @ProdNumber
             WHERE id = @Id";
 
@@ -228,7 +295,6 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@Date", part.Date);
                     command.Parameters.AddWithValue("@Part", part.MasterId);
                     command.Parameters.AddWithValue("@Component", part.Component ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@SubComponent", part.SubComponent ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@Quantity", part.QtyToSchedule);
                     command.Parameters.AddWithValue("@Run", part.Run);
                     command.Parameters.AddWithValue("@Open", part.Open);

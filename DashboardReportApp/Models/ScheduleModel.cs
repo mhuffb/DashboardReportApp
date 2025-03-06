@@ -14,13 +14,13 @@
         public string MasterId { get; set; }
         public string Part { get; set; }
         public string Component { get; set; }
-        public string SubComponent { get; set; }
-        public int QtyNeededFor1Assy { get; set; }
+        public int? QtyNeededFor1Assy { get; set; }
         public int QtyToSchedule { get; set; }
         public int AssyGPcs { get; set; }
         public string Run { get; set; }
         public int Open { get; set; } // Add this property
         public string ProdNumber { get; set; }
+        public sbyte GetsSintergySecondary { get; set; }
     }
 
 

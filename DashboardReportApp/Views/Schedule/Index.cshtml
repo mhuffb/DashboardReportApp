@@ -38,7 +38,7 @@
     </div>
 
     <!-- Query Results -->
-    <h2 class="mt-4 text-center">View Parts, Components, and Subcomponents</h2>
+    <h2 class="mt-4 text-center">View Parts, Components</h2>
     @if (Model.AllComponents != null)
     {
         <div class="table-responsive">
@@ -51,7 +51,6 @@
                             <tr>
                                 <th>Part</th>
                                 <th>Component</th>
-                                <th>Subcomponent</th>
                                 <th>Qty to Make Part</th>
                                 <th>Qty to Schedule</th>
                                 <th>Production Number</th>
@@ -69,10 +68,6 @@
                                     <td>
                                         <input type="hidden" name="AllComponents[@i].Component" value="@Model.AllComponents[i].Component" />
                                         @Model.AllComponents[i].Component
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].SubComponent" value="@(Model.AllComponents[i].SubComponent ?? "")" />
-                                        @(Model.AllComponents[i].SubComponent ?? "")
                                     </td>
                                     <td>
                                         <input type="hidden" name="AllComponents[@i].QtyNeededFor1Assy" value="@Model.AllComponents[i].QtyNeededFor1Assy" />
@@ -137,7 +132,6 @@
                         <th class="sortable" data-label="Date">Date</th>
                         <th class="sortable" data-label="Part">Part</th>
                         <th class="sortable" data-label="Component">Component</th>
-                        <th class="sortable" data-label="Subcomponent">Subcomponent</th>
                         <th class="sortable" data-label="Quantity">Quantity</th>
                         <th class="sortable" data-label="ProdNumber">Production Number</th>
                         <th class="sortable" data-label="Run">Run</th>
@@ -152,7 +146,6 @@
                             data-date="@(Model.AllParts[i].Date?.ToString("yyyy-MM-dd"))"
                             data-masterid="@Model.AllParts[i].MasterId"
                             data-component="@Model.AllParts[i].Component"
-                            data-subcomponent="@(Model.AllParts[i].SubComponent ?? "")"
                             data-qty="@Model.AllParts[i].QtyToSchedule"
                             data-prodnumber="@Model.AllParts[i].ProdNumber"
                             data-run="@Model.AllParts[i].Run"
@@ -161,7 +154,6 @@
                             <td>@Model.AllParts[i].Date?.ToString("yyyy-MM-dd")</td>
                             <td>@Model.AllParts[i].MasterId</td>
                             <td>@Model.AllParts[i].Component</td>
-                            <td>@(Model.AllParts[i].SubComponent ?? "")</td>
                             <td>@Model.AllParts[i].QtyToSchedule</td>
                             <td>@Model.AllParts[i].ProdNumber</td>
                             <td>@Model.AllParts[i].Run</td>
@@ -201,10 +193,6 @@
                     <div class="mb-3">
                         <label for="editComponent" class="form-label">Component</label>
                         <input type="text" class="form-control" id="editComponent" name="Component" />
-                    </div>
-                    <div class="mb-3">
-                        <label for="editSubComponent" class="form-label">Subcomponent</label>
-                        <input type="text" class="form-control" id="editSubComponent" name="SubComponent" />
                     </div>
                     <div class="mb-3">
                         <label for="editQtyToSchedule" class="form-label">Quantity</label>
@@ -334,7 +322,6 @@
                     var date = row.getAttribute('data-date');
                     var masterId = row.getAttribute('data-masterid');
                     var component = row.getAttribute('data-component');
-                    var subcomponent = row.getAttribute('data-subcomponent');
                     var qty = row.getAttribute('data-qty');
                     var prodnumber = row.getAttribute('data-prodnumber');
                     var run = row.getAttribute('data-run');
@@ -345,7 +332,6 @@
                     document.getElementById('editDate').value = date;
                     document.getElementById('editMasterId').value = masterId;
                     document.getElementById('editComponent').value = component;
-                    document.getElementById('editSubComponent').value = subcomponent;
                     document.getElementById('editQtyToSchedule').value = qty;
                     document.getElementById('editProdNumber').value = prodnumber;
                     document.getElementById('editRun').value = run;

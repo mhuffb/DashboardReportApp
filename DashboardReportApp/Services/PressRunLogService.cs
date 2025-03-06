@@ -29,11 +29,13 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringDataflex;
+        private readonly SharedService _sharedService;
 
-        public PressRunLogService(IConfiguration config)
+        public PressRunLogService(IConfiguration config, SharedService sharedService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
+            _sharedService = sharedService;
         }
 
         #region Device Mapping / Count
@@ -357,49 +359,13 @@ LIMIT 1";
             Console.WriteLine("Start Skid Processed Successfully.");
         }
 
+       
         public string GenerateRouterTag(PressRunLogModel model)
         {
-            string part = model.Part;
-
             List<string> result = new List<string>();
 
-            string query = "SELECT mstep.master_id, pstep.\"desc\", mastersg.qc_prior, mastersg.qc_after " +
-                           "FROM (mstep LEFT OUTER JOIN mastersg ON (mstep.master_id = mastersg.master_id AND mstep.pstep = mastersg.pstep)) " +
-                           "LEFT OUTER JOIN pstep ON mstep.pstep = pstep.pcode " +
-                           "WHERE mstep.omit = 0 AND mstep.master_id = ? " +
-                           "AND pstep.\"desc\" IS NOT NULL " +
-                           "AND (mastersg.omit = 0 OR mastersg.omit IS NULL) " +
-                           "ORDER BY mstep.master_id";
+            result = _sharedService.GetOrderOfOps(model.Part);
 
-            using (OdbcConnection conn = new OdbcConnection(_connectionStringDataflex))
-            using (OdbcCommand cmd = new OdbcCommand(query, conn))
-            {
-                // Set the part number parameter
-                cmd.Parameters.AddWithValue("?", part);
-                conn.Open();
-                using (OdbcDataReader reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        string desc = reader["desc"].ToString();
-
-                        // Check if qc_prior equals 1 and add "QC Check" before the description if true.
-                        bool qcPriorIsOne = reader["qc_prior"] != DBNull.Value && Convert.ToInt32(reader["qc_prior"]) == 1;
-                        // Check if qc_after equals 1 and add "QC Check" after the description if true.
-                        bool qcAfterIsOne = reader["qc_after"] != DBNull.Value && Convert.ToInt32(reader["qc_after"]) == 1;
-
-                        if (qcPriorIsOne)
-                        {
-                            result.Add("QC Check");
-                        }
-                        result.Add(desc);
-                        if (qcAfterIsOne)
-                        {
-                            result.Add("QC Check");
-                        }
-                    }
-                }
-            }
 
             string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\RouterTag_" + model.Id + ".pdf";
 

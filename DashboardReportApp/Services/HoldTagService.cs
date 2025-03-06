@@ -24,12 +24,13 @@ namespace DashboardReportApp.Services
 
        
 
-        public async Task AddHoldRecordAsync(HoldTagModel record)
+        public async Task<int> AddHoldRecordAsync(HoldTagModel record)
         {
             string query = @"INSERT INTO holdrecords 
                 (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
-                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2)";
-
+                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
+                SELECT LAST_INSERT_ID();";
+                
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
@@ -51,7 +52,10 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@fileAddress1", record.FileAddress1 ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@fileAddress2", record.FileAddress2 ?? (object)DBNull.Value);
 
-                    await command.ExecuteNonQueryAsync();
+                    // Execute and get the new ID
+                    int newId = Convert.ToInt32(await command.ExecuteScalarAsync());
+                    record.Id = newId; // update your model
+                    return newId;
                 }
             }
         }

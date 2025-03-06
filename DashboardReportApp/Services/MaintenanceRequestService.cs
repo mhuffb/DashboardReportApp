@@ -22,10 +22,12 @@
     {
         private readonly string _connectionString;
         private readonly string _uploadFolder;
-        public MaintenanceRequestService(IConfiguration configuration)
+        private readonly SharedService _sharedService;
+        public MaintenanceRequestService(IConfiguration configuration, SharedService sharedService)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+            _sharedService = sharedService;
         }
 
       
@@ -64,7 +66,7 @@
                     // Generate PDF for the request
                     string pdfPath = GeneratePdf(request);
 
-                    SharedService.PrintFile("Maintenance", pdfPath);
+                    _sharedService.PrintFile("Maintenance", pdfPath);
 
                     // Email the PDF
                     await SendEmailWithPdfAsync(pdfPath, request);

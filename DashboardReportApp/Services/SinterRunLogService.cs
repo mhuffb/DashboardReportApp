@@ -379,7 +379,7 @@ public class SinterRunLogService
         var openGreenAssy = new List<SintergyComponent>();
 
         string query = @"
-    SELECT id, prodNumber, run, part, component, subcomponent, open
+    SELECT id, prodNumber, run, part, component, open
     FROM schedule
     WHERE open = 1 
     ";
@@ -394,14 +394,7 @@ public class SinterRunLogService
             // Retrieve values
             string partValue = reader["part"]?.ToString() ?? "N/A";
             string component = reader["component"]?.ToString();
-            string subcomponent = reader["subcomponent"]?.ToString();
 
-            // If subcomponent contains "C", skip this record immediately.
-            if (!string.IsNullOrEmpty(subcomponent) &&
-                subcomponent.IndexOf("C", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                continue;
-            }
 
             // If component contains "C", skip this record immediately.
             if (!string.IsNullOrEmpty(component) &&
@@ -411,16 +404,10 @@ public class SinterRunLogService
             }
 
             // Determine the final part value based on "Y" conditions:
-            // 1. If subcomponent is not null and contains "Y", use subcomponent.
             // 2. Else if component is not null and contains "Y", use component.
             // 3. Else if part contains "Y", use part.
             string finalPart = null;
-            if (!string.IsNullOrEmpty(subcomponent) &&
-                subcomponent.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                finalPart = subcomponent;
-            }
-            else if (!string.IsNullOrEmpty(component) &&
+            if (!string.IsNullOrEmpty(component) &&
                      component.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 finalPart = component;
@@ -442,7 +429,6 @@ public class SinterRunLogService
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = finalPart,
                 Component = component ?? "N/A",
-                SubComponent = subcomponent ?? "N/A",
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
             });
         }

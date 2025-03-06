@@ -4,6 +4,7 @@ using System.Net.Mail;
 using System.Net;
 using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
+using System.Data.Odbc;
 
 namespace DashboardReportApp.Services
 {
@@ -11,6 +12,7 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringSQLExpress;
+        private readonly string _connectionStringDataflex;
         private readonly string _uploadFolder;
 
         public SharedService(IConfiguration configuration)
@@ -18,13 +20,14 @@ namespace DashboardReportApp.Services
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
+            _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
         }
 
         public SharedService()
         {
         }
 
-        public static void PrintFile(string printerName, string pdfPath)
+        public void PrintFile(string printerName, string pdfPath)
         {
             if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
             {
@@ -236,6 +239,48 @@ ORDER BY
             return operators;
         }
 
+        public List<string> GetOrderOfOps(string part)
+        {
+            List<string> result = new List<string>();
 
+            string query = "SELECT mstep.master_id, pstep.\"desc\", mastersg.qc_prior, mastersg.qc_after " +
+                           "FROM (mstep LEFT OUTER JOIN mastersg ON (mstep.master_id = mastersg.master_id AND mstep.pstep = mastersg.pstep)) " +
+                           "LEFT OUTER JOIN pstep ON mstep.pstep = pstep.pcode " +
+                           "WHERE mstep.omit = 0 AND mstep.master_id = ? " +
+                           "AND pstep.\"desc\" IS NOT NULL " +
+                           "AND (mastersg.omit = 0 OR mastersg.omit IS NULL) " +
+                           "ORDER BY mstep.master_id";
+
+            using (OdbcConnection conn = new OdbcConnection(_connectionStringDataflex))
+            using (OdbcCommand cmd = new OdbcCommand(query, conn))
+            {
+                // Set the part number parameter
+                cmd.Parameters.AddWithValue("?", part);
+                conn.Open();
+                using (OdbcDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string desc = reader["desc"].ToString();
+
+                        // Check if qc_prior equals 1 and add "QC Check" before the description if true.
+                        bool qcPriorIsOne = reader["qc_prior"] != DBNull.Value && Convert.ToInt32(reader["qc_prior"]) == 1;
+                        // Check if qc_after equals 1 and add "QC Check" after the description if true.
+                        bool qcAfterIsOne = reader["qc_after"] != DBNull.Value && Convert.ToInt32(reader["qc_after"]) == 1;
+
+                        if (qcPriorIsOne)
+                        {
+                            result.Add("QC Check");
+                        }
+                        result.Add(desc);
+                        if (qcAfterIsOne)
+                        {
+                            result.Add("QC Check");
+                        }
+                    }
+                }
+            }
+            return result;
+        }
     }
 }
