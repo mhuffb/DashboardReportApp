@@ -7,6 +7,8 @@ using System.Collections.Generic;
 namespace DashboardReportApp.Controllers
 {
     [PasswordProtected(Password = "5intergy")] // Set your password here
+
+    [Route("Schedule")]
     public class ScheduleController : Controller
     {
         private readonly ScheduleService _scheduleService;
@@ -32,7 +34,7 @@ namespace DashboardReportApp.Controllers
             return View(viewModel);
         }
 
-        [HttpPost]
+        [HttpPost("ScheduleComponents")]
         public IActionResult ScheduleComponents(ScheduleModel viewModel)
         {
             try
@@ -60,8 +62,7 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-
-        [HttpPost]
+        [HttpPost("UpdatePart")]
         public IActionResult UpdatePart(SintergyComponent updatedPart)
         {
             try
@@ -74,6 +75,23 @@ namespace DashboardReportApp.Controllers
                 TempData["Error"] = $"An error occurred while updating part: {ex.Message}";
             }
             return RedirectToAction("Index");
+        }
+        [HttpGet("GetComponents")]
+        public IActionResult GetComponents(string part, int quantity)
+        {
+            // Log parameters
+            Console.WriteLine($"GetComponents called with part: {part}, quantity: {quantity}");
+            var components = _scheduleService.GetComponentsForMasterId(part, quantity);
+            Console.WriteLine($"Components count: {components.Count}");
+
+            // Build a new model with these components.
+            var model = new ScheduleModel
+            {
+                AllComponents = components
+            };
+
+            // Return the partial view with the model.
+            return PartialView("_ComponentsPartial", model);
         }
 
     }

@@ -1,4 +1,6 @@
 ﻿@model DashboardReportApp.Models.ScheduleModel
+@using System.Text.Json;
+
 <div class="container mt-4">
     <h1 class="text-center mb-4">Schedule Parts</h1>
     <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
@@ -17,92 +19,14 @@
         </div>
     }
 
-    <!-- Query Form -->
-    <div class="card shadow">
-        <div class="card-body">
-            <h3 class="text-center">Search for Parts</h3>
-            <form asp-action="Index" method="get" class="d-flex flex-column align-items-center">
-                <div class="mb-3" style="width: 200px;">
-                    <label for="masterId" class="form-label text-center w-100">Part Number</label>
-                    <input type="text" id="masterId" name="masterId" class="form-control" placeholder="Enter Part Number" />
-                </div>
-                <div class="mb-3" style="width: 200px;">
-                    <label for="quantity" class="form-label text-center w-100">Quantity</label>
-                    <input type="number" id="quantity" name="quantity" class="form-control" placeholder="Enter Quantity" />
-                </div>
-                <div class="mb-3" style="width: 200px;">
-                    <button type="submit" class="btn btn-primary w-100">Query</button>
-                </div>
-            </form>
-        </div>
+    <!-- Start Scheduling Button -->
+    <div class="text-center">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#startSchedulingModal">
+            Start Scheduling
+        </button>
     </div>
 
-    <!-- Query Results -->
-    <h2 class="mt-4 text-center">View Parts, Components</h2>
-    @if (Model.AllComponents != null)
-    {
-        <div class="table-responsive">
-            <form asp-action="ScheduleComponents" method="post" class="d-flex flex-column align-items-center">
-                <input type="hidden" name="MasterId" value="@Model.AllComponents.FirstOrDefault()?.MasterId" />
-                @if (Model.AllComponents.Any())
-                {
-                    <table class="custom-table table-striped table-bordered shadow-sm w-100">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Part</th>
-                                <th>Component</th>
-                                <th>Qty to Make Part</th>
-                                <th>Qty to Schedule</th>
-                                <th>Production Number</th>
-                                <th>Run</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (int i = 0; i < Model.AllComponents.Count; i++)
-                            {
-                                <tr>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].MasterId" value="@Model.AllComponents[i].MasterId" />
-                                        @Model.AllComponents[i].MasterId
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].Component" value="@Model.AllComponents[i].Component" />
-                                        @Model.AllComponents[i].Component
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].QtyNeededFor1Assy" value="@Model.AllComponents[i].QtyNeededFor1Assy" />
-                                        @Model.AllComponents[i].QtyNeededFor1Assy
-                                    </td>
-
-                                    <td>
-                                        <input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" required />
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].ProdNumber" value="@Model.AllComponents[i].ProdNumber" />
-                                        @Model.AllComponents[i].ProdNumber
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
-                                        @Model.AllComponents[i].Run
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-                else
-                {
-                    <p class="">No components found for the given part number and quantity.</p>
-                }
-                <!-- Schedule Button -->
-                <div class="mt-3" style="width: 200px;">
-                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-calendar-check"></i> Schedule</button>
-                </div>
-            </form>
-        </div>
-    }
-
-    <!-- Parts Scheduled Section with Sorting and Filtering -->
+    <!-- Table of All Scheduled Parts -->
     <h3 class="mt-4 text-center">Parts Scheduled</h3>
     @if (Model.AllParts == null || !Model.AllParts.Any())
     {
@@ -110,23 +34,8 @@
     }
     else
     {
-        <!-- Filtering Inputs -->
-        <div class="row mb-3 justify-content-center">
-            <div class="col-auto">
-                <input type="text" id="scheduleSearchInput" class="form-control" placeholder="Search scheduled parts..." style="max-width: 200px;" />
-            </div>
-            <div class="col-auto d-flex">
-                <input type="date" id="scheduleStartDate" class="form-control me-2" style="max-width: 150px;" />
-                <input type="date" id="scheduleEndDate" class="form-control" style="max-width: 150px;" />
-            </div>
-            <div class="col-auto">
-                <button id="scheduleClearFilters" class="btn btn-secondary">Clear Filters</button>
-            </div>
-        </div>
-
-        <!-- Table with Sorting-enabled Headers using custom-table class -->
         <div class="table-responsive">
-            <table id="scheduledPartsTable" class="custom-table">
+            <table id="scheduledPartsTable" class="custom-table table-striped table-bordered shadow-sm">
                 <thead class="table-dark">
                     <tr>
                         <th class="sortable" data-label="Date">Date</th>
@@ -142,9 +51,10 @@
                 <tbody>
                     @for (int i = 0; i < Model.AllParts.Count; i++)
                     {
+                        var partUpper = Model.AllParts[i].MasterId?.ToUpper();
                         <tr data-index="@i"
                             data-date="@(Model.AllParts[i].Date?.ToString("yyyy-MM-dd"))"
-                            data-masterid="@Model.AllParts[i].MasterId"
+                            data-masterid="@partUpper"
                             data-component="@Model.AllParts[i].Component"
                             data-qty="@Model.AllParts[i].QtyToSchedule"
                             data-prodnumber="@Model.AllParts[i].ProdNumber"
@@ -152,7 +62,7 @@
                             data-id="@Model.AllParts[i].Id"
                             data-open="@Model.AllParts[i].Open">
                             <td>@Model.AllParts[i].Date?.ToString("yyyy-MM-dd")</td>
-                            <td>@Model.AllParts[i].MasterId</td>
+                            <td>@partUpper</td>
                             <td>@Model.AllParts[i].Component</td>
                             <td>@Model.AllParts[i].QtyToSchedule</td>
                             <td>@Model.AllParts[i].ProdNumber</td>
@@ -169,6 +79,62 @@
     }
 </div>
 
+<!-- Modal 1: Start Scheduling (Query Input) -->
+<div class="modal fade" id="startSchedulingModal" tabindex="-1" aria-labelledby="startSchedulingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="queryFormModal">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="startSchedulingModalLabel">Enter Part and Quantity</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="queryPart" class="form-label">Part Number</label>
+                        <input type="text" class="form-control" id="queryPart" placeholder="Enter Part Number" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="queryQuantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="queryQuantity" placeholder="Enter Quantity" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- Query Button triggers AJAX call -->
+                    <button type="button" id="queryButtonModal" class="btn btn-primary">Query</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: Query Results & Scheduling -->
+<div class="modal fade" id="queryResultsModal" tabindex="-1" aria-labelledby="queryResultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="ScheduleComponents" method="post" id="scheduleComponentsForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="queryResultsModalLabel">Query Results - Adjust Quantity to Schedule</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Partial view content will be injected here via AJAX -->
+                    <div id="queryResultsContent">
+                        <p class="text-center">No components found.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- Schedule Button inside modal -->
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-calendar-check"></i> Schedule
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Edit Modal -->
 <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -181,21 +147,20 @@
                 <div class="modal-body">
                     <!-- Hidden field to pass the record's ID -->
                     <input type="hidden" id="editId" name="Id" />
-
                     <div class="mb-3">
                         <label for="editDate" class="form-label">Date</label>
                         <input type="date" class="form-control" id="editDate" name="Date" />
                     </div>
                     <div class="mb-3">
                         <label for="editMasterId" class="form-label">Part</label>
-                        <input type="text" class="form-control" id="editMasterId" name="MasterId" />
+                        <input type="text" class="form-control" id="editMasterId" name="MasterId" readonly />
                     </div>
                     <div class="mb-3">
                         <label for="editComponent" class="form-label">Component</label>
                         <input type="text" class="form-control" id="editComponent" name="Component" />
                     </div>
                     <div class="mb-3">
-                        <label for="editQtyToSchedule" class="form-label">Quantity</label>
+                        <label for="editQtyToSchedule" class="form-label">Qty to Schedule</label>
                         <input type="number" class="form-control" id="editQtyToSchedule" name="QtyToSchedule" />
                     </div>
                     <div class="mb-3">
@@ -224,90 +189,40 @@
 </div>
 
 @section Scripts {
-    <!-- Sorting and Filtering Scripts for Scheduled Parts -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            // Get filter controls and table elements for Scheduled Parts table
-            const searchInput = document.getElementById("scheduleSearchInput");
-            const startDateInput = document.getElementById("scheduleStartDate");
-            const endDateInput = document.getElementById("scheduleEndDate");
-            const clearBtn = document.getElementById("scheduleClearFilters");
-            const tableBody = document.querySelector("#scheduledPartsTable tbody");
-            const rows = Array.from(tableBody.querySelectorAll("tr"));
-            const headers = document.querySelectorAll("#scheduledPartsTable thead th.sortable");
+            // When the Query button in Modal 1 is clicked...
+            document.getElementById("queryButtonModal").addEventListener("click", function () {
+                var part = document.getElementById("queryPart").value;
+                var quantity = document.getElementById("queryQuantity").value;
+                if (!part || !quantity) {
+                    alert("Please enter both part number and quantity.");
+                    return;
+                }
 
-            // SEARCH FUNCTION: Filter rows by search term
-            searchInput.addEventListener("keyup", function () {
-                const searchTerm = searchInput.value.toLowerCase();
-                rows.forEach(row => {
-                    const rowText = row.textContent.toLowerCase();
-                    row.style.display = rowText.includes(searchTerm) ? "" : "none";
-                });
-            });
+                // Force uppercase on the part value
+                part = part.toUpperCase();
+                document.getElementById("queryPart").value = part;
 
-            // DATE FILTER FUNCTION: Assumes Date is in the first column
-            function filterByDate() {
-                const startDateValue = startDateInput.value;
-                const endDateValue = endDateInput.value;
-                rows.forEach(row => {
-                    const dateCell = row.children[0]; // Date column index
-                    const rowDateStr = dateCell.textContent.trim();
-                    if (!rowDateStr) {
-                        row.style.display = "";
-                        return;
-                    }
-                    const rowDate = new Date(rowDateStr);
-                    let showRow = true;
-                    if (startDateValue) {
-                        const startDate = new Date(startDateValue);
-                        if (rowDate < startDate) {
-                            showRow = false;
-                        }
-                    }
-                    if (endDateValue) {
-                        const endDate = new Date(endDateValue);
-                        if (rowDate > endDate) {
-                            showRow = false;
-                        }
-                    }
-                    row.style.display = showRow ? "" : "none";
-                });
-            }
-            startDateInput.addEventListener("change", filterByDate);
-            endDateInput.addEventListener("change", filterByDate);
+                // Hide the first modal (Start Scheduling)
+                var startModalEl = document.getElementById('startSchedulingModal');
+                var startModal = bootstrap.Modal.getInstance(startModalEl);
+                startModal.hide();
 
-            // Clear Filters Button
-            clearBtn.addEventListener("click", function () {
-                searchInput.value = "";
-                startDateInput.value = "";
-                endDateInput.value = "";
-                rows.forEach(row => row.style.display = "");
-            });
-
-            // SORTING FUNCTION: Enable column sorting on header click
-            headers.forEach((header, index) => {
-                header.addEventListener("click", function () {
-                    // Toggle sort order: header.dataset.order (1 for ascending, -1 for descending)
-                    const order = header.dataset.order = -(header.dataset.order || -1);
-                    const type = header.dataset.label;
-
-                    rows.sort((rowA, rowB) => {
-                        const cellA = rowA.children[index].textContent.trim();
-                        const cellB = rowB.children[index].textContent.trim();
-
-                        if (type === "Date") {
-                            return order * (new Date(cellA) - new Date(cellB));
-                        } else if (!isNaN(cellA) && !isNaN(cellB)) {
-                            return order * (Number(cellA) - Number(cellB));
-                        } else {
-                            return order * cellA.localeCompare(cellB);
-                        }
+                // Make an AJAX call to fetch the components partial view.
+                fetch('/Schedule/GetComponents?part=' + encodeURIComponent(part) + '&quantity=' + encodeURIComponent(quantity))
+                    .then(response => response.text())
+                    .then(html => {
+                        // Inject returned HTML into the query results modal body.
+                        document.getElementById("queryResultsContent").innerHTML = html;
+                        // Open the Query Results modal.
+                        var queryResultsModal = new bootstrap.Modal(document.getElementById('queryResultsModal'));
+                        queryResultsModal.show();
+                    })
+                    .catch(error => {
+                        console.error("Error fetching components:", error);
+                        alert("An error occurred while fetching components.");
                     });
-
-                    // Rebuild table body with sorted rows
-                    tableBody.innerHTML = "";
-                    rows.forEach(row => tableBody.appendChild(row));
-                });
             });
         });
     </script>
@@ -320,7 +235,7 @@
                 btn.addEventListener('click', function() {
                     var row = btn.closest('tr');
                     var date = row.getAttribute('data-date');
-                    var masterId = row.getAttribute('data-masterid');
+                    var masterId = row.getAttribute('data-masterid'); // This value is already uppercase.
                     var component = row.getAttribute('data-component');
                     var qty = row.getAttribute('data-qty');
                     var prodnumber = row.getAttribute('data-prodnumber');
@@ -337,7 +252,6 @@
                     document.getElementById('editRun').value = run;
                     document.getElementById('editOpen').value = open;
 
-                    // Show the modal using Bootstrap's modal plugin
                     var myModal = new bootstrap.Modal(document.getElementById('editModal'));
                     myModal.show();
                 });

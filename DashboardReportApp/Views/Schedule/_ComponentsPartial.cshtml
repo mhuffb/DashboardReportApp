@@ -1,0 +1,54 @@
+﻿@model DashboardReportApp.Models.ScheduleModel
+
+@if (Model.AllComponents != null && Model.AllComponents.Any())
+{
+    <input type="hidden" name="MasterId" value="@Model.AllComponents.FirstOrDefault()?.MasterId" />
+    <div class="table-responsive">
+        <table class="custom-table table-striped table-bordered shadow-sm w-100">
+            <thead class="table-dark">
+                <tr>
+                    <th>Part</th>
+                    <th>Component</th>
+                    <th>Qty to Make Part</th>
+                    <th>Qty to Schedule</th>
+                    <th>Production Number</th>
+                    <th>Run</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.AllComponents.Count; i++)
+                {
+                    <tr>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].MasterId" value="@Model.AllComponents[i].MasterId" />
+                            @Model.AllComponents[i].MasterId
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].Component" value="@Model.AllComponents[i].Component" />
+                            @Model.AllComponents[i].Component
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].QtyNeededFor1Assy" value="@Model.AllComponents[i].QtyNeededFor1Assy" />
+                            @Model.AllComponents[i].QtyNeededFor1Assy
+                        </td>
+                        <td>
+                            <input type="number" name="AllComponents[@i].QtyToSchedule" value="@Model.AllComponents[i].QtyToSchedule" class="form-control" required />
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].ProdNumber" value="@Model.AllComponents[i].ProdNumber" />
+                            @Model.AllComponents[i].ProdNumber
+                        </td>
+                        <td>
+                            <input type="hidden" name="AllComponents[@i].Run" value="@Model.AllComponents[i].Run" />
+                            @Model.AllComponents[i].Run
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <p class="text-center">No components found for the given part number and quantity.</p>
+}

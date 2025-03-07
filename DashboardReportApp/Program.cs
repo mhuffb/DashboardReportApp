@@ -43,6 +43,7 @@ try
     builder.Services.AddScoped<MoldingService>();
     builder.Services.AddScoped<AdminProcessChangeRequestService>();
     builder.Services.AddScoped<SharedService>();
+    builder.Services.AddScoped<AssemblyService>();
 
     // Add session services
     builder.Services.AddSession(options =>

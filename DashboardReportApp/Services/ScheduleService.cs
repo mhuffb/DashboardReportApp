@@ -140,7 +140,7 @@ namespace DashboardReportApp.Services
         }
 
 
-        public bool CheckIfPartGetsSintergySecondary(string part)
+        public bool CheckIfPartNeedsSintergySecondary(string part)
         {
             List<string> result = _sharedService.GetOrderOfOps(part);
 
@@ -179,14 +179,6 @@ namespace DashboardReportApp.Services
             bool condition2 = machinFound && sintergyFound;
             bool condition3 = tapFound;
 
-            Console.WriteLine("HoningFound: " + honingFound);
-            Console.WriteLine("InHouseFound: " + inHouseFound);
-            Console.WriteLine("MachinFound: " + machinFound);
-            Console.WriteLine("SintergyFound: " + sintergyFound);
-            Console.WriteLine("TapFound: " + tapFound);
-            Console.WriteLine("Condition1 (Honing & In House): " + condition1);
-            Console.WriteLine("Condition2 (Machin & Sintergy): " + condition2);
-            Console.WriteLine("Condition3 (Tap): " + condition3);
 
             return condition1 || condition2 || condition3;
         }
@@ -200,8 +192,8 @@ namespace DashboardReportApp.Services
             Console.WriteLine("Scheduling...");
             int nextProdNumber = GetNextProdNumber();
             
-            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, getsSintergySecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @GetsSintergySecondary)";
-            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, getsSintergySecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @GetsSintergySecondary)";
+            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary)";
+            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary)";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -220,15 +212,15 @@ namespace DashboardReportApp.Services
                         command.Parameters.AddWithValue("@ProdNumber", nextProdNumber);
                         command.Parameters.AddWithValue("@QtyNeededFor1Assy", component.QtyNeededFor1Assy);
 
-                        bool getsSintergySecondaryMasterID = CheckIfPartGetsSintergySecondary(component.MasterId);
-                        bool getsSintergySecondaryComponent = CheckIfPartGetsSintergySecondary(component.MasterId);
-                        if (getsSintergySecondaryMasterID || getsSintergySecondaryComponent)
+                        bool needsSintergySecondaryMasterID = CheckIfPartNeedsSintergySecondary(component.MasterId);
+                        bool needsSintergySecondaryComponent = CheckIfPartNeedsSintergySecondary(component.MasterId);
+                        if (needsSintergySecondaryMasterID || needsSintergySecondaryComponent)
                         {
-                            command.Parameters.AddWithValue("@GetsSintergySecondary", 1);
+                            command.Parameters.AddWithValue("@NeedsSintergySecondary", 1);
                         }
                         else
                         {
-                            command.Parameters.AddWithValue("@GetsSintergySecondary", 0);
+                            command.Parameters.AddWithValue("@NeedsSintergySecondary", 0);
                         }
 
                         if (hasComponent)
