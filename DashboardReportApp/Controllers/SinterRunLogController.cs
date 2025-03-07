@@ -38,8 +38,7 @@ namespace DashboardReportApp.Controllers
                 Console.WriteLine($"Part: {partRun.Key.Item1}, Run: {partRun.Key.Item2}, Furnace: {partRun.Value}");
             }
 
-            var openAssyG = await _sinterRunLogService.GetScheduledAssyG();
-            ViewData["OpenAssyG"] = openAssyG;
+           
 
             // 4) Get all sinter run records for the React table
             var allRuns = await _sinterRunLogService.GetAllRunsAsync();
@@ -50,15 +49,15 @@ namespace DashboardReportApp.Controllers
         public IActionResult LoginToSkid(SinterRunSkid model)
         {
             if (string.IsNullOrWhiteSpace(model.Operator) ||
-                string.IsNullOrWhiteSpace(model.ProdNumber) ||
-                string.IsNullOrWhiteSpace(model.Part) ||
-                string.IsNullOrWhiteSpace(model.Run) ||
-                string.IsNullOrWhiteSpace(model.Machine) ||
-                string.IsNullOrWhiteSpace(model.Process))
+    string.IsNullOrWhiteSpace(model.ProdNumber) ||
+    string.IsNullOrWhiteSpace(model.Part) ||
+    string.IsNullOrWhiteSpace(model.Machine) ||
+    string.IsNullOrWhiteSpace(model.Process))
             {
-                ViewData["Error"] = "All fields are required.";
+                ViewData["Error"] = "All required fields are required.";
                 return RedirectToAction("Index");
             }
+
 
             try
             {
@@ -76,12 +75,12 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpPost("LogoutOfSkid")]
-        public IActionResult LogoutOfSkid(string part, string run, string skidNumber)
+        public IActionResult LogoutOfSkid(string part, string run, string skidNumber, string prodNumber)
         {
             try
             {
                 Console.WriteLine($"Closing Sinter Run: Part = {part}, Run = {run}, SkidNumber = {skidNumber}");
-                _sinterRunLogService.LogoutOfSkid(part, run, skidNumber);
+                _sinterRunLogService.LogoutOfSkid(part, run, skidNumber, prodNumber);
                 ViewData["Message"] = $"Sintering stopped for {part} - {run} (Skid: {skidNumber}) successfully.";
             }
             catch (Exception ex)
@@ -108,20 +107,6 @@ namespace DashboardReportApp.Controllers
             }
             return RedirectToAction("Index");
         }
-        [HttpPost("EndGreenAssemblyRun")]
-        public IActionResult EndSkid(string run, string part, string prodNumber)
-        {
-            try
-            {
-                _sinterRunLogService.EndGreenAssemblyRun(run, part, prodNumber);
-                ViewData["Message"] = "Skid run ended successfully.";
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error Ending Skid Run: {ex.Message}");
-                ViewData["Error"] = $"An error occurred: {ex.Message}";
-            }
-            return RedirectToAction("Index");
-        }
+       
     }
 }

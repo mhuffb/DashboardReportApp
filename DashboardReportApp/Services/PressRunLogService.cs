@@ -155,18 +155,19 @@ namespace DashboardReportApp.Services
 
         #region Main Run Logic (Login, Logout, EndRun)
 
-        public async Task HandleLoginWithCountAsync(PressRunLogModel formModel, int userCount)
+        public async Task HandleLogin(PressRunLogModel formModel)
         {
             const string insertMainRun = @"
 INSERT INTO pressrun 
-    (operator, part, machine, prodNumber, run, startDateTime, skidNumber)
+    (operator, part, component,  machine, prodNumber, run, startDateTime, skidNumber)
 VALUES 
-    (@operator, @part, @machine, @prodNumber, @run, @startTime, 0)";
+    (@operator, @part, @component, @machine, @prodNumber, @run, @startTime, 0)";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(insertMainRun, conn);
             cmd.Parameters.AddWithValue("@operator", formModel.Operator);
             cmd.Parameters.AddWithValue("@part", formModel.Part);
+            cmd.Parameters.AddWithValue("@component", formModel.Component);
             // Store the raw machine value.
             cmd.Parameters.AddWithValue("@machine", formModel.Machine);
             cmd.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
@@ -306,11 +307,12 @@ LIMIT 1";
             if (currentSkidNumber == 0)
             {
                 const string insertFirst = @"
-        INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-        VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
+        INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+        VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
                 using var insCmd = new MySqlCommand(insertFirst, conn);
                 insCmd.Parameters.AddWithValue("@run", model.Run);
                 insCmd.Parameters.AddWithValue("@part", model.Part);
+                insCmd.Parameters.AddWithValue("@component", model.Component);
                 insCmd.Parameters.AddWithValue("@operator", model.Operator);
                 insCmd.Parameters.AddWithValue("@machine", model.Machine);
                 insCmd.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
@@ -343,11 +345,12 @@ LIMIT 1";
 
                 // 5) Insert a new skid
                 const string insertNext = @"
-        INSERT INTO pressrun (run, part, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-        VALUES (@run, @part, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
+        INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+        VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
                 using var insSkid = new MySqlCommand(insertNext, conn);
                 insSkid.Parameters.AddWithValue("@run", model.Run);
                 insSkid.Parameters.AddWithValue("@part", model.Part);
+                insSkid.Parameters.AddWithValue("@component", model.Component);
                 insSkid.Parameters.AddWithValue("@operator", model.Operator);
                 insSkid.Parameters.AddWithValue("@machine", model.Machine);
                 insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
@@ -439,7 +442,7 @@ LIMIT 1";
                             .SetBorder(Border.NO_BORDER);
 
                         
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Part: " + model.Part)
+                        headerTable.AddCell(new Cell().Add(new Paragraph("Part: " + model.Part + " " + model.Component)
                             .SetFont(normalFont)
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
@@ -565,7 +568,7 @@ ORDER BY name";
         {
             var list = new List<PressSetupModel>();
             const string sql = @"
-        SELECT id, timestamp, part, prodNumber, run, operator, endDateTime, machine, notes
+        SELECT id, timestamp, part, component, prodNumber, run, operator, endDateTime, machine, notes
         FROM presssetup
         WHERE open = 1
         ORDER BY part, run";
@@ -581,6 +584,7 @@ ORDER BY name";
                     Id = rdr.GetInt32("id"),
                     Timestamp = rdr.GetDateTime("timestamp"),
                     Part = rdr.GetString("part"),
+                    Component = rdr.GetString("component"),
                     // Safely read prodNumber
                     ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
                                  ? ""
@@ -607,7 +611,7 @@ ORDER BY name";
         {
             var list = new List<PressRunLogModel>();
             const string sql = @"
-SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
+SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
 FROM pressrun
 WHERE endDateTime IS NULL";
@@ -627,7 +631,7 @@ WHERE endDateTime IS NULL";
         {
             var list = new List<PressRunLogModel>();
             const string sql = @"
-SELECT id, timestamp, prodNumber, run, part, startDateTime, endDateTime,
+SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
 FROM pressrun
 ORDER BY id DESC";
@@ -654,6 +658,7 @@ ORDER BY id DESC";
                              : rdr.GetString("prodNumber"),
                 Run = rdr["run"]?.ToString(),
                 Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
                 StartDateTime = rdr.GetDateTime("startDateTime"),
                 EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime"))
                                 ? null
@@ -661,14 +666,16 @@ ORDER BY id DESC";
                 Operator = rdr["operator"]?.ToString(),
                 Machine = rdr["machine"]?.ToString(),
                 PcsStart = rdr.IsDBNull(rdr.GetOrdinal("pcsStart"))
-                                ? 0
-                                : rdr.GetInt32("pcsStart"),
+    ? (int?)null
+    : rdr.GetInt32("pcsStart"),
                 PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd"))
-                                ? 0
-                                : rdr.GetInt32("pcsEnd"),
+    ? (int?)null
+    : rdr.GetInt32("pcsEnd"),
+
                 Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap"))
-                                ? 0
-                                : rdr.GetInt32("scrap"),
+        ? (int?)null
+        : rdr.GetInt32("scrap"),
+
                 Notes = rdr["notes"]?.ToString(),
                 SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber"))
                                 ? 0

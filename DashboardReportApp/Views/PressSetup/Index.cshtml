@@ -49,6 +49,7 @@
                     <thead class="table-dark">
                         <tr>
                             <th>Part</th>
+                            <th>Component</th>
                             <th>Production Number</th>
                             <th>Run</th>
                             <th>Operator</th>
@@ -62,6 +63,7 @@
                         {
                             <tr>
                                 <td>@login.Part</td>
+                                 <td>@login.Component</td>
                                 <td>@login.ProdNumber</td>
                                 <td>@login.Run</td>
                                 <td>@login.Operator</td>
@@ -105,26 +107,25 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Part Selection -->
+                    <!-- Part Selection Dropdown -->
                     <div class="mb-3">
                         <label for="modalPartNumber" class="form-label">Part Number</label>
                         <select id="modalPartNumber" name="Part" class="form-control" required onchange="updateHiddenFieldsModal()">
                             <option value="">-- Select Part --</option>
                             @foreach (var part in ViewData["Parts"] as List<Scheduled> ?? new List<Scheduled>())
                             {
-                                var displayText = !string.IsNullOrEmpty(part.Subcomponent) ? part.Subcomponent :
-                                !string.IsNullOrEmpty(part.Component) ? part.Component :
-                                part.Part;
                                 <option value="@part.Part"
                                         data-prodnumber="@part.ProdNumber"
                                         data-run="@part.Run"
                                         data-component="@part.Component"
                                         data-subcomponent="@part.Subcomponent">
-                                    @($"{displayText} (Production Number: {part.ProdNumber} Run Number: {part.Run})")
+                                    @($"{part.Part} -> {part.Component} (Production Number: {part.ProdNumber}, Run Number: {part.Run})")
                                 </option>
                             }
                         </select>
+
                     </div>
+
 
                     <!-- Hidden Inputs for additional part details -->
                     <input type="hidden" id="modalRunNumber" name="Run" />
@@ -229,17 +230,23 @@
 </div>
 
 <script>
-    // Function to update hidden fields in the Login Modal
-    function updateHiddenFieldsModal() {
+        function updateHiddenFieldsModal() {
         const partSelect = document.getElementById("modalPartNumber");
         const selectedOption = partSelect.options[partSelect.selectedIndex];
         if (!selectedOption) return;
+
+        // Update hidden fields for submission
         document.getElementById("modalProdNumber").value = selectedOption.getAttribute("data-prodnumber") || "";
         document.getElementById("modalRunNumber").value = selectedOption.getAttribute("data-run") || "";
         document.getElementById("modalComponent").value = selectedOption.getAttribute("data-component") || "";
         document.getElementById("modalSubcomponent").value = selectedOption.getAttribute("data-subcomponent") || "";
 
+        // Update visible fields to show the selected part and component side by side
+        document.getElementById("displayPart").value = partSelect.value;
+        document.getElementById("displayComponent").value = selectedOption.getAttribute("data-component") || "";
     }
+
+
 
     // ========== REACT TABLE SETUP ==========
     document.addEventListener('DOMContentLoaded', function() {
@@ -250,6 +257,7 @@
         const columns = [
             { key: 'Id', label: 'Id' },
             { key: 'Part', label: 'Part' },
+            { key: 'Component', label: 'Component' },
             { key: 'ProdNumber', label: 'Production Number' },
             { key: 'Run', label: 'Run' },
             { key: 'Operator', label: 'Operator' },

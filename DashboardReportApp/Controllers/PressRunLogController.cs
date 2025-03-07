@@ -46,19 +46,22 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int finalCount)
+        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model)
         {
-            Console.WriteLine("Received ProdNumber: " + model.ProdNumber);  // For debugging
+            Console.WriteLine("Received ProdNumber: " + model.ProdNumber);
+            Console.WriteLine("Received Component: " + model.Component);  // Debug component value
+
             var formModel = new PressRunLogModel
             {
                 Operator = model.Operator,
                 Part = model.Part,
+                Component = model.Component,  // <-- Include the component!
                 Machine = model.Machine,
                 Run = model.Run,
                 StartDateTime = DateTime.Now,
-                ProdNumber = model.ProdNumber  // This should now be set
+                ProdNumber = model.ProdNumber
             };
-            await _pressRunLogService.HandleLoginWithCountAsync(formModel, finalCount);
+            await _pressRunLogService.HandleLogin(formModel);
             return RedirectToAction("Index");
         }
 

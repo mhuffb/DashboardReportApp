@@ -6,6 +6,7 @@
         public DateTime? Timestamp { get; set; }
         public string? Operator { get; set; }
         public string? Part { get; set; }
+        public string? Component { get; set; }  // <-- New Property
         public string? Machine { get; set; }
         public string? Process { get; set; }
         public DateTime? StartDateTime { get; set; }

@@ -30,7 +30,7 @@ namespace DashboardReportApp.Controllers
             ViewData["SortOrder"] = sortOrder == "asc" ? "desc" : "asc";
             var scheduledParts = _pressSetupService.GetScheduledParts();
             ViewData["Parts"] = scheduledParts;
-            var records = _pressSetupService.GetAllRecords(part, operatorName, machine, setupComplete, assistanceRequired, search, startDate, endDate, sortBy, sortOrder);
+            var records = _pressSetupService.GetAllRecords();
 
             return View(records);
         }

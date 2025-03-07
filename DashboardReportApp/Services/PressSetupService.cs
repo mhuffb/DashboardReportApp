@@ -18,9 +18,7 @@ namespace DashboardReportApp.Services
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
         }
 
-        public List<PressSetupModel> GetAllRecords(string part, string operatorName, string machine, string setupComplete,
-                                                   string assistanceRequired, string search, string startDate,
-                                                   string endDate, string sortBy, string sortOrder)
+        public List<PressSetupModel> GetAllRecords()
         {
             var records = new List<PressSetupModel>();
             string query = "SELECT * FROM presssetup order by id desc";
@@ -40,6 +38,7 @@ namespace DashboardReportApp.Services
                             Id = Convert.ToInt32(reader["id"]),
                             Timestamp = reader["timestamp"] as DateTime?,
                             Part = reader["part"].ToString(),
+                            Component = reader["component"].ToString(),
                             Operator = reader["operator"].ToString(),
                             StartDateTime = reader["startDateTime"] as DateTime?,
                             EndDateTime = reader["endDateTime"] as DateTime?,
@@ -65,25 +64,13 @@ namespace DashboardReportApp.Services
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
-                string query = @"INSERT INTO presssetup (part, run, operator, machine, startDateTime, open, prodNumber) 
-                         VALUES (@part, @run, @operator, @machine, @startDateTime, @open, @prodNumber)";
+                string query = @"INSERT INTO presssetup (part, component, run, operator, machine, startDateTime, open, prodNumber) 
+                         VALUES (@part, @component, @run, @operator, @machine, @startDateTime, @open, @prodNumber)";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    string toAdd = null;
-                    if (model.Part != null)
-                    {
-                        toAdd = model.Part; ;
-                    }
-                    if (model.Component != null)
-                    {
-                        toAdd = model.Component;
-                    }
-                    if (model.Subcomponent != null)
-                    {
-                        toAdd = model.Subcomponent;
-                    }
-                    command.Parameters.AddWithValue("@part", toAdd.ToUpper());
+                    command.Parameters.AddWithValue("@part", model.Part?.ToUpper() ?? "");
+                    command.Parameters.AddWithValue("@component", model.Component?.ToUpper() ?? "");
                     command.Parameters.AddWithValue("@run", model.Run);
                     command.Parameters.AddWithValue("@operator", model.Operator);
                     command.Parameters.AddWithValue("@machine", model.Machine);
@@ -95,6 +82,7 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+
 
 
         public async Task LogoutAsync(string partNumber, DateTime startDateTime, string difficulty, string assistanceRequired,
@@ -111,7 +99,7 @@ namespace DashboardReportApp.Services
                                      setupComp = @setupComp, 
                                      open = @open,
                                      notes = @notes
-                                 WHERE part = @part AND startDateTime = @startDateTime";
+                                 WHERE run = @run AND startDateTime = @startDateTime";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
@@ -133,6 +121,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@notes", notes);
                     command.Parameters.AddWithValue("@part", partNumber);
                     command.Parameters.AddWithValue("@startDateTime", startDateTime);
+                    command.Parameters.AddWithValue("@run", run);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -217,26 +206,15 @@ namespace DashboardReportApp.Services
                     {
                         // Retrieve values
                         var component = reader["component"].ToString();
-                        var subcomponent = reader["Subcomponent"]?.ToString(); // may be null or empty
 
-                        // If subcomponent exists and contains "PC" or "Y", skip this record.
-                        if (!string.IsNullOrWhiteSpace(subcomponent))
+                        
+                        // If  is null/empty and component contains "Y", skip.
+                        if (!string.IsNullOrWhiteSpace(component) &&
+                            component.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
                         {
-                            if (subcomponent.IndexOf("PC", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                subcomponent.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                continue;
-                            }
+                           continue;
                         }
-                        else
-                        {
-                            // If subcomponent is null/empty and component contains "Y", skip.
-                            if (!string.IsNullOrWhiteSpace(component) &&
-                                component.IndexOf("Y", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                continue;
-                            }
-                        }
+                        
 
                         // If component contains "PC", skip this record.
                         if (!string.IsNullOrWhiteSpace(component) &&
@@ -251,7 +229,6 @@ namespace DashboardReportApp.Services
                             Id = Convert.ToInt32(reader["id"]),
                             Part = reader["part"].ToString(),
                             Component = component,
-                            Subcomponent = subcomponent,
                             ProdNumber = reader["ProdNumber"].ToString(),
                             Run = reader["run"].ToString(),
                         });

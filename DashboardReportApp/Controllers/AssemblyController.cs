@@ -24,44 +24,45 @@ namespace DashboardReportApp.Controllers
             var openGreenSkids = await _assemblyService.GetOpenGreenSkidsAsync();
             ViewBag.OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>();
 
-            // 3) Create a dictionary of (Part, Run) => Furnace for dropdown selection from open skids
-           var openParts = openGreenSkids.ToDictionary(
-    r => (r.Part, r.Run, r.SkidNumber),
-    r => r.Machine
-);
-
-            ViewData["OpenParts"] = openParts;
-            foreach (var partRun in openParts)
-            {
-                Console.WriteLine($"Part: {partRun.Key.Item1}, Run: {partRun.Key.Item2}, Furnace: {partRun.Value}");
-            }
-
-            var openAssyG = await _assemblyService.GetScheduledAssyG();
-            ViewData["OpenAssyG"] = openAssyG;
 
             // 4) Get all sinter run records for the React table
             var allRuns = await _assemblyService.GetAllRunsAsync();
             return View(allRuns);
         }
 
-        [HttpPost("LoginToSkid")]
+        [HttpPost("LogSkid")]
         public IActionResult LoginToSkid(AssemblyModel model)
         {
+            // Debug: Log received values.
+            Console.WriteLine($"[DEBUG] LoginToSkid called with: Operator={model.Operator}, ProdNumber={model.ProdNumber}, Part={model.Part}, Pcs={model.Pcs}");
+
             if (string.IsNullOrWhiteSpace(model.Operator) ||
                 string.IsNullOrWhiteSpace(model.ProdNumber) ||
-                string.IsNullOrWhiteSpace(model.Part) ||
-                string.IsNullOrWhiteSpace(model.Run))
+                string.IsNullOrWhiteSpace(model.Part))
             {
+                Console.WriteLine("[DEBUG] Validation failed: One or more required fields are missing.");
                 ViewData["Error"] = "All fields are required.";
                 return RedirectToAction("Index");
             }
 
             try
             {
-                _assemblyService.LoginToSkid(model);
+                // Map the view model to your AssemblyModel
+                var assemblyModel = new AssemblyModel
+                {
+                    ProdNumber = model.ProdNumber,
+                    Part = model.Part,
+                    Operator = model.Operator,
+                    Pcs = model.Pcs,
+                    Notes = model.Notes  // In case you want to capture notes as well.
+                };
+
+                _assemblyService.LogSkid(assemblyModel);
+                Console.WriteLine("[DEBUG] Skid logged successfully.");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[DEBUG] Exception in LoginToSkid: {ex.Message}");
                 ViewData["Error"] = $"An error occurred: {ex.Message}";
             }
 
@@ -69,45 +70,13 @@ namespace DashboardReportApp.Controllers
         }
 
 
-        [HttpPost("LogoutOfSkid")]
-        public IActionResult LogoutOfSkid(string part, string run, string skidNumber)
-        {
-            try
-            {
-                Console.WriteLine($"Closing Sinter Run: Part = {part}, Run = {run}, SkidNumber = {skidNumber}");
-                _assemblyService.LogoutOfSkid(part, run, skidNumber);
-                ViewData["Message"] = $"Sintering stopped for {part} - {run} (Skid: {skidNumber}) successfully.";
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error Closing Sinter Run: {ex.Message}");
-                ViewData["Error"] = $"An error occurred: {ex.Message}";
-            }
-            return RedirectToAction("Index");
-        }
 
-        [HttpPost("EndSkid")]
-        public IActionResult EndSkid(string prodNumber, string part, string skidNumber, string pcs,
-                                        string run, string oper, string oven, string process, string notes)
+        [HttpPost("EndProduction")]
+        public IActionResult EndProduction(string part, string prodNumber)
         {
             try
             {
-                _assemblyService.EndSkid(prodNumber, part, skidNumber, pcs, run, oper, oven, process, notes);
-                ViewData["Message"] = "Skid run ended successfully.";
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error Ending Skid Run: {ex.Message}");
-                ViewData["Error"] = $"An error occurred: {ex.Message}";
-            }
-            return RedirectToAction("Index");
-        }
-        [HttpPost("EndGreenAssemblyRun")]
-        public IActionResult EndSkid(string run, string part, string prodNumber)
-        {
-            try
-            {
-                _assemblyService.EndGreenAssemblyRun(run, part, prodNumber);
+                _assemblyService.EndProduction(part, prodNumber);
                 ViewData["Message"] = "Skid run ended successfully.";
             }
             catch (Exception ex)
