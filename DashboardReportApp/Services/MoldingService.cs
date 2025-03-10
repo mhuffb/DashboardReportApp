@@ -102,25 +102,25 @@ namespace DashboardReportApp.Services
         /// </summary>
         public async Task<Dictionary<string, int?>> GetAllMachineCountsAsync()
         {
-            // List out the machines you want to poll. 
-            // Alternatively, you could get them from pressSetups or some table.
+            // Corrected machine list with proper commas and without duplicates
             var machineList = new List<string> {
-            //"1","2","41","45","50","51","57","59","70","74",
-            //"92","95","102","112","124","125","154","156","175"
-            "156","102"
-        };
+        "1", "2", "41", "45", "50", "51", "57", "59", "70", "74",
+        "92", "95", "102", "112", "124", "125", "154", "156", "175"
+    };
 
-            var results = new Dictionary<string, int?>();
-
-            // Reuse your existing logic from PressRunLogService
-            foreach (var machine in machineList)
+            // Start all tasks concurrently
+            var tasks = machineList.Select(async machine =>
             {
                 int? count = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
-                // If null, we’ll store 0 (or you can store -1 as an error indicator)
-                results[machine] = count;
-            }
+                return new { machine, count };
+            });
 
-            return results;
+            // Wait for all tasks to complete
+            var results = await Task.WhenAll(tasks);
+
+            // Build and return the dictionary from the results
+            return results.ToDictionary(x => x.machine, x => x.count);
         }
+
     }
 }
