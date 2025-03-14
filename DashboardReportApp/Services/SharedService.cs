@@ -27,20 +27,25 @@ namespace DashboardReportApp.Services
         {
         }
 
-        public void PrintFile(string printerName, string pdfPath)
+        public void PrintFile(string printerName, string pdfPath, int copies = 1)
         {
             if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
             {
                 throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
             }
 
+            if (copies < 1)
+            {
+                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
+            }
+
             try
             {
-
                 string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
 
                 // Validate printer existence
-                if (!PrinterSettings.InstalledPrinters.Cast<string>().Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+                if (!PrinterSettings.InstalledPrinters.Cast<string>()
+                    .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
                 {
                     throw new Exception($"Printer '{printerName}' is not installed.");
                 }
@@ -51,8 +56,10 @@ namespace DashboardReportApp.Services
                     throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
                 }
 
-                // Set up the SumatraPDF command-line arguments
-                string arguments = $"-print-to \"{printerName}\" \"{pdfPath}\"";
+                // Build command arguments
+                // Only add the copies setting if more than one copy is requested.
+                string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
+                string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
 
                 // Start the process
                 var process = new Process
@@ -79,6 +86,7 @@ namespace DashboardReportApp.Services
                 throw new Exception($"Failed to print PDF: {ex.Message}");
             }
         }
+
         public string SaveFileToUploads(IFormFile file, string prefix)
         {
             //Prefixes HoldTagFile1, HoldTagFile2, 
@@ -280,6 +288,7 @@ ORDER BY
                     }
                 }
             }
+           // Console.WriteLine(result.ToArray());
             return result;
         }
     }

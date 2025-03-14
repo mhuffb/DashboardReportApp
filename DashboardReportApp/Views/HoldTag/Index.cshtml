@@ -138,6 +138,7 @@
     </div>
 </div>
 
+<!-- Modal for "Add Request" -->
 <!-- NEW: Modal for "Add Request" -->
 <div class="modal fade" id="addRequestModal" tabindex="-1" aria-labelledby="addRequestModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-md">
@@ -188,6 +189,18 @@
                         <label for="ModalQuantity" class="form-label">Quantity</label>
                         <input type="number" id="ModalQuantity" name="Quantity" class="form-control" required />
                         <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
+                    </div>
+                    <!-- UNIT -->
+                    <div class="mb-3">
+                        <label for="ModalUnit" class="form-label">Unit</label>
+                        <select id="ModalUnit" name="Unit" class="form-control">
+                            <option value="skid" data-singular="skid" data-plural="skids">Skid</option>
+                            <option value="tray" data-singular="tray" data-plural="trays">Tray</option>
+                            <option value="tote" data-singular="tote" data-plural="totes">Tote</option>
+                            <option value="barrel" data-singular="barrel" data-plural="barrels">Barrel</option>
+                            <option value="pc" data-singular="pc" data-plural="pcs">Pc</option>
+                        </select>
+                        <span asp-validation-for="FormModel.Unit" class="text-danger"></span>
                     </div>
                     <!-- File Upload -->
                     <div class="mb-3">
@@ -452,4 +465,29 @@
             });
         });
     </script>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    const quantityInput = document.getElementById("ModalQuantity");
+    const unitSelect = document.getElementById("ModalUnit");
+
+    function updateUnitOptions() {
+        const quantity = parseInt(quantityInput.value, 10);
+        const isPlural = !isNaN(quantity) && quantity > 1;
+        // Update each option's text based on its data attributes
+        for (let option of unitSelect.options) {
+            const singular = option.getAttribute("data-singular");
+            const plural = option.getAttribute("data-plural");
+            if (isPlural && plural) {
+                option.text = plural.charAt(0).toUpperCase() + plural.slice(1);
+            } else if (singular) {
+                option.text = singular.charAt(0).toUpperCase() + singular.slice(1);
+            }
+        }
+    }
+
+    quantityInput.addEventListener("input", updateUnitOptions);
+    updateUnitOptions(); // Run on page load to set the initial state
+});
+</script>
+
 }

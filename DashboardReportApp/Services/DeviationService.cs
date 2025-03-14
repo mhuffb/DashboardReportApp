@@ -22,10 +22,11 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionString;
         private readonly string _uploadFolder;
-
-        public DeviationService(IConfiguration configuration)
+        private readonly SharedService _sharedService;
+        public DeviationService(IConfiguration configuration, SharedService sharedService)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
+            _sharedService = sharedService;
             // For example, save deviation files in wwwroot\DeviationUploads
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             if (!Directory.Exists(_uploadFolder))
@@ -200,8 +201,8 @@ namespace DashboardReportApp.Services
                     .SetFont(boldFont)
                     .SetTextAlignment(TextAlignment.CENTER));
             }
-
-            PrintPdfWithSumatraPDF(filePath);
+            Console.WriteLine("Printing file: " + filePath);
+            _sharedService.PrintFile("QC1", filePath);
             return filePath;
         }
 
