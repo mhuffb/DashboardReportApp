@@ -42,14 +42,35 @@
                         </select>
                     </div>
 
+                    <!-- Schedule Dropdown with data-ops attribute -->
                     <div class="mb-3">
-                        <label for="Run" class="form-label">Run #:</label>
-                        <input type="text" id="Run" name="Run" class="form-control bg-black text-goldenrod border-goldenrod" required />
+                        <label for="ScheduleOption" class="form-label">Select Part:</label>
+                        <select id="ScheduleOption" name="ScheduleOption" class="form-control bg-black text-goldenrod border-goldenrod" required>
+                            <option value="">-- Select Part --</option>
+                            @* 
+                                Note: We now assume that each ScheduleItem has a Run property.
+                                The option value is formatted as: "Part|ProdNumber|Run"
+                            *@
+                            @foreach (var item in (IEnumerable<ScheduleItem>)ViewBag.ScheduleItems)
+                            {
+                                <option value="@($"{item.Part}|{item.ProdNumber}|{item.Run}")" data-ops="@item.NumberOfSintergySecondaryOps">
+                                    @($"{item.Part} (Production Number: {item.ProdNumber} Run: {item.Run})")
+                                </option>
+                            }
+                        </select>
                     </div>
 
+                    <!-- Hidden fields to store Part, ProdNumber, and Run -->
+                    <input type="hidden" id="Part" name="Part" />
+                    <input type="hidden" id="ProdNumber" name="ProdNumber" />
+                    <input type="hidden" id="Run" name="Run" />
+
+                    <!-- Op Dropdown that will be populated dynamically -->
                     <div class="mb-3">
                         <label for="Op" class="form-label">Op:</label>
-                        <input type="text" id="Op" name="Op" class="form-control bg-black text-goldenrod border-goldenrod" required />
+                        <select id="Op" name="Op" class="form-control bg-black text-goldenrod border-goldenrod" required>
+                            <option value="">-- Select Op --</option>
+                        </select>
                     </div>
 
                     <div class="mb-3">
@@ -97,6 +118,54 @@
     </div>
 </div>
 
+<!-- JavaScript to update hidden fields and the "Op" dropdown dynamically -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var scheduleOption = document.getElementById("ScheduleOption");
+        var opDropdown = document.getElementById("Op");
+        var partField = document.getElementById("Part");
+        var prodNumberField = document.getElementById("ProdNumber");
+        var runField = document.getElementById("Run");
+
+        function updateHiddenFieldsAndOps() {
+            var selectedOption = scheduleOption.options[scheduleOption.selectedIndex];
+            var value = selectedOption.value;
+            var opsCount = parseInt(selectedOption.getAttribute("data-ops"));
+            console.log("Selected value:", value, "Ops count:", opsCount);
+
+            if (value) {
+                var parts = value.split("|");
+                if (parts.length === 3) {
+                    partField.value = parts[0];
+                    prodNumberField.value = parts[1];
+                    runField.value = parts[2];
+                    console.log("Hidden fields set - Part:", partField.value, "ProdNumber:", prodNumberField.value, "Run:", runField.value);
+                }
+            } else {
+                partField.value = "";
+                prodNumberField.value = "";
+                runField.value = "";
+                console.log("No value selected; hidden fields cleared");
+            }
+
+            // Clear and update the Op dropdown
+            opDropdown.innerHTML = '<option value="">-- Select Op --</option>';
+            if (!isNaN(opsCount) && opsCount > 0) {
+                for (var i = 1; i <= opsCount; i++) {
+                    var option = document.createElement("option");
+                    option.value = i;
+                    option.text = i;
+                    opDropdown.appendChild(option);
+                }
+            }
+        }
+
+        scheduleOption.addEventListener("change", updateHiddenFieldsAndOps);
+        // Trigger update on page load in case an option is preselected
+        updateHiddenFieldsAndOps();
+    });
+</script>
+
 <!-- Load your React bundle -->
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
@@ -104,11 +173,9 @@
         const container = document.getElementById("myReactTableRoot");
         if (!container) return;
 
-        // Retrieve JSON data (the model is a list of runs)
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData);
 
-        // Define columns for the React table (adjust keys as needed)
         const columns = [
             { key: "Id", label: "ID" },
             { key: "Timestamp", label: "Timestamp" },
@@ -122,7 +189,6 @@
             { key: "Notes", label: "Notes" }
         ];
 
-        // Render the React table using your MyDataTable component's render function
         if (window.renderMyDataTable) {
             window.renderMyDataTable("myReactTableRoot", data, columns, true);
         } else {

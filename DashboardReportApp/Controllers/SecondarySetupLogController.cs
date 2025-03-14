@@ -17,30 +17,30 @@ namespace DashboardReportApp.Controllers
         {
             ViewBag.Operators = await _service.GetOperatorsAsync();
             ViewBag.Machines = await _service.GetEquipmentAsync();
+            // Load the schedule items for the dropdown
+            ViewBag.ScheduleItems = await _service.GetAvailableScheduleItemsAsync();
 
-            // This call now returns List<SecondarySetupLogModel>
             var allRuns = await _service.GetAllRecords();
-
-            return View(allRuns); // Pass the typed list to the view
+            return View(allRuns);
         }
 
 
+
         [HttpPost]
-        public async Task<IActionResult> CreateSetup(SecondarySetupLogModel model)
+        public async Task<IActionResult> CreateSetup(SecondarySetupLogModel model, string ScheduleOption)
         {
+            // Optionally remove model state errors for fields you update client-side
+            ModelState.Remove("ProdNumber");
+            ModelState.Remove("Part");
+            ModelState.Remove("Run");
+
             if (ModelState.IsValid)
             {
-                string partNumber = await _service.LookupPartNumberAsync(model.Run);
-                model.Part = partNumber;
+                // Optionally, if ScheduleOption is still provided, you can log it:
+                Console.WriteLine("ScheduleOption posted value: " + ScheduleOption);
 
-                if (string.IsNullOrWhiteSpace(partNumber))
-                {
-                    TempData["Error"] = "Failed to find the part number for the given run.";
-                    return RedirectToAction("Index");
-                }
-
+                // At this point, model.Part and model.ProdNumber should be populated via the hidden fields.
                 await _service.AddSetupAsync(model);
-
                 TempData["Message"] = "Setup added successfully!";
             }
             else
@@ -50,5 +50,7 @@ namespace DashboardReportApp.Controllers
 
             return RedirectToAction("Index");
         }
+
+
     }
 }

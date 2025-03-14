@@ -22,6 +22,14 @@
         public string ProdNumber { get; set; }
         public sbyte GetsSintergySecondary { get; set; }
     }
+    public class ScheduleItem
+    {
+        public string Part { get; set; }
+        public string ProdNumber { get; set; }
+        public int? Run { get; set; } // Make sure this is a property, not a method
+        public int NumberOfSintergySecondaryOps { get; set; }
+    }
+
 
 
 

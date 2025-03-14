@@ -140,48 +140,69 @@ namespace DashboardReportApp.Services
         }
 
 
-        public bool CheckIfPartNeedsSintergySecondary(string part)
+        public int CheckIfPartNeedsSintergySecondary(string part)
         {
             List<string> result = _sharedService.GetOrderOfOps(part);
 
-            bool honingFound = false;
-            bool inHouseFound = false;
-            bool machinFound = false;
             bool sintergyFound = false;
+            bool machineFound = false;
             bool tapFound = false;
+            bool honingFound = false; // Changed from "honeFound" to "honingFound"
 
             foreach (var op in result)
             {
                 Console.WriteLine("Checking: " + op);
-                if (op.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    honingFound = true;
-                }
-                if (op.IndexOf("In House", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    inHouseFound = true;
-                }
-                if (op.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    machinFound = true;
-                }
                 if (op.IndexOf("Sintergy", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     sintergyFound = true;
+                    Console.WriteLine("Found 'Sintergy' in: " + op);
+                }
+                if (op.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    machineFound = true;
+                    Console.WriteLine("Found 'Machin' in: " + op);
                 }
                 if (op.IndexOf("Tap", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     tapFound = true;
+                    Console.WriteLine("Found 'Tap' in: " + op);
+                }
+                // Updated check to "Honing" instead of "Hone"
+                if (op.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    honingFound = true;
+                    Console.WriteLine("Found 'Honing' in: " + op);
                 }
             }
 
-            bool condition1 = honingFound && inHouseFound;
-            bool condition2 = machinFound && sintergyFound;
-            bool condition3 = tapFound;
+            int count = 0;
 
+            // Combined condition: if both Sintergy and Machine are found, add one.
+            if (sintergyFound && machineFound)
+            {
+                count++;
+                Console.WriteLine("Combined condition met: Both 'Sintergy' and 'Machine' found.");
+            }
+            // Condition for "Tap"
+            if (tapFound)
+            {
+                count++;
+                Console.WriteLine("Condition met: 'Tap' found.");
+            }
+            // Condition for "Honing"
+            if (honingFound)
+            {
+                count++;
+                Console.WriteLine("Condition met: 'Honing' found.");
+            }
 
-            return condition1 || condition2 || condition3;
+            Console.WriteLine($"Debug: sintergyFound = {sintergyFound}, machineFound = {machineFound}, tapFound = {tapFound}, honingFound = {honingFound}");
+            Console.WriteLine("Debug: Total sintergy secondary ops count = " + count);
+
+            return count;
         }
+
+
 
 
 
@@ -191,9 +212,9 @@ namespace DashboardReportApp.Services
         {
             Console.WriteLine("Scheduling...");
             int nextProdNumber = GetNextProdNumber();
-            
-            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary)";
-            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary)";
+
+            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary, numberOfSintergySecondaryOps, openToSecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary, @numberOfSintergySecondaryOps, @openToSecondary)";
+            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary, numberOfSintergySecondaryOps, openToSecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary, @numberOfSintergySecondaryOps, @openToSecondary)";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -212,16 +233,15 @@ namespace DashboardReportApp.Services
                         command.Parameters.AddWithValue("@ProdNumber", nextProdNumber);
                         command.Parameters.AddWithValue("@QtyNeededFor1Assy", component.QtyNeededFor1Assy);
 
-                        bool needsSintergySecondaryMasterID = CheckIfPartNeedsSintergySecondary(component.MasterId);
-                        bool needsSintergySecondaryComponent = CheckIfPartNeedsSintergySecondary(component.MasterId);
-                        if (needsSintergySecondaryMasterID || needsSintergySecondaryComponent)
-                        {
-                            command.Parameters.AddWithValue("@NeedsSintergySecondary", 1);
-                        }
-                        else
-                        {
-                            command.Parameters.AddWithValue("@NeedsSintergySecondary", 0);
-                        }
+                        int sintergySecondaryOpsCount = CheckIfPartNeedsSintergySecondary(component.MasterId);
+
+                        // Set NeedsSintergySecondary to 1 if count > 0, otherwise 0.
+                        command.Parameters.AddWithValue("@NeedsSintergySecondary", sintergySecondaryOpsCount > 0 ? 1 : 0);
+                        // Set the numberOfSintergySecondaryOps parameter to the count.
+                        command.Parameters.AddWithValue("@numberOfSintergySecondaryOps", sintergySecondaryOpsCount);
+
+                        // Assuming openToSecondary should be set to 1
+                        command.Parameters.AddWithValue("@openToSecondary", 1);
 
                         if (hasComponent)
                         {
@@ -233,6 +253,7 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+
 
         public int GetNextRunNumber()
         {

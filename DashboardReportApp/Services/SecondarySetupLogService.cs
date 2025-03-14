@@ -10,10 +10,13 @@ namespace DashboardReportApp.Services
     public class SecondarySetupLogService
     {
         private readonly string _connectionStringMySQL;
+        private readonly SharedService _sharedService;
 
-        public SecondarySetupLogService(IConfiguration configuration)
+
+        public SecondarySetupLogService(IConfiguration configuration, SharedService sharedService)
         {
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
+            _sharedService = sharedService;
         }
 
         public async Task<List<string>> GetEquipmentAsync()
@@ -104,29 +107,56 @@ namespace DashboardReportApp.Services
 
         public async Task AddSetupAsync(SecondarySetupLogModel model)
         {
-            string query = "INSERT INTO secondarysetup (operator, op, part, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours) " +
-                           "VALUES (@operator, @op, @part, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours)";
+            string insertQuery = "INSERT INTO secondarysetup (operator, op, part, prodNumber, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours, open) " +
+                                 "VALUES (@operator, @op, @part, @prodNumber, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours, 1)";
+
+            string updateQuery = "UPDATE schedule SET openToSecondary = 0 WHERE part = @part AND prodNumber = @prodNumber";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
+                using (var transaction = connection.BeginTransaction())
                 {
-                    command.Parameters.AddWithValue("@operator", model.Operator);
-                    command.Parameters.AddWithValue("@op", model.Op);
-                    command.Parameters.AddWithValue("@part", model.Part);
-                    command.Parameters.AddWithValue("@machine", model.Machine);
-                    command.Parameters.AddWithValue("@run", model.Run);
-                    command.Parameters.AddWithValue("@pcs", model.Pcs);
-                    command.Parameters.AddWithValue("@scrapMach", model.ScrapMach);
-                    command.Parameters.AddWithValue("@scrapNonMach", model.ScrapNonMach);
-                    command.Parameters.AddWithValue("@notes", model.Notes);
-                    command.Parameters.AddWithValue("@setupHours", model.SetupHours);
+                    try
+                    {
+                        // Insert the new setup record.
+                        using (var command = new MySqlCommand(insertQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@operator", model.Operator);
+                            command.Parameters.AddWithValue("@op", model.Op);
+                            command.Parameters.AddWithValue("@part", model.Part);
+                            command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                            command.Parameters.AddWithValue("@machine", model.Machine);
+                            command.Parameters.AddWithValue("@run", model.Run ?? 0);
+                            command.Parameters.AddWithValue("@pcs", model.Pcs);
+                            command.Parameters.AddWithValue("@scrapMach", model.ScrapMach);
+                            command.Parameters.AddWithValue("@scrapNonMach", model.ScrapNonMach);
+                            command.Parameters.AddWithValue("@notes", model.Notes);
+                            command.Parameters.AddWithValue("@setupHours", model.SetupHours);
 
-                    await command.ExecuteNonQueryAsync();
+                            await command.ExecuteNonQueryAsync();
+                        }
+
+                        // Update the schedule record so that openToSecondary is set to 0.
+                        using (var command = new MySqlCommand(updateQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@part", model.Part);
+                            command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                            await command.ExecuteNonQueryAsync();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch (Exception)
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
                 }
             }
         }
+
+
 
         public async Task<string> LookupPartNumberAsync(int? run)
         {
@@ -142,5 +172,49 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+
+
+        public async Task<List<ScheduleItem>> GetAvailableScheduleItemsAsync()
+        {
+            var items = new List<ScheduleItem>();
+            string query = @"
+        SELECT prodNumber, part, 
+               CASE WHEN COUNT(DISTINCT run) = 1 THEN MAX(run) ELSE NULL END AS run,
+               numberOfSintergySecondaryOps
+        FROM schedule 
+        WHERE needsSintergySecondary = 1 
+          AND openToSecondary = 1 
+        GROUP BY prodNumber, part, numberOfSintergySecondaryOps";
+
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        // Assume ScheduleItem.Run is of type int? (nullable int)
+                        int? runValue = reader.IsDBNull(reader.GetOrdinal("run"))
+                                        ? (int?)null
+                                        : Convert.ToInt32(reader["run"]);
+
+                        var item = new ScheduleItem
+                        {
+                            Part = reader["part"].ToString(),
+                            ProdNumber = reader["prodNumber"].ToString(),
+                            Run = runValue,  // will be null if there are multiple run values
+                            NumberOfSintergySecondaryOps = Convert.ToInt32(reader["numberOfSintergySecondaryOps"])
+                        };
+                        items.Add(item);
+                    }
+                }
+            }
+            return items;
+        }
+
+
+
+
     }
 }
