@@ -30,7 +30,7 @@ namespace DashboardReportApp.Models
         public List<string> Operators { get; set; } = new List<string>();
         public List<string> Equipment { get; set; } = new List<string>();
         public DateTime? Timestamp { get; set; }
-
+        public sbyte? Open { get; set; }
     }
 
 }

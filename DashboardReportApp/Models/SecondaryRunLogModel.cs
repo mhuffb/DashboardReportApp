@@ -4,6 +4,7 @@
     {
         public int Id { get; set; }
         public DateTime Timestamp { get; set; }
+        public string ProdNumber { get; set; }
         public int Run { get; set; }
         public string Part { get; set; }
         public string Machine { get; set; }

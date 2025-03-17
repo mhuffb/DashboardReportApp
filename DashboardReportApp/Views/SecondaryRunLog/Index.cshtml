@@ -3,105 +3,111 @@
 
 <div class="container mt-4">
     <div class="table-responsive">
-    <h1 class="text-center mb-4">Secondary Run Log</h1>
+        <h1 class="text-center mb-4">Secondary Run Log</h1>
 
-
-    <!-- Add New Run Form -->
-    <div class="card shadow p-4 mb-4">
-        <h4 class="text-center">Start Machining</h4>
-        <form asp-action="Login" method="post">
-            <div class="mb-3">
-                <label for="runNumber" class="form-label">Run #</label>
-                <input type="text" id="runNumber" name="runNumber" class="form-control" required />
-            </div>
-            <div class="mb-3">
-                <label for="operatorName" class="form-label">Operator</label>
-                <select id="operatorName" name="operatorName" class="form-control" required>
-                    <option value="" disabled selected>Select an operator</option>
-                    @foreach (var operatorName in ViewBag.Operators as List<string>)
-                    {
-                        <option value="@operatorName">@operatorName</option>
-                    }
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="machine" class="form-label">Machine</label>
-                <select id="machine" name="machine" class="form-control" required>
-                    <option value="" disabled selected>Select a machine</option>
-                    @foreach (var machine in ViewBag.Machines as List<string>)
-                    {
-                        <option value="@machine">@machine</option>
-                    }
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="op" class="form-label">Op</label>
-                <input type="text" id="op" name="op" class="form-control" />
-            </div>
-            <button type="submit" class="btn btn-primary w-100 mt-3">
-                <i class="bi bi-plus-circle"></i> Login
-            </button>
-        </form>
-    </div>
-
-    <!-- Open Runs Table -->
-    <h3 class="text-center mt-4">Machining Now</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-bordered shadow-sm wider-table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>ID</th>
-                            <th>Timestamp</th>
-                            <th>Run #</th>
-                            <th>Part</th>
-                            <th>Op</th>
-                            <th>Operator</th>
-                            <th>Start Time</th>
-                            <th>Machine</th>
-                            <th>Notes</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var run in ViewBag.OpenRuns as List<DashboardReportApp.Models.SecondaryRunLogModel>)
-                        {
-                            <tr>
-                                <td>@run.Id</td>
-                                <td>@run.Timestamp</td>
-                                <td>@run.Run</td>
-                                <td>@run.Part</td>
-                                <td>@run.Op</td>
-                                <td>@run.Operator</td>
-                                <td>@run.StartDateTime</td>
-                                <td>@run.Machine</td>
-                                <td>@run.Notes</td>
-                                <td>
-                                    <!-- Clicking this button triggers the modal -->
-                                    <button class="btn btn-warning btn-sm w-100"
-                                            onclick="showLogoutModal(@run.Id, '@run.Run', '@run.Operator', '@run.Machine', '@run.StartDateTime', '@run.Notes')">
-                                        <i class="bi bi-x-circle"></i> Logout
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- All Runs Table (React Component) -->
-    <div class="container mt-4">
-        <h3 class="text-center mt-4">All Runs</h3>
+        <!-- Available Parts Table -->
+        <h3 class="text-center mt-4">Parts Available to Run</h3>
         <div class="card shadow mb-4">
             <div class="card-body">
-                <!-- The React table will use the JSON data from the entire model -->
-                <div id="myReactTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered shadow-sm wider-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Production Number</th>
+                                <th>Run</th>
+                                <th>Machine</th>
+                                <th>Op</th>
+                                <th>Setup By</th>
+                                <th>Notes</th>
+                                <th>Part</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var part in ViewBag.AvailableParts as List<DashboardReportApp.Models.SecondarySetupLogModel>)
+                            {
+                                <tr>
+                                    <td>@part.ProdNumber</td>
+                                    <td>@part.Run</td>
+                                    <td>@part.Machine</td>
+                                    <td>@part.Op</td>
+                                    <td>@part.Operator</td>
+                                    <td>@part.Notes</td>
+                                    <td>@part.Part</td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm w-auto"
+                                                onclick="showLoginModal('@part.Part', '@part.ProdNumber', '@part.Run', '@part.Op', '@part.Machine')">
+                                            <i class="bi bi-play-circle"></i> Login
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
+
+        <!-- Open Runs Table -->
+        <h3 class="text-center mt-4">Machining Now</h3>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered shadow-sm wider-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Production Number</th>
+                                <th>Run</th>
+                                <th>Machine</th>
+                                <th>Op</th>
+                                <th>Operator</th>
+                                <th>Start Time</th>
+                                <th>Notes</th>
+                                <th>Part</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var run in ViewBag.OpenRuns as List<DashboardReportApp.Models.SecondaryRunLogModel>)
+                            {
+                                <tr>
+                                    <td>@run.ProdNumber</td>
+                                    <td>@run.Run</td>
+                                    <td>@run.Machine</td>
+                                    <td>@run.Op</td>
+                                    <td>@run.Operator</td>
+                                    <td>@run.StartDateTime</td>
+                                    <td>@run.Notes</td>
+                                    <td>@run.Part</td>
+                                    <td>
+                                        <div class="d-flex">
+                                            <button class="btn btn-warning btn-sm me-1"
+                                                    onclick="showLogoutModal('@run.Id', '@run.Part')">
+                                                <i class="bi bi-box-arrow-right"></i> Logout
+                                            </button>
+                                            <button class="btn btn-danger btn-sm"
+                                                    onclick="showEndRunModal('@run.Id', '@run.ProdNumber', '@run.Part', '@run.Run', '@run.Operator', '@run.Machine', '@run.StartDateTime', '@run.Notes')">
+                                                <i class="bi bi-stop-circle"></i> End Run
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Runs Table (React Component) -->
+        <div class="container mt-4">
+            <h3 class="text-center mt-4">All Runs</h3>
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <div id="myReactTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -116,11 +122,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="closeRunId" name="id" />
-                    <p><strong>Run #:</strong> <span id="closeRunRunNumber"></span></p>
-                    <p><strong>Operator:</strong> <span id="closeRunOperator"></span></p>
-                    <p><strong>Machine:</strong> <span id="closeRunMachine"></span></p>
-                    <p><strong>Start Time:</strong> <span id="closeRunStartTime"></span></p>
-                    <p><strong>Notes:</strong> <span id="closeRunNotes"></span></p>
+                    <p><strong>Part:</strong> <span id="logoutPartDisplay"></span></p>
                     <div class="mb-3">
                         <label for="pcs" class="form-label">Pieces Ran</label>
                         <input type="number" id="pcs" name="pcs" class="form-control" required />
@@ -147,54 +149,171 @@
     </div>
 </div>
 
+<!-- Login Modal -->
+<div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="Login" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">Start a Run</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Hidden Fields -->
+                    <input type="hidden" id="prodNumber" name="prodNumber" />
+                    <input type="hidden" id="run" name="run" />
+                    <input type="hidden" id="part" name="part" />
+                    <input type="hidden" id="machine" name="machine" />
+                    <input type="hidden" id="op" name="op" />
+
+                    <!-- Display Part -->
+                    <p><strong>Part:</strong> <span id="loginPartDisplay"></span></p>
+
+                    <!-- Only Operator Select -->
+                    <div class="mb-3">
+                        <label for="operatorName" class="form-label">Operator</label>
+                        <select id="operatorName" name="operator" class="form-control" required>
+                            <option value="" disabled selected>Select an operator</option>
+                            @foreach (var operatorName in ViewBag.Operators as List<string>)
+                            {
+                                <option value="@operatorName">@operatorName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle"></i> Start Run</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- End Run Modal (Bootstrap Modal) -->
+<div class="modal fade" id="endRunModal" tabindex="-1" aria-labelledby="endRunModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="EndRun" method="post" id="endRunForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="endRunModalLabel">End Run</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Hidden fields including prodNumber and part -->
+                    <input type="hidden" id="endRunId" name="id" />
+                    <input type="hidden" id="endRunProdNumber" name="prodNumber" />
+                    <input type="hidden" id="endRunPart" name="part" />
+
+                    <!-- (You can still display some details if desired) -->
+                    <p><strong>Run #:</strong> <span id="endRunRunNumber"></span></p>
+                    <p><strong>Operator:</strong> <span id="endRunOperator"></span></p>
+                    <p><strong>Machine:</strong> <span id="endRunMachine"></span></p>
+                    <p><strong>Start Time:</strong> <span id="endRunStartTime"></span></p>
+                    <p><strong>Notes:</strong> <span id="endRunNotes"></span></p>
+                    <!-- Now show only the inputs you need -->
+                    <div class="mb-3">
+                        <label for="endPcs" class="form-label">Pieces Ran</label>
+                        <input type="number" id="endPcs" name="pcs" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="endScrapMach" class="form-label">Machined Scrap</label>
+                        <input type="number" id="endScrapMach" name="scrapMach" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="endScrapNonMach" class="form-label">Non-Machined Scrap</label>
+                        <input type="number" id="endScrapNonMach" name="scrapNonMach" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="endNotes" class="form-label">Notes</label>
+                        <textarea id="endNotes" name="notes" class="form-control text-area-large" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-stop-circle"></i> End Run</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 @section Scripts {
     <script>
-        // Function to populate the modal fields and show the modal
-        function showLogoutModal(id, run, operator, machine, startTime, notes) {
-            document.getElementById('closeRunId').value = id;
-            document.getElementById('closeRunRunNumber').innerText = run && run.trim() ? run : "Not Available";
-            document.getElementById('closeRunOperator').innerText = operator && operator.trim() ? operator : "Not Available";
-            document.getElementById('closeRunMachine').innerText = machine && machine.trim() ? machine : "Not Available";
-            document.getElementById('closeRunStartTime').innerText = startTime && startTime.trim() ? startTime : "Not Available";
-            document.getElementById('closeRunNotes').innerText = notes && notes.trim() ? notes : "None";
+        function showLoginModal(part, prodNumber, run, op, machine) {
+          console.log("Opening login modal for:", part, prodNumber, run, op, machine);
+          document.getElementById('prodNumber').value = prodNumber;
+          document.getElementById('run').value = run;
+          document.getElementById('part').value = part;
+          document.getElementById('machine').value = machine;
+          document.getElementById('op').value = op;
+          // Display the part in the modal body
+          document.getElementById('loginPartDisplay').innerText = part;
 
-            // Show the Bootstrap modal (using Bootstrap 5)
-            var logoutModal = new bootstrap.Modal(document.getElementById('logoutModal'));
-            logoutModal.show();
+          var modalElement = document.getElementById('loginModal');
+          var loginModal = new bootstrap.Modal(modalElement);
+          loginModal.show();
         }
-    </script>
 
-    <!-- Load your React bundle -->
-    <script src="/js/mydatatable.bundle.js"></script>
-    <script>
+        // Opens the Logout Modal (now only shows the part)
+        function showLogoutModal(id, part) {
+          console.log("Opening logout modal for:", id, part);
+          document.getElementById('closeRunId').value = id;
+          document.getElementById('logoutPartDisplay').innerText = part;
+
+          var modalElement = document.getElementById('logoutModal');
+          var logoutModal = new bootstrap.Modal(modalElement);
+          logoutModal.show();
+        }
+
+              // Opens the End Run Modal
+        function showEndRunModal(id, prodNumber, part, run, operator, machine, startTime, notes) {
+          document.getElementById('endRunId').value = id;
+          document.getElementById('endRunProdNumber').value = prodNumber;
+          document.getElementById('endRunPart').value = part;
+
+          document.getElementById('endRunRunNumber').innerText = run && run.trim() ? run : "Not Available";
+          document.getElementById('endRunOperator').innerText = operator && operator.trim() ? operator : "Not Available";
+          document.getElementById('endRunMachine').innerText = machine && machine.trim() ? machine : "Not Available";
+          document.getElementById('endRunStartTime').innerText = startTime && startTime.trim() ? startTime : "Not Available";
+          document.getElementById('endRunNotes').innerText = notes && notes.trim() ? notes : "None";
+
+          var modalElement = document.getElementById('endRunModal');
+          var endRunModal = new bootstrap.Modal(modalElement);
+          endRunModal.show();
+        }
+
+
         document.addEventListener("DOMContentLoaded", function () {
-            const container = document.getElementById("myReactTableRoot");
-            if (!container) return;
+          const container = document.getElementById("myReactTableRoot");
+          if (!container) return;
 
-            // Retrieve JSON data (the model is a list of runs)
-            const rawData = container.getAttribute("data-records");
-            const data = JSON.parse(rawData);
+          // Retrieve JSON data (the model is a list of runs)
+          const rawData = container.getAttribute("data-records");
+          const data = JSON.parse(rawData);
 
-            // Define columns for the React table (adjust keys as needed)
-            const columns = [
-                { key: "Id", label: "ID" },
-                { key: "Timestamp", label: "Timestamp" },
-                { key: "Run", label: "Run #" },
-                { key: "Part", label: "Part" },
-                { key: "Op", label: "Op" },
-                { key: "Operator", label: "Operator" },
-                { key: "StartDateTime", label: "Start Time" },
-                { key: "EndDateTime", label: "End Time" },
-                { key: "Machine", label: "Machine" },
-                { key: "Notes", label: "Notes" }
-            ];
+          // Define columns for the React table (adjust keys as needed)
+          const columns = [
+            { key: "Id", label: "ID" },
+            { key: "Timestamp", label: "Timestamp" },
+            { key: "Run", label: "Run #" },
+            { key: "Part", label: "Part" },
+            { key: "Op", label: "Op" },
+            { key: "Operator", label: "Operator" },
+            { key: "StartDateTime", label: "Start Time" },
+            { key: "EndDateTime", label: "End Time" },
+            { key: "Machine", label: "Machine" },
+            { key: "Notes", label: "Notes" }
+          ];
 
-            // Render the React table using your MyDataTable component's render function
-            if (window.renderMyDataTable) {
-                window.renderMyDataTable("myReactTableRoot", data, columns, true);
-            } else {
-                console.error("React table render function not found!");
-            }
+          if (window.renderMyDataTable) {
+            window.renderMyDataTable("myReactTableRoot", data, columns, true);
+          } else {
+            console.error("React table render function not found!");
+          }
         });
     </script>
+
+    <script src="/js/mydatatable.bundle.js"></script>
 }

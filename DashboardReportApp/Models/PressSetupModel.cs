@@ -21,7 +21,7 @@ namespace DashboardReportApp.Models
         public string Notes { get; set; }
         public sbyte Open { get; set; }
         public string ProdNumber { get; set; }
-        public string Component { get; set; }
+        public string? Component { get; set; }
         public string Subcomponent { get; set; }
     }
     public class PressSetupLoginViewModel

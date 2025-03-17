@@ -584,7 +584,10 @@ ORDER BY name";
                     Id = rdr.GetInt32("id"),
                     Timestamp = rdr.GetDateTime("timestamp"),
                     Part = rdr.GetString("part"),
-                    Component = rdr.GetString("component"),
+                    Component = rdr.IsDBNull(rdr.GetOrdinal("component"))
+                                 ? ""
+                                 : rdr.GetString("component"),                  
+
                     // Safely read prodNumber
                     ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
                                  ? ""

@@ -17,7 +17,7 @@ namespace DashboardReportApp.Services
             var allRuns = new List<SecondaryRunLogModel>();
 
             const string query = @"
-                SELECT id, timestamp, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                SELECT id, timestamp, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
                 FROM secondaryrun
                 ORDER BY id DESC";
 
@@ -32,6 +32,7 @@ namespace DashboardReportApp.Services
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+                    ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Run = reader.IsDBNull(reader.GetOrdinal("run"))
     ? 0
     : int.TryParse(reader["run"]?.ToString(), out int runValue)
@@ -60,7 +61,7 @@ namespace DashboardReportApp.Services
             var loggedInRuns = new List<SecondaryRunLogModel>();
 
             const string query = @"
-                SELECT id, timestamp, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                SELECT id, timestamp, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
                 FROM secondaryrun
                 WHERE open = 1";
 
@@ -75,6 +76,7 @@ namespace DashboardReportApp.Services
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+                    ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Run = reader.IsDBNull(reader.GetOrdinal("run")) ? 0 : reader.GetInt32(reader.GetOrdinal("run")),
                     Part = reader["part"]?.ToString() ?? "N/A",
                     Machine = reader["machine"]?.ToString(),
@@ -91,6 +93,43 @@ namespace DashboardReportApp.Services
             }
 
             return loggedInRuns;
+        }
+        public async Task<List<SecondarySetupLogModel>> GetAvailableParts()
+        {
+            var availableParts = new List<SecondarySetupLogModel>();
+
+            string query = @"
+            SELECT id, timestamp, operator, prodNumber, run, op, part, machine, notes, open
+            FROM secondarysetup WHERE open = 1" +
+                    " ORDER BY id DESC";
+
+            await using var connection = new MySqlConnection(_connectionStringMySQL);
+            await connection.OpenAsync();
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                DateTime timestamp = !reader.IsDBNull(reader.GetOrdinal("timestamp"))
+                                     ? reader.GetDateTime("timestamp")
+                                     : DateTime.MinValue;
+
+                availableParts.Add(new SecondarySetupLogModel
+                {
+                    Id = reader.GetInt32("id"),
+                    Timestamp = timestamp,
+                    Operator = reader["operator"]?.ToString(),
+                    ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                    Run = reader.GetInt32("run"),
+                    Op = reader["op"]?.ToString() ?? "N/A",
+                    Part = reader["part"]?.ToString() ?? "N/A",
+                    Machine = reader["machine"]?.ToString(),
+                    Notes = reader["notes"]?.ToString(),
+                    Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0
+                });
+            }
+
+            return availableParts;
         }
 
         public async Task<IEnumerable<string>> GetOperatorsAsync()
@@ -140,23 +179,24 @@ namespace DashboardReportApp.Services
         }
 
        
-        public async Task HandleLoginAsync(string operatorName, string machine, int runNumber, string op)
+        public async Task HandleLoginAsync(SecondaryRunLogModel model)
         {
-            string part = await LookupPartNumberAsync(runNumber); // Use helper method to fetch the part
+            string part = await LookupPartNumberAsync(model.Run); // Use helper method to fetch the part
 
             string query = @"INSERT INTO secondaryrun 
-                      (run, operator, machine, op, part, startDateTime, open) 
-                      VALUES (@run, @operator, @machine, @op, @part, @startDateTime, 1)";
+                      (prodNumber, run, operator, machine, op, part, startDateTime, open) 
+                      VALUES (@prodNumber, @run, @operator, @machine, @op, @part, @startDateTime, 1)";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@run", runNumber);
-                    command.Parameters.AddWithValue("@operator", operatorName);
-                    command.Parameters.AddWithValue("@machine", machine);
-                    command.Parameters.AddWithValue("@op", string.IsNullOrEmpty(op) ? DBNull.Value : (object)op);
+                    command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                    command.Parameters.AddWithValue("@run", model.Run);
+                    command.Parameters.AddWithValue("@operator", model.Operator);
+                    command.Parameters.AddWithValue("@machine", model.Machine);
+                    command.Parameters.AddWithValue("@op", string.IsNullOrEmpty(model.Op) ? DBNull.Value : (object)model.Op);
                     command.Parameters.AddWithValue("@part", string.IsNullOrEmpty(part) ? DBNull.Value : (object)part);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
 
@@ -211,6 +251,20 @@ namespace DashboardReportApp.Services
             }
         }
 
-       
+        public async Task UpdateSecondarySetupAsync(string prodNumber, string part)
+        {
+            string query = "UPDATE secondarysetup SET open = 0 WHERE prodNumber = @prodNumber AND part = @part";
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@prodNumber", prodNumber);
+                    command.Parameters.AddWithValue("@part", part);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
     }
 }
