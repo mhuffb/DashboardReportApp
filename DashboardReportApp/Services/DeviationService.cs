@@ -206,38 +206,7 @@ namespace DashboardReportApp.Services
             return filePath;
         }
 
-        private void PrintPdfWithSumatraPDF(string pdfPath)
-        {
-            string sumatraPdfPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe";
-            string printerName = "QC1"; // Change to your target printer
-
-            if (!File.Exists(sumatraPdfPath))
-            {
-                throw new FileNotFoundException("SumatraPDF.exe not found. Please provide the correct path.");
-            }
-
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = sumatraPdfPath,
-                    Arguments = $"-print-to \"{printerName}\" \"{pdfPath}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            try
-            {
-                process.Start();
-                process.WaitForExit();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Failed to print PDF: {ex.Message}");
-            }
-        }
-
+       
         // Updates FileAddress1 for an existing deviation record.
         // Uses the same file-saving logic as in Create.
         public async Task<bool> UpdateFileAddress1Async(int id, IFormFile file)
