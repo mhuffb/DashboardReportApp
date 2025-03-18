@@ -48,14 +48,26 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> EndRun(int id, int pcs, int scrapMach, int scrapNonMach, string notes, string prodNumber, string part)
+        public async Task<IActionResult> EndRun(
+    int id,
+    int pcs,
+    int scrapMach,
+    int scrapNonMach,
+    string notes,
+    string prodNumber,
+    string part,
+    bool orderComplete)
         {
             // Update the secondaryrun table (using your existing logout routine)
             await _secondaryRunLogService.HandleLogoutAsync(pcs, scrapMach, scrapNonMach, notes, id);
-            // Additionally, update the secondarysetup table so that records with the same prodNumber and part are closed
+
             await _secondaryRunLogService.UpdateSecondarySetupAsync(prodNumber, part);
+            // Update the schedule table based on whether the order is complete.
+            await _secondaryRunLogService.UpdateScheduleAsync(prodNumber, part, orderComplete);
+
             return RedirectToAction("Index");
         }
+
 
 
     }

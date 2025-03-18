@@ -207,18 +207,15 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Hidden fields including prodNumber and part -->
+                    <!-- Hidden fields -->
                     <input type="hidden" id="endRunId" name="id" />
                     <input type="hidden" id="endRunProdNumber" name="prodNumber" />
                     <input type="hidden" id="endRunPart" name="part" />
 
-                    <!-- (You can still display some details if desired) -->
-                    <p><strong>Run #:</strong> <span id="endRunRunNumber"></span></p>
-                    <p><strong>Operator:</strong> <span id="endRunOperator"></span></p>
-                    <p><strong>Machine:</strong> <span id="endRunMachine"></span></p>
-                    <p><strong>Start Time:</strong> <span id="endRunStartTime"></span></p>
-                    <p><strong>Notes:</strong> <span id="endRunNotes"></span></p>
-                    <!-- Now show only the inputs you need -->
+                    <!-- Display Part -->
+                    <p><strong>Part:</strong> <span id="endRunPartDisplay"></span></p>
+
+                    <!-- Input fields -->
                     <div class="mb-3">
                         <label for="endPcs" class="form-label">Pieces Ran</label>
                         <input type="number" id="endPcs" name="pcs" class="form-control" required />
@@ -235,6 +232,13 @@
                         <label for="endNotes" class="form-label">Notes</label>
                         <textarea id="endNotes" name="notes" class="form-control text-area-large" rows="3"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="orderComplete" class="form-label">Order Complete?</label>
+                        <input type="checkbox" id="orderComplete" name="orderComplete" value="true" />
+                    </div>
+                    <input type="hidden" name="orderComplete" value="false" />
+
+
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -274,22 +278,27 @@
           logoutModal.show();
         }
 
-              // Opens the End Run Modal
-        function showEndRunModal(id, prodNumber, part, run, operator, machine, startTime, notes) {
-          document.getElementById('endRunId').value = id;
-          document.getElementById('endRunProdNumber').value = prodNumber;
-          document.getElementById('endRunPart').value = part;
+              function showEndRunModal(id, prodNumber, part, run, operator, machine, startTime, notes) {
+            document.getElementById('endRunId').value = id;
+            document.getElementById('endRunProdNumber').value = prodNumber;
+            document.getElementById('endRunPart').value = part;
 
-          document.getElementById('endRunRunNumber').innerText = run && run.trim() ? run : "Not Available";
-          document.getElementById('endRunOperator').innerText = operator && operator.trim() ? operator : "Not Available";
-          document.getElementById('endRunMachine').innerText = machine && machine.trim() ? machine : "Not Available";
-          document.getElementById('endRunStartTime').innerText = startTime && startTime.trim() ? startTime : "Not Available";
-          document.getElementById('endRunNotes').innerText = notes && notes.trim() ? notes : "None";
+            // Set the part display in the modal
+            document.getElementById('endRunPartDisplay').innerText = part;
 
-          var modalElement = document.getElementById('endRunModal');
-          var endRunModal = new bootstrap.Modal(modalElement);
-          endRunModal.show();
+            // Optionally, clear previous input values if needed:
+            document.getElementById('endPcs').value = "";
+            document.getElementById('endScrapMach').value = "";
+            document.getElementById('endScrapNonMach').value = "";
+            document.getElementById('endNotes').value = "";
+            document.getElementById('orderComplete').checked = false;
+
+            // Show the modal
+            var modalElement = document.getElementById('endRunModal');
+            var endRunModal = new bootstrap.Modal(modalElement);
+            endRunModal.show();
         }
+
 
 
         document.addEventListener("DOMContentLoaded", function () {

@@ -3,6 +3,7 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace DashboardReportApp.Services
@@ -264,6 +265,28 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+        public async Task UpdateScheduleAsync(string prodNumber, string part, bool orderComplete)
+        {
+            Console.WriteLine(prodNumber + " " + part + " " + orderComplete);
+            int openToSecondaryValue = orderComplete ? 0 : 1;
+            string query = "UPDATE schedule SET openToSecondary = @openToSecondary WHERE part = @part AND prodNumber = @prodNumber";
+
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@openToSecondary", openToSecondaryValue);
+                    command.Parameters.AddWithValue("@prodNumber", prodNumber);
+                    command.Parameters.AddWithValue("@part", part);
+
+                    int rowsAffected = await command.ExecuteNonQueryAsync();
+                    // Log the result (for example, using a logger or even Debug.WriteLine)
+                    Debug.WriteLine($"UpdateScheduleAsync affected {rowsAffected} row(s) for part '{part}' and prodNumber '{prodNumber}'");
+                }
+            }
+        }
+
 
     }
 }
