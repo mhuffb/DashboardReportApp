@@ -23,7 +23,7 @@ namespace DashboardReportApp.Controllers
             ViewBag.OpenRuns = await _secondaryRunLogService.GetLoggedInRunsAsync();
             ViewBag.AvailableParts = await _secondaryRunLogService.GetAvailableParts();
 
-            // Fetch all runs (instead of open runs)
+            // Fetch all runs 
             var allRuns = await _secondaryRunLogService.GetAllRunsAsync();
 
             

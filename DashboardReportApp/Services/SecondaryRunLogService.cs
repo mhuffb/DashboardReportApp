@@ -17,7 +17,7 @@ namespace DashboardReportApp.Services
             var allRuns = new List<SecondaryRunLogModel>();
 
             const string query = @"
-                SELECT id, timestamp, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                SELECT id, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
                 FROM secondaryrun
                 ORDER BY id DESC";
 
@@ -31,7 +31,6 @@ namespace DashboardReportApp.Services
                 allRuns.Add(new SecondaryRunLogModel
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
-                    Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
                     ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Run = reader.IsDBNull(reader.GetOrdinal("run"))
     ? 0
@@ -61,7 +60,7 @@ namespace DashboardReportApp.Services
             var loggedInRuns = new List<SecondaryRunLogModel>();
 
             const string query = @"
-                SELECT id, timestamp, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
+                SELECT id, date, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach, startDateTime, endDateTime, notes, appearance
                 FROM secondaryrun
                 WHERE open = 1";
 
@@ -75,7 +74,7 @@ namespace DashboardReportApp.Services
                 loggedInRuns.Add(new SecondaryRunLogModel
                 {
                     Id = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32("id"),
-                    Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp")) ? default(DateTime) : reader.GetDateTime("timestamp"),
+                    Date = reader.IsDBNull(reader.GetOrdinal("date")) ? default(DateTime) : reader.GetDateTime("date"),
                     ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Run = reader.IsDBNull(reader.GetOrdinal("run")) ? 0 : reader.GetInt32(reader.GetOrdinal("run")),
                     Part = reader["part"]?.ToString() ?? "N/A",
@@ -99,7 +98,7 @@ namespace DashboardReportApp.Services
             var availableParts = new List<SecondarySetupLogModel>();
 
             string query = @"
-            SELECT id, timestamp, operator, prodNumber, run, op, part, machine, notes, open
+            SELECT id, date, operator, prodNumber, run, op, part, machine, notes, open
             FROM secondarysetup WHERE open = 1" +
                     " ORDER BY id DESC";
 
@@ -110,14 +109,14 @@ namespace DashboardReportApp.Services
 
             while (await reader.ReadAsync())
             {
-                DateTime timestamp = !reader.IsDBNull(reader.GetOrdinal("timestamp"))
-                                     ? reader.GetDateTime("timestamp")
+                DateTime date = !reader.IsDBNull(reader.GetOrdinal("date"))
+                                     ? reader.GetDateTime("date")
                                      : DateTime.MinValue;
 
                 availableParts.Add(new SecondarySetupLogModel
                 {
                     Id = reader.GetInt32("id"),
-                    Timestamp = timestamp,
+                    Date = date,
                     Operator = reader["operator"]?.ToString(),
                     ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Run = reader.GetInt32("run"),

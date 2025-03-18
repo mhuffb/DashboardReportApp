@@ -82,6 +82,7 @@ namespace DashboardReportApp.Services
     : int.TryParse(reader["run"]?.ToString(), out int runValue)
         ? runValue
         : 0,
+                            Date = reader.IsDBNull(reader.GetOrdinal("date")) ? default(DateTime) : reader.GetDateTime("date"),
 
                             Part = reader["part"].ToString(),
                             Operator = reader["operator"].ToString(),
@@ -107,8 +108,8 @@ namespace DashboardReportApp.Services
 
         public async Task AddSetupAsync(SecondarySetupLogModel model)
         {
-            string insertQuery = "INSERT INTO secondarysetup (operator, op, part, prodNumber, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours, open) " +
-                                 "VALUES (@operator, @op, @part, @prodNumber, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours, 1)";
+            string insertQuery = "INSERT INTO secondarysetup (date, operator, op, part, prodNumber, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours, open) " +
+                                 "VALUES (@date, @operator, @op, @part, @prodNumber, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours, 1)";
 
             string updateQuery = "UPDATE schedule SET openToSecondary = 0 WHERE part = @part AND prodNumber = @prodNumber";
 
@@ -122,6 +123,7 @@ namespace DashboardReportApp.Services
                         // Insert the new setup record.
                         using (var command = new MySqlCommand(insertQuery, connection, transaction))
                         {
+                            command.Parameters.AddWithValue("@date", DateTime.Now);
                             command.Parameters.AddWithValue("@operator", model.Operator);
                             command.Parameters.AddWithValue("@op", model.Op);
                             command.Parameters.AddWithValue("@part", model.Part);

@@ -15,6 +15,7 @@
                             <tr>
                                 <th>Production Number</th>
                                 <th>Run</th>
+                                <th>Date</th>
                                 <th>Machine</th>
                                 <th>Op</th>
                                 <th>Setup By</th>
@@ -29,6 +30,12 @@
                                 <tr>
                                     <td>@part.ProdNumber</td>
                                     <td>@part.Run</td>
+                                    <td>
+                                        @(part.Date.HasValue && part.Date.Value != default(DateTime)
+                                            ? part.Date.Value.ToString("MM/dd/yyyy HH:mm:ss")
+                                            : "")
+                                    </td>
+
                                     <td>@part.Machine</td>
                                     <td>@part.Op</td>
                                     <td>@part.Operator</td>
@@ -296,7 +303,7 @@
           // Define columns for the React table (adjust keys as needed)
           const columns = [
             { key: "Id", label: "ID" },
-            { key: "Timestamp", label: "Timestamp" },
+            { key: "ProdNumber", label: "Production Number" },
             { key: "Run", label: "Run #" },
             { key: "Part", label: "Part" },
             { key: "Op", label: "Op" },

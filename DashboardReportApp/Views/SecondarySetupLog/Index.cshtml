@@ -19,7 +19,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form asp-action="CreateSetup" method="post">
+                <form asp-action="CreateSetup" method="post" id="setupForm">
                     <div class="mb-3">
                         <label for="Operator" class="form-label">Operator:</label>
                         <select id="Operator" name="Operator" class="form-control bg-black text-goldenrod border-goldenrod" required>
@@ -98,7 +98,7 @@
                         <input type="number" step="0.1" id="SetupHours" name="SetupHours" class="form-control bg-black text-goldenrod border-goldenrod" />
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-primary w-100" id="submitButton">
                         <i class="bi bi-play-circle"></i> Add Setup
                     </button>
                 </form>
@@ -178,7 +178,7 @@
 
         const columns = [
             { key: "Id", label: "ID" },
-            { key: "Timestamp", label: "Timestamp" },
+            { key: "Date", label: "Date" },
             { key: "ProdNumber", label: "ProdNumber" },
             { key: "Run", label: "Run #" },
             { key: "Part", label: "Part" },
@@ -194,5 +194,13 @@
         } else {
             console.error("React table render function not found!");
         }
+    });
+</script>
+<script>
+    document.getElementById("setupForm").addEventListener("submit", function () {
+      var submitButton = document.getElementById("submitButton");
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
     });
 </script>
