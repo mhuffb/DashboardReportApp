@@ -158,7 +158,7 @@ namespace DashboardReportApp.Services
                     Directory.CreateDirectory(_uploadFolder);
                 }
                 var fileExtension1 = Path.GetExtension(file1.FileName);
-                var fileName1 = $"ProcessChangeRequest_File1_{model.Id}{fileExtension1}";
+                var fileName1 = $"ProcessChangeRequestFile1_{model.Id}{fileExtension1}";
                 filePath1 = Path.Combine(_uploadFolder, fileName1);
 
                 try
@@ -183,7 +183,7 @@ namespace DashboardReportApp.Services
                     Directory.CreateDirectory(_uploadFolder);
                 }
                 var fileExtension2 = Path.GetExtension(file2.FileName);
-                var fileName2 = $"ProcessChangeRequest_File2_{model.Id}{fileExtension2}";
+                var fileName2 = $"ProcessChangeRequestFile2_{model.Id}{fileExtension2}";
                 filePath2 = Path.Combine(_uploadFolder, fileName2);
 
                 try
