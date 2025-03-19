@@ -53,11 +53,20 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost("Logout")]
         public async Task<IActionResult> Logout(string partNumber, DateTime startDateTime, string difficulty,
-                                                string assistanceRequired, string assistedBy, string setupComplete, string notes, string runNumber)
+     string assistanceRequired, string assistedBy, string setupComplete, string notes, string runNumber, string machine)
         {
+            // Log the machine value from the form:
+            var machineFromForm = Request.Form["machine"];
+            Console.WriteLine($"[Logout] Received machine parameter: '{machineFromForm}'");
+
             try
             {
                 await _pressSetupService.LogoutAsync(partNumber, startDateTime, difficulty, assistanceRequired, assistedBy, setupComplete, notes, runNumber);
+                // If setup is complete, reset the counter on the device.
+                if (setupComplete == "Yes")
+                {
+                    await _pressSetupService.ResetPressCounterAsync(machine);
+                }
                 TempData["Message"] = "Logout successfully recorded!";
             }
             catch (Exception ex)
@@ -67,7 +76,9 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-       
+
+
+
 
     }
 }

@@ -45,40 +45,10 @@ namespace DashboardReportApp.Services
         /// If the machine string already contains a dot, it is assumed to be an IP.
         /// Otherwise, it is mapped using a dictionary.
         /// </summary>
+        // Instead of your private MapMachineToIp method, you can do:
         private string MapMachineToIp(string machine)
         {
-            if (machine.Contains("."))
-            {
-                return machine;
-            }
-            var dict = new Dictionary<string, string>
-            {
-                { "1", "192.168.1.30" },
-                { "2", "192.168.1.31" },
-                { "41", "192.168.1.32" },
-                { "45", "192.168.1.33" },
-                { "50", "192.168.1.34" },
-                { "51", "192.168.1.35" },
-                { "57", "192.168.1.36" },
-                { "59", "192.168.1.37" },
-                { "70", "192.168.1.38" },
-                { "74", "192.168.1.39" },
-                { "92", "192.168.1.40" },
-                { "95", "192.168.1.41" },
-                { "102", "192.168.1.42" },
-                { "112", "192.168.1.43" },
-                { "124", "192.168.1.44" },
-                { "125", "192.168.1.45" },
-                { "154", "192.168.1.46" },
-                { "156", "192.168.1.47" },
-                { "175", "192.168.1.48" }
-                // Add additional mappings as needed.
-            };
-            if (dict.TryGetValue(machine, out var ip))
-            {
-                return ip;
-            }
-            throw new Exception($"No device found for machine: {machine}");
+            return _sharedService.GetDeviceIp(machine);
         }
 
         /// <summary>

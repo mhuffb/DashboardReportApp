@@ -291,5 +291,43 @@ ORDER BY
            // Console.WriteLine(result.ToArray());
             return result;
         }
+
+        public string GetDeviceIp(string machine)
+        {
+            // If the machine already looks like an IP, return it directly.
+            if (machine.Contains("."))
+                return machine;
+
+            var deviceIPs = new Dictionary<string, string>
+            {
+                { "1", "192.168.1.30" },
+                { "2", "192.168.1.31" },
+                { "41", "192.168.1.32" },
+                { "45", "192.168.1.33" },
+                { "50", "192.168.1.34" },
+                { "51", "192.168.1.35" },
+                { "57", "192.168.1.36" },
+                { "59", "192.168.1.37" },
+                { "70", "192.168.1.38" },
+                { "74", "192.168.1.39" },
+                { "92", "192.168.1.40" },
+                { "95", "192.168.1.41" },
+                { "102", "192.168.1.42" },
+                { "112", "192.168.1.43" },
+                { "124", "192.168.1.44" },
+                { "125", "192.168.1.45" },
+                { "154", "192.168.1.46" },
+                { "156", "192.168.1.47" },
+                { "175", "192.168.1.48" }
+            };
+
+            if (deviceIPs.TryGetValue(machine, out var ip))
+            {
+                return ip;
+            }
+            throw new Exception($"No device found for machine: {machine}");
+        }
+
+       
     }
 }

@@ -70,10 +70,12 @@
                                 <td>@login.Machine</td>
                                 <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
                                 <td>
-                                    <button class="btn btn-danger btn-sm"
-                                            onclick="openStopSetupModal('@login.Part', '@login.Run', '@login.StartDateTime')">
-                                        Logout of Setup
-                                    </button>
+                                        <button class="btn btn-danger btn-sm"
+                                                onclick="openStopSetupModal('@login.Part', '@login.Run', '@login.StartDateTime', '@login.Machine')">
+                                            Logout of Setup
+                                        </button>
+
+
                                 </td>
                             </tr>
                         }
@@ -181,6 +183,8 @@
                     <input type="hidden" id="modalProdNumber" name="prodNumber" />
                     <input type="hidden" id="modalRun" name="runNumber" />
                     <input type="hidden" id="modalStartDateTime" name="startDateTime" />
+                    <!-- NEW: Hidden field for the machine/device ID with unique ID -->
+                    <input type="hidden" id="logoutMachine" name="machine" />
 
                     <!-- Assistance Required -->
                     <div class="mb-3">
@@ -272,14 +276,22 @@
         window.renderMyDataTable('myReactTableRoot', data, columns, true);
     });
 
-    // ========== LOGOUT MODAL SCRIPTS ==========
-    function openStopSetupModal(part, run, startDateTime) {
+      function openStopSetupModal(part, run, startDateTime, machine) {
+        console.log("openStopSetupModal called with machine:", machine);
         document.getElementById("modalPart").value = part;
         document.getElementById("modalRun").value = run;
         document.getElementById("modalStartDateTime").value = startDateTime;
+        // Set the machine value on the uniquely identified hidden field.
+        document.getElementById("logoutMachine").value = machine;
+        console.log("logoutMachine.value set to:", document.getElementById("logoutMachine").value);
         const modal = new bootstrap.Modal(document.getElementById("stopSetupModal"));
         modal.show();
     }
+
+
+
+
+
 
     function closeModal() {
         const modalElement = document.getElementById("stopSetupModal");
@@ -301,5 +313,7 @@
             });
         }
     });
+
+
 </script>
 <script src="/js/mydatatable.bundle.js"></script>

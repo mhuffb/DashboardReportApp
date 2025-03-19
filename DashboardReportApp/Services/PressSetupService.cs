@@ -12,12 +12,13 @@ namespace DashboardReportApp.Services
     public class PressSetupService
     {
         private readonly string _connectionStringMySQL;
+        private readonly SharedService _sharedService;
 
-        public PressSetupService(IConfiguration config)
+        public PressSetupService(IConfiguration config, SharedService sharedService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
+            _sharedService = sharedService;
         }
-
         public List<PressSetupModel> GetAllRecords()
         {
             var records = new List<PressSetupModel>();
@@ -254,6 +255,56 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+        public async Task ResetPressCounterAsync(string machine)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(machine))
+                {
+                    Console.WriteLine("[ResetPressCounterAsync] ERROR: 'machine' parameter is null or empty.");
+                    throw new ArgumentNullException(nameof(machine), "Machine parameter cannot be null or empty.");
+                }
+
+                // If the machine value contains colons, extract the last part.
+                if (machine.Contains(":"))
+                {
+                    var parts = machine.Split(':');
+                    string original = machine;
+                    machine = parts.Last();
+                    Console.WriteLine($"[ResetPressCounterAsync] Parsed machine id from '{original}' to '{machine}'.");
+                }
+
+                // Use the centralized mapping to obtain the device IP.
+                string deviceIP = _sharedService.GetDeviceIp(machine);
+                Console.WriteLine($"[ResetPressCounterAsync] Machine '{machine}' mapped to device IP: {deviceIP}");
+
+                using (var client = new HttpClient())
+                {
+                    // Only send count_value to reset the counter (do not update press_value).
+                    var content = new FormUrlEncodedContent(new[]
+                    {
+                new KeyValuePair<string, string>("count_value", "0")
+            });
+
+                    string requestUrl = $"http://{deviceIP}/update";
+                    Console.WriteLine($"[ResetPressCounterAsync] Sending POST request to: {requestUrl}");
+                    Console.WriteLine("[ResetPressCounterAsync] Request content: count_value=0");
+
+                    var response = await client.PostAsync(requestUrl, content);
+                    Console.WriteLine($"[ResetPressCounterAsync] Received HTTP status code: {response.StatusCode}");
+                    response.EnsureSuccessStatusCode();
+                    Console.WriteLine("[ResetPressCounterAsync] Counter reset successfully.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ResetPressCounterAsync] Exception occurred: {ex}");
+                throw;
+            }
+        }
+
+
+
 
     }
 }
