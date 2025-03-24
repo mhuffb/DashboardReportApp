@@ -1,0 +1,164 @@
+﻿@{
+    ViewData["Title"] = "Prolink Data";
+}
+
+<h2>Prolink Data</h2>
+
+<style>
+    /* Stack the form elements vertically */
+    #reportForm {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+        /* Add spacing between each form row */
+        #reportForm > div {
+            margin-bottom: 15px;
+        }
+        /* Style the labels and inputs to be on separate lines */
+        #reportForm label,
+        #reportForm input,
+        #reportForm select {
+            display: block;
+            width: 100%;
+        }
+    /* Container for the two buttons: display them inline */
+    .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+
+        .button-container button {
+            flex: 1;
+        }
+</style>
+
+<form id="reportForm">
+    <div>
+        <label for="partString">Part:</label>
+        <input type="text" id="partString" name="partString" required />
+    </div>
+    <div>
+        <label for="type">Department:</label>
+        <select id="type" name="type">
+            <option value="">Any</option>
+            <option value="mold">Molding</option>
+            <option value="sint">Sintering</option>
+            <option value="machin">Machining</option>
+        </select>
+    </div>
+    <div>
+        <label for="startDate">Start Date (optional):</label>
+        <input type="date" id="startDate" name="startDate" />
+    </div>
+    <div>
+        <label for="endDate">End Date (optional):</label>
+        <input type="date" id="endDate" name="endDate" />
+    </div>
+    <!-- Checkbox for filtering only out-of-spec records -->
+    <div>
+        <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" />
+        <label for="onlyOutOfSpec">Only show out-of-spec records</label>
+    </div>
+    <div class="button-container">
+        <!-- Generate PDF button submits the form to the GeneratePdf action -->
+        <button type="submit" formaction='@Url.Action("GeneratePdf", "Prolink")' formmethod="get" target="_blank">
+            Generate PDF
+        </button>
+        <!-- Query button triggers an AJAX call to update the React table -->
+        <button type="button" id="queryButton" onclick="queryData()">Query</button>
+    </div>
+</form>
+
+<!-- Container for the React table (no initial data) -->
+<div id="prolinkTableRoot"></div>
+
+<script>
+    // Define the column definitions for your React table (keys in camelCase).
+    function getColumns() {
+        return [
+            { key: 'partId', label: 'Part ID' },
+            { key: 'recordNumber', label: 'Record' },
+            { key: 'measureDate', label: 'Date/Time' },
+            { key: 'qccFileDesc', label: 'Qcc File Desc' },
+            { key: 'dimension', label: 'Dimension' },
+            { key: 'measurementValue', label: 'Measurement Value' },
+            { key: 'nominal', label: 'Nominal' },
+            { key: 'tolPlus', label: 'Tol Plus' },
+            { key: 'tolMinus', label: 'Tol Minus' }
+        ];
+    }
+
+    // AJAX call to query data and update the React table.
+    function queryData() {
+        var partString = document.getElementById("partString").value;
+        var type = document.getElementById("type").value;
+        var startDate = document.getElementById("startDate").value;
+        var endDate = document.getElementById("endDate").value;
+        var onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
+        // Include the checkbox value in the query string.
+        var query = "?partString=" + encodeURIComponent(partString) +
+                    "&type=" + encodeURIComponent(type) +
+                    "&startDate=" + encodeURIComponent(startDate) +
+                    "&endDate=" + encodeURIComponent(endDate) +
+                    "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec);
+
+        fetch('/Prolink/QueryData' + query)
+            .then(response => response.json())
+            .then(data => {
+                // Format numeric fields to 4 decimals.
+                data = data.map(item => {
+                    item.nominal = parseFloat(item.nominal).toFixed(4);
+                    item.tolPlus = parseFloat(item.tolPlus).toFixed(4);
+                    item.tolMinus = parseFloat(item.tolMinus).toFixed(4);
+                    item.measurementValue = parseFloat(item.measurementValue).toFixed(4);
+                    return item;
+                });
+                if (window.renderMyDataTable) {
+                    window.renderMyDataTable("prolinkTableRoot", data, getColumns(), true);
+                    // After rendering, highlight out-of-spec measurement cells.
+                    highlightOutOfSpecCells();
+                } else {
+                    console.error("React table render function not found!");
+                }
+            })
+            .catch(error => {
+                console.error('Error querying data:', error);
+            });
+    }
+
+    // This function inspects the rendered table rows and highlights the measurement cell if out-of-spec.
+    function highlightOutOfSpecCells() {
+        // Wait briefly to ensure the table is rendered.
+        setTimeout(function() {
+            var table = document.querySelector("#prolinkTableRoot table");
+            if (!table) return;
+            // Query all rows in the table body.
+            var rows = table.querySelectorAll("tbody tr");
+            rows.forEach(function(row) {
+                var cells = row.getElementsByTagName("td");
+                // Assuming column order: measurementValue = index 5, nominal = index 6, tolPlus = index 7, tolMinus = index 8.
+                if (cells.length >= 9) {
+                    var measurement = parseFloat(cells[5].textContent.trim());
+                    var nominal = parseFloat(cells[6].textContent.trim());
+                    var tolPlus = parseFloat(cells[7].textContent.trim());
+                    var tolMinus = parseFloat(cells[8].textContent.trim());
+                    var usl = nominal + tolPlus;
+                    var lsl = nominal - tolMinus; // Standard: lower spec limit.
+                    if (!isNaN(measurement) && (measurement > usl || measurement < lsl)) {
+                        cells[5].style.color = "red";
+                    }
+                }
+            });
+        }, 100);
+    }
+
+    // On initial load, render an empty table.
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.renderMyDataTable) {
+            window.renderMyDataTable("prolinkTableRoot", [], getColumns(), true);
+        }
+    });
+</script>
+
+<script src="/js/mydatatable.bundle.js"></script>

@@ -107,6 +107,7 @@
                             <li><a class="dropdown-item" asp-controller="Deviation" asp-action="Index"><i class="bi bi-journal-text"></i> Deviations</a></li>
                             <li><a class="dropdown-item" asp-controller="QCSecondaryHoldReturn" asp-action="Index"><i class="bi bi-arrow-counterclockwise"></i> Secondary Hold Returns</a></li>
                             <li><a class="dropdown-item" asp-controller="ProcessChangeRequest" asp-action="Index"><i class="bi bi-arrow-repeat"></i> Process Change Requests</a></li>
+                            <li><a class="dropdown-item" asp-controller="Prolink" asp-action="Index"><i class="bi bi-arrow-repeat"></i> Prolink</a></li>
                         </ul>
                     </li>
 
@@ -158,7 +159,13 @@
     @await RenderSectionAsync("Scripts", required: false)
 
 </body>
+
+
 </html>
+
+
+
+
 <style>
     .text-light{color: goldenrod !important;}
 </style>

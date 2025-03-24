@@ -5,6 +5,7 @@ using System.Net;
 using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
 using System.Data.Odbc;
+using System.Data;
 
 namespace DashboardReportApp.Services
 {
@@ -328,6 +329,82 @@ ORDER BY
             throw new Exception($"No device found for machine: {machine}");
         }
 
-       
+        public async Task<DataTable> GetLatestPartFactorDetailsAsync(string partNumber)
+        {
+            DataTable dt = new DataTable();
+            using (var connection = new SqlConnection(_connectionStringSQLExpress))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand("GetLatestPartFactorDetails", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+                    // Pass the part number parameter
+                    command.Parameters.AddWithValue("@qcc_file_desc", partNumber);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        dt.Load(reader);
+                    }
+                }
+            }
+            return dt;
+        }
+
+        public async Task<DataTable> GetStatisticsAsync(string part, DateTime? startDate)
+        {
+            DataTable dt = new DataTable();
+            using (var connection = new SqlConnection(_connectionStringSQLExpress))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand("GetStatistics", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+                    // Pass the part and start date parameters
+                    command.Parameters.AddWithValue("@qcc_file_desc", part);
+                    command.Parameters.AddWithValue("@startDate", startDate);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        dt.Load(reader);
+                    }
+                }
+            }
+            return dt;
+        }
+
+        public async Task<string> GetMostCurrentProlinkPart(string searchString)
+        {
+            string partResult = null;
+            string query = @"
+        SELECT TOP 1 qf.qcc_file_desc
+        FROM part p
+        INNER JOIN qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
+        WHERE qf.qcc_file_desc LIKE '%' + @searchString + '%'
+          AND qf.qcc_file_desc LIKE '%MOLD%'
+          AND qf.qcc_file_desc NOT LIKE '%IM%'
+          AND qf.qcc_file_desc NOT LIKE '%SETUP%'
+          AND qf.qcc_file_desc NOT LIKE '%CALIBRATION%'
+        ORDER BY p.measure_date DESC";
+
+            string prolinkPartNumber = "";
+
+            using (var connection = new SqlConnection(_connectionStringSQLExpress))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@searchString", searchString);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            prolinkPartNumber = reader["qcc_file_desc"].ToString();
+                            
+                        }
+                    }
+                }
+            }
+
+            return prolinkPartNumber;
+        }
+
     }
 }

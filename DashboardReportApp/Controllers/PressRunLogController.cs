@@ -140,7 +140,8 @@ namespace DashboardReportApp.Controllers
         public async Task<IActionResult> GenerateRouterTag(PressRunLogModel model)
         {
 
-            string filePath = _pressRunLogService.GenerateRouterTag(model);
+            string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);
+
 
             string computerName = Environment.MachineName;
             Console.WriteLine("Computer Name: " + computerName);

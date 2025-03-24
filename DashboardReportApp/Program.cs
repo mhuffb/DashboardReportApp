@@ -44,7 +44,7 @@ try
     builder.Services.AddScoped<AdminProcessChangeRequestService>();
     builder.Services.AddScoped<SharedService>();
     builder.Services.AddScoped<AssemblyService>();
-
+    builder.Services.AddScoped<ProlinkService>();
     // Add session services
     builder.Services.AddSession(options =>
     {

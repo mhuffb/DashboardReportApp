@@ -332,53 +332,48 @@ LIMIT 1";
             Console.WriteLine("Start Skid Processed Successfully.");
         }
 
-       
-        public string GenerateRouterTag(PressRunLogModel model)
+
+        public async Task<string> GenerateRouterTagAsync(PressRunLogModel model)
         {
-            List<string> result = new List<string>();
+            // Get the order of operations (unchanged).
+            List<string> result = _sharedService.GetOrderOfOps(model.Part);
 
-            result = _sharedService.GetOrderOfOps(model.Part);
-
-
+            // Generate the PDF file path.
             string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\RouterTag_" + model.Id + ".pdf";
 
-            // Use predefined fonts
+            // Predefined fonts.
             PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
             PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
-            // Create writer and pdf document
+            // Create writer and PDF document.
             PdfWriter writer = new PdfWriter(filePath);
             PdfDocument pdf = new PdfDocument(writer);
             using (var document = new Document(pdf))
             {
-                // Set overall document margins (increased bottom margin for footer)
+                // Set overall document margins (increased bottom margin for footer).
                 document.SetMargins(20, 20, 40, 20);
 
-                // Title at top center
+                // Title at top center.
                 document.Add(new Paragraph("Sintergy Tracer Tag")
                     .SetFont(boldFont)
                     .SetFontSize(18)
                     .SetTextAlignment(TextAlignment.CENTER));
 
-                // Prepare formatted StartDateTime
+                // Prepare formatted StartDateTime.
                 string formattedStartDateTime = model.StartDateTime.ToString();
                 string id = string.IsNullOrWhiteSpace(model.Id.ToString()) ? "N/A" : model.Id.ToString();
 
-                
-
-
-
-                // Add a horizontal line separator
+                // Add a horizontal line separator.
                 document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
 
-                // Order of Operations header (centered)
+                // Order of Operations header (centered).
                 document.Add(new Paragraph("Order of Operations:")
                     .SetFont(boldFont)
                     .SetFontSize(14)
                     .SetTextAlignment(TextAlignment.CENTER)
                     .SetMarginBottom(2));
 
-                // Loop through each order operation item (keeping the same logic)
+                // Loop through each order operation item.
                 foreach (var item in result)
                 {
                     document.Add(new Paragraph(processDesc(item))
@@ -387,9 +382,9 @@ LIMIT 1";
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(2));
 
-                    if (item.ToLower().Contains("machine"))
+                    if (item.ToLower().Contains("machin"))
                     {
-                        document.Add(new Paragraph("Machine #: ________________________   Date: __________________")
+                        document.Add(new Paragraph("Machine #: ____________ Signature: __________________________   Date: __________________")
                             .SetFont(normalFont)
                             .SetFontSize(12)
                             .SetTextAlignment(TextAlignment.CENTER)
@@ -405,13 +400,12 @@ LIMIT 1";
                     }
                     else if (item.ToLower().Contains("mold"))
                     {
-                        // Create a header table with 3 columns
+                        // Create a header table with 3 columns.
                         Table headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1 }))
                             .UseAllAvailableWidth()
                             .SetMarginBottom(10)
                             .SetBorder(Border.NO_BORDER);
 
-                        
                         headerTable.AddCell(new Cell().Add(new Paragraph("Part: " + model.Part + " " + model.Component)
                             .SetFont(normalFont)
                             .SetFontSize(12))
@@ -457,10 +451,10 @@ LIMIT 1";
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
-
+                        
                         document.Add(headerTable);
 
-                        // Create a header table with 4 columns
+                        // Create a header table with 2 columns for date/time.
                         Table headerTable2 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1 }))
                             .UseAllAvailableWidth()
                             .SetMarginBottom(10)
@@ -472,14 +466,93 @@ LIMIT 1";
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
 
-
                         string currentDate = DateTime.Now.ToString("MM/dd/yyyy hh:mm tt");
                         headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph("End Date Time: " + currentDate)
                             .SetFont(normalFont)
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
+
+                       
+
+                        
+
+                        string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(model.Part);
+
+                        // ---------------------------
+                        // Section: Latest Part Factor Details
+                        // ---------------------------
+                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(qcc_file_desc);
+
+                       
+
+                        if (partFactorDetails != null && partFactorDetails.Rows.Count >= 4)
+                        {
+                            // Loop through rows 3 and 4 (zero-indexed rows 2 and 3)
+                            for (int rowIndex = 2; rowIndex <= 3; rowIndex++)
+                            {
+                                DataRow row = partFactorDetails.Rows[rowIndex];
+                                // Assume first column is "Mix Lot" and second column is "Mix #"
+                                string mixLot = row[0].ToString();
+                                string mixNumber = row[1].ToString();
+
+                                headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph(mixLot)
+                                    .SetFont(normalFont)
+                                    .SetFontSize(12))
+                                    .SetBorder(Border.NO_BORDER)
+                                     .SetTextAlignment(TextAlignment.LEFT));
+
+                                headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph(mixNumber)
+                                    .SetFont(normalFont)
+                                    .SetFontSize(12))
+                                    .SetBorder(Border.NO_BORDER)
+                                     .SetTextAlignment(TextAlignment.LEFT));
+                            }
+                        }
+                        else
+                        {
+                            headerTable2.AddCell(new Paragraph("Not enough data rows available.").SetFont(normalFont));
+                        }
                         document.Add(headerTable2);
+
+
+
+                        // ---------------------------
+                        // Section: Statistics
+                        // ---------------------------
+                        DateTime startDate = new DateTime(2025, 3, 1, 9, 0, 0);
+                        DataTable statistics = await _sharedService.GetStatisticsAsync(qcc_file_desc, model.StartDateTime);
+                        document.Add(new Paragraph("Statistics:")
+                            .SetFont(boldFont)
+                            .SetFontSize(14)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetMarginTop(10)
+                            .SetMarginBottom(10));
+
+                        if (statistics != null && statistics.Rows.Count > 0)
+                        {
+                            Table statsTable = new Table(UnitValue.CreatePercentArray(statistics.Columns.Count))
+                                .UseAllAvailableWidth();
+
+                            // Add header cells.
+                            foreach (DataColumn column in statistics.Columns)
+                            {
+                                statsTable.AddHeaderCell(new Cell().Add(new Paragraph(column.ColumnName).SetFont(boldFont)));
+                            }
+                            // Add data rows.
+                            foreach (DataRow row in statistics.Rows)
+                            {
+                                foreach (var item2 in row.ItemArray)
+                                {
+                                    statsTable.AddCell(new Cell().Add(new Paragraph(item2.ToString()).SetFont(normalFont)));
+                                }
+                            }
+                            document.Add(statsTable);
+                        }
+                        else
+                        {
+                            document.Add(new Paragraph("No Statistics available.").SetFont(normalFont));
+                        }
                     }
                     else
                     {
@@ -491,7 +564,11 @@ LIMIT 1";
                     }
                 }
 
-                // Now add the footer directly to the last page while the document is still open.
+               
+
+                // ---------------------------
+                // Footer (as before)
+                // ---------------------------
                 PdfPage lastPage = pdf.GetLastPage();
                 Rectangle pageSize = lastPage.GetPageSize();
                 PdfCanvas pdfCanvas = new PdfCanvas(lastPage);
@@ -501,15 +578,15 @@ LIMIT 1";
                         .SetFont(boldFont)
                         .SetFontSize(25),
                     pageSize.GetWidth() / 2,
-                    pageSize.GetBottom() + 33,  // 33 points above the bottom edge
+                    pageSize.GetBottom() + 33,
                     TextAlignment.CENTER);
                 footerCanvas.Close();
             }
-            // Close the PDF document
             pdf.Close();
-
-            return filePath; // Return the generated PDF file path
+            return filePath;
         }
+
+
 
         #endregion
 
