@@ -169,7 +169,7 @@
                     <!-- Hidden Fields -->
                     <input type="hidden" id="prodNumber" name="prodNumber" />
                     <input type="hidden" id="run" name="run" />
-                    <input type="hidden" id="part" name="part" />
+                    <input type="hidden" id="partValue" name="part" />
                     <input type="hidden" id="machine" name="machine" />
                     <input type="hidden" id="op" name="op" />
 
@@ -252,20 +252,21 @@
 
 @section Scripts {
     <script>
-        function showLoginModal(part, prodNumber, run, op, machine) {
-          console.log("Opening login modal for:", part, prodNumber, run, op, machine);
-          document.getElementById('prodNumber').value = prodNumber;
-          document.getElementById('run').value = run;
-          document.getElementById('part').value = part;
-          document.getElementById('machine').value = machine;
-          document.getElementById('op').value = op;
-          // Display the part in the modal body
-          document.getElementById('loginPartDisplay').innerText = part;
+               function showLoginModal(part, prodNumber, run, op, machine) {
+            console.log("Opening login modal for:", part, prodNumber, run, op, machine);
+            document.getElementById('prodNumber').value = prodNumber;
+            document.getElementById('run').value = run;
+            document.getElementById('partValue').value = part; // changed here
+            document.getElementById('machine').value = machine;
+            document.getElementById('op').value = op;
+            // Display the part in the modal body
+            document.getElementById('loginPartDisplay').innerText = part;
 
-          var modalElement = document.getElementById('loginModal');
-          var loginModal = new bootstrap.Modal(modalElement);
-          loginModal.show();
+            var modalElement = document.getElementById('loginModal');
+            var loginModal = new bootstrap.Modal(modalElement);
+            loginModal.show();
         }
+
 
         // Opens the Logout Modal (now only shows the part)
         function showLogoutModal(id, part) {

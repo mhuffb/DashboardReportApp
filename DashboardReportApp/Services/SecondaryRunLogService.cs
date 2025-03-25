@@ -181,7 +181,6 @@ namespace DashboardReportApp.Services
        
         public async Task HandleLoginAsync(SecondaryRunLogModel model)
         {
-            string part = await LookupPartNumberAsync(model.Run); // Use helper method to fetch the part
 
             string query = @"INSERT INTO secondaryrun 
                       (prodNumber, run, operator, machine, op, part, startDateTime, open) 
@@ -197,7 +196,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@operator", model.Operator);
                     command.Parameters.AddWithValue("@machine", model.Machine);
                     command.Parameters.AddWithValue("@op", string.IsNullOrEmpty(model.Op) ? DBNull.Value : (object)model.Op);
-                    command.Parameters.AddWithValue("@part", string.IsNullOrEmpty(part) ? DBNull.Value : (object)part);
+                    command.Parameters.AddWithValue("@part", string.IsNullOrEmpty(model.Part) ? DBNull.Value : (object)model.Part);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
 
                     await command.ExecuteNonQueryAsync();
