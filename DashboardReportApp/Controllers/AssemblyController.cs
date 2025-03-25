@@ -1,4 +1,5 @@
 ﻿using DashboardReportApp.Models;
+using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DashboardReportApp.Controllers
@@ -7,10 +8,11 @@ namespace DashboardReportApp.Controllers
     public class AssemblyController : Controller
     {
         private readonly AssemblyService _assemblyService;
-
-        public AssemblyController(AssemblyService assemblyService)
+        private readonly SharedService _sharedService;
+        public AssemblyController(AssemblyService assemblyService, SharedService serviceShared)
         {
             _assemblyService = assemblyService;
+            _sharedService = serviceShared;
         }
 
         public async Task<IActionResult> Index()
@@ -31,7 +33,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost("LogSkid")]
-        public IActionResult LoginToSkid(AssemblyModel model)
+        public async Task<IActionResult> LoginToSkidAsync(AssemblyModel model)
         {
             // Debug: Log received values.
             Console.WriteLine($"[DEBUG] LoginToSkid called with: Operator={model.Operator}, ProdNumber={model.ProdNumber}, Part={model.Part}, Pcs={model.Pcs}");
@@ -57,12 +59,23 @@ namespace DashboardReportApp.Controllers
                     Notes = model.Notes  // In case you want to capture notes as well.
                 };
 
-                _assemblyService.LogSkid(assemblyModel);
-                Console.WriteLine("[DEBUG] Skid logged successfully.");
+                // Log the skid and retrieve the new ID.
+                await _assemblyService.LogSkidAsync(assemblyModel);
+
+                // Now generate the PDF report using the updated model.
+                string pdfFilePath = await _assemblyService.GenerateAssemblyReportAsync(assemblyModel);
+
+                string computerName = Environment.MachineName;
+                Console.WriteLine("Computer Name: " + computerName);
+
+               // if (computerName == "Mold02")
+               // {
+              //      _sharedService.PrintFile("Mold02", pdfFilePath);
+              //  }
+
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Exception in LoginToSkid: {ex.Message}");
                 ViewData["Error"] = $"An error occurred: {ex.Message}";
             }
 

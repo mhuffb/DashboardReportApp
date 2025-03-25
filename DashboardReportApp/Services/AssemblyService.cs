@@ -6,17 +6,32 @@ using Microsoft.Extensions.Configuration;
 using DashboardReportApp.Models;
 using System.Data;
 using Mysqlx.Crud;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.StyledXmlParser.Jsoup.Nodes;
+using System.IO;
+using iText.IO.Font.Constants;
+using iText.Kernel.Font;
+using iText.Kernel.Pdf.Canvas;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+using iText.Layout;
+using iText.Kernel.Pdf.Canvas.Draw;
+using DashboardReportApp.Services;
+using static iText.StyledXmlParser.Jsoup.Select.Evaluator;
+using iText.Layout.Borders;
 
 public class AssemblyService
 {
     private readonly string _connectionStringMySQL;
     private readonly string _connectionStringDataflex;
     private string datatable = "assembly";
-
-    public AssemblyService(IConfiguration configuration)
+    private readonly SharedService _sharedService;
+    public AssemblyService(IConfiguration configuration, SharedService sharedService)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
         _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
+        _sharedService = sharedService;
     }
     /// <summary>
     /// Get *all* runs in descending order by startDateTime.
@@ -150,11 +165,16 @@ ORDER BY startDateTime DESC";
 
         return operators;
     }
-    // Start a new skid (insert into AssemblyModel table)
-    public void LogSkid(AssemblyModel model)
+
+    /// <summary>
+    /// Inserts a new skid record into the assembly table and then generates a PDF report 
+    /// using the submitted AssemblyModel information.
+    /// </summary>
+    /// <param name="model">The AssemblyModel with the submitted info.</param>
+    /// <returns>The file path to the generated PDF report.</returns>
+    public async Task LogSkidAsync(AssemblyModel model)
     {
         int nextSkidNumber = 1;
-        // Query to determine the current maximum skid number for the given prodNumber and part.
         string selectQuery = "SELECT IFNULL(MAX(skidNumber), 0) FROM " + datatable + " WHERE prodNumber = @prodNumber AND part = @part";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
@@ -174,12 +194,12 @@ ORDER BY startDateTime DESC";
                 }
             }
 
-            // Insert the new skid record with open=1
+            // Insert the new skid record with open = 1.
             string insertQuery = @"
-    INSERT INTO " + datatable + @" 
-        (prodNumber, part, endDateTime, operator, notes, skidNumber, pcs, open) 
-    VALUES 
-        (@prodNumber, @part, @endDateTime, @operator, @notes, @skidNumber, @pcs, 1)";
+            INSERT INTO " + datatable + @" 
+                (prodNumber, part, endDateTime, operator, notes, skidNumber, pcs, open) 
+            VALUES 
+                (@prodNumber, @part, @endDateTime, @operator, @notes, @skidNumber, @pcs, 1)";
 
             using (var command = new MySqlCommand(insertQuery, connection))
             {
@@ -187,30 +207,172 @@ ORDER BY startDateTime DESC";
                 command.Parameters.AddWithValue("@part", model.Part.ToUpper());
                 command.Parameters.AddWithValue("@endDateTime", DateTime.Now);
                 command.Parameters.AddWithValue("@operator", model.Operator);
-                command.Parameters.AddWithValue("@notes",
-                    string.IsNullOrEmpty(model.Notes) ? DBNull.Value : (object)model.Notes
-                );
+                command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(model.Notes) ? DBNull.Value : (object)model.Notes);
                 command.Parameters.AddWithValue("@skidNumber", nextSkidNumber);
                 command.Parameters.AddWithValue("@pcs", model.Pcs);
 
                 command.ExecuteNonQuery();
+
+                // Retrieve the last inserted ID and update the model.
+                long insertedId = command.LastInsertedId;
+                model.Id = Convert.ToInt32(insertedId);
             }
 
+            // Update the model with the newly determined skid number.
+            model.SkidNumber = nextSkidNumber;
         }
+
+        
     }
 
 
+    /// <summary>
+    /// Generates a PDF report for the given AssemblyModel and returns the file path.
+    /// </summary>
+    public async Task<string> GenerateAssemblyReportAsync(AssemblyModel model)
+    {
+        // Generate the PDF file path.
+        string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\AssemblyTag_" + model.Id + ".pdf";
+        // Get the order of operations (unchanged).
+        List<string> result = _sharedService.GetOrderOfOps(model.Part);
+
+        // Predefined fonts.
+        PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+        PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+
+        // Create writer and PDF document.
+        PdfWriter writer = new PdfWriter(filePath);
+        PdfDocument pdf = new PdfDocument(writer);
+
+        using (var document = new iText.Layout.Document(pdf))
+        {
+            // Set overall document margins.
+            document.SetMargins(20, 20, 40, 20);
+
+            // Title at top center.
+            document.Add(new Paragraph("Assembly Tag")
+                .SetFont(boldFont)
+                .SetFontSize(18)
+                .SetTextAlignment(TextAlignment.CENTER));
+
+            // Add a horizontal line separator.
+            document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
 
 
 
+            // Order of Operations header (centered).
+            document.Add(new Paragraph("Order of Operations:")
+                .SetFont(boldFont)
+                .SetFontSize(14)
+                .SetTextAlignment(TextAlignment.CENTER)
+                .SetMarginBottom(2));
+
+            document.Add(new Paragraph($"Assembly")
+                .SetFont(boldFont)
+                .SetFontSize(12)
+                .SetTextAlignment(TextAlignment.CENTER)
+                .SetMarginBottom(2));
+
+            // Add assembly record details.
+            document.Add(new Paragraph($"Assembly Id: {model.Id}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Production Number: {model.ProdNumber}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Part: {model.Part}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"End DateTime: {DateTime.Now}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Operator: {model.Operator}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Pcs: {model.Pcs}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Skid Number: {model.SkidNumber}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+            document.Add(new Paragraph($"Notes: {model.Notes}")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetMarginBottom(2));
+
+
+            // Loop through each order operation item.
+            foreach (var item in result)
+            {
+                document.Add(new Paragraph(_sharedService.processDesc(item))
+                    .SetFont(boldFont)
+                    .SetFontSize(12)
+                    .SetTextAlignment(TextAlignment.CENTER)
+                    .SetMarginBottom(2));
+
+                if (item.ToLower().Contains("machin"))
+                {
+                    document.Add(new Paragraph("Machine #: ____________ Signature: __________________________   Date: __________________")
+                        .SetFont(normalFont)
+                        .SetFontSize(12)
+                        .SetTextAlignment(TextAlignment.CENTER)
+                        .SetMarginBottom(5));
+                }
+                else if (item.ToLower().Contains("sinter"))
+                {
+                    document.Add(new Paragraph("Loaded By: __________________   Unloaded By: __________________   Date: __________________")
+                        .SetFont(normalFont)
+                        .SetFontSize(12)
+                        .SetTextAlignment(TextAlignment.CENTER)
+                        .SetMarginBottom(5));
+                }
+                else
+                {
+                    document.Add(new Paragraph("Signature: __________________________   Date: __________________")
+                        .SetFont(normalFont)
+                        .SetFontSize(12)
+                        .SetTextAlignment(TextAlignment.CENTER)
+                        .SetMarginBottom(5));
+                }
+
+
+
+
+                // Add a footer on each page with the part information.
+                int pageCount = pdf.GetNumberOfPages();
+                for (int i = 1; i <= pageCount; i++)
+                {
+                    PdfPage page = pdf.GetPage(i);
+                    Rectangle pageSize = page.GetPageSize();
+                    PdfCanvas pdfCanvas = new PdfCanvas(page);
+                    Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
+                    footerCanvas.ShowTextAligned(
+                        new Paragraph(model.Part)
+                            .SetFont(boldFont)
+                            .SetFontSize(25),
+                        pageSize.GetWidth() / 2,
+                        pageSize.GetBottom() + 33,
+                        TextAlignment.CENTER);
+                    footerCanvas.Close();
+                }
+            }
+
+            pdf.Close();
+            return filePath;
+        }
+    }
     public void EndProduction(string part, string prodNumber)
     {
-
         string updateQuery1 = "UPDATE pressrun " +
                        "SET open = 0 " +
                        "WHERE prodNumber = @prodNumber AND part = @part";
-
-        ;
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -225,9 +387,12 @@ ORDER BY startDateTime DESC";
             }
         }
 
-       
-
     }
-   
+
+      
+
 
 }
+
+
+

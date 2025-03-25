@@ -223,6 +223,21 @@ LIMIT 1";
                 await endMainCmd.ExecuteNonQueryAsync();
             }
 
+            // 3.5) end any other run records but dont send scrap
+            // 3) End the main run record.
+            const string endMainRun2 = @"
+UPDATE pressrun
+SET endDateTime = NOW()
+WHERE run = @runIdentifier
+  AND skidNumber = 0";
+            using (var endMainCmd = new MySqlCommand(endMainRun2, conn))
+            {
+                endMainCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
+                await endMainCmd.ExecuteNonQueryAsync();
+            }
+
+
+
             // 4) Mark the run as closed in the presssetup table.
             const string closeSetup = @"
 UPDATE presssetup
@@ -348,6 +363,9 @@ LIMIT 1";
             // Create writer and PDF document.
             PdfWriter writer = new PdfWriter(filePath);
             PdfDocument pdf = new PdfDocument(writer);
+
+
+
             using (var document = new Document(pdf))
             {
                 // Set overall document margins (increased bottom margin for footer).
@@ -376,8 +394,8 @@ LIMIT 1";
                 // Loop through each order operation item.
                 foreach (var item in result)
                 {
-                    document.Add(new Paragraph(processDesc(item))
-                        .SetFont(normalFont)
+                    document.Add(new Paragraph(_sharedService.processDesc(item))
+                        .SetFont(boldFont)
                         .SetFontSize(12)
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(2));
@@ -473,9 +491,13 @@ LIMIT 1";
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
 
-                       
+                        document.Add(headerTable2);
 
-                        
+                        // Create a header table with 2 columns for date/time.
+                        Table headerTable3 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }))
+                            .UseAllAvailableWidth()
+                            .SetMarginBottom(10)
+                            .SetBorder(Border.NO_BORDER);
 
                         string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(model.Part);
 
@@ -496,13 +518,13 @@ LIMIT 1";
                                 string mixLot = row[0].ToString();
                                 string mixNumber = row[1].ToString();
 
-                                headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph(mixLot)
+                                headerTable3.AddCell(new Cell(1, 1).Add(new Paragraph(mixLot)
                                     .SetFont(normalFont)
                                     .SetFontSize(12))
                                     .SetBorder(Border.NO_BORDER)
                                      .SetTextAlignment(TextAlignment.LEFT));
 
-                                headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph(mixNumber)
+                                headerTable3.AddCell(new Cell(1, 1).Add(new Paragraph(mixNumber)
                                     .SetFont(normalFont)
                                     .SetFontSize(12))
                                     .SetBorder(Border.NO_BORDER)
@@ -511,9 +533,9 @@ LIMIT 1";
                         }
                         else
                         {
-                            headerTable2.AddCell(new Paragraph("Not enough data rows available.").SetFont(normalFont));
+                            headerTable3.AddCell(new Paragraph("Not enough data rows available.").SetFont(normalFont));
                         }
-                        document.Add(headerTable2);
+                        document.Add(headerTable3);
 
 
 
@@ -531,20 +553,23 @@ LIMIT 1";
 
                         if (statistics != null && statistics.Rows.Count > 0)
                         {
-                            Table statsTable = new Table(UnitValue.CreatePercentArray(statistics.Columns.Count))
+                            // Calculate the number of columns to use (skipping the first one)
+                            int totalColumns = statistics.Columns.Count - 1;
+                            Table statsTable = new Table(UnitValue.CreatePercentArray(totalColumns))
                                 .UseAllAvailableWidth();
 
-                            // Add header cells.
-                            foreach (DataColumn column in statistics.Columns)
+                            // Add header cells starting from the second column.
+                            for (int i = 1; i < statistics.Columns.Count; i++)
                             {
-                                statsTable.AddHeaderCell(new Cell().Add(new Paragraph(column.ColumnName).SetFont(boldFont)));
+                                statsTable.AddHeaderCell(new Cell().Add(new Paragraph(statistics.Columns[i].ColumnName).SetFont(boldFont)));
                             }
-                            // Add data rows.
+
+                            // Add data rows, skipping the first column.
                             foreach (DataRow row in statistics.Rows)
                             {
-                                foreach (var item2 in row.ItemArray)
+                                for (int i = 1; i < statistics.Columns.Count; i++)
                                 {
-                                    statsTable.AddCell(new Cell().Add(new Paragraph(item2.ToString()).SetFont(normalFont)));
+                                    statsTable.AddCell(new Cell().Add(new Paragraph(row[i].ToString()).SetFont(normalFont)));
                                 }
                             }
                             document.Add(statsTable);
@@ -553,6 +578,7 @@ LIMIT 1";
                         {
                             document.Add(new Paragraph("No Statistics available.").SetFont(normalFont));
                         }
+
                     }
                     else
                     {
@@ -564,28 +590,26 @@ LIMIT 1";
                     }
                 }
 
-               
-
-                // ---------------------------
-                // Footer (as before)
-                // ---------------------------
-                PdfPage lastPage = pdf.GetLastPage();
-                Rectangle pageSize = lastPage.GetPageSize();
-                PdfCanvas pdfCanvas = new PdfCanvas(lastPage);
-                Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
-                footerCanvas.ShowTextAligned(
-                    new Paragraph(model.Part)
-                        .SetFont(boldFont)
-                        .SetFontSize(25),
-                    pageSize.GetWidth() / 2,
-                    pageSize.GetBottom() + 33,
-                    TextAlignment.CENTER);
-                footerCanvas.Close();
+                int pageCount = pdf.GetNumberOfPages();
+                for (int i = 1; i <= pageCount; i++)
+                {
+                    PdfPage page = pdf.GetPage(i);
+                    Rectangle pageSize = page.GetPageSize();
+                    PdfCanvas pdfCanvas = new PdfCanvas(page);
+                    Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
+                    footerCanvas.ShowTextAligned(
+                        new Paragraph(model.Part)
+                            .SetFont(boldFont)
+                            .SetFontSize(25),
+                        pageSize.GetWidth() / 2,
+                        pageSize.GetBottom() + 33,
+                        TextAlignment.CENTER);
+                    footerCanvas.Close();
+                }
             }
             pdf.Close();
             return filePath;
         }
-
 
 
         #endregion
@@ -734,37 +758,7 @@ ORDER BY id DESC";
             return model;
         }
 
-        public string processDesc(string input)
-        {
-            switch (input)
-            {
-                case string a when a.Contains("HEAT TREAT-AHT") || a.Contains("HEAT TREAT - US HEAT") || a.Contains("HEAT TREAT - ELK COUNTY"): return "Heat Treat";
-
-                case string st when st.Contains("Steam Treat") || st.Contains("STEAM TREAT"): return "Steam Treat";
-
-                case string lsp when lsp.Contains("LS&PLATE") || lsp.Contains("LS & PLATE") || lsp.Contains("LS & Plate"): return "LS & Plate";
-
-                case string Gr when Gr.Contains("Grind") || Gr.Contains("GRIND"): return "Grind";
-
-                case string mc when mc.Contains("Machin"): return "Machine";
-
-                case string et when et.Contains("Etching") || et.Contains("ETCHING"): return "Etching";
-
-                case string hn when hn.Contains("Honing") || hn.Contains("HONING"): return "Honing";
-
-                case string pl when pl.Contains("Plating") || pl.Contains("PLATING"): return "Plating";
-
-                case string bo when bo.Contains("Black Oxide") || bo.Contains("BLACK OXIDE"): return "Black Oxide";
-
-                case string mg when mg.Contains("Magni-Coat") || mg.Contains("MAGNI-COAT"): return "Magni-Coat";
-
-                case string ls when ls.Contains("Loctite Seal") || ls.Contains("LOCTITE SEAL"): return "Loctite Seal";
-
-                case string tb when tb.Contains("Tumbl") || tb.Contains("TUMBL"): return "Tumble";
-
-            }
-            return input;
-        }
+        
         #endregion
 
 

@@ -10,10 +10,12 @@ namespace DashboardReportApp.Controllers
     public class PressRunLogController : Controller
     {
         private readonly PressRunLogService _pressRunLogService;
+        private readonly SharedService _sharedService;
 
-        public PressRunLogController(PressRunLogService service)
+        public PressRunLogController(PressRunLogService servicePressRun, SharedService serviceShared)
         {
-            _pressRunLogService = service;
+            _pressRunLogService = servicePressRun;
+            _sharedService = serviceShared;
         }
 
         [HttpGet]
@@ -148,17 +150,16 @@ namespace DashboardReportApp.Controllers
 
             if(computerName == "Mold02")
             {
-
+                _sharedService.PrintFile("Mold02", pdfFilePath);
             }
             else if(computerName == "Mold03")
             {
-
+                _sharedService.PrintFile("Mold03", pdfFilePath);
             }
             else
             {
 
             }
-            //SharedService.PrintFile("HPFRONT", filePath);
 
             return RedirectToAction("Index");
         }

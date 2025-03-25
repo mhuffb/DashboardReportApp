@@ -405,6 +405,36 @@ ORDER BY
 
             return prolinkPartNumber;
         }
+        public string processDesc(string input)
+        {
+            switch (input)
+            {
+                case string a when a.Contains("HEAT TREAT-AHT") || a.Contains("HEAT TREAT - US HEAT") || a.Contains("HEAT TREAT - ELK COUNTY"): return "Heat Treat";
 
+                case string st when st.Contains("Steam Treat") || st.Contains("STEAM TREAT"): return "Steam Treat";
+
+                case string lsp when lsp.Contains("LS&PLATE") || lsp.Contains("LS & PLATE") || lsp.Contains("LS & Plate"): return "LS & Plate";
+
+                case string Gr when Gr.Contains("Grind") || Gr.Contains("GRIND"): return "Grind";
+
+                case string mc when mc.Contains("Machin"): return "Machine";
+
+                case string et when et.Contains("Etching") || et.Contains("ETCHING"): return "Etching";
+
+                case string hn when hn.Contains("Honing") || hn.Contains("HONING"): return "Honing";
+
+                case string pl when pl.Contains("Plating") || pl.Contains("PLATING"): return "Plating";
+
+                case string bo when bo.Contains("Black Oxide") || bo.Contains("BLACK OXIDE"): return "Black Oxide";
+
+                case string mg when mg.Contains("Magni-Coat") || mg.Contains("MAGNI-COAT"): return "Magni-Coat";
+
+                case string ls when ls.Contains("Loctite Seal") || ls.Contains("LOCTITE SEAL"): return "Loctite Seal";
+
+                case string tb when tb.Contains("Tumbl") || tb.Contains("TUMBL"): return "Tumble";
+
+            }
+            return input;
+        }
     }
 }
