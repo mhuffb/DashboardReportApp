@@ -436,5 +436,41 @@ ORDER BY
             }
             return input;
         }
+
+        public async Task<string> GetLatestProlinkPartForMachineAsync(string machine)
+        {
+            string partName = null;
+            string query = @"
+        SELECT TOP 1 qf.qcc_file_desc
+        FROM dbo.part p
+        INNER JOIN dbo.qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
+        INNER JOIN dbo.part_factor pf ON p.part_id = pf.part_id
+        INNER JOIN dbo.factor f ON pf.factor_id = f.factor_id
+        WHERE p.measure_date >= DATEADD(HOUR, -1, GETDATE())
+          AND (f.factor_desc LIKE '%Machine%' OR f.factor_desc LIKE '%Press%')
+          AND pf.value = @machine
+          AND qf.qcc_file_desc NOT LIKE '%CALIBRATION%'
+        ORDER BY p.measure_date DESC;";
+
+            using (var connection = new SqlConnection(_connectionStringSQLExpress))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@machine", machine);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            string prolinkPartNumber = reader["qcc_file_desc"].ToString();
+                            // Use your helper method to parse the part number.
+                            partName = ParseProlinkPartNumber(prolinkPartNumber);
+                        }
+                    }
+                }
+            }
+            return partName;
+        }
+
     }
 }
