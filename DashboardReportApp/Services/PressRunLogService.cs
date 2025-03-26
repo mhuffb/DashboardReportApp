@@ -364,8 +364,6 @@ LIMIT 1";
             PdfWriter writer = new PdfWriter(filePath);
             PdfDocument pdf = new PdfDocument(writer);
 
-
-
             using (var document = new Document(pdf))
             {
                 // Set overall document margins (increased bottom margin for footer).
@@ -377,8 +375,10 @@ LIMIT 1";
                     .SetFontSize(18)
                     .SetTextAlignment(TextAlignment.CENTER));
 
-                // Prepare formatted StartDateTime.
+                // Format start and end date/time using a custom format.
                 string formattedStartDateTime = model.StartDateTime.ToString();
+                string formattedEndDateTime = model.EndDateTime.ToString();
+
                 string id = string.IsNullOrWhiteSpace(model.Id.ToString()) ? "N/A" : model.Id.ToString();
 
                 // Add a horizontal line separator.
@@ -469,7 +469,7 @@ LIMIT 1";
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
-                        
+
                         document.Add(headerTable);
 
                         // Create a header table with 2 columns for date/time.
@@ -478,14 +478,13 @@ LIMIT 1";
                             .SetMarginBottom(10)
                             .SetBorder(Border.NO_BORDER);
 
-                        headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph("Start DateTime: " + formattedStartDateTime)
+                        headerTable2.AddCell(new Cell().Add(new Paragraph("Start DateTime: " + formattedStartDateTime)
                             .SetFont(normalFont)
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
                             .SetTextAlignment(TextAlignment.LEFT));
 
-                        string currentDate = DateTime.Now.ToString("MM/dd/yyyy hh:mm tt");
-                        headerTable2.AddCell(new Cell(1, 1).Add(new Paragraph("End Date Time: " + currentDate)
+                        headerTable2.AddCell(new Cell().Add(new Paragraph("End DateTime: " + formattedEndDateTime)
                             .SetFont(normalFont)
                             .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER)
@@ -493,20 +492,18 @@ LIMIT 1";
 
                         document.Add(headerTable2);
 
-                        // Create a header table with 2 columns for date/time.
+                        // ---------------------------
+                        // Section: Latest Part Factor Details
+                        // ---------------------------
+                        // Use DateTime.Now as the end date when fetching the latest part factor details.
+                        string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(model.Part);
+                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(qcc_file_desc, model.StartDateTime, DateTime.Now);
+
+                        // Create a header table for displaying factor details.
                         Table headerTable3 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }))
                             .UseAllAvailableWidth()
                             .SetMarginBottom(10)
                             .SetBorder(Border.NO_BORDER);
-
-                        string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(model.Part);
-
-                        // ---------------------------
-                        // Section: Latest Part Factor Details
-                        // ---------------------------
-                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(qcc_file_desc);
-
-                       
 
                         if (partFactorDetails != null && partFactorDetails.Rows.Count >= 4)
                         {
@@ -518,17 +515,17 @@ LIMIT 1";
                                 string mixLot = row[0].ToString();
                                 string mixNumber = row[1].ToString();
 
-                                headerTable3.AddCell(new Cell(1, 1).Add(new Paragraph(mixLot)
+                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixLot)
                                     .SetFont(normalFont)
                                     .SetFontSize(12))
                                     .SetBorder(Border.NO_BORDER)
-                                     .SetTextAlignment(TextAlignment.LEFT));
+                                    .SetTextAlignment(TextAlignment.LEFT));
 
-                                headerTable3.AddCell(new Cell(1, 1).Add(new Paragraph(mixNumber)
+                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixNumber)
                                     .SetFont(normalFont)
                                     .SetFontSize(12))
                                     .SetBorder(Border.NO_BORDER)
-                                     .SetTextAlignment(TextAlignment.LEFT));
+                                    .SetTextAlignment(TextAlignment.LEFT));
                             }
                         }
                         else
@@ -537,12 +534,10 @@ LIMIT 1";
                         }
                         document.Add(headerTable3);
 
-
-
                         // ---------------------------
                         // Section: Statistics
                         // ---------------------------
-                        DateTime startDate = new DateTime(2025, 3, 1, 9, 0, 0);
+                        // Leave the GetStatisticsAsync call as it is.
                         DataTable statistics = await _sharedService.GetStatisticsAsync(qcc_file_desc, model.StartDateTime);
                         document.Add(new Paragraph("Statistics:")
                             .SetFont(boldFont)
@@ -553,7 +548,6 @@ LIMIT 1";
 
                         if (statistics != null && statistics.Rows.Count > 0)
                         {
-                            // Calculate the number of columns to use (skipping the first one)
                             int totalColumns = statistics.Columns.Count - 1;
                             Table statsTable = new Table(UnitValue.CreatePercentArray(totalColumns))
                                 .UseAllAvailableWidth();
@@ -578,7 +572,6 @@ LIMIT 1";
                         {
                             document.Add(new Paragraph("No Statistics available.").SetFont(normalFont));
                         }
-
                     }
                     else
                     {
@@ -590,6 +583,7 @@ LIMIT 1";
                     }
                 }
 
+                // Add footer text on each page.
                 int pageCount = pdf.GetNumberOfPages();
                 for (int i = 1; i <= pageCount; i++)
                 {

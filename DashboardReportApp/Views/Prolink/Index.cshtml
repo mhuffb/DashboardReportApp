@@ -57,7 +57,7 @@
     </div>
     <!-- Checkbox for filtering only out-of-spec records -->
     <div>
-        <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" />
+        <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" value="true" />
         <label for="onlyOutOfSpec">Only show out-of-spec records</label>
     </div>
     <div class="button-container">
@@ -74,6 +74,20 @@
 <div id="prolinkTableRoot"></div>
 
 <script>
+    // Utility: Convert department code to display string. // CHANGED HERE
+    function getDeptDisplayName(code) {
+        switch (code.toLowerCase()) {
+            case "mold":
+                return "Molding";
+            case "sint":
+                return "Sintering";
+            case "machin":
+                return "Machining";
+            default:
+                return code; // fallback if something else
+        }
+    }
+
     // Define the column definitions for your React table (keys in camelCase).
     function getColumns() {
         return [
@@ -89,76 +103,215 @@
         ];
     }
 
-    // AJAX call to query data and update the React table.
     function queryData() {
         var partString = document.getElementById("partString").value;
         var type = document.getElementById("type").value;
         var startDate = document.getElementById("startDate").value;
         var endDate = document.getElementById("endDate").value;
         var onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
-        // Include the checkbox value in the query string.
-        var query = "?partString=" + encodeURIComponent(partString) +
-                    "&type=" + encodeURIComponent(type) +
-                    "&startDate=" + encodeURIComponent(startDate) +
-                    "&endDate=" + encodeURIComponent(endDate) +
-                    "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec);
+
+        var query = "?partString=" + encodeURIComponent(partString)
+                  + "&type=" + encodeURIComponent(type)
+                  + "&startDate=" + encodeURIComponent(startDate)
+                  + "&endDate=" + encodeURIComponent(endDate)
+                  + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec);
 
         fetch('/Prolink/QueryData' + query)
             .then(response => response.json())
-            .then(data => {
-                // Format numeric fields to 4 decimals.
-                data = data.map(item => {
-                    item.nominal = parseFloat(item.nominal).toFixed(4);
-                    item.tolPlus = parseFloat(item.tolPlus).toFixed(4);
-                    item.tolMinus = parseFloat(item.tolMinus).toFixed(4);
-                    item.measurementValue = parseFloat(item.measurementValue).toFixed(4);
-                    return item;
-                });
-                if (window.renderMyDataTable) {
-                    window.renderMyDataTable("prolinkTableRoot", data, getColumns(), true);
-                    // After rendering, highlight out-of-spec measurement cells.
-                    highlightOutOfSpecCells();
-                } else {
-                    console.error("React table render function not found!");
-                }
-            })
-            .catch(error => {
-                console.error('Error querying data:', error);
-            });
-    }
+            .then(json => {
+                // Clear the tableRoot
+                const container = document.getElementById("prolinkTableRoot");
+                container.innerHTML = "";
 
-    // This function inspects the rendered table rows and highlights the measurement cell if out-of-spec.
-    function highlightOutOfSpecCells() {
-        // Wait briefly to ensure the table is rendered.
-        setTimeout(function() {
-            var table = document.querySelector("#prolinkTableRoot table");
-            if (!table) return;
-            // Query all rows in the table body.
-            var rows = table.querySelectorAll("tbody tr");
-            rows.forEach(function(row) {
-                var cells = row.getElementsByTagName("td");
-                // Assuming column order: measurementValue = index 5, nominal = index 6, tolPlus = index 7, tolMinus = index 8.
-                if (cells.length >= 9) {
-                    var measurement = parseFloat(cells[5].textContent.trim());
-                    var nominal = parseFloat(cells[6].textContent.trim());
-                    var tolPlus = parseFloat(cells[7].textContent.trim());
-                    var tolMinus = parseFloat(cells[8].textContent.trim());
-                    var usl = nominal + tolPlus;
-                    var lsl = nominal - tolMinus; // Standard: lower spec limit.
-                    if (!isNaN(measurement) && (measurement > usl || measurement < lsl)) {
-                        cells[5].style.color = "red";
+                // We expect json: { departmentResults: [...] }
+                if (!json.departmentResults || !json.departmentResults.length) {
+                    container.innerHTML = "<p>No results found.</p>";
+                    return;
+                }
+
+                // For each department, build a separate table
+                json.departmentResults.forEach(dept => {
+                    // If there's no pivot rows, skip
+                    if (!dept.rows || dept.rows.length === 0) {
+                        const msg = document.createElement("p");
+                        msg.textContent = `No records found for department: ${getDeptDisplayName(dept.departmentName)}`;
+                        container.appendChild(msg);
+                        return;
                     }
-                }
+
+                    // Department heading // CHANGED HERE
+                    const heading = document.createElement("h3");
+                    heading.textContent = `Department: ${getDeptDisplayName(dept.departmentName)}`;
+                    container.appendChild(heading);
+
+                    // Build table
+                    const table = document.createElement("table");
+                    // Basic table styling
+                    table.border = "1";
+                    table.cellPadding = "5";
+                    table.style.marginBottom = "30px";
+                    table.style.backgroundColor = "black";       // CHANGED HERE
+                    table.style.color = "goldenrod";             // CHANGED HERE
+                    table.style.borderColor = "goldenrod";       // CHANGED HERE
+
+                    // 1) stat rows (USL, LSL, Max, Min)
+                    const rowLabels = ["USL", "LSL", "Max", "Min"];
+                    rowLabels.forEach(label => {
+                        const tr = document.createElement("tr");
+
+                        // First cell = label
+                        const tdLabel = document.createElement("td");
+                        tdLabel.style.fontWeight = "bold";
+                        tdLabel.textContent = label;
+                        tdLabel.style.backgroundColor = "black"; // CHANGED HERE
+                        tdLabel.style.color = "goldenrod";       // CHANGED HERE
+                        tr.appendChild(tdLabel);
+
+                        // Second cell = blank
+                        const tdBlank = document.createElement("td");
+                        tdBlank.textContent = "";
+                        tdBlank.style.backgroundColor = "black"; // CHANGED HERE
+                        tdBlank.style.color = "goldenrod";       // CHANGED HERE
+                        tr.appendChild(tdBlank);
+
+                        // dimension columns
+                        dept.dimensionColumns.forEach(dim => {
+                            let val = "";
+                            if (dept.dimensionStats && dept.dimensionStats[dim]) {
+                                const st = dept.dimensionStats[dim];
+                                if (label === "USL") {
+                                    val = st.usl.toFixed(4);
+                                } else if (label === "LSL") {
+                                    val = st.lsl.toFixed(4);
+                                } else if (label === "Max") {
+                                    val = st.max.toFixed(4);
+                                } else if (label === "Min") {
+                                    val = st.min.toFixed(4);
+                                }
+                            }
+                            const td = document.createElement("td");
+                            td.textContent = val;
+                            td.style.backgroundColor = "black"; // CHANGED HERE
+                            td.style.color = "goldenrod";       // CHANGED HERE
+                            tr.appendChild(td);
+                        });
+
+                        // factor columns => blank
+                        dept.factorColumns.forEach(fc => {
+                            const tdF = document.createElement("td");
+                            tdF.textContent = "";
+                            tdF.style.backgroundColor = "black"; // CHANGED HERE
+                            tdF.style.color = "goldenrod";       // CHANGED HERE
+                            tr.appendChild(tdF);
+                        });
+
+                        table.appendChild(tr);
+                    });
+
+                    // 2) header row
+                    const headerRow = document.createElement("tr");
+
+                    // "Record" and "Date/Time"
+                    ["Record", "Date/Time"].forEach(h => {
+                        const th = document.createElement("th");
+                        th.textContent = h;
+                        th.style.backgroundColor = "black"; // CHANGED HERE
+                        th.style.color = "goldenrod";       // CHANGED HERE
+                        headerRow.appendChild(th);
+                    });
+
+                    // dimension columns
+                    dept.dimensionColumns.forEach(dim => {
+                        const th = document.createElement("th");
+                        th.textContent = dim;
+                        th.style.backgroundColor = "black"; // CHANGED HERE
+                        th.style.color = "goldenrod";       // CHANGED HERE
+                        headerRow.appendChild(th);
+                    });
+
+                    // factor columns
+                    dept.factorColumns.forEach(fc => {
+                        const th = document.createElement("th");
+                        th.textContent = fc;
+                        th.style.backgroundColor = "black"; // CHANGED HERE
+                        th.style.color = "goldenrod";       // CHANGED HERE
+                        headerRow.appendChild(th);
+                    });
+
+                    table.appendChild(headerRow);
+
+                    // 3) Data rows
+                    dept.rows.forEach(row => {
+                        const tr = document.createElement("tr");
+
+                        // record number
+                        const tdRecord = document.createElement("td");
+                        tdRecord.textContent = row.recordNumber;
+                        tdRecord.style.backgroundColor = "black"; // CHANGED HERE
+                        tdRecord.style.color = "goldenrod";       // CHANGED HERE
+                        tr.appendChild(tdRecord);
+
+                        // date/time
+                        const tdDate = document.createElement("td");
+                        const dateVal = new Date(row.measureDate).toLocaleString();
+                        tdDate.textContent = dateVal;
+                        tdDate.style.backgroundColor = "black"; // CHANGED HERE
+                        tdDate.style.color = "goldenrod";       // CHANGED HERE
+                        tr.appendChild(tdDate);
+
+                        // dimension columns
+                        dept.dimensionColumns.forEach(dim => {
+                            const tdM = document.createElement("td");
+                            let val = "";
+                            if (row.measurements && row.measurements[dim]) {
+                                val = row.measurements[dim];
+                            }
+                            tdM.textContent = val;
+                            tdM.style.backgroundColor = "black"; // CHANGED HERE
+                            tdM.style.color = "goldenrod";       // CHANGED HERE
+                            tdM.style.textAlign = "right";
+
+                            // highlight out-of-spec in red
+                            if (dept.dimensionStats && dept.dimensionStats[dim] && val) {
+                                const st = dept.dimensionStats[dim];
+                                const meas = parseFloat(val);
+                                if (!isNaN(meas)) {
+                                    if (meas > st.usl || meas < st.lsl) {
+                                        tdM.style.color = "red";
+                                    }
+                                }
+                            }
+                            tr.appendChild(tdM);
+                        });
+
+                        // factor columns
+                        dept.factorColumns.forEach(fc => {
+                            const tdF = document.createElement("td");
+                            let val = "";
+                            if (row.factors && row.factors[fc]) {
+                                val = row.factors[fc];
+                            }
+                            tdF.textContent = val;
+                            tdF.style.backgroundColor = "black"; // CHANGED HERE
+                            tdF.style.color = "goldenrod";       // CHANGED HERE
+                            tdF.style.textAlign = "right";
+                            tr.appendChild(tdF);
+                        });
+
+                        table.appendChild(tr);
+                    });
+
+                    // Add table to container
+                    container.appendChild(table);
+                });
+            })
+            .catch(err => {
+                console.error("Error querying pivoted data:", err);
+                document.getElementById("prolinkTableRoot").innerHTML =
+                    "<p style='color:red;'>Error loading data.</p>";
             });
-        }, 100);
     }
 
-    // On initial load, render an empty table.
-    document.addEventListener('DOMContentLoaded', function() {
-        if (window.renderMyDataTable) {
-            window.renderMyDataTable("prolinkTableRoot", [], getColumns(), true);
-        }
-    });
+   
 </script>
 
-<script src="/js/mydatatable.bundle.js"></script>

@@ -167,18 +167,47 @@ namespace DashboardReportApp.Services
                 // Split the string by '-'
                 string[] parts = prolinkPartNumber.Split('-');
 
-                // Check if there are at least two '-' in the string
-                if (parts.Length > 2)
+                if (prolinkPartNumber.Contains("B"))
                 {
-                    // Concatenate the first two parts back with '-'
-                    sintergyPartNumber = $"{parts[0]}-{parts[1]}";
+                    // If there are at least three parts, join the first three parts
+                    if (parts.Length > 2)
+                    {
+                        sintergyPartNumber = $"{parts[0]}-{parts[1]}-{parts[2]}-{parts[3]}";
+                    }
+                    else
+                    {
+                        // If not enough parts, fallback to the original string
+                        sintergyPartNumber = prolinkPartNumber;
+                    }
+                }
+                // Check if the string contains "SL"
+                else if (prolinkPartNumber.Contains("SL"))
+                {
+                    // If there are at least three parts, join the first three parts
+                    if (parts.Length > 2)
+                    {
+                        sintergyPartNumber = $"{parts[0]}-{parts[1]}-{parts[2]}";
+                    }
+                    else
+                    {
+                        // If not enough parts, fallback to the original string
+                        sintergyPartNumber = prolinkPartNumber;
+                    }
                 }
                 else
                 {
-                    // If there are fewer than two '-', use the original string
-                    sintergyPartNumber = prolinkPartNumber;
+                    // Original logic: if there are at least two '-' (i.e. three parts) then join the first two parts
+                    if (parts.Length > 2)
+                    {
+                        sintergyPartNumber = $"{parts[0]}-{parts[1]}";
+                    }
+                    else
+                    {
+                        sintergyPartNumber = prolinkPartNumber;
+                    }
                 }
             }
+
 
             return sintergyPartNumber;
         }
@@ -329,7 +358,7 @@ ORDER BY
             throw new Exception($"No device found for machine: {machine}");
         }
 
-        public async Task<DataTable> GetLatestPartFactorDetailsAsync(string partNumber)
+        public async Task<DataTable> GetLatestPartFactorDetailsAsync(string partNumber, DateTime? startDate, DateTime endDate)
         {
             DataTable dt = new DataTable();
             using (var connection = new SqlConnection(_connectionStringSQLExpress))
@@ -338,8 +367,10 @@ ORDER BY
                 using (var command = new SqlCommand("GetLatestPartFactorDetails", connection))
                 {
                     command.CommandType = CommandType.StoredProcedure;
-                    // Pass the part number parameter
+                    // Pass the parameters to the stored procedure.
                     command.Parameters.AddWithValue("@qcc_file_desc", partNumber);
+                    command.Parameters.AddWithValue("@start_date", startDate);
+                    command.Parameters.AddWithValue("@end_date", endDate);
                     using (var reader = await command.ExecuteReaderAsync())
                     {
                         dt.Load(reader);
@@ -348,6 +379,7 @@ ORDER BY
             }
             return dt;
         }
+
 
         public async Task<DataTable> GetStatisticsAsync(string part, DateTime? startDate)
         {
