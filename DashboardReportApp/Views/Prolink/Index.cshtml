@@ -4,6 +4,12 @@
 
 <h2>Prolink Data</h2>
 
+<!-- Note about large data -->
+<p style="font-style: italic; color: gray;">
+    Note: Querying or generating a PDF for very large datasets can take a while.
+    Please refine your search if possible.
+</p>
+
 <style>
     /* Stack the form elements vertically */
     #reportForm {
@@ -31,9 +37,56 @@
         .button-container button {
             flex: 1;
         }
+
+    /* Simple overlay for the spinner */
+    #spinnerOverlay {
+        display: none; /* hidden by default */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 9999;
+        background-color: rgba(0, 0, 0, 0.6); /* semi-transparent black */
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        color: white;
+        font-size: 1.2rem;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 6px solid #ccc;
+        border-top: 6px solid #000;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1rem;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
 </style>
 
-<form id="reportForm">
+<!-- The overlay with spinner -->
+<div id="spinnerOverlay">
+    <div class="spinner"></div>
+    <div>Loading, please wait...</div>
+</div>
+
+<!--
+     Note: We keep a <form> for user input, but we won't do a normal
+     POST or GET submission with the PDF button. We'll handle it via JS.
+-->
+<form id="reportForm" onsubmit="return false;">
     <div>
         <label for="partString">Part:</label>
         <input type="text" id="partString" name="partString" required />
@@ -61,147 +114,165 @@
         <label for="onlyOutOfSpec">Only show out-of-spec records</label>
     </div>
     <div class="button-container">
-        <!-- Generate PDF button submits the form to the GeneratePdf action -->
-        <button type="submit" formaction='@Url.Action("GeneratePdf", "Prolink")' formmethod="get" target="_blank">
+        <!-- "Generate PDF" is now a button with a JS handler -->
+        <button type="button" id="pdfButton" onclick="generatePdfAjax()">
             Generate PDF
         </button>
-        <!-- Query button triggers an AJAX call to update the React table -->
-        <button type="button" id="queryButton" onclick="queryData()">Query</button>
+        <!-- Query button triggers an AJAX call to update the data table -->
+        <button type="button" id="queryButton" onclick="queryData()">
+            Query
+        </button>
     </div>
 </form>
 
-<!-- Container for the React table (no initial data) -->
+<!-- Container for the result table(s) -->
 <div id="prolinkTableRoot"></div>
 
 <script>
-    // Utility: Convert department code to display string. // CHANGED HERE
-    function getDeptDisplayName(code) {
-        switch (code.toLowerCase()) {
-            case "mold":
-                return "Molding";
-            case "sint":
-                return "Sintering";
-            case "machin":
-                return "Machining";
-            default:
-                return code; // fallback if something else
-        }
+    // 1) Spinner utility
+    function showSpinner() {
+        document.getElementById("spinnerOverlay").style.display = "flex";
+    }
+    function hideSpinner() {
+        document.getElementById("spinnerOverlay").style.display = "none";
     }
 
-    // Define the column definitions for your React table (keys in camelCase).
-    function getColumns() {
-        return [
-            { key: 'partId', label: 'Part ID' },
-            { key: 'recordNumber', label: 'Record' },
-            { key: 'measureDate', label: 'Date/Time' },
-            { key: 'qccFileDesc', label: 'Qcc File Desc' },
-            { key: 'dimension', label: 'Dimension' },
-            { key: 'measurementValue', label: 'Measurement Value' },
-            { key: 'nominal', label: 'Nominal' },
-            { key: 'tolPlus', label: 'Tol Plus' },
-            { key: 'tolMinus', label: 'Tol Minus' }
-        ];
-    }
+    // 2) Build a common query string from form fields
+    function buildQueryParams() {
+        const partString   = document.getElementById("partString").value;
+        const type         = document.getElementById("type").value;
+        const startDate    = document.getElementById("startDate").value;
+        const endDate      = document.getElementById("endDate").value;
+        const onlyOutOfSpec= document.getElementById("onlyOutOfSpec").checked;
 
-    function queryData() {
-        var partString = document.getElementById("partString").value;
-        var type = document.getElementById("type").value;
-        var startDate = document.getElementById("startDate").value;
-        var endDate = document.getElementById("endDate").value;
-        var onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
-
-        var query = "?partString=" + encodeURIComponent(partString)
+        let query = "?partString=" + encodeURIComponent(partString)
                   + "&type=" + encodeURIComponent(type)
                   + "&startDate=" + encodeURIComponent(startDate)
                   + "&endDate=" + encodeURIComponent(endDate)
                   + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec);
 
-        fetch('/Prolink/QueryData' + query)
+        return query;
+    }
+
+    // 3) Generate PDF via AJAX so we can hide spinner automatically
+    async function generatePdfAjax() {
+        try {
+            showSpinner();
+
+            // Build the query string
+            const queryString = buildQueryParams();
+
+            // Fetch the PDF bytes from the server
+            const response = await fetch('/Prolink/GeneratePdf' + queryString, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/pdf'
+                }
+            });
+            if (!response.ok) {
+                throw new Error("PDF generation request failed.");
+            }
+
+            // Convert response to a Blob
+            const pdfBlob = await response.blob();
+
+            // Create a temporary object URL to open the PDF in a new tab
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+
+            // (Optional) Revoke the object URL after some delay to free memory
+            // setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+        } catch (err) {
+            console.error("Error generating PDF:", err);
+            alert("Error generating PDF. See console for details.");
+        } finally {
+            hideSpinner();
+        }
+    }
+
+    // 4) Query data and build table
+    function queryData() {
+        showSpinner(); // Show spinner at the start of fetch
+
+        const queryString = buildQueryParams();
+        fetch('/Prolink/QueryData' + queryString)
             .then(response => response.json())
             .then(json => {
-                // Clear the tableRoot
+                hideSpinner(); // Hide spinner once data arrives
+
                 const container = document.getElementById("prolinkTableRoot");
                 container.innerHTML = "";
 
-                // We expect json: { departmentResults: [...] }
                 if (!json.departmentResults || !json.departmentResults.length) {
                     container.innerHTML = "<p>No results found.</p>";
                     return;
                 }
 
-                // For each department, build a separate table
                 json.departmentResults.forEach(dept => {
                     // If there's no pivot rows, skip
                     if (!dept.rows || dept.rows.length === 0) {
                         const msg = document.createElement("p");
-                        msg.textContent = `No records found for department: ${getDeptDisplayName(dept.departmentName)}`;
+                        msg.textContent = "No records found for department: " + dept.departmentName;
                         container.appendChild(msg);
                         return;
                     }
 
-                    // Department heading // CHANGED HERE
                     const heading = document.createElement("h3");
-                    heading.textContent = `Department: ${getDeptDisplayName(dept.departmentName)}`;
+                    heading.textContent = "Department: " + dept.departmentName;
                     container.appendChild(heading);
 
                     // Build table
                     const table = document.createElement("table");
-                    // Basic table styling
                     table.border = "1";
                     table.cellPadding = "5";
                     table.style.marginBottom = "30px";
-                    table.style.backgroundColor = "black";       // CHANGED HERE
-                    table.style.color = "goldenrod";             // CHANGED HERE
-                    table.style.borderColor = "goldenrod";       // CHANGED HERE
+                    table.style.backgroundColor = "black";
+                    table.style.color = "goldenrod";
+                    table.style.borderColor = "goldenrod";
 
                     // 1) stat rows (USL, LSL, Max, Min)
                     const rowLabels = ["USL", "LSL", "Max", "Min"];
                     rowLabels.forEach(label => {
                         const tr = document.createElement("tr");
 
-                        // First cell = label
                         const tdLabel = document.createElement("td");
                         tdLabel.style.fontWeight = "bold";
                         tdLabel.textContent = label;
-                        tdLabel.style.backgroundColor = "black"; // CHANGED HERE
-                        tdLabel.style.color = "goldenrod";       // CHANGED HERE
+                        tdLabel.style.backgroundColor = "black";
+                        tdLabel.style.color = "goldenrod";
                         tr.appendChild(tdLabel);
 
-                        // Second cell = blank
+                        // blank second cell
                         const tdBlank = document.createElement("td");
                         tdBlank.textContent = "";
-                        tdBlank.style.backgroundColor = "black"; // CHANGED HERE
-                        tdBlank.style.color = "goldenrod";       // CHANGED HERE
+                        tdBlank.style.backgroundColor = "black";
+                        tdBlank.style.color = "goldenrod";
                         tr.appendChild(tdBlank);
 
                         // dimension columns
                         dept.dimensionColumns.forEach(dim => {
                             let val = "";
-                            if (dept.dimensionStats && dept.dimensionStats[dim]) {
-                                const st = dept.dimensionStats[dim];
-                                if (label === "USL") {
-                                    val = st.usl.toFixed(4);
-                                } else if (label === "LSL") {
-                                    val = st.lsl.toFixed(4);
-                                } else if (label === "Max") {
-                                    val = st.max.toFixed(4);
-                                } else if (label === "Min") {
-                                    val = st.min.toFixed(4);
-                                }
+                            const stats = dept.dimensionStats[dim];
+                            if (stats) {
+                                if (label === "USL") val = stats.usl.toFixed(4);
+                                else if (label === "LSL") val = stats.lsl.toFixed(4);
+                                else if (label === "Max") val = stats.max.toFixed(4);
+                                else if (label === "Min") val = stats.min.toFixed(4);
                             }
                             const td = document.createElement("td");
                             td.textContent = val;
-                            td.style.backgroundColor = "black"; // CHANGED HERE
-                            td.style.color = "goldenrod";       // CHANGED HERE
+                            td.style.backgroundColor = "black";
+                            td.style.color = "goldenrod";
                             tr.appendChild(td);
                         });
 
-                        // factor columns => blank
+                        // factor columns => blank in stat rows
                         dept.factorColumns.forEach(fc => {
                             const tdF = document.createElement("td");
                             tdF.textContent = "";
-                            tdF.style.backgroundColor = "black"; // CHANGED HERE
-                            tdF.style.color = "goldenrod";       // CHANGED HERE
+                            tdF.style.backgroundColor = "black";
+                            tdF.style.color = "goldenrod";
                             tr.appendChild(tdF);
                         });
 
@@ -210,73 +281,61 @@
 
                     // 2) header row
                     const headerRow = document.createElement("tr");
-
-                    // "Record" and "Date/Time"
                     ["Record", "Date/Time"].forEach(h => {
                         const th = document.createElement("th");
                         th.textContent = h;
-                        th.style.backgroundColor = "black"; // CHANGED HERE
-                        th.style.color = "goldenrod";       // CHANGED HERE
+                        th.style.backgroundColor = "black";
+                        th.style.color = "goldenrod";
                         headerRow.appendChild(th);
                     });
-
-                    // dimension columns
                     dept.dimensionColumns.forEach(dim => {
                         const th = document.createElement("th");
                         th.textContent = dim;
-                        th.style.backgroundColor = "black"; // CHANGED HERE
-                        th.style.color = "goldenrod";       // CHANGED HERE
+                        th.style.backgroundColor = "black";
+                        th.style.color = "goldenrod";
                         headerRow.appendChild(th);
                     });
-
-                    // factor columns
                     dept.factorColumns.forEach(fc => {
                         const th = document.createElement("th");
                         th.textContent = fc;
-                        th.style.backgroundColor = "black"; // CHANGED HERE
-                        th.style.color = "goldenrod";       // CHANGED HERE
+                        th.style.backgroundColor = "black";
+                        th.style.color = "goldenrod";
                         headerRow.appendChild(th);
                     });
-
                     table.appendChild(headerRow);
 
                     // 3) Data rows
                     dept.rows.forEach(row => {
                         const tr = document.createElement("tr");
 
-                        // record number
                         const tdRecord = document.createElement("td");
                         tdRecord.textContent = row.recordNumber;
-                        tdRecord.style.backgroundColor = "black"; // CHANGED HERE
-                        tdRecord.style.color = "goldenrod";       // CHANGED HERE
+                        tdRecord.style.backgroundColor = "black";
+                        tdRecord.style.color = "goldenrod";
                         tr.appendChild(tdRecord);
 
-                        // date/time
                         const tdDate = document.createElement("td");
                         const dateVal = new Date(row.measureDate).toLocaleString();
                         tdDate.textContent = dateVal;
-                        tdDate.style.backgroundColor = "black"; // CHANGED HERE
-                        tdDate.style.color = "goldenrod";       // CHANGED HERE
+                        tdDate.style.backgroundColor = "black";
+                        tdDate.style.color = "goldenrod";
                         tr.appendChild(tdDate);
 
                         // dimension columns
                         dept.dimensionColumns.forEach(dim => {
                             const tdM = document.createElement("td");
-                            let val = "";
-                            if (row.measurements && row.measurements[dim]) {
-                                val = row.measurements[dim];
-                            }
+                            let val = row.measurements[dim] || "";
                             tdM.textContent = val;
-                            tdM.style.backgroundColor = "black"; // CHANGED HERE
-                            tdM.style.color = "goldenrod";       // CHANGED HERE
+                            tdM.style.backgroundColor = "black";
+                            tdM.style.color = "goldenrod";
                             tdM.style.textAlign = "right";
 
                             // highlight out-of-spec in red
-                            if (dept.dimensionStats && dept.dimensionStats[dim] && val) {
-                                const st = dept.dimensionStats[dim];
+                            const stats = dept.dimensionStats[dim];
+                            if (stats && val !== "") {
                                 const meas = parseFloat(val);
                                 if (!isNaN(meas)) {
-                                    if (meas > st.usl || meas < st.lsl) {
+                                    if (meas > stats.usl || meas < stats.lsl) {
                                         tdM.style.color = "red";
                                     }
                                 }
@@ -287,13 +346,9 @@
                         // factor columns
                         dept.factorColumns.forEach(fc => {
                             const tdF = document.createElement("td");
-                            let val = "";
-                            if (row.factors && row.factors[fc]) {
-                                val = row.factors[fc];
-                            }
-                            tdF.textContent = val;
-                            tdF.style.backgroundColor = "black"; // CHANGED HERE
-                            tdF.style.color = "goldenrod";       // CHANGED HERE
+                            tdF.textContent = row.factors && row.factors[fc] ? row.factors[fc] : "";
+                            tdF.style.backgroundColor = "black";
+                            tdF.style.color = "goldenrod";
                             tdF.style.textAlign = "right";
                             tr.appendChild(tdF);
                         });
@@ -301,17 +356,14 @@
                         table.appendChild(tr);
                     });
 
-                    // Add table to container
                     container.appendChild(table);
                 });
             })
             .catch(err => {
                 console.error("Error querying pivoted data:", err);
+                hideSpinner();
                 document.getElementById("prolinkTableRoot").innerHTML =
                     "<p style='color:red;'>Error loading data.</p>";
             });
     }
-
-   
 </script>
-
