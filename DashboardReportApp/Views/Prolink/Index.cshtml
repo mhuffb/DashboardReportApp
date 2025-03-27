@@ -2,13 +2,13 @@
     ViewData["Title"] = "Prolink Data";
 }
 
-<h2>Prolink Data</h2>
-
-<!-- Note about large data -->
-<p style="font-style: italic; color: gray;">
-    Note: Querying or generating a PDF for very large datasets can take a while.
-    Please refine your search if possible.
-</p>
+<div class="text-center">
+    <h2>Prolink Data</h2>
+    <p class="fst-italic">
+        Note: Querying or generating a PDF for very large datasets can take a while.
+        Please refine your search if possible.
+    </p>
+</div>
 
 <style>
     /* Stack the form elements vertically */
@@ -74,6 +74,11 @@
             transform: rotate(360deg);
         }
     }
+
+    /* Center the generated tables */
+    #prolinkTableRoot table {
+        margin: 1rem auto; /* center the table horizontally */
+    }
 </style>
 
 <!-- The overlay with spinner -->
@@ -82,10 +87,6 @@
     <div>Loading, please wait...</div>
 </div>
 
-<!--
-     Note: We keep a <form> for user input, but we won't do a normal
-     POST or GET submission with the PDF button. We'll handle it via JS.
--->
 <form id="reportForm" onsubmit="return false;">
     <div>
         <label for="partString">Part:</label>
@@ -114,7 +115,7 @@
         <label for="onlyOutOfSpec">Only show out-of-spec records</label>
     </div>
     <div class="button-container">
-        <!-- "Generate PDF" is now a button with a JS handler -->
+        <!-- "Generate PDF" is a button with a JS handler -->
         <button type="button" id="pdfButton" onclick="generatePdfAjax()">
             Generate PDF
         </button>
@@ -137,13 +138,27 @@
         document.getElementById("spinnerOverlay").style.display = "none";
     }
 
-    // 2) Build a common query string from form fields
+    // 2) Helper to display "mold" -> "Molding", "sint" -> "Sintering", "machin" -> "Machining"
+    function getDeptDisplayName(code) {
+        switch (code.toLowerCase()) {
+            case "mold":
+                return "Molding";
+            case "sint":
+                return "Sintering";
+            case "machin":
+                return "Machining";
+            default:
+                return code; // fallback if something else
+        }
+    }
+
+    // 3) Build a common query string from form fields
     function buildQueryParams() {
-        const partString   = document.getElementById("partString").value;
-        const type         = document.getElementById("type").value;
-        const startDate    = document.getElementById("startDate").value;
-        const endDate      = document.getElementById("endDate").value;
-        const onlyOutOfSpec= document.getElementById("onlyOutOfSpec").checked;
+        const partString    = document.getElementById("partString").value;
+        const type          = document.getElementById("type").value;
+        const startDate     = document.getElementById("startDate").value;
+        const endDate       = document.getElementById("endDate").value;
+        const onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
 
         let query = "?partString=" + encodeURIComponent(partString)
                   + "&type=" + encodeURIComponent(type)
@@ -154,34 +169,24 @@
         return query;
     }
 
-    // 3) Generate PDF via AJAX so we can hide spinner automatically
+    // 4) Generate PDF via AJAX so we can hide spinner automatically
     async function generatePdfAjax() {
         try {
             showSpinner();
-
-            // Build the query string
             const queryString = buildQueryParams();
 
-            // Fetch the PDF bytes from the server
+            // Fetch PDF bytes from the server
             const response = await fetch('/Prolink/GeneratePdf' + queryString, {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/pdf'
-                }
+                headers: { 'Accept': 'application/pdf' }
             });
             if (!response.ok) {
                 throw new Error("PDF generation request failed.");
             }
 
-            // Convert response to a Blob
             const pdfBlob = await response.blob();
-
-            // Create a temporary object URL to open the PDF in a new tab
             const blobUrl = URL.createObjectURL(pdfBlob);
             window.open(blobUrl, '_blank');
-
-            // (Optional) Revoke the object URL after some delay to free memory
-            // setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 
         } catch (err) {
             console.error("Error generating PDF:", err);
@@ -191,16 +196,15 @@
         }
     }
 
-    // 4) Query data and build table
+    // 5) Query data and build table
     function queryData() {
-        showSpinner(); // Show spinner at the start of fetch
-
+        showSpinner();
         const queryString = buildQueryParams();
+
         fetch('/Prolink/QueryData' + queryString)
             .then(response => response.json())
             .then(json => {
-                hideSpinner(); // Hide spinner once data arrives
-
+                hideSpinner();
                 const container = document.getElementById("prolinkTableRoot");
                 container.innerHTML = "";
 
@@ -213,13 +217,15 @@
                     // If there's no pivot rows, skip
                     if (!dept.rows || dept.rows.length === 0) {
                         const msg = document.createElement("p");
-                        msg.textContent = "No records found for department: " + dept.departmentName;
+                        msg.textContent = "No records found for department: " + getDeptDisplayName(dept.departmentName);
                         container.appendChild(msg);
                         return;
                     }
 
+                    // Department heading
                     const heading = document.createElement("h3");
-                    heading.textContent = "Department: " + dept.departmentName;
+                    heading.textContent = "Department: " + getDeptDisplayName(dept.departmentName);
+                    heading.style.textAlign = "center";  // <-- ADDED LINE to center the heading
                     container.appendChild(heading);
 
                     // Build table
@@ -344,14 +350,15 @@
                         });
 
                         // factor columns
-                        dept.factorColumns.forEach(fc => {
-                            const tdF = document.createElement("td");
-                            tdF.textContent = row.factors && row.factors[fc] ? row.factors[fc] : "";
-                            tdF.style.backgroundColor = "black";
-                            tdF.style.color = "goldenrod";
-                            tdF.style.textAlign = "right";
-                            tr.appendChild(tdF);
-                        });
+                           dept.factorColumns.forEach(fc => {
+            const tdF = document.createElement("td");
+            let val = "";
+           if (row.factorValues && row.factorValues[fc]) {
+               val = row.factorValues[fc];
+            }
+            tdF.textContent = val;
+            tr.appendChild(tdF);
+        });
 
                         table.appendChild(tr);
                     });

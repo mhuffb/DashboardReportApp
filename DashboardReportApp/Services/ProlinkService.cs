@@ -77,7 +77,7 @@ namespace DashboardReportApp.Services
         // Define allowed factors (only these factor_desc values will appear as columns).
         private readonly List<string> allowedFactors = new List<string>
         {
-            "Operator", "Mix Lot #", "Mix No.", "Press", "Machine"
+            "Operator", "Mix Lot #", "Mix No.", "Press", "Machine", "Oven"
         };
 
         public ProlinkService(IConfiguration configuration)
@@ -128,7 +128,8 @@ WHERE
         )
     AND m.deleted_flag = 0
     AND (@StartDate IS NULL OR p.measure_date >= @StartDate)
-    AND (@EndDate IS NULL OR p.measure_date <= @EndDate)";
+    AND (@EndDate IS NULL OR p.measure_date <= @EndDate)
+ORDER BY p.measure_date desc";
 
                 using (var command = new SqlCommand(sql, connection))
                 {
