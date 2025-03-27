@@ -37,55 +37,11 @@
         .button-container button {
             flex: 1;
         }
-
-    /* Simple overlay for the spinner */
-    #spinnerOverlay {
-        display: none; /* hidden by default */
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 9999;
-        background-color: rgba(0, 0, 0, 0.6); /* semi-transparent black */
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        color: white;
-        font-size: 1.2rem;
-    }
-
-    .spinner {
-        width: 50px;
-        height: 50px;
-        border: 6px solid #ccc;
-        border-top: 6px solid #000;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        margin-bottom: 1rem;
-    }
-
-    @@keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
     /* Center the generated tables */
     #prolinkTableRoot table {
         margin: 1rem auto; /* center the table horizontally */
     }
 </style>
-
-<!-- The overlay with spinner -->
-<div id="spinnerOverlay">
-    <div class="spinner"></div>
-    <div>Loading, please wait...</div>
-</div>
 
 <form id="reportForm" onsubmit="return false;">
     <div>
@@ -114,12 +70,17 @@
         <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" value="true" />
         <label for="onlyOutOfSpec">Only show out-of-spec records</label>
     </div>
+    <!-- Checkbox for including corrective actions -->
+    <div>
+        <input type="checkbox" id="includeCorrectiveActions" name="includeCorrectiveActions" value="true" />
+        <label for="includeCorrectiveActions">Include Corrective Actions</label>
+    </div>
     <div class="button-container">
-        <!-- "Generate PDF" is a button with a JS handler -->
+        <!-- "Generate PDF" button -->
         <button type="button" id="pdfButton" onclick="generatePdfAjax()">
             Generate PDF
         </button>
-        <!-- Query button triggers an AJAX call to update the data table -->
+        <!-- Query button triggers an AJAX call -->
         <button type="button" id="queryButton" onclick="queryData()">
             Query
         </button>
@@ -130,52 +91,29 @@
 <div id="prolinkTableRoot"></div>
 
 <script>
-    // 1) Spinner utility
-    function showSpinner() {
-        document.getElementById("spinnerOverlay").style.display = "flex";
-    }
-    function hideSpinner() {
-        document.getElementById("spinnerOverlay").style.display = "none";
-    }
-
-    // 2) Helper to display "mold" -> "Molding", "sint" -> "Sintering", "machin" -> "Machining"
-    function getDeptDisplayName(code) {
-        switch (code.toLowerCase()) {
-            case "mold":
-                return "Molding";
-            case "sint":
-                return "Sintering";
-            case "machin":
-                return "Machining";
-            default:
-                return code; // fallback if something else
-        }
-    }
-
-    // 3) Build a common query string from form fields
+    // Build a common query string from form fields
     function buildQueryParams() {
-        const partString    = document.getElementById("partString").value;
-        const type          = document.getElementById("type").value;
-        const startDate     = document.getElementById("startDate").value;
-        const endDate       = document.getElementById("endDate").value;
+        const partString = document.getElementById("partString").value;
+        const type = document.getElementById("type").value;
+        const startDate = document.getElementById("startDate").value;
+        const endDate = document.getElementById("endDate").value;
         const onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
+        const includeCorrectiveActions = document.getElementById("includeCorrectiveActions").checked;
 
         let query = "?partString=" + encodeURIComponent(partString)
                   + "&type=" + encodeURIComponent(type)
                   + "&startDate=" + encodeURIComponent(startDate)
                   + "&endDate=" + encodeURIComponent(endDate)
-                  + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec);
-
+                  + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec)
+                  + "&includeCorrectiveActions=" + encodeURIComponent(includeCorrectiveActions);
         return query;
     }
 
-    // 4) Generate PDF via AJAX so we can hide spinner automatically
+    // Generate PDF via AJAX (spinner functions come from _Layout)
     async function generatePdfAjax() {
         try {
             showSpinner();
             const queryString = buildQueryParams();
-
-            // Fetch PDF bytes from the server
             const response = await fetch('/Prolink/GeneratePdf' + queryString, {
                 method: 'GET',
                 headers: { 'Accept': 'application/pdf' }
@@ -183,11 +121,9 @@
             if (!response.ok) {
                 throw new Error("PDF generation request failed.");
             }
-
             const pdfBlob = await response.blob();
             const blobUrl = URL.createObjectURL(pdfBlob);
             window.open(blobUrl, '_blank');
-
         } catch (err) {
             console.error("Error generating PDF:", err);
             alert("Error generating PDF. See console for details.");
@@ -196,11 +132,10 @@
         }
     }
 
-    // 5) Query data and build table
+    // Query data and build table
     function queryData() {
         showSpinner();
         const queryString = buildQueryParams();
-
         fetch('/Prolink/QueryData' + queryString)
             .then(response => response.json())
             .then(json => {
@@ -214,21 +149,19 @@
                 }
 
                 json.departmentResults.forEach(dept => {
-                    // If there's no pivot rows, skip
-                    if (!dept.rows || dept.rows.length === 0) {
+                    // Department name already mapped on server (e.g., "Molding")
+                    if (!dept.rows || !dept.rows.length) {
                         const msg = document.createElement("p");
-                        msg.textContent = "No records found for department: " + getDeptDisplayName(dept.departmentName);
+                        msg.textContent = "No records found for department: " + dept.departmentName;
                         container.appendChild(msg);
                         return;
                     }
 
-                    // Department heading
                     const heading = document.createElement("h3");
-                    heading.textContent = "Department: " + getDeptDisplayName(dept.departmentName);
-                    heading.style.textAlign = "center";  // <-- ADDED LINE to center the heading
+                    heading.textContent = "Department: " + dept.departmentName;
+                    heading.style.textAlign = "center";
                     container.appendChild(heading);
 
-                    // Build table
                     const table = document.createElement("table");
                     table.border = "1";
                     table.cellPadding = "5";
@@ -237,11 +170,10 @@
                     table.style.color = "goldenrod";
                     table.style.borderColor = "goldenrod";
 
-                    // 1) stat rows (USL, LSL, Max, Min)
+                    // Stat rows: USL, LSL, Max, Min
                     const rowLabels = ["USL", "LSL", "Max", "Min"];
                     rowLabels.forEach(label => {
                         const tr = document.createElement("tr");
-
                         const tdLabel = document.createElement("td");
                         tdLabel.style.fontWeight = "bold";
                         tdLabel.textContent = label;
@@ -249,14 +181,12 @@
                         tdLabel.style.color = "goldenrod";
                         tr.appendChild(tdLabel);
 
-                        // blank second cell
                         const tdBlank = document.createElement("td");
                         tdBlank.textContent = "";
                         tdBlank.style.backgroundColor = "black";
                         tdBlank.style.color = "goldenrod";
                         tr.appendChild(tdBlank);
 
-                        // dimension columns
                         dept.dimensionColumns.forEach(dim => {
                             let val = "";
                             const stats = dept.dimensionStats[dim];
@@ -273,7 +203,6 @@
                             tr.appendChild(td);
                         });
 
-                        // factor columns => blank in stat rows
                         dept.factorColumns.forEach(fc => {
                             const tdF = document.createElement("td");
                             tdF.textContent = "";
@@ -285,7 +214,7 @@
                         table.appendChild(tr);
                     });
 
-                    // 2) header row
+                    // Header row for data
                     const headerRow = document.createElement("tr");
                     ["Record", "Date/Time"].forEach(h => {
                         const th = document.createElement("th");
@@ -310,10 +239,9 @@
                     });
                     table.appendChild(headerRow);
 
-                    // 3) Data rows
+                    // Data rows
                     dept.rows.forEach(row => {
                         const tr = document.createElement("tr");
-
                         const tdRecord = document.createElement("td");
                         tdRecord.textContent = row.recordNumber;
                         tdRecord.style.backgroundColor = "black";
@@ -327,7 +255,6 @@
                         tdDate.style.color = "goldenrod";
                         tr.appendChild(tdDate);
 
-                        // dimension columns
                         dept.dimensionColumns.forEach(dim => {
                             const tdM = document.createElement("td");
                             let val = row.measurements[dim] || "";
@@ -335,32 +262,37 @@
                             tdM.style.backgroundColor = "black";
                             tdM.style.color = "goldenrod";
                             tdM.style.textAlign = "right";
-
-                            // highlight out-of-spec in red
                             const stats = dept.dimensionStats[dim];
                             if (stats && val !== "") {
                                 const meas = parseFloat(val);
-                                if (!isNaN(meas)) {
-                                    if (meas > stats.usl || meas < stats.lsl) {
-                                        tdM.style.color = "red";
-                                    }
+                                if (!isNaN(meas) && (meas > stats.usl || meas < stats.lsl)) {
+                                    tdM.style.color = "red";
                                 }
                             }
                             tr.appendChild(tdM);
                         });
 
-                        // factor columns
-                           dept.factorColumns.forEach(fc => {
-            const tdF = document.createElement("td");
-            let val = "";
-           if (row.factorValues && row.factorValues[fc]) {
-               val = row.factorValues[fc];
-            }
-            tdF.textContent = val;
-            tr.appendChild(tdF);
-        });
+                        dept.factorColumns.forEach(fc => {
+                            const tdF = document.createElement("td");
+                            let val = (row.factorValues && row.factorValues[fc]) || "";
+                            tdF.textContent = val;
+                            tr.appendChild(tdF);
+                        });
 
                         table.appendChild(tr);
+
+                        // Append corrective actions row if available for this record
+                        if (row.correctiveActions && row.correctiveActions.length > 0) {
+                            const trCA = document.createElement("tr");
+                            const tdCA = document.createElement("td");
+                            // Use total number of columns
+                            tdCA.colSpan = 2 + dept.dimensionColumns.length + dept.factorColumns.length;
+                            tdCA.style.backgroundColor = "black";
+                            tdCA.style.color = "cyan";
+                            tdCA.textContent = "Corrective Actions: " + row.correctiveActions.map(ca => ca.actionRef + ": " + ca.actionDesc).join("; ");
+                            trCA.appendChild(tdCA);
+                            table.appendChild(trCA);
+                        }
                     });
 
                     container.appendChild(table);
@@ -368,7 +300,6 @@
             })
             .catch(err => {
                 console.error("Error querying pivoted data:", err);
-                hideSpinner();
                 document.getElementById("prolinkTableRoot").innerHTML =
                     "<p style='color:red;'>Error loading data.</p>";
             });

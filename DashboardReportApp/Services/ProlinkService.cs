@@ -16,7 +16,15 @@ using System.Linq;
 
 namespace DashboardReportApp.Services
 {
-    // Represents a raw measurement record returned from the database.
+    // New model for corrective actions
+    public class CorrectiveAction
+    {
+        public int ActionId { get; set; }
+        public string ActionRef { get; set; }
+        public string ActionDesc { get; set; }
+    }
+
+    // Represents a raw measurement record.
     public class MeasurementRecord
     {
         public int PartId { get; set; }
@@ -26,29 +34,25 @@ namespace DashboardReportApp.Services
         public string Dimension { get; set; }
         public string MeasurementValue { get; set; }
         public string Factors { get; set; }
-
-        // New properties for tolerance information.
         public double Nominal { get; set; }
         public double TolPlus { get; set; }
         public double TolMinus { get; set; }
     }
 
-    // Represents a pivoted record per part (one row per PartId/RecordNumber).
+    // Represents a pivoted record per part.
     public class PartMeasurementPivot
     {
         public int PartId { get; set; }
         public int RecordNumber { get; set; }
         public DateTime MeasureDate { get; set; }
         public string QccFileDesc { get; set; }
-
-        // dimension -> measurement value
         public Dictionary<string, string> Measurements { get; set; } = new Dictionary<string, string>();
-
-        // factor -> factor value
         public Dictionary<string, string> FactorValues { get; set; } = new Dictionary<string, string>();
+        // Corrective actions for this record.
+        public List<CorrectiveAction> CorrectiveActions { get; set; } = new List<CorrectiveAction>();
     }
 
-    // For returning dimension-level stats to match your PDF row approach.
+    // For returning dimension-level stats.
     public class DimensionStats
     {
         public double Usl { get; set; }
@@ -57,24 +61,20 @@ namespace DashboardReportApp.Services
         public double Min { get; set; }
     }
 
-    // For convenience, a container that groups everything about a single department's data.
+    // Container grouping a department's data.
     public class PivotedDepartmentResult
     {
+        // DepartmentName is already mapped to a full name (e.g., "Molding")
         public string DepartmentName { get; set; }
         public List<string> DimensionColumns { get; set; } = new List<string>();
         public List<string> FactorColumns { get; set; } = new List<string>();
         public List<PartMeasurementPivot> Rows { get; set; } = new List<PartMeasurementPivot>();
-
-        // dimension -> (usl, lsl, max, min)
-        public Dictionary<string, DimensionStats> DimensionStats { get; set; }
-            = new Dictionary<string, DimensionStats>();
+        public Dictionary<string, DimensionStats> DimensionStats { get; set; } = new Dictionary<string, DimensionStats>();
     }
 
     public class ProlinkService
     {
         private readonly string connectionString;
-
-        // Define allowed factors (only these factor_desc values will appear as columns).
         private readonly List<string> allowedFactors = new List<string>
         {
             "Operator", "Mix Lot #", "Mix No.", "Press", "Machine", "Oven"
@@ -85,16 +85,14 @@ namespace DashboardReportApp.Services
             connectionString = configuration.GetConnectionString("SQLExpressConnection");
         }
 
-        // 1) Retrieve raw measurement records including tolerance info.
+        // 1) Retrieve raw measurement records.
         public List<MeasurementRecord> GetMeasurementRecords(
             string partString,
             string type,
             DateTime? startDate,
-            DateTime? endDate
-        )
+            DateTime? endDate)
         {
             List<MeasurementRecord> records = new List<MeasurementRecord>();
-
             using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
@@ -110,12 +108,9 @@ SELECT
     d.tol_plus,
     d.tol_minus
 FROM dbo.part p
-JOIN dbo.qcc_file qf 
-    ON p.qcc_file_id = qf.qcc_file_id
-JOIN dbo.measurement m 
-    ON p.part_id = m.part_id
-JOIN dbo.dimension d 
-    ON m.dim_id = d.dim_id
+JOIN dbo.qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
+JOIN dbo.measurement m ON p.part_id = m.part_id
+JOIN dbo.dimension d ON m.dim_id = d.dim_id
 WHERE 
     qf.qcc_file_desc LIKE '%' + @PartString + '%'
     AND (
@@ -130,14 +125,12 @@ WHERE
     AND (@StartDate IS NULL OR p.measure_date >= @StartDate)
     AND (@EndDate IS NULL OR p.measure_date <= @EndDate)
 ORDER BY p.measure_date desc";
-
                 using (var command = new SqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@PartString", partString);
                     command.Parameters.AddWithValue("@Type", string.IsNullOrEmpty(type) ? (object)DBNull.Value : type);
                     command.Parameters.AddWithValue("@StartDate", startDate.HasValue ? (object)startDate.Value : DBNull.Value);
                     command.Parameters.AddWithValue("@EndDate", endDate.HasValue ? (object)endDate.Value : DBNull.Value);
-
                     using (var reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -161,7 +154,7 @@ ORDER BY p.measure_date desc";
             return records;
         }
 
-        // 2) Group raw measurement records into pivoted structures.
+        // 2) Pivot measurements.
         public List<PartMeasurementPivot> PivotMeasurements(List<MeasurementRecord> rawRecords)
         {
             var grouped = rawRecords.GroupBy(r => new
@@ -171,9 +164,7 @@ ORDER BY p.measure_date desc";
                 r.MeasureDate,
                 r.QccFileDesc
             });
-
             List<PartMeasurementPivot> pivotList = new List<PartMeasurementPivot>();
-
             foreach (var group in grouped)
             {
                 PartMeasurementPivot pivot = new PartMeasurementPivot
@@ -183,25 +174,21 @@ ORDER BY p.measure_date desc";
                     MeasureDate = group.Key.MeasureDate,
                     QccFileDesc = group.Key.QccFileDesc,
                 };
-
-                // Accumulate dimension -> measurement for that part
                 foreach (var rec in group)
                 {
                     pivot.Measurements[rec.Dimension] = rec.MeasurementValue;
                 }
-
                 pivotList.Add(pivot);
             }
             return pivotList;
         }
 
-        // 3) Populate factor values for each pivoted part.
+        // 3) Populate factor values.
         public void PopulateFactorValues(List<PartMeasurementPivot> pivotRecords)
         {
             using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
-
                 foreach (var pivot in pivotRecords)
                 {
                     string factorSql = @"
@@ -209,11 +196,9 @@ SELECT f.factor_desc, pf.value
 FROM dbo.part_factor pf
 JOIN dbo.factor f ON pf.factor_id = f.factor_id
 WHERE pf.part_id = @PartId";
-
                     using (var command = new SqlCommand(factorSql, connection))
                     {
                         command.Parameters.AddWithValue("@PartId", pivot.PartId);
-
                         using (var reader = command.ExecuteReader())
                         {
                             while (reader.Read())
@@ -221,11 +206,9 @@ WHERE pf.part_id = @PartId";
                                 string factorDesc = reader.GetString(reader.GetOrdinal("factor_desc"));
                                 if (!allowedFactors.Contains(factorDesc))
                                     continue;
-
                                 string value = reader.IsDBNull(reader.GetOrdinal("value"))
                                     ? ""
                                     : reader.GetString(reader.GetOrdinal("value"));
-
                                 pivot.FactorValues[factorDesc] = value;
                             }
                         }
@@ -234,18 +217,47 @@ WHERE pf.part_id = @PartId";
             }
         }
 
-        // 4) MAIN UTILITY:
-        //    Return pivoted data with dimension stats for each relevant department,
-        //    i.e. EXACTLY the data structure you'd want to replicate the PDF format in JSON.
+        // 4) Populate corrective actions via the stored procedure.
+        public void PopulateCorrectiveActions(List<PartMeasurementPivot> pivotRecords, DateTime? startDate, DateTime? endDate, string department)
+        {
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                foreach (var pivot in pivotRecords)
+                {
+                    string sql = "EXEC dbo.GetCorrectiveActionsForRecordOrDepartment @recordNumber, @department, @startDate, @endDate";
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@recordNumber", pivot.RecordNumber);
+                        command.Parameters.AddWithValue("@department", string.IsNullOrEmpty(department) ? DBNull.Value : (object)department);
+                        command.Parameters.AddWithValue("@startDate", startDate.HasValue ? (object)startDate.Value : DBNull.Value);
+                        command.Parameters.AddWithValue("@endDate", endDate.HasValue ? (object)endDate.Value : DBNull.Value);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                pivot.CorrectiveActions.Add(new CorrectiveAction
+                                {
+                                    ActionId = reader.GetInt32(0),
+                                    ActionRef = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                                    ActionDesc = reader.GetString(2)
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5) Get pivoted data for departments (with department name mapping).
         public List<PivotedDepartmentResult> GetPivotedData(
             string partString,
             string departmentParam,
             DateTime? startDate,
             DateTime? endDate,
-            bool onlyOutOfSpec
-        )
+            bool onlyOutOfSpec,
+            bool includeCorrectiveActions)
         {
-            // If user didn't specify department, do "mold, sint, machin"
             List<string> departments;
             if (string.IsNullOrEmpty(departmentParam))
                 departments = new List<string> { "mold", "sint", "machin" };
@@ -256,13 +268,14 @@ WHERE pf.part_id = @PartId";
 
             foreach (string dept in departments)
             {
-                // 1) Get raw records
-                var rawRecords = GetMeasurementRecords(partString, dept, startDate, endDate);
+                // Map department code to full name.
+                string displayDept = dept.Equals("mold", StringComparison.OrdinalIgnoreCase) ? "Molding" :
+                                     dept.Equals("sint", StringComparison.OrdinalIgnoreCase) ? "Sintering" :
+                                     dept.Equals("machin", StringComparison.OrdinalIgnoreCase) ? "Machining" : dept;
 
-                // 2) If onlyOutOfSpec is requested, keep records in any group that has an OOS measurement
+                var rawRecords = GetMeasurementRecords(partString, dept, startDate, endDate);
                 if (onlyOutOfSpec)
                 {
-                    // group by (partId, recordNumber)
                     var grouped = rawRecords.GroupBy(r => new { r.PartId, r.RecordNumber });
                     var filteredGroups = grouped.Where(g =>
                         g.Any(r =>
@@ -280,16 +293,14 @@ WHERE pf.part_id = @PartId";
                             return false;
                         })
                     );
-
                     rawRecords = filteredGroups.SelectMany(x => x).ToList();
                 }
 
-                // If no raw records remain, we can just note it & continue
                 if (!rawRecords.Any())
                 {
                     results.Add(new PivotedDepartmentResult
                     {
-                        DepartmentName = dept,
+                        DepartmentName = displayDept,
                         DimensionColumns = new List<string>(),
                         FactorColumns = new List<string>(),
                         Rows = new List<PartMeasurementPivot>(),
@@ -298,13 +309,12 @@ WHERE pf.part_id = @PartId";
                     continue;
                 }
 
-                // 3) Pivot
                 var pivotRows = PivotMeasurements(rawRecords);
-
-                // 4) Factor values
                 PopulateFactorValues(pivotRows);
-
-                // 5) Build dimension & factor columns
+                if (includeCorrectiveActions)
+                {
+                    PopulateCorrectiveActions(pivotRows, startDate, endDate, dept);
+                }
                 var dimensionColumns = pivotRows
                     .SelectMany(p => p.Measurements.Keys)
                     .Distinct()
@@ -318,8 +328,6 @@ WHERE pf.part_id = @PartId";
                     ))
                     .ToList();
 
-                // 6) Compute dimension-level stats (USL, LSL, Max, Min)
-                //    First gather dimension tolerances from the raw data
                 var dimTolerances = new Dictionary<string, (double nom, double plus, double minus)>();
                 foreach (var rr in rawRecords)
                 {
@@ -329,13 +337,11 @@ WHERE pf.part_id = @PartId";
                     }
                 }
 
-                // Now compute max/min from pivoted rows
                 var dimensionStats = new Dictionary<string, DimensionStats>();
                 foreach (var dim in dimensionColumns)
                 {
                     double? maxVal = null;
                     double? minVal = null;
-
                     foreach (var pr in pivotRows)
                     {
                         if (pr.Measurements.TryGetValue(dim, out string strVal) &&
@@ -347,14 +353,12 @@ WHERE pf.part_id = @PartId";
                                 minVal = dblVal;
                         }
                     }
-
                     double usl = 0.0, lsl = 0.0;
                     if (dimTolerances.TryGetValue(dim, out var t))
                     {
                         usl = t.nom + t.plus;
                         lsl = t.nom + t.minus;
                     }
-
                     dimensionStats[dim] = new DimensionStats
                     {
                         Usl = usl,
@@ -364,10 +368,9 @@ WHERE pf.part_id = @PartId";
                     };
                 }
 
-                // 7) Build the final pivoted result object
                 var deptResult = new PivotedDepartmentResult
                 {
-                    DepartmentName = dept,
+                    DepartmentName = displayDept,
                     DimensionColumns = dimensionColumns,
                     FactorColumns = factorColumns,
                     Rows = pivotRows,
@@ -376,17 +379,17 @@ WHERE pf.part_id = @PartId";
 
                 results.Add(deptResult);
             }
-
             return results;
         }
 
-        // 5) Generate PDF exactly as you had before (unchanged).
+        // 6) Generate PDF.
         public byte[] GeneratePdf(
             string partString,
             string type,
             DateTime? startDate,
             DateTime? endDate,
-            bool onlyOutOfSpec)
+            bool onlyOutOfSpec,
+            bool includeCorrectiveActions)
         {
             using (var ms = new MemoryStream())
             {
@@ -398,12 +401,10 @@ WHERE pf.part_id = @PartId";
                 PdfFont regularFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
                 float smallFontSize = 8f;
 
-                // Overall report title
                 document.Add(new Paragraph("Prolink Report")
                     .SetFont(boldFont)
                     .SetFontSize(12));
 
-                // Basic filter info
                 document.Add(new Paragraph($"Part: {(partString ?? "").ToUpper()}")
                     .SetFont(regularFont)
                     .SetFontSize(smallFontSize));
@@ -419,9 +420,8 @@ WHERE pf.part_id = @PartId";
                     .SetFont(regularFont)
                     .SetFontSize(smallFontSize));
 
-                document.Add(new Paragraph("\n")); // extra blank line
+                document.Add(new Paragraph("\n"));
 
-                // 1) Determine which departments to process
                 List<string> departments;
                 if (string.IsNullOrEmpty(type))
                 {
@@ -435,29 +435,25 @@ WHERE pf.part_id = @PartId";
                 bool firstDept = true;
                 foreach (string dept in departments)
                 {
-                    // Page break between departments (but not before the first).
                     if (!firstDept)
                     {
                         document.Add(new AreaBreak(AreaBreakType.NEXT_PAGE));
                     }
                     firstDept = false;
 
-                    // Show a department header
+                    // Map department code to full name.
                     string deptDisplay = dept.Equals("mold", StringComparison.OrdinalIgnoreCase)
                         ? "Molding"
                         : dept.Equals("sint", StringComparison.OrdinalIgnoreCase)
                             ? "Sintering"
                             : dept.Equals("machin", StringComparison.OrdinalIgnoreCase)
                                 ? "Machining"
-                                : dept;  // fallback if user typed something else
+                                : dept;
                     document.Add(new Paragraph($"Department: {deptDisplay}")
                         .SetFont(boldFont)
                         .SetFontSize(smallFontSize));
 
-                    // 2) Get all raw measurement rows
                     var rawRecords = GetMeasurementRecords(partString, dept, startDate, endDate);
-
-                    // 3) If onlyOutOfSpec, keep entire records where ANY dimension is out-of-spec
                     if (onlyOutOfSpec)
                     {
                         var grouped = rawRecords.GroupBy(r => new { r.PartId, r.RecordNumber });
@@ -481,7 +477,6 @@ WHERE pf.part_id = @PartId";
                         rawRecords = filteredGroups.SelectMany(g => g).ToList();
                     }
 
-                    // If no measurements remain
                     if (!rawRecords.Any())
                     {
                         document.Add(new Paragraph("No records found for this department.")
@@ -490,9 +485,12 @@ WHERE pf.part_id = @PartId";
                         continue;
                     }
 
-                    // 4) Pivot & factor
                     var pivotRecords = PivotMeasurements(rawRecords);
                     PopulateFactorValues(pivotRecords);
+                    if (includeCorrectiveActions)
+                    {
+                        PopulateCorrectiveActions(pivotRecords, startDate, endDate, dept);
+                    }
 
                     if (!pivotRecords.Any())
                     {
@@ -502,21 +500,18 @@ WHERE pf.part_id = @PartId";
                         continue;
                     }
 
-                    // Identify dimension columns
                     var measurementColumns = pivotRecords
                         .SelectMany(p => p.Measurements.Keys)
                         .Distinct()
                         .OrderBy(d => d)
                         .ToList();
 
-                    // Factor columns actually used
                     var factorColumns = allowedFactors
                         .Where(f => pivotRecords.Any(p =>
                             p.FactorValues.ContainsKey(f) &&
                             !string.IsNullOrWhiteSpace(p.FactorValues[f])))
                         .ToList();
 
-                    // Stats for Max/Min
                     var measurementStats = new Dictionary<string, (double max, double min)>();
                     foreach (var dim in measurementColumns)
                     {
@@ -536,7 +531,6 @@ WHERE pf.part_id = @PartId";
                             measurementStats[dim] = (vals.Max(), vals.Min());
                     }
 
-                    // Collect tolerances for highlighting & USL/LSL rows
                     var dimensionTolerances = new Dictionary<string, (double nominal, double plus, double minus)>();
                     foreach (var rec in rawRecords)
                     {
@@ -547,7 +541,6 @@ WHERE pf.part_id = @PartId";
                         }
                     }
 
-                    // 5) Build the PDF table
                     BuildDepartmentTable(
                         document,
                         pivotRecords,
@@ -561,34 +554,30 @@ WHERE pf.part_id = @PartId";
                     );
                 }
 
-                // Done with all departments
                 document.Close();
                 return ms.ToArray();
             }
         }
 
-        // 6) BuildDepartmentTable - unchanged from your code
+        // 7) BuildDepartmentTable: constructs the PDF table and appends a corrective actions row after each record row.
         private void BuildDepartmentTable(
-            Document document,
-            List<PartMeasurementPivot> pivotRecords,
-            List<string> measurementColumns,
-            List<string> factorColumns,
-            Dictionary<string, (double max, double min)> measurementStats,
-            Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
-            PdfFont boldFont,
-            PdfFont regularFont,
-            float smallFontSize)
+     Document document,
+     List<PartMeasurementPivot> pivotRecords,
+     List<string> measurementColumns,
+     List<string> factorColumns,
+     Dictionary<string, (double max, double min)> measurementStats,
+     Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
+     PdfFont boldFont,
+     PdfFont regularFont,
+     float smallFontSize)
         {
-            // Common columns: (Record, Date/Time)
             int commonCols = 2;
             int measCount = measurementColumns.Count;
             int factorCount = factorColumns.Count;
             int totalCols = commonCols + measCount + factorCount;
-
-            // Column widths: Record=1, Date=3, everything else=1
             float[] colWidths = new float[totalCols];
-            colWidths[0] = 1f;  // record
-            colWidths[1] = 3f;  // date/time
+            colWidths[0] = 1f;
+            colWidths[1] = 3f;
             for (int i = 2; i < totalCols; i++)
                 colWidths[i] = 1f;
 
@@ -596,27 +585,21 @@ WHERE pf.part_id = @PartId";
                 .SetWidth(UnitValue.CreatePercentValue(100))
                 .SetMarginTop(10);
 
-            // 1) Tolerance/stat rows: USL, LSL, Max, Min
             string[] rowLabels = { "USL", "LSL", "Max", "Min" };
             foreach (var label in rowLabels)
             {
-                // first cell = label
                 table.AddHeaderCell(new Cell()
                     .Add(new Paragraph(label).SetFont(boldFont).SetFontSize(smallFontSize))
                     .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                     .SetTextAlignment(TextAlignment.CENTER)
                     .SetPadding(3)
                     .SetBorder(new SolidBorder(1)));
-
-                // second cell = blank
                 table.AddHeaderCell(new Cell()
                     .Add(new Paragraph("").SetFont(regularFont).SetFontSize(smallFontSize))
                     .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                     .SetTextAlignment(TextAlignment.CENTER)
                     .SetPadding(3)
                     .SetBorder(new SolidBorder(1)));
-
-                // one cell per measurement dimension
                 foreach (var dim in measurementColumns)
                 {
                     string cellText = "";
@@ -637,7 +620,6 @@ WHERE pf.part_id = @PartId";
                         else if (label == "Min" && measurementStats.ContainsKey(dim))
                             cellText = measurementStats[dim].min.ToString("F4");
                     }
-
                     table.AddHeaderCell(new Cell()
                         .Add(new Paragraph(cellText).SetFont(regularFont).SetFontSize(smallFontSize))
                         .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
@@ -645,8 +627,6 @@ WHERE pf.part_id = @PartId";
                         .SetPadding(3)
                         .SetBorder(new SolidBorder(1)));
                 }
-
-                // factor columns are blank in these stat rows
                 for (int i = 0; i < factorCount; i++)
                 {
                     table.AddHeaderCell(new Cell()
@@ -658,7 +638,7 @@ WHERE pf.part_id = @PartId";
                 }
             }
 
-            // 2) Main header row: "Record", "Date/Time", then dims, then factors
+            // Main header row: "Record", "Date/Time", then dimension and factor columns.
             string[] commonHeaders = { "Record", "Date/Time" };
             for (int i = 0; i < totalCols; i++)
             {
@@ -678,37 +658,23 @@ WHERE pf.part_id = @PartId";
                     .SetBorder(new SolidBorder(1)));
             }
 
-            // 3) Data rows
+            // Data rows with corrective actions row appended per record if available.
             foreach (var pivot in pivotRecords)
             {
-                // Record Number
                 table.AddCell(new Cell()
-                    .Add(new Paragraph(pivot.RecordNumber.ToString())
-                        .SetFont(regularFont)
-                        .SetFontSize(smallFontSize))
+                    .Add(new Paragraph(pivot.RecordNumber.ToString()).SetFont(regularFont).SetFontSize(smallFontSize))
                     .SetPadding(3)
                     .SetBorder(new SolidBorder(1)));
-
-                // Date/Time
                 table.AddCell(new Cell()
-                    .Add(new Paragraph(pivot.MeasureDate.ToString("g"))
-                        .SetFont(regularFont)
-                        .SetFontSize(smallFontSize))
+                    .Add(new Paragraph(pivot.MeasureDate.ToString("g")).SetFont(regularFont).SetFontSize(smallFontSize))
                     .SetTextAlignment(TextAlignment.CENTER)
                     .SetPadding(3)
                     .SetBorder(new SolidBorder(1)));
-
-                // Measurement columns
                 foreach (var dim in measurementColumns)
                 {
                     pivot.Measurements.TryGetValue(dim, out var val);
                     if (string.IsNullOrWhiteSpace(val)) val = "";
-
-                    var paragraph = new Paragraph(val)
-                        .SetFont(regularFont)
-                        .SetFontSize(smallFontSize);
-
-                    // Highlight out-of-spec in red
+                    var paragraph = new Paragraph(val).SetFont(regularFont).SetFontSize(smallFontSize);
                     if (dimensionTolerances.ContainsKey(dim) && double.TryParse(val, out double doubleVal))
                     {
                         var (nom, plus, minus) = dimensionTolerances[dim];
@@ -719,32 +685,38 @@ WHERE pf.part_id = @PartId";
                             paragraph.SetFontColor(ColorConstants.RED);
                         }
                     }
-
                     table.AddCell(new Cell()
                         .Add(paragraph)
                         .SetTextAlignment(TextAlignment.RIGHT)
                         .SetPadding(3)
                         .SetBorder(new SolidBorder(1)));
                 }
-
-                // Factor columns
                 foreach (var factor in factorColumns)
                 {
                     pivot.FactorValues.TryGetValue(factor, out var fVal);
                     if (string.IsNullOrWhiteSpace(fVal)) fVal = "";
-
                     table.AddCell(new Cell()
-                        .Add(new Paragraph(fVal)
-                            .SetFont(regularFont)
-                            .SetFontSize(smallFontSize))
+                        .Add(new Paragraph(fVal).SetFont(regularFont).SetFontSize(smallFontSize))
                         .SetTextAlignment(TextAlignment.RIGHT)
                         .SetPadding(3)
                         .SetBorder(new SolidBorder(1)));
                 }
+                // Append corrective actions row if available.
+                if (pivot.CorrectiveActions != null && pivot.CorrectiveActions.Any())
+                {
+                    string caText = "Corrective Actions: " + string.Join("; ",
+                        pivot.CorrectiveActions.Select(a => a.ActionRef + ": " + a.ActionDesc));
+                    // Note: new Cell(1, totalCols) creates a cell that spans 1 row and totalCols columns.
+                    table.AddCell(new Cell(1, totalCols)
+                        .Add(new Paragraph(caText).SetFont(regularFont).SetFontSize(smallFontSize))
+                        .SetTextAlignment(TextAlignment.LEFT)
+                        .SetBackgroundColor(ColorConstants.YELLOW)
+                        .SetBorder(new SolidBorder(1)));
+                }
             }
 
-            // Finally, add the table to the document
             document.Add(table);
         }
+
     }
 }

@@ -20,55 +20,52 @@ namespace DashboardReportApp.Controllers
             return View();
         }
 
-       [HttpGet("GeneratePdf")]
-public IActionResult GeneratePdf(
-    string partString, 
-    string type, 
-    DateTime? startDate, 
-    DateTime? endDate, 
-    bool onlyOutOfSpec = false)
-{
-    try
-    {
-        // Simply let the ProlinkService do the same single call.
-        byte[] pdfBytes = _prolinkService.GeneratePdf(
-            partString, 
-            type, 
-            startDate, 
-            endDate, 
-            onlyOutOfSpec
-        );
-        return File(pdfBytes, "application/pdf", "report.pdf");
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(500, ex.Message);
-    }
-}
-
-
-
-        [HttpGet("QueryData")]
-        public IActionResult QueryData(
-      string partString,
-      string type,
-      DateTime? startDate,
-      DateTime? endDate,
-      bool onlyOutOfSpec = false
-  )
+        [HttpGet("GeneratePdf")]
+        public IActionResult GeneratePdf(
+            string partString,
+            string type,
+            DateTime? startDate,
+            DateTime? endDate,
+            bool onlyOutOfSpec = false,
+            bool includeCorrectiveActions = false)
         {
             try
             {
-                // 1) pivoted data (matching PDF logic)
+                byte[] pdfBytes = _prolinkService.GeneratePdf(
+                    partString,
+                    type,
+                    startDate,
+                    endDate,
+                    onlyOutOfSpec,
+                    includeCorrectiveActions
+                );
+                return File(pdfBytes, "application/pdf", "report.pdf");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+        [HttpGet("QueryData")]
+        public IActionResult QueryData(
+            string partString,
+            string type,
+            DateTime? startDate,
+            DateTime? endDate,
+            bool onlyOutOfSpec = false,
+            bool includeCorrectiveActions = false)
+        {
+            try
+            {
                 var pivotedResults = _prolinkService.GetPivotedData(
                     partString,
                     type,
                     startDate,
                     endDate,
-                    onlyOutOfSpec
+                    onlyOutOfSpec,
+                    includeCorrectiveActions
                 );
-
-                // 2) return as JSON
                 return Json(new
                 {
                     departmentResults = pivotedResults
@@ -79,8 +76,5 @@ public IActionResult GeneratePdf(
                 return StatusCode(500, ex.Message);
             }
         }
-
-
-
     }
 }
