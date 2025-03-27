@@ -39,10 +39,20 @@
         }
     /* Center the generated tables */
     #prolinkTableRoot table {
-        margin: 1rem auto; /* center the table horizontally */
+        margin: 1rem auto;
+    }
+    /* Container for the charts */
+    #chartContainer {
+        max-width: 1000px;
+        margin: 2rem auto;
+    }
+
+    .department-chart {
+        margin-bottom: 2rem;
     }
 </style>
 
+<!-- The query form -->
 <form id="reportForm" onsubmit="return false;">
     <div>
         <label for="partString">Part:</label>
@@ -76,22 +86,22 @@
         <label for="includeCorrectiveActions">Include Corrective Actions</label>
     </div>
     <div class="button-container">
-        <!-- "Generate PDF" button -->
-        <button type="button" id="pdfButton" onclick="generatePdfAjax()">
-            Generate PDF
-        </button>
-        <!-- Query button triggers an AJAX call -->
-        <button type="button" id="queryButton" onclick="queryData()">
-            Query
-        </button>
+        <button type="button" id="pdfButton" onclick="generatePdfAjax()">Generate PDF</button>
+        <button type="button" id="queryButton" onclick="queryData()">Query</button>
     </div>
 </form>
 
-<!-- Container for the result table(s) -->
+<!-- Container for the charts (will be filled dynamically) -->
+<div id="chartContainer"></div>
+
+<!-- Container for the results table (will be filled dynamically) -->
 <div id="prolinkTableRoot"></div>
 
+<!-- Include Chart.js Annotation Plugin if not already loaded in _Layout -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0"></script>
+
 <script>
-    // Build a common query string from form fields
+    // Build a common query string from the form fields.
     function buildQueryParams() {
         const partString = document.getElementById("partString").value;
         const type = document.getElementById("type").value;
@@ -99,7 +109,6 @@
         const endDate = document.getElementById("endDate").value;
         const onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
         const includeCorrectiveActions = document.getElementById("includeCorrectiveActions").checked;
-
         let query = "?partString=" + encodeURIComponent(partString)
                   + "&type=" + encodeURIComponent(type)
                   + "&startDate=" + encodeURIComponent(startDate)
@@ -109,7 +118,7 @@
         return query;
     }
 
-    // Generate PDF via AJAX (spinner functions come from _Layout)
+    // Generate PDF via AJAX.
     async function generatePdfAjax() {
         try {
             showSpinner();
@@ -132,7 +141,7 @@
         }
     }
 
-    // Query data and build table
+    // Query data and build both table and charts.
     function queryData() {
         showSpinner();
         const queryString = buildQueryParams();
@@ -140,28 +149,20 @@
             .then(response => response.json())
             .then(json => {
                 hideSpinner();
-                const container = document.getElementById("prolinkTableRoot");
-                container.innerHTML = "";
-
+                // Build table for each department.
+                const tableContainer = document.getElementById("prolinkTableRoot");
+                tableContainer.innerHTML = "";
                 if (!json.departmentResults || !json.departmentResults.length) {
-                    container.innerHTML = "<p>No results found.</p>";
+                    tableContainer.innerHTML = "<p>No results found.</p>";
                     return;
                 }
-
                 json.departmentResults.forEach(dept => {
-                    // Department name already mapped on server (e.g., "Molding")
-                    if (!dept.rows || !dept.rows.length) {
-                        const msg = document.createElement("p");
-                        msg.textContent = "No records found for department: " + dept.departmentName;
-                        container.appendChild(msg);
-                        return;
-                    }
-
-                    const heading = document.createElement("h3");
-                    heading.textContent = "Department: " + dept.departmentName;
-                    heading.style.textAlign = "center";
-                    container.appendChild(heading);
-
+                    // Create a department heading.
+                    const deptHeading = document.createElement("h3");
+                    deptHeading.textContent = "Department: " + dept.departmentName;
+                    deptHeading.style.textAlign = "center";
+                    tableContainer.appendChild(deptHeading);
+                    // Create the table.
                     const table = document.createElement("table");
                     table.border = "1";
                     table.cellPadding = "5";
@@ -169,8 +170,7 @@
                     table.style.backgroundColor = "black";
                     table.style.color = "goldenrod";
                     table.style.borderColor = "goldenrod";
-
-                    // Stat rows: USL, LSL, Max, Min
+                    // Build stat rows: USL, LSL, Max, Min.
                     const rowLabels = ["USL", "LSL", "Max", "Min"];
                     rowLabels.forEach(label => {
                         const tr = document.createElement("tr");
@@ -180,13 +180,11 @@
                         tdLabel.style.backgroundColor = "black";
                         tdLabel.style.color = "goldenrod";
                         tr.appendChild(tdLabel);
-
                         const tdBlank = document.createElement("td");
                         tdBlank.textContent = "";
                         tdBlank.style.backgroundColor = "black";
                         tdBlank.style.color = "goldenrod";
                         tr.appendChild(tdBlank);
-
                         dept.dimensionColumns.forEach(dim => {
                             let val = "";
                             const stats = dept.dimensionStats[dim];
@@ -202,7 +200,6 @@
                             td.style.color = "goldenrod";
                             tr.appendChild(td);
                         });
-
                         dept.factorColumns.forEach(fc => {
                             const tdF = document.createElement("td");
                             tdF.textContent = "";
@@ -210,11 +207,9 @@
                             tdF.style.color = "goldenrod";
                             tr.appendChild(tdF);
                         });
-
                         table.appendChild(tr);
                     });
-
-                    // Header row for data
+                    // Data header row.
                     const headerRow = document.createElement("tr");
                     ["Record", "Date/Time"].forEach(h => {
                         const th = document.createElement("th");
@@ -238,8 +233,7 @@
                         headerRow.appendChild(th);
                     });
                     table.appendChild(headerRow);
-
-                    // Data rows
+                    // Data rows.
                     dept.rows.forEach(row => {
                         const tr = document.createElement("tr");
                         const tdRecord = document.createElement("td");
@@ -247,14 +241,12 @@
                         tdRecord.style.backgroundColor = "black";
                         tdRecord.style.color = "goldenrod";
                         tr.appendChild(tdRecord);
-
                         const tdDate = document.createElement("td");
                         const dateVal = new Date(row.measureDate).toLocaleString();
                         tdDate.textContent = dateVal;
                         tdDate.style.backgroundColor = "black";
                         tdDate.style.color = "goldenrod";
                         tr.appendChild(tdDate);
-
                         dept.dimensionColumns.forEach(dim => {
                             const tdM = document.createElement("td");
                             let val = row.measurements[dim] || "";
@@ -271,21 +263,17 @@
                             }
                             tr.appendChild(tdM);
                         });
-
                         dept.factorColumns.forEach(fc => {
                             const tdF = document.createElement("td");
                             let val = (row.factorValues && row.factorValues[fc]) || "";
                             tdF.textContent = val;
                             tr.appendChild(tdF);
                         });
-
                         table.appendChild(tr);
-
-                        // Append corrective actions row if available for this record
+                        // Append corrective actions row if available.
                         if (row.correctiveActions && row.correctiveActions.length > 0) {
                             const trCA = document.createElement("tr");
                             const tdCA = document.createElement("td");
-                            // Use total number of columns
                             tdCA.colSpan = 2 + dept.dimensionColumns.length + dept.factorColumns.length;
                             tdCA.style.backgroundColor = "black";
                             tdCA.style.color = "cyan";
@@ -294,9 +282,10 @@
                             table.appendChild(trCA);
                         }
                     });
-
-                    container.appendChild(table);
+                    tableContainer.appendChild(table);
                 });
+                // Now plot charts for each department.
+                plotAllDepartments(json.departmentResults);
             })
             .catch(err => {
                 console.error("Error querying pivoted data:", err);
@@ -304,4 +293,140 @@
                     "<p style='color:red;'>Error loading data.</p>";
             });
     }
+
+    // Function to plot charts for each department and each dimension.
+        // Function to plot charts for each department and for each dimension.
+    function plotAllDepartments(departmentResults) {
+        const container = document.getElementById("chartContainer");
+        container.innerHTML = ""; // Clear previous charts.
+        departmentResults.forEach(dept => {
+            // Create a heading for the department charts.
+            const deptHeading = document.createElement("h4");
+            deptHeading.textContent = "Charts for Department: " + dept.departmentName;
+            deptHeading.style.textAlign = "center";
+            container.appendChild(deptHeading);
+
+            // For each dimension in the department, create a chart.
+            dept.dimensionColumns.forEach(dim => {
+                // Create a container div for the chart.
+                const chartDiv = document.createElement("div");
+                chartDiv.className = "department-chart";
+                // Create a canvas element.
+                const canvas = document.createElement("canvas");
+                canvas.id = "chart_" + dept.departmentName + "_" + dim;
+                chartDiv.appendChild(canvas);
+                container.appendChild(chartDiv);
+
+                // Build data arrays: use measurement dates (formatted as dates) as x-axis labels and extract measurement values.
+                let labels = [];
+                let dataValues = [];
+                dept.rows.forEach(row => {
+                    if (row.measurements[dim] !== undefined) {
+                        labels.push(new Date(row.measureDate).toLocaleDateString());
+                        dataValues.push(parseFloat(row.measurements[dim]));
+                    }
+                });
+
+                // Retrieve USL and LSL values for this dimension.
+                let usl = 0, lsl = 0;
+                if (dept.dimensionStats && dept.dimensionStats[dim]) {
+                    usl = parseFloat(dept.dimensionStats[dim].usl);
+                    lsl = parseFloat(dept.dimensionStats[dim].lsl);
+                }
+                let uslValues = Array(labels.length).fill(usl);
+                let lslValues = Array(labels.length).fill(lsl);
+
+                // Create the Chart.js chart.
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: dim,
+                                data: dataValues,
+                                fill: false,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'USL',
+                                data: uslValues,
+                                borderColor: 'rgba(255, 0, 0, 1)',
+                                borderDash: [5, 5],
+                                fill: false,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'LSL',
+                                data: lslValues,
+                                borderColor: 'rgba(0, 0, 255, 1)',
+                                borderDash: [5, 5],
+                                fill: false,
+                                pointRadius: 0
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            // Add a title to the chart with the dimension name.
+                            title: {
+                                display: true,
+                                text: dim,
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                }
+                            },
+                            annotation: {
+                                annotations: {
+                                    uslLine: {
+                                        type: 'line',
+                                        yMin: usl,
+                                        yMax: usl,
+                                        borderColor: 'rgba(255, 0, 0, 1)',
+                                        borderWidth: 2,
+                                        label: {
+                                            enabled: true,
+                                            content: 'USL: ' + usl.toFixed(4),
+                                            backgroundColor: 'rgba(255, 0, 0, 0.75)'
+                                        }
+                                    },
+                                    lslLine: {
+                                        type: 'line',
+                                        yMin: lsl,
+                                        yMax: lsl,
+                                        borderColor: 'rgba(0, 0, 255, 1)',
+                                        borderWidth: 2,
+                                        label: {
+                                            enabled: true,
+                                            content: 'LSL: ' + lsl.toFixed(4),
+                                            backgroundColor: 'rgba(0, 0, 255, 0.75)'
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Measurement Date'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: dim + ' Value'
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    }
+
 </script>
