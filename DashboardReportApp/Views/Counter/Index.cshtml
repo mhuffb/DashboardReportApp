@@ -35,7 +35,15 @@
             margin-bottom: 1em;
             font-weight: bold;
         }
+        /* Disable the site-wide spinner on this page */
+        #spinnerOverlay {
+            display: none !important;
+        }
     </style>
+    <script>
+        // Set a flag so that if your layout's JS checks it, it won't show the spinner.
+        window.disableSpinner = true;
+    </script>
 </head>
 <body>
     <h1>Update Press Configuration</h1>
@@ -185,8 +193,5 @@
         // Update form values when a new device is selected
         document.getElementById("deviceSelect").addEventListener("change", fetchCurrentValues);
     </script>
-
-
-
 </body>
 </html>
