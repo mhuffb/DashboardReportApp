@@ -124,7 +124,7 @@ WHERE
     AND m.deleted_flag = 0
     AND (@StartDate IS NULL OR p.measure_date >= @StartDate)
     AND (@EndDate IS NULL OR p.measure_date <= @EndDate)
-ORDER BY p.measure_date desc";
+ORDER BY p.measure_date asc";
                 using (var command = new SqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@PartString", partString);

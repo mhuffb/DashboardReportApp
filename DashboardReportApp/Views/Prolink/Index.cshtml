@@ -145,12 +145,13 @@
                     graphContainer.appendChild(canvas);
                     deptContainer.appendChild(graphContainer);
 
-                    // Extract labels and measurement data using recordNumber as x-axis
+                    // Extract labels and measurement data using measure date for x-axis
                     const labels = [];
                     const measurementData = [];
                     dept.rows.forEach(row => {
                         if (row.measurements && row.measurements[dim]) {
-                            labels.push(row.recordNumber); // You may use row.measureDate if preferred
+                            // Convert measure date to a locale date string
+                            labels.push(new Date(row.measureDate).toLocaleDateString());
                             measurementData.push(parseFloat(row.measurements[dim]));
                         }
                     });
@@ -214,7 +215,7 @@
                                 x: {
                                     title: {
                                         display: true,
-                                        text: 'Record Number'
+                                        text: 'Measure Date'
                                     }
                                 },
                                 y: {
