@@ -1,432 +1,285 @@
-﻿@{
-    ViewData["Title"] = "Prolink Data";
-}
-
-<div class="text-center">
-    <h2>Prolink Data</h2>
-    <p class="fst-italic">
-        Note: Querying or generating a PDF for very large datasets can take a while.
-        Please refine your search if possible.
-    </p>
-</div>
-
-<style>
-    /* Stack the form elements vertically */
-    #reportForm {
-        max-width: 500px;
-        margin: 0 auto;
-    }
-        /* Add spacing between each form row */
-        #reportForm > div {
-            margin-bottom: 15px;
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Prolink Data</title>
+    <!-- Include Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Center the form and constrain its width */
+        #reportForm {
+            max-width: 500px;
+            margin: 0 auto;
         }
-        /* Style the labels and inputs to be on separate lines */
-        #reportForm label,
-        #reportForm input,
-        #reportForm select {
-            display: block;
-            width: 100%;
-        }
-    /* Container for the two buttons: display them inline */
-    .button-container {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-    }
-
-        .button-container button {
-            flex: 1;
-        }
-    /* Center the generated tables */
-    #prolinkTableRoot table {
-        margin: 1rem auto;
-    }
-    /* Container for the charts */
-    #chartContainer {
-        max-width: 1000px;
-        margin: 2rem auto;
-    }
-
-    .department-chart {
-        margin-bottom: 2rem;
-    }
-</style>
-
-<!-- The query form -->
-<form id="reportForm" onsubmit="return false;">
-    <div>
-        <label for="partString">Part:</label>
-        <input type="text" id="partString" name="partString" required />
-    </div>
-    <div>
-        <label for="type">Department:</label>
-        <select id="type" name="type">
-            <option value="">Any</option>
-            <option value="mold">Molding</option>
-            <option value="sint">Sintering</option>
-            <option value="machin">Machining</option>
-        </select>
-    </div>
-    <div>
-        <label for="startDate">Start Date (optional):</label>
-        <input type="date" id="startDate" name="startDate" />
-    </div>
-    <div>
-        <label for="endDate">End Date (optional):</label>
-        <input type="date" id="endDate" name="endDate" />
-    </div>
-    <!-- Checkbox for filtering only out-of-spec records -->
-    <div>
-        <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" value="true" />
-        <label for="onlyOutOfSpec">Only show out-of-spec records</label>
-    </div>
-    <!-- Checkbox for including corrective actions -->
-    <div>
-        <input type="checkbox" id="includeCorrectiveActions" name="includeCorrectiveActions" value="true" />
-        <label for="includeCorrectiveActions">Include Corrective Actions</label>
-    </div>
-    <div class="button-container">
-        <button type="button" id="pdfButton" onclick="generatePdfAjax()">Generate PDF</button>
-        <button type="button" id="queryButton" onclick="queryData()">Query</button>
-    </div>
-</form>
-
-<!-- Container for the charts (will be filled dynamically) -->
-<div id="chartContainer"></div>
-
-<!-- Container for the results table (will be filled dynamically) -->
-<div id="prolinkTableRoot"></div>
-
-<!-- Include Chart.js Annotation Plugin if not already loaded in _Layout -->
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0"></script>
-
-<script>
-    // Build a common query string from the form fields.
-    function buildQueryParams() {
-        const partString = document.getElementById("partString").value;
-        const type = document.getElementById("type").value;
-        const startDate = document.getElementById("startDate").value;
-        const endDate = document.getElementById("endDate").value;
-        const onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
-        const includeCorrectiveActions = document.getElementById("includeCorrectiveActions").checked;
-        let query = "?partString=" + encodeURIComponent(partString)
-                  + "&type=" + encodeURIComponent(type)
-                  + "&startDate=" + encodeURIComponent(startDate)
-                  + "&endDate=" + encodeURIComponent(endDate)
-                  + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec)
-                  + "&includeCorrectiveActions=" + encodeURIComponent(includeCorrectiveActions);
-        return query;
-    }
-
-    // Generate PDF via AJAX.
-    async function generatePdfAjax() {
-        try {
-            showSpinner();
-            const queryString = buildQueryParams();
-            const response = await fetch('/Prolink/GeneratePdf' + queryString, {
-                method: 'GET',
-                headers: { 'Accept': 'application/pdf' }
-            });
-            if (!response.ok) {
-                throw new Error("PDF generation request failed.");
+            /* Add some spacing between form fields */
+            #reportForm div {
+                margin-bottom: 15px;
             }
-            const pdfBlob = await response.blob();
-            const blobUrl = URL.createObjectURL(pdfBlob);
-            window.open(blobUrl, '_blank');
-        } catch (err) {
-            console.error("Error generating PDF:", err);
-            alert("Error generating PDF. See console for details.");
-        } finally {
-            hideSpinner();
-        }
-    }
+            /* For non-checkbox inputs, display the label on top and make input fields full width */
+            #reportForm label {
+                display: block;
+                margin-bottom: 5px;
+            }
 
-    // Query data and build both table and charts.
-    function queryData() {
-        showSpinner();
-        const queryString = buildQueryParams();
-        fetch('/Prolink/QueryData' + queryString)
-            .then(response => response.json())
-            .then(json => {
-                hideSpinner();
-                // Build table for each department.
-                const tableContainer = document.getElementById("prolinkTableRoot");
-                tableContainer.innerHTML = "";
-                if (!json.departmentResults || !json.departmentResults.length) {
-                    tableContainer.innerHTML = "<p>No results found.</p>";
-                    return;
-                }
-                json.departmentResults.forEach(dept => {
-                    // Create a department heading.
-                    const deptHeading = document.createElement("h3");
-                    deptHeading.textContent = "Department: " + dept.departmentName;
-                    deptHeading.style.textAlign = "center";
-                    tableContainer.appendChild(deptHeading);
-                    // Create the table.
-                    const table = document.createElement("table");
-                    table.border = "1";
-                    table.cellPadding = "5";
-                    table.style.marginBottom = "30px";
-                    table.style.backgroundColor = "black";
-                    table.style.color = "goldenrod";
-                    table.style.borderColor = "goldenrod";
-                    // Build stat rows: USL, LSL, Max, Min.
-                    const rowLabels = ["USL", "LSL", "Max", "Min"];
-                    rowLabels.forEach(label => {
-                        const tr = document.createElement("tr");
-                        const tdLabel = document.createElement("td");
-                        tdLabel.style.fontWeight = "bold";
-                        tdLabel.textContent = label;
-                        tdLabel.style.backgroundColor = "black";
-                        tdLabel.style.color = "goldenrod";
-                        tr.appendChild(tdLabel);
-                        const tdBlank = document.createElement("td");
-                        tdBlank.textContent = "";
-                        tdBlank.style.backgroundColor = "black";
-                        tdBlank.style.color = "goldenrod";
-                        tr.appendChild(tdBlank);
-                        dept.dimensionColumns.forEach(dim => {
-                            let val = "";
-                            const stats = dept.dimensionStats[dim];
-                            if (stats) {
-                                if (label === "USL") val = stats.usl.toFixed(4);
-                                else if (label === "LSL") val = stats.lsl.toFixed(4);
-                                else if (label === "Max") val = stats.max.toFixed(4);
-                                else if (label === "Min") val = stats.min.toFixed(4);
-                            }
-                            const td = document.createElement("td");
-                            td.textContent = val;
-                            td.style.backgroundColor = "black";
-                            td.style.color = "goldenrod";
-                            tr.appendChild(td);
-                        });
-                        dept.factorColumns.forEach(fc => {
-                            const tdF = document.createElement("td");
-                            tdF.textContent = "";
-                            tdF.style.backgroundColor = "black";
-                            tdF.style.color = "goldenrod";
-                            tr.appendChild(tdF);
-                        });
-                        table.appendChild(tr);
-                    });
-                    // Data header row.
-                    const headerRow = document.createElement("tr");
-                    ["Record", "Date/Time"].forEach(h => {
-                        const th = document.createElement("th");
-                        th.textContent = h;
-                        th.style.backgroundColor = "black";
-                        th.style.color = "goldenrod";
-                        headerRow.appendChild(th);
-                    });
-                    dept.dimensionColumns.forEach(dim => {
-                        const th = document.createElement("th");
-                        th.textContent = dim;
-                        th.style.backgroundColor = "black";
-                        th.style.color = "goldenrod";
-                        headerRow.appendChild(th);
-                    });
-                    dept.factorColumns.forEach(fc => {
-                        const th = document.createElement("th");
-                        th.textContent = fc;
-                        th.style.backgroundColor = "black";
-                        th.style.color = "goldenrod";
-                        headerRow.appendChild(th);
-                    });
-                    table.appendChild(headerRow);
-                    // Data rows.
+            #reportForm input:not([type="checkbox"]),
+            #reportForm select {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 8px;
+            }
+        /* For checkboxes, keep label inline */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+        }
+
+            .checkbox-group label {
+                display: inline;
+                margin-left: 5px;
+            }
+        /* Center buttons with flex layout */
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="text-center">
+        <h1>Prolink Data</h1>
+        <p>Note: Querying or generating a PDF for very large datasets can take a while. Please refine your search if possible.</p>
+    </div>
+
+    <form id="reportForm" onsubmit="return false;">
+        <div>
+            <label for="partString">Part:</label>
+            <input type="text" id="partString" name="partString" required />
+        </div>
+        <div>
+            <label for="type">Department:</label>
+            <select id="type" name="type">
+                <option value="">Any</option>
+                <option value="mold">Molding</option>
+                <option value="sint">Sintering</option>
+                <option value="machin">Machining</option>
+            </select>
+        </div>
+        <div>
+            <label for="startDate">Start Date (optional):</label>
+            <input type="date" id="startDate" name="startDate" />
+        </div>
+        <div>
+            <label for="endDate">End Date (optional):</label>
+            <input type="date" id="endDate" name="endDate" />
+        </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="onlyOutOfSpec" name="onlyOutOfSpec" value="true" />
+            <label for="onlyOutOfSpec">Only show out-of-spec records</label>
+        </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="includeCorrectiveActions" name="includeCorrectiveActions" value="true" />
+            <label for="includeCorrectiveActions">Include Corrective Actions</label>
+        </div>
+        <div class="button-container">
+            <!-- PDF generation button -->
+            <button type="button" id="pdfButton" onclick="generatePdfAjax()">Generate PDF</button>
+            <!-- Graph generation button -->
+            <button type="button" id="queryButton" onclick="queryData()">View Graphs</button>
+        </div>
+    </form>
+
+    <!-- Container for the graphs -->
+    <div id="chartsRoot" style="margin-top:40px;"></div>
+
+    <script>
+        // Spinner functions (replace these with your own if needed)
+        function showSpinner() {
+            console.log("Spinner shown");
+        }
+        function hideSpinner() {
+            console.log("Spinner hidden");
+        }
+
+        // Build query parameters from form fields
+        function buildQueryParams() {
+            const partString = document.getElementById("partString").value;
+            const type = document.getElementById("type").value;
+            const startDate = document.getElementById("startDate").value;
+            const endDate = document.getElementById("endDate").value;
+            const onlyOutOfSpec = document.getElementById("onlyOutOfSpec").checked;
+            const includeCorrectiveActions = document.getElementById("includeCorrectiveActions").checked;
+
+            return "?partString=" + encodeURIComponent(partString)
+                   + "&type=" + encodeURIComponent(type)
+                   + "&startDate=" + encodeURIComponent(startDate)
+                   + "&endDate=" + encodeURIComponent(endDate)
+                   + "&onlyOutOfSpec=" + encodeURIComponent(onlyOutOfSpec)
+                   + "&includeCorrectiveActions=" + encodeURIComponent(includeCorrectiveActions);
+        }
+
+        // Function to generate graphs for each department and dimension using Chart.js
+        function generateGraphs(departmentResults) {
+            const chartsContainer = document.getElementById("chartsRoot");
+            chartsContainer.innerHTML = ''; // Clear previous graphs
+
+            departmentResults.forEach(dept => {
+                // Container for each department's graphs
+                const deptContainer = document.createElement("div");
+                deptContainer.style.marginBottom = "40px";
+
+                // Department header
+                const deptHeader = document.createElement("h3");
+                deptHeader.textContent = "Department: " + dept.departmentName;
+                deptHeader.style.textAlign = "center";
+                deptContainer.appendChild(deptHeader);
+
+                // Loop through each dimension for the department
+                dept.dimensionColumns.forEach(dim => {
+                    const graphContainer = document.createElement("div");
+                    graphContainer.style.marginBottom = "20px";
+
+                    // Create canvas element for the chart
+                    const canvas = document.createElement("canvas");
+                    canvas.id = dept.departmentName + "_" + dim + "_chart";
+                    graphContainer.appendChild(canvas);
+                    deptContainer.appendChild(graphContainer);
+
+                    // Extract labels and measurement data using recordNumber as x-axis
+                    const labels = [];
+                    const measurementData = [];
                     dept.rows.forEach(row => {
-                        const tr = document.createElement("tr");
-                        const tdRecord = document.createElement("td");
-                        tdRecord.textContent = row.recordNumber;
-                        tdRecord.style.backgroundColor = "black";
-                        tdRecord.style.color = "goldenrod";
-                        tr.appendChild(tdRecord);
-                        const tdDate = document.createElement("td");
-                        const dateVal = new Date(row.measureDate).toLocaleString();
-                        tdDate.textContent = dateVal;
-                        tdDate.style.backgroundColor = "black";
-                        tdDate.style.color = "goldenrod";
-                        tr.appendChild(tdDate);
-                        dept.dimensionColumns.forEach(dim => {
-                            const tdM = document.createElement("td");
-                            let val = row.measurements[dim] || "";
-                            tdM.textContent = val;
-                            tdM.style.backgroundColor = "black";
-                            tdM.style.color = "goldenrod";
-                            tdM.style.textAlign = "right";
-                            const stats = dept.dimensionStats[dim];
-                            if (stats && val !== "") {
-                                const meas = parseFloat(val);
-                                if (!isNaN(meas) && (meas > stats.usl || meas < stats.lsl)) {
-                                    tdM.style.color = "red";
-                                }
-                            }
-                            tr.appendChild(tdM);
-                        });
-                        dept.factorColumns.forEach(fc => {
-                            const tdF = document.createElement("td");
-                            let val = (row.factorValues && row.factorValues[fc]) || "";
-                            tdF.textContent = val;
-                            tr.appendChild(tdF);
-                        });
-                        table.appendChild(tr);
-                        // Append corrective actions row if available.
-                        if (row.correctiveActions && row.correctiveActions.length > 0) {
-                            const trCA = document.createElement("tr");
-                            const tdCA = document.createElement("td");
-                            tdCA.colSpan = 2 + dept.dimensionColumns.length + dept.factorColumns.length;
-                            tdCA.style.backgroundColor = "black";
-                            tdCA.style.color = "cyan";
-                            tdCA.textContent = "Corrective Actions: " + row.correctiveActions.map(ca => ca.actionRef + ": " + ca.actionDesc).join("; ");
-                            trCA.appendChild(tdCA);
-                            table.appendChild(trCA);
+                        if (row.measurements && row.measurements[dim]) {
+                            labels.push(row.recordNumber); // You may use row.measureDate if preferred
+                            measurementData.push(parseFloat(row.measurements[dim]));
                         }
                     });
-                    tableContainer.appendChild(table);
-                });
-                // Now plot charts for each department.
-                plotAllDepartments(json.departmentResults);
-            })
-            .catch(err => {
-                console.error("Error querying pivoted data:", err);
-                document.getElementById("prolinkTableRoot").innerHTML =
-                    "<p style='color:red;'>Error loading data.</p>";
-            });
-    }
 
-    // Function to plot charts for each department and each dimension.
-        // Function to plot charts for each department and for each dimension.
-    function plotAllDepartments(departmentResults) {
-        const container = document.getElementById("chartContainer");
-        container.innerHTML = ""; // Clear previous charts.
-        departmentResults.forEach(dept => {
-            // Create a heading for the department charts.
-            const deptHeading = document.createElement("h4");
-            deptHeading.textContent = "Charts for Department: " + dept.departmentName;
-            deptHeading.style.textAlign = "center";
-            container.appendChild(deptHeading);
+                    // Skip this dimension if there is no data
+                    if (measurementData.length === 0) return;
 
-            // For each dimension in the department, create a chart.
-            dept.dimensionColumns.forEach(dim => {
-                // Create a container div for the chart.
-                const chartDiv = document.createElement("div");
-                chartDiv.className = "department-chart";
-                // Create a canvas element.
-                const canvas = document.createElement("canvas");
-                canvas.id = "chart_" + dept.departmentName + "_" + dim;
-                chartDiv.appendChild(canvas);
-                container.appendChild(chartDiv);
+                    // Retrieve USL and LSL values for this dimension
+                    const stats = dept.dimensionStats[dim];
+                    if (!stats) return;
+                    const usl = stats.usl;
+                    const lsl = stats.lsl;
 
-                // Build data arrays: use measurement dates (formatted as dates) as x-axis labels and extract measurement values.
-                let labels = [];
-                let dataValues = [];
-                dept.rows.forEach(row => {
-                    if (row.measurements[dim] !== undefined) {
-                        labels.push(new Date(row.measureDate).toLocaleDateString());
-                        dataValues.push(parseFloat(row.measurements[dim]));
-                    }
-                });
+                    // Create constant arrays for USL and LSL matching the number of data points
+                    const uslData = new Array(measurementData.length).fill(usl);
+                    const lslData = new Array(measurementData.length).fill(lsl);
 
-                // Retrieve USL and LSL values for this dimension.
-                let usl = 0, lsl = 0;
-                if (dept.dimensionStats && dept.dimensionStats[dim]) {
-                    usl = parseFloat(dept.dimensionStats[dim].usl);
-                    lsl = parseFloat(dept.dimensionStats[dim].lsl);
-                }
-                let uslValues = Array(labels.length).fill(usl);
-                let lslValues = Array(labels.length).fill(lsl);
-
-                // Create the Chart.js chart.
-                const ctx = canvas.getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: dim,
-                                data: dataValues,
-                                fill: false,
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                tension: 0.1
-                            },
-                            {
-                                label: 'USL',
-                                data: uslValues,
-                                borderColor: 'rgba(255, 0, 0, 1)',
-                                borderDash: [5, 5],
-                                fill: false,
-                                pointRadius: 0
-                            },
-                            {
-                                label: 'LSL',
-                                data: lslValues,
-                                borderColor: 'rgba(0, 0, 255, 1)',
-                                borderDash: [5, 5],
-                                fill: false,
-                                pointRadius: 0
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            // Add a title to the chart with the dimension name.
-                            title: {
-                                display: true,
-                                text: dim,
-                                font: {
-                                    size: 16,
-                                    weight: 'bold'
+                    // Create the chart using Chart.js
+                    const ctx = canvas.getContext("2d");
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Measurement',
+                                    data: measurementData,
+                                    borderColor: 'blue',
+                                    fill: false,
+                                    tension: 0.1,
+                                    pointRadius: 4
+                                },
+                                {
+                                    label: 'USL (' + usl.toFixed(4) + ')',
+                                    data: uslData,
+                                    borderColor: 'red',
+                                    borderDash: [5, 5],
+                                    fill: false,
+                                    pointRadius: 0,
+                                    tension: 0
+                                },
+                                {
+                                    label: 'LSL (' + lsl.toFixed(4) + ')',
+                                    data: lslData,
+                                    borderColor: 'green',
+                                    borderDash: [5, 5],
+                                    fill: false,
+                                    pointRadius: 0,
+                                    tension: 0
+                                }
+                            ]
+                        },
+                        options: {
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: dim  // Chart title is the dimension name
                                 }
                             },
-                            annotation: {
-                                annotations: {
-                                    uslLine: {
-                                        type: 'line',
-                                        yMin: usl,
-                                        yMax: usl,
-                                        borderColor: 'rgba(255, 0, 0, 1)',
-                                        borderWidth: 2,
-                                        label: {
-                                            enabled: true,
-                                            content: 'USL: ' + usl.toFixed(4),
-                                            backgroundColor: 'rgba(255, 0, 0, 0.75)'
-                                        }
-                                    },
-                                    lslLine: {
-                                        type: 'line',
-                                        yMin: lsl,
-                                        yMax: lsl,
-                                        borderColor: 'rgba(0, 0, 255, 1)',
-                                        borderWidth: 2,
-                                        label: {
-                                            enabled: true,
-                                            content: 'LSL: ' + lsl.toFixed(4),
-                                            backgroundColor: 'rgba(0, 0, 255, 0.75)'
-                                        }
+                            scales: {
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'Record Number'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Measurement Value'
                                     }
                                 }
                             }
-                        },
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Measurement Date'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: dim + ' Value'
-                                }
-                            }
                         }
-                    }
+                    });
                 });
-            });
-        });
-    }
 
-</script>
+                chartsContainer.appendChild(deptContainer);
+            });
+        }
+
+        // PDF generation function using async/await
+        async function generatePdfAjax() {
+            try {
+                showSpinner();
+                const queryString = buildQueryParams();
+                const response = await fetch('/Prolink/GeneratePdf' + queryString, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/pdf' }
+                });
+                if (!response.ok) {
+                    throw new Error("PDF generation request failed with status " + response.status);
+                }
+                const pdfBlob = await response.blob();
+                const blobUrl = URL.createObjectURL(pdfBlob);
+                window.open(blobUrl, '_blank');  // Open the generated PDF in a new tab/window
+            } catch (err) {
+                console.error("Error generating PDF:", err);
+                alert("Error generating PDF. See console for details.");
+            } finally {
+                hideSpinner();
+            }
+        }
+
+        // Function to query data and generate graphs only
+        function queryData() {
+            showSpinner();
+            const queryString = buildQueryParams();
+            fetch('/Prolink/QueryData' + queryString)
+                .then(response => response.json())
+                .then(json => {
+                    hideSpinner();
+                    const chartsContainer = document.getElementById("chartsRoot");
+                    chartsContainer.innerHTML = ""; // Clear any previous content
+
+                    if (!json.departmentResults || !json.departmentResults.length) {
+                        chartsContainer.innerHTML = "<p>No results found.</p>";
+                        return;
+                    }
+
+                    // Generate graphs based on the returned department results
+                    generateGraphs(json.departmentResults);
+                })
+                .catch(err => {
+                    console.error("Error querying pivoted data:", err);
+                    document.getElementById("chartsRoot").innerHTML =
+                        "<p style='color:red;'>Error loading data.</p>";
+                });
+        }
+    </script>
+</body>
+</html>
