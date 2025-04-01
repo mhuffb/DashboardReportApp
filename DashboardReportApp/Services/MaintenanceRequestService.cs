@@ -17,6 +17,7 @@
     using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
     using Microsoft.AspNetCore.Hosting;
     using DashboardReportApp.Services;
+    using Microsoft.Data.SqlClient;
 
     public class MaintenanceRequestService
     {
@@ -424,9 +425,58 @@ Problem: {request.Problem}"
             }
         }
 
-       
 
+        public async Task<int> GetOpenMaintenanceCount(string equipment)
+        {
+            int count = 0;
+            // Adjust the query as needed. Here we assume an open request is defined by the status being "Open".
+            string query = "SELECT COUNT(*) FROM maintenance WHERE equipment = @equipment AND LOWER(status) = 'open'";
 
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@equipment", equipment);
+                    count = Convert.ToInt32(await command.ExecuteScalarAsync());
+                }
+            }
+            return count;
+        }
+
+        public async Task<List<MaintenanceRequestModel>> GetAllOpenRequestsAsync()
+        {
+            var requests = new List<MaintenanceRequestModel>();
+            // Query for open requests (assuming status is set to "Open")
+            string query = "SELECT * FROM maintenance WHERE LOWER(status) = 'open'";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            // Create and populate your MaintenanceRequestModel.
+                            // Adjust property names as needed.
+                            var request = new MaintenanceRequestModel
+                            {
+                                Id = Convert.ToInt32(reader["id"]),
+                                Equipment = reader["Equipment"]?.ToString(),
+                                Requester = reader["Requester"]?.ToString(),
+                                RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
+                                Problem = reader["Problem"]?.ToString(),
+                                // Populate additional fields as needed.
+                            };
+                            requests.Add(request);
+                        }
+                    }
+                }
+            }
+            return requests;
+        }
     }
 
 }

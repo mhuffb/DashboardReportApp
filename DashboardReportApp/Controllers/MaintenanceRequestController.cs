@@ -9,18 +9,18 @@ namespace DashboardReportApp.Controllers
     [Route("MaintenanceRequest")]
     public class MaintenanceRequestController : Controller
     {
-        private readonly MaintenanceRequestService _service;
+        private readonly MaintenanceRequestService _maintenanceService;
 
         public MaintenanceRequestController( MaintenanceRequestService service)
         {
-            _service = service;
+            _maintenanceService = service;
         }
 
 
         [HttpPost("SaveImagePath")]
         public async Task<IActionResult> SaveImagePath(int id, string imagePath)
         {
-            bool success = await _service.UpdateFile1Link(id, imagePath);
+            bool success = await _maintenanceService.UpdateFile1Link(id, imagePath);
             if (success)
                 TempData["Success"] = "Image path updated successfully.";
             else
@@ -33,11 +33,11 @@ namespace DashboardReportApp.Controllers
         public async Task<IActionResult> Index()
         {
             // Use GetAllRequests() to return every maintenance request (open and closed)
-            var requests = _service.GetAllRequests();
+            var requests = _maintenanceService.GetAllRequests();
 
             // Populate Requesters and EquipmentList as before
-            ViewData["Requesters"] = await _service.GetRequestersAsync();
-            ViewData["EquipmentList"] = await _service.GetEquipmentListAsync();
+            ViewData["Requesters"] = await _maintenanceService.GetRequestersAsync();
+            ViewData["EquipmentList"] = await _maintenanceService.GetEquipmentListAsync();
             return View(requests);
         }
 
@@ -90,7 +90,7 @@ namespace DashboardReportApp.Controllers
 
                 // First, add the new request without the file.
                 Console.WriteLine("[DEBUG] About to call AddRequestAsync...");
-                bool insertSuccess = await _service.AddRequestAsync(request);
+                bool insertSuccess = await _maintenanceService.AddRequestAsync(request);
                 Console.WriteLine($"[DEBUG] Insert success? {insertSuccess}");
 
                 if (!insertSuccess)
@@ -129,7 +129,7 @@ namespace DashboardReportApp.Controllers
 
                     // Update the record with the new file path.
                     Console.WriteLine("[DEBUG] Updating DB record with file path...");
-                    bool fileUpdateSuccess = await _service.UpdateFile1Link(request.Id, filePath);
+                    bool fileUpdateSuccess = await _maintenanceService.UpdateFile1Link(request.Id, filePath);
                     Console.WriteLine($"[DEBUG] File update success? {fileUpdateSuccess}");
                     if (!fileUpdateSuccess)
                     {
@@ -218,20 +218,20 @@ namespace DashboardReportApp.Controllers
                     }
                 }
 
-                return View("AdminView", _service.GetAllRequests());
+                return View("AdminView", _maintenanceService.GetAllRequests());
             }
 
             try
             {
                 // Call the service to update the request
-                _service.UpdateRequest(model, FileUpload);
+                _maintenanceService.UpdateRequest(model, FileUpload);
 
                 return RedirectToAction("AdminView");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
-                return View("AdminView", _service.GetAllRequests());
+                return View("AdminView", _maintenanceService.GetAllRequests());
             }
         }
 
@@ -267,7 +267,7 @@ namespace DashboardReportApp.Controllers
                 Console.WriteLine("[DEBUG] File saved successfully.");
 
                 // Ensure NULL safety when updating the database
-                bool success = await _service.UpdateFile1Link(id, filePath ?? "");
+                bool success = await _maintenanceService.UpdateFile1Link(id, filePath ?? "");
 
                 if (success)
                 {
@@ -287,7 +287,21 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-
+        // New endpoint to return all open maintenance requests
+        [HttpGet("ApiGetAllOpenRequests")]
+        public async Task<IActionResult> ApiGetAllOpenRequests()
+        {
+            try
+            {
+                var requests = await _maintenanceService.GetAllOpenRequestsAsync();
+                return Ok(requests);
+            }
+            catch (Exception ex)
+            {
+                // Optionally log the exception here
+                return StatusCode(500, "Internal server error");
+            }
+        }
     }
 
 }

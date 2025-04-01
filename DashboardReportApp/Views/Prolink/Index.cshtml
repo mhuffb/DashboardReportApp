@@ -52,10 +52,12 @@
     </div>
 
     <form id="reportForm" onsubmit="return false;">
+        <!-- Updated Part field: note the removal of "required" and the new placeholder -->
         <div>
-            <label for="partString">Part:</label>
-            <input type="text" id="partString" name="partString" required />
+            <label for="partString">Part (leave blank for all parts):</label>
+            <input type="text" id="partString" name="partString" placeholder="e.g., part number or leave blank" />
         </div>
+
         <div>
             <label for="type">Department:</label>
             <select id="type" name="type">
@@ -257,7 +259,12 @@
         }
 
         // Function to query data and generate graphs only
-        function queryData() {
+               function queryData() {
+            const partString = document.getElementById("partString").value.trim();
+            if (partString === "") {
+                alert("Please enter a part number to generate graphs.");
+                return;
+            }
             showSpinner();
             const queryString = buildQueryParams();
             fetch('/Prolink/QueryData' + queryString)
@@ -272,7 +279,7 @@
                         return;
                     }
 
-                    // Generate graphs based on the returned department results
+                    // Generate graphs based on the returned department results.
                     generateGraphs(json.departmentResults);
                 })
                 .catch(err => {
@@ -281,6 +288,7 @@
                         "<p style='color:red;'>Error loading data.</p>";
                 });
         }
+
     </script>
 </body>
 </html>
