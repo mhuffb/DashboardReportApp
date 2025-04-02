@@ -1,17 +1,18 @@
 ﻿using DashboardReportApp.Models;
 using MySql.Data.MySqlClient;
+using System.Text.Json;
 
 namespace DashboardReportApp.Services
 {
     public class MoldingService
     {
         private readonly string _connectionString;
-        private readonly PressRunLogService _pressRunLogService; // We'll reuse its method
+        private readonly SharedService _sharedService;
 
-        public MoldingService(IConfiguration configuration, PressRunLogService pressRunLogService)
+        public MoldingService(IConfiguration configuration, SharedService sharedService)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _pressRunLogService = pressRunLogService;
+            _sharedService = sharedService;
         }
 
 
@@ -20,7 +21,7 @@ namespace DashboardReportApp.Services
         {
             var pressRuns = GetPressRuns();
             var pressSetups = GetPressSetups();
-            var pressLotChanges = GetPressLotChanges();
+            var pressLotChanges = GetPressMixBagChanges();
 
             return new MoldingModel
             {
@@ -30,19 +31,19 @@ namespace DashboardReportApp.Services
             };
         }
 
-        private List<PressRunLogModel> GetPressRuns()
+        public List<PressRunLogModel> GetPressRuns()
         {
-            return QueryTable<PressRunLogModel>("pressrun");
+            return QueryTable<PressRunLogModel>("pressruntime");
         }
 
-        private List<PressSetupModel> GetPressSetups()
+        public List<PressSetupModel> GetPressSetups()
         {
-            return QueryTable<PressSetupModel>("presssetup");
+            return QueryTable<PressSetupModel>("presssetuptime");
         }
 
-        private List<PressMixBagChangeModel> GetPressLotChanges()
+        private List<PressMixBagChangeModel> GetPressMixBagChanges()
         {
-            return QueryTable<PressMixBagChangeModel>("presslotchange");
+            return QueryTable<PressMixBagChangeModel>("pressmixbagchange");
         }
 
         private List<T> QueryTable<T>(string tableName) where T : new()
@@ -111,7 +112,7 @@ namespace DashboardReportApp.Services
             // Start all tasks concurrently
             var tasks = machineList.Select(async machine =>
             {
-                int? count = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+                int? count = await TryGetDeviceCountOrNull(machine);
                 return new { machine, count };
             });
 
@@ -120,6 +121,74 @@ namespace DashboardReportApp.Services
 
             // Build and return the dictionary from the results
             return results.ToDictionary(x => x.machine, x => x.count);
+        }
+
+        private string MapMachineToIp(string machine)
+        {
+            return _sharedService.GetDeviceIp(machine);
+        }
+
+        public async Task<int?> TryGetDeviceCountOrNull(string machine)
+        {
+            string deviceIp;
+            try
+            {
+                deviceIp = MapMachineToIp(machine);
+            }
+            catch
+            {
+                return null;
+            }
+
+            try
+            {
+                // Configure a 5-second timeout (adjust as needed)
+                using var httpClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+
+                string url = $"http://{deviceIp}/api/picodata";
+                HttpResponseMessage response = await httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                string json = (await response.Content.ReadAsStringAsync()).Trim();
+                Console.WriteLine("Device JSON: " + json);
+
+                // Attempt to parse "count_value" from a JSON object
+                if (json.StartsWith("{"))
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    using var doc = JsonDocument.Parse(json);
+                    JsonElement root = doc.RootElement;
+                    if (root.TryGetProperty("count_value", out JsonElement countElement))
+                    {
+                        if (countElement.ValueKind == JsonValueKind.Number && countElement.TryGetInt32(out int deviceCount))
+                        {
+                            return deviceCount;
+                        }
+                        else if (countElement.ValueKind == JsonValueKind.String)
+                        {
+                            string countStr = countElement.GetString();
+                            if (int.TryParse(countStr, out int parsedCount))
+                            {
+                                return parsedCount;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: check if JSON is just a plain integer
+                if (int.TryParse(json, out int plainCount))
+                {
+                    return plainCount;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in TryGetDeviceCountOrNull: " + ex.Message);
+            }
+            return null;
         }
 
     }

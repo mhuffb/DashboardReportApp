@@ -13,50 +13,18 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
         private readonly SharedService _sharedService;
+        private readonly MoldingService _moldingService;
 
-        public PressSetupService(IConfiguration config, SharedService sharedService)
+        public PressSetupService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _sharedService = sharedService;
+            _moldingService = moldingService;
         }
         public List<PressSetupModel> GetAllRecords()
         {
             var records = new List<PressSetupModel>();
-            string query = "SELECT * FROM presssetup order by id desc";
-
-
-            using (var connection = new MySqlConnection(_connectionStringMySQL))
-            using (var command = new MySqlCommand(query, connection))
-            {
-
-                connection.Open();
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        records.Add(new PressSetupModel
-                        {
-                            Id = Convert.ToInt32(reader["id"]),
-                            Timestamp = reader["timestamp"] as DateTime?,
-                            Part = reader["part"].ToString(),
-                            Component = reader["component"].ToString(),
-                            Operator = reader["operator"].ToString(),
-                            StartDateTime = reader["startDateTime"] as DateTime?,
-                            EndDateTime = reader["endDateTime"] as DateTime?,
-                            Machine = reader["machine"].ToString(),
-                            PressType = reader["pressType"].ToString(),
-                            Difficulty = reader["difficulty"].ToString(),
-                            SetupComp = reader["setupComp"].ToString(),
-                            AssistanceReq = reader["assistanceReq"].ToString(),
-                            AssistedBy = reader["assistedBy"].ToString(),
-                            Notes = reader["notes"].ToString(),
-                            Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
-                            Run = reader["run"].ToString(),
-                            ProdNumber = reader["prodNumber"].ToString()
-                        });
-                    }
-                }
-            }
+            records = _moldingService.GetPressSetups();
             return records;
         }
 

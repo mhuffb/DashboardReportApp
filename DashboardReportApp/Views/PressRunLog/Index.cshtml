@@ -235,19 +235,23 @@
         const rawData = container.getAttribute("data-records");
         const data = JSON.parse(rawData);
         const columns = [
-            { key: "Id", label: "ID" },
-            { key: "Part", label: "Part" },
-            { key: "ProdNumber", label: "Prod Number" },
-            { key: "Run", label: "Run" },
-            { key: "Machine", label: "Machine" },
-            { key: "Operator", label: "Operator" },
-            { key: "SkidNumber", label: "SkidNumber" },
-            { key: "StartDateTime", label: "Start Time" },
-            { key: "EndDateTime", label: "End Time" },
-            { key: "PcsStart", label: "Pcs Start" },
-            { key: "PcsEnd", label: "Pcs End" },
-            { key: "Scrap", label: "Scrap" },
-            { key: "Notes", label: "Notes" }
+                { key: "Id", label: "ID" },
+                { key: "Part", label: "Part" },
+                { key: "Component", label: "Component" },
+                { key: "ProdNumber", label: "Prod Number" },
+                { key: "Run", label: "Run" },
+                { key: "Machine", label: "Machine" },
+                { key: "Operator", label: "Operator" },
+                { key: "StartDateTime", label: "Start Time" },
+                { key: "EndDateTime", label: "End Time" },
+                { key: "ElapsedTime", label: "ElapsedTime" },
+                { key: "SkidNumber", label: "SkidNumber" },
+                { key: "PcsStart", label: "Pcs Start" },
+                { key: "PcsEnd", label: "Pcs End" },
+                { key: "Pcs", label: "Pcs" },
+                { key: "CycleTime", label: "CycleTime" },
+                { key: "Scrap", label: "Scrap" },
+                { key: "Notes", label: "Notes" }
         ];
 
         if (window.renderMyDataTable) {

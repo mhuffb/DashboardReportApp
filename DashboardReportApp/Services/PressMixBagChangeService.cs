@@ -55,7 +55,7 @@
             var partsWithRuns = new List<PressSetupModel>();
 
             const string query = @"
-        SELECT part, run, operator, machine 
+        SELECT part, component, prodNumber, run, operator, machine 
         FROM presssetup 
         WHERE open = 1 
         ORDER BY part, run";
@@ -69,6 +69,8 @@
             while (await reader.ReadAsync())
             {
                 var part = reader["part"].ToString();
+                var component = reader["component"].ToString();
+                var prodNumber = reader["prodNumber"].ToString();
                 var run = reader["run"].ToString();
                 var operatorName = reader["operator"]?.ToString() ?? "N/A";
                 var machine = reader["machine"]?.ToString() ?? "N/A";
@@ -78,6 +80,8 @@
                     partsWithRuns.Add(new PressSetupModel
                     {
                         Part = part,
+                        Component = component,
+                        ProdNumber = prodNumber,
                         Run = run,
                         Operator = operatorName,
                         Machine = machine
@@ -91,25 +95,34 @@
 
 
 
-        public async Task InsertPressLotChangeAsync(
-    string part,
-    string time,
-    string op,
-    string machine,
-    string lot,
-    string mix,
-    string notes)
+        public async Task InsertPressMixBagChangeAsync(
+     string part,
+     string component,
+     string prodNumber,
+     string run,
+     string time,
+     string op,
+     string machine,
+     string lot,
+     string mix,
+     string notes)
         {
-            Console.WriteLine($"Inserting: Part={part}, Time={time}, Operator={op}, Machine={machine}, Lot={lot}, Mix={mix}, Notes={notes}");
+            Console.WriteLine($"Inserting: Part={part}, Component={component}, ProdNumber={prodNumber}, Run={run}, Time={time}, Operator={op}, Machine={machine}, Lot={lot}, Mix={mix}, Notes={notes}");
 
-            const string query = @"INSERT INTO presslotchange (part, sentDateTime, operator, machine, lotNumber, mixNumber, notes) 
-                           VALUES (@part, @sentDateTime, @operator, @machine, @lotNumber, @mixNumber, @notes)";
+            const string query = @"
+        INSERT INTO pressmixbagchange 
+            (part, component, prodNumber, run, sentDateTime, operator, machine, lotNumber, mixNumber, notes) 
+        VALUES 
+            (@part, @component, @prodNumber, @run, @sentDateTime, @operator, @machine, @lotNumber, @mixNumber, @notes)";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
 
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@part", part);
+            command.Parameters.AddWithValue("@component", component);
+            command.Parameters.AddWithValue("@prodNumber", prodNumber);
+            command.Parameters.AddWithValue("@run", run);
             command.Parameters.AddWithValue("@sentDateTime", time);
             command.Parameters.AddWithValue("@operator", op);
             command.Parameters.AddWithValue("@machine", machine);
@@ -120,13 +133,14 @@
             await command.ExecuteNonQueryAsync();
         }
 
+
         public async Task<List<PressMixBagChangeModel>> GetAllMixBagChangesAsync()
         {
             var records = new List<PressMixBagChangeModel>();
 
             const string query = @"
         SELECT id, part, run, operator, machine, lotNumber, mixNumber, sentDateTime, notes
-        FROM presslotchange
+        FROM pressmixbagchange
         ORDER BY id DESC";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);

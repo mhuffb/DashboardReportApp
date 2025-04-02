@@ -11,11 +11,12 @@ namespace DashboardReportApp.Controllers
     {
         private readonly PressRunLogService _pressRunLogService;
         private readonly SharedService _sharedService;
-
-        public PressRunLogController(PressRunLogService servicePressRun, SharedService serviceShared)
+        private readonly MoldingService _moldingService;
+        public PressRunLogController(PressRunLogService servicePressRun, SharedService serviceShared, MoldingService serviceMolding)
         {
             _pressRunLogService = servicePressRun;
             _sharedService = serviceShared;
+            _moldingService = serviceMolding;
         }
 
         [HttpGet]
@@ -38,7 +39,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> LoadLoginModal(string machine)
         {
-            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            int? deviceCount = await _moldingService.TryGetDeviceCountOrNull(machine);
             ViewBag.Machine = machine;
             ViewBag.DeviceCount = deviceCount ?? 0;
 
@@ -96,7 +97,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> LoadLogoutModal(int runId, string machine)
         {
-            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            int? deviceCount = await _moldingService.TryGetDeviceCountOrNull(machine);
             ViewBag.RunId = runId;
             ViewBag.Machine = machine;
             ViewBag.DeviceCount = deviceCount ?? 0;
@@ -116,7 +117,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> LoadEndRunModal(int runId, string machine)
         {
-            int? deviceCount = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            int? deviceCount = await _moldingService.TryGetDeviceCountOrNull(machine);
             ViewBag.RunId = runId;
             ViewBag.Machine = machine;
             ViewBag.DeviceCount = deviceCount ?? 0;
@@ -126,7 +127,7 @@ namespace DashboardReportApp.Controllers
         public async Task<IActionResult> ApiGetDeviceCount(string machine)
         {
             // 1) Call your service to get device count or null
-            int? count = await _pressRunLogService.TryGetDeviceCountOrNull(machine);
+            int? count = await _moldingService.TryGetDeviceCountOrNull(machine);
             // 2) Return JSON
             return Json(new { deviceCount = count ?? 0 });
         }

@@ -55,17 +55,21 @@
                                 @foreach (var entry in ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel> ?? new List<DashboardReportApp.Models.PressSetupModel>())
                                 {
                                     <option value="@entry.Part"
+                                            data-component="@entry.Component"
+                                            data-prodnumber="@entry.ProdNumber"
                                             data-run="@entry.Run"
                                             data-operator="@entry.Operator"
                                             data-machine="@entry.Machine">
-                                        @entry.Part (Run: @entry.Run)
+                                        @entry.Part -> @entry.Component (Production Number: @entry.ProdNumber, Run: @entry.Run)
                                     </option>
                                 }
                             </select>
-
-                            <!-- Hidden Run Number -->
+                            <!-- Hidden fields to send extra data -->
                             <input type="hidden" id="RunNumber" name="Run" />
+                            <input type="hidden" id="Component" name="Component" />
+                            <input type="hidden" id="ProdNumber" name="ProdNumber" />
                         </div>
+
 
                         <!-- Operator Field (dropdown) -->
                         <div class="mb-3">
@@ -130,22 +134,27 @@
 </div>
 
 <script>
-    function updateFields() {
+        function updateFields() {
         const partSelect = document.getElementById("partNumber");
         const runHidden = document.getElementById("RunNumber");
+        const componentHidden = document.getElementById("Component");
+        const prodNumberHidden = document.getElementById("ProdNumber");
         const operatorSelect = document.getElementById("operatorName");
         const machineField = document.getElementById("machine");
 
         const selectedOption = partSelect.options[partSelect.selectedIndex];
         if (!selectedOption) return;
 
-        // Get data attributes from the selected option
+        // Update hidden and form fields based on selected option's data attributes
         runHidden.value = selectedOption.getAttribute("data-run") || "";
+        componentHidden.value = selectedOption.getAttribute("data-component") || "";
+        prodNumberHidden.value = selectedOption.getAttribute("data-prodnumber") || "";
+
         const opValue = selectedOption.getAttribute("data-operator") || "";
-        // Set the default operator in the dropdown
         operatorSelect.value = opValue;
         machineField.value = selectedOption.getAttribute("data-machine") || "";
     }
+
 </script>
 <script src="/js/mydatatable.bundle.js"></script>
 <script>

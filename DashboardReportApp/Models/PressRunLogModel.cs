@@ -22,6 +22,8 @@
         public sbyte Open { get; set; }
         public int SkidNumber { get; set; }
         public int Pcs { get; set; }
+        public decimal ElapsedTime { get; set; }
+        public decimal CycleTime { get; set; }
     }
 
     public class OpenSetups

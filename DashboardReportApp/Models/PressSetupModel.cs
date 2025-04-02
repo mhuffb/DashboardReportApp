@@ -23,6 +23,7 @@ namespace DashboardReportApp.Models
         public string ProdNumber { get; set; }
         public string? Component { get; set; }
         public string Subcomponent { get; set; }
+        public decimal ElapsedTime { get; set; }
     }
     public class PressSetupLoginViewModel
     {

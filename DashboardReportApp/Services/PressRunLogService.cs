@@ -30,12 +30,13 @@ namespace DashboardReportApp.Services
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringDataflex;
         private readonly SharedService _sharedService;
-
-        public PressRunLogService(IConfiguration config, SharedService sharedService)
+        private readonly MoldingService _moldingService;
+        public PressRunLogService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
             _sharedService = sharedService;
+            _moldingService = moldingService;
         }
 
         #region Device Mapping / Count
@@ -46,79 +47,14 @@ namespace DashboardReportApp.Services
         /// Otherwise, it is mapped using a dictionary.
         /// </summary>
         // Instead of your private MapMachineToIp method, you can do:
-        private string MapMachineToIp(string machine)
-        {
-            return _sharedService.GetDeviceIp(machine);
-        }
+       
 
         /// <summary>
         /// Attempts to query the device’s count.
         /// Returns an integer if successful; otherwise, null.
         /// This method uses multiple parsing strategies.
         /// </summary>
-        public async Task<int?> TryGetDeviceCountOrNull(string machine)
-        {
-            string deviceIp;
-            try
-            {
-                deviceIp = MapMachineToIp(machine);
-            }
-            catch
-            {
-                return null;
-            }
-
-            try
-            {
-                // Configure a 5-second timeout (adjust as needed)
-                using var httpClient = new HttpClient
-                {
-                    Timeout = TimeSpan.FromSeconds(5)
-                };
-
-                string url = $"http://{deviceIp}/api/picodata";
-                HttpResponseMessage response = await httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-
-                string json = (await response.Content.ReadAsStringAsync()).Trim();
-                Console.WriteLine("Device JSON: " + json);
-
-                // Attempt to parse "count_value" from a JSON object
-                if (json.StartsWith("{"))
-                {
-                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                    using var doc = JsonDocument.Parse(json);
-                    JsonElement root = doc.RootElement;
-                    if (root.TryGetProperty("count_value", out JsonElement countElement))
-                    {
-                        if (countElement.ValueKind == JsonValueKind.Number && countElement.TryGetInt32(out int deviceCount))
-                        {
-                            return deviceCount;
-                        }
-                        else if (countElement.ValueKind == JsonValueKind.String)
-                        {
-                            string countStr = countElement.GetString();
-                            if (int.TryParse(countStr, out int parsedCount))
-                            {
-                                return parsedCount;
-                            }
-                        }
-                    }
-                }
-
-                // Fallback: check if JSON is just a plain integer
-                if (int.TryParse(json, out int plainCount))
-                {
-                    return plainCount;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error in TryGetDeviceCountOrNull: " + ex.Message);
-            }
-            return null;
-        }
-
+        
 
 
         #endregion
@@ -698,19 +634,7 @@ WHERE endDateTime IS NULL";
         public async Task<List<PressRunLogModel>> GetAllRunsAsync()
         {
             var list = new List<PressRunLogModel>();
-            const string sql = @"
-SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
-FROM pressrun
-ORDER BY id DESC";
-            await using var conn = new MySqlConnection(_connectionStringMySQL);
-            await conn.OpenAsync();
-            await using var cmd = new MySqlCommand(sql, conn);
-            await using var rdr = await cmd.ExecuteReaderAsync();
-            while (await rdr.ReadAsync())
-            {
-                list.Add(ParseRunFromReader(rdr));
-            }
+            list = _moldingService.GetPressRuns();
             return list;
         }
 

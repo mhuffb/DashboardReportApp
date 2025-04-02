@@ -42,11 +42,14 @@ public class PressMixBagChangeController : Controller
         try
         {
             // Debugging: Log received values
-            Console.WriteLine($"Received: Part={model.Part}, Run={model.Run}, Operator={model.Operator}, Machine={model.Machine}, Lot={model.LotNumber}, Mix={model.MixNumber}, Notes={model.Notes}");
+            Console.WriteLine($"Received: Part={model.Part}, Component={model.Component}, ProdNumber={model.ProdNumber}, Run={model.Run}, Operator={model.Operator}, Machine={model.Machine}, Lot={model.LotNumber}, Mix={model.MixNumber}, Notes={model.Notes}");
 
-            // Insert into the database
-            await _pressMixBagChangeService.InsertPressLotChangeAsync(
+            // Insert into the database with extra parameters
+            await _pressMixBagChangeService.InsertPressMixBagChangeAsync(
                 model.Part,
+                model.Component,
+                model.ProdNumber,
+                model.Run,
                 DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 model.Operator,
                 model.Machine,
