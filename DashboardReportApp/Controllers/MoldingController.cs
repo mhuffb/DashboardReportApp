@@ -1,8 +1,12 @@
 ﻿using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
+    [Route("Molding")]
     public class MoldingController : Controller
     {
         private readonly MoldingService _moldingService;
@@ -20,14 +24,15 @@ namespace DashboardReportApp.Controllers
             var viewModel = _moldingService.GetData();
             return View(viewModel);
         }
+
+        [Route("ApiGetAllMachineCounts")]
         [HttpGet]
         public async Task<IActionResult> ApiGetAllMachineCounts()
         {
-            // Returns JSON: { "1": 123, "2": 456, ... }
             Dictionary<string, int?> allCounts = await _moldingService.GetAllMachineCountsAsync();
             return Json(allCounts);
         }
-
+        [Route("ApiGetLatestPart")]
         [HttpGet]
         public async Task<IActionResult> ApiGetLatestPart([FromQuery] string machine)
         {
@@ -36,9 +41,7 @@ namespace DashboardReportApp.Controllers
                 return BadRequest("Machine parameter is required.");
             }
 
-            // Assuming MoldingService wraps SharedService; otherwise, adjust to get a SharedService instance.
             string partName = await _sharedService.GetLatestProlinkPartForMachineAsync(machine);
-
             if (string.IsNullOrEmpty(partName))
             {
                 return NotFound("No part found for the specified machine in the last hour.");
@@ -47,6 +50,19 @@ namespace DashboardReportApp.Controllers
             return Json(new { partName });
         }
 
+        // New endpoint to get inspection data for a given part.
+        [HttpGet("GetInspectionData")]
+        public IActionResult GetInspectionData(string partNumber)
+        {
+            try
+            {
+                var data = _moldingService.GetInspectionData(partNumber);
+                return Json(data);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
     }
-
 }
