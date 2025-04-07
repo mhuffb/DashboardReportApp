@@ -29,43 +29,36 @@
 }
 
 <div class="container-fluid px-3">
-<div class="table-responsive">
-    <h1 class="text-center mb-4">Press Run Log</h1>
+    <div class="table-responsive">
+        <h1 class="text-center mb-4">Press Run Log</h1>
 
-    <!-- Parts Setup and Ready to Mold -->
-    <h2 class="text-center">Parts Currently Setup and Available to Run</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <table class="table table-striped table-bordered">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Prod Number</th>
-                        <th>Run</th>
-                        
-                        <th>Notes</th>
-
+        <!-- Parts Setup and Ready to Mold -->
+        <h2 class="text-center">Parts Currently Setup and Available to Run</h2>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <table class="table table-striped table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Prod Number</th>
+                            <th>Run</th>
+                            <th>Notes</th>
                             <th>End DateTime</th>
-                        
-                        
-                        <th>Setup By</th>
+                            <th>Setup By</th>
                             <th>Machine</th>
                             <th>Part</th>
                             <th>Component</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var item in openParts)
-                    {
-                        <tr>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in openParts)
+                        {
+                            <tr>
                                 <td>@item.ProdNumber</td>
                                 <td>@item.Run</td>
-                                
                                 <td>@item.Notes</td>
                                 <td>@(item.EndDateTime.HasValue ? item.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm") : "Open")</td>
-                           
-                            
-                            <td>@item.Operator</td>
+                                <td>@item.Operator</td>
                                 <td>@item.Machine</td>
                                 <td>@item.Part</td>
                                 <td>@item.Component</td>
@@ -75,154 +68,147 @@
                                         Login to Run
                                     </button>
                                 </td>
-
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Open Mold Production Operator Runs -->
-    <h2 class="text-center mb-4">Open Mold Production Operator Runs</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            @if (mainRuns.Any())
-            {
-                <table class="table table-striped table-bordered">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>ID</th>
-                                <th>Prod Number</th>
-                                <th>Run</th>
-                                <th>Start Time</th>
-                            
-                            
-                            <th>Operator</th>
-                                <th>Machine</th>
-                                <th>Part</th>
-                                <th>Component</th>
-                            
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var rec in mainRuns)
-                        {
-                            <tr>
-                                <td>@rec.Id</td>
-                                    <td>@rec.ProdNumber</td>
-                                    <td>@rec.Run</td>
-                                    <td>@(rec.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
-                                   
-                                
-                               
-                                <td>@rec.Operator</td>
-                                    <td>@rec.Machine</td>
-                                    <td>@rec.Part</td>
-                                    <td>@rec.Component</td>
-                                <td>
-                                    <button class="btn btn-danger btn-sm"
-                                            onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
-                                        Logout
-                                    </button>
-                                    <span>&nbsp;</span>
-                                    <button class="btn btn-secondary btn-sm"
-                                            onclick="openEndRunModal('@rec.Id', '@rec.Machine')">
-                                        End Run
-                                    </button>
-                                    <span>&nbsp;</span>
-                                        <button class="btn btn-info btn-sm"
-                                                onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Component', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
-                                            Start Skid
-                                        </button>
-
-                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
-            }
-            else
-            {
-                <p>No open run records.</p>
-            }
+            </div>
         </div>
-    </div>
 
-    <!-- Open Skid Records -->
-    <h2 class="text-center mb-4">Open Skids</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            @if (skids.Any())
-            {
-                <table class="table table-striped table-bordered">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>ID</th>
+        <!-- Open Mold Production Operator Runs -->
+        <h2 class="text-center mb-4">Open Mold Production Operator Runs</h2>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                @if (mainRuns.Any())
+                {
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
                                 <th>Prod Number</th>
                                 <th>Run</th>
-                               
-                            <th>Start Time</th>
-                                <th>SkidNumber</th>
-                            <th>Pcs Start</th>
+                                <th>Start Time</th>
                                 <th>Operator</th>
                                 <th>Machine</th>
                                 <th>Part</th>
                                 <th>Component</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var skid in skids)
-                        {
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rec in mainRuns)
+                            {
+                                <tr>
+                                    <td>@rec.Id</td>
+                                    <td>@rec.ProdNumber</td>
+                                    <td>@rec.Run</td>
+                                    <td>@(rec.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                                    <td>@rec.Operator</td>
+                                    <td>@rec.Machine</td>
+                                    <td>@rec.Part</td>
+                                    <td>@rec.Component</td>
+                                    <td>
+                                        <button class="btn btn-danger btn-sm"
+                                                onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
+                                            Logout
+                                        </button>
+                                        <span>&nbsp;</span>
+                                        <button class="btn btn-secondary btn-sm"
+                                                onclick="openEndRunModal('@rec.Id', '@rec.Machine')">
+                                            End Run
+                                        </button>
+                                        <span>&nbsp;</span>
+                                        <button class="btn btn-info btn-sm"
+                                                onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Component', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
+                                            Start Skid
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p>No open run records.</p>
+                }
+            </div>
+        </div>
+
+        <!-- Open Skid Records -->
+        <h2 class="text-center mb-4">Open Skids</h2>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                @if (skids.Any())
+                {
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
                             <tr>
-                                <td>@skid.Id</td>
+                                <th>ID</th>
+                                <th>Prod Number</th>
+                                <th>Run</th>
+                                <th>Start Time</th>
+                                <th>SkidNumber</th>
+                                <th>Pcs Start</th>
+                                <th>Operator</th>
+                                <th>Machine</th>
+                                <th>Part</th>
+                                <th>Component</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var skid in skids)
+                            {
+                                <tr>
+                                    <td>@skid.Id</td>
                                     <td>@skid.ProdNumber</td>
                                     <td>@skid.Run</td>
-                                    
-                                <td>@skid.StartDateTime</td>
+                                    <td>@skid.StartDateTime</td>
                                     <td>@skid.SkidNumber</td>
-                                <td>@skid.PcsStart</td>
+                                    <td>@skid.PcsStart</td>
                                     <td>@skid.Operator</td>
                                     <td>@skid.Machine</td>
                                     <td>@skid.Part</td>
                                     <td>@skid.Component</td>
-                                <td>
-                                    <form method="post" asp-action="GenerateRouterTag" asp-controller="PressRunLog">
-                                        <input type="hidden" name="Id" value="@skid.Id" />
-                                        <input type="hidden" name="Part" value="@skid.Part" />
-                                        <input type="hidden" name="ProdNumber" value="@skid.ProdNumber" />
-                                        <input type="hidden" name="Run" value="@skid.Run" />
-                                        <input type="hidden" name="Machine" value="@skid.Machine" />
-                                        <input type="hidden" name="Operator" value="@skid.Operator" />
-                                        <input type="hidden" name="SkidNumber" value="@skid.SkidNumber" />
-                                        <input type="hidden" name="StartDateTime" value="@skid.StartDateTime" />
-                                        <input type="hidden" name="PcsStart" value="@skid.PcsStart" />
-                                        <input type="hidden" name="PcsEnd" value="@skid.PcsEnd" />
-                                        <button type="submit" class="btn btn-primary btn-sm">Print Router Tag</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-            else
-            {
-                <p>No open skid records.</p>
-            }
-        </div>
-    </div>
+                                    <td>
+                                        <form method="post" asp-action="GenerateRouterTag" asp-controller="PressRunLog">
+                                            <input type="hidden" name="Id" value="@skid.Id" />
+                                            <input type="hidden" name="Part" value="@skid.Part" />
+                                            <input type="hidden" name="Component" value="@skid.Component" />
+                                            <input type="hidden" name="ProdNumber" value="@skid.ProdNumber" />
+                                            <input type="hidden" name="Run" value="@skid.Run" />
+                                            <input type="hidden" name="Machine" value="@skid.Machine" />
+                                            <input type="hidden" name="Operator" value="@skid.Operator" />
+                                            <input type="hidden" name="SkidNumber" value="@skid.SkidNumber" />
+                                            <input type="hidden" name="StartDateTime" value="@skid.StartDateTime" />
+                                            <input type="hidden" name="PcsStart" value="@skid.PcsStart" />
+                                            <input type="hidden" name="PcsEnd" value="@skid.PcsEnd" />
+                                            <!-- For open skids, EndDateTime is null. This will be empty if null. -->
+                                            <input type="hidden" name="EndDateTime" value="@(skid.EndDateTime.HasValue ? skid.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss") : "")" />
 
-
-    <!-- React Table of All Runs (Optional) -->
-    <h2 class="text-center">All Runs</h2>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div id="myReactPressRunTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+                                            <button type="submit" class="btn btn-primary btn-sm">Print Router Tag</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p>No open skid records.</p>
+                }
+            </div>
         </div>
-    </div>
+
+        <!-- React Table of All Runs (Optional) -->
+        <h2 class="text-center">All Runs</h2>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <div id="myReactPressRunTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -259,8 +245,7 @@
         }
     });
 
-    // LOGIN: Simply set hidden values and open the modal (no device count fetch)
-       // LOGIN: Set hidden values (including component) and open the modal
+    // LOGIN: Set hidden values (including component) and open the modal
     function openLoginModalForRun(part, component, run, machine, prodNumber) {
         console.log("openLoginModalForRun called with", part, component, run, machine, prodNumber);
         document.getElementById("loginPartHidden").value = part;
@@ -273,7 +258,6 @@
         modal.show();
     }
 
-
     // LOGOUT: Set hidden value and open modal (no device count fetch)
     function openLogoutModal(runId, machine) {
         document.getElementById("logoutRunId").value = runId;
@@ -281,36 +265,36 @@
         modal.show();
     }
 
-    // END RUN remains unchanged (if used for skid-ending or run-ending, it still asks for count)
-   function openEndRunModal(runId, machine) {
-    document.getElementById("endRunId").value = runId;
-    document.getElementById("endRunScrap").value = "0";
-    document.getElementById("endRunNotes").value = "";
-    
-    const endCountInput = document.getElementById("endRunFinalCount");
-    const defaultValue = endCountInput.value; // usually "0"
-    
-    let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
-    modal.show();
-    
-    fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
-        .then(response => response.json())
-        .then(data => {
-            if(endCountInput.value === defaultValue) {
-                endCountInput.value = data.deviceCount || 0;
-            }
-        })
-        .catch(err => console.error("Error fetching device count:", err));
-}
+    // END RUN: Asks for count; also ends any open skids
+    function openEndRunModal(runId, machine) {
+        document.getElementById("endRunId").value = runId;
+        document.getElementById("endRunScrap").value = "0";
+        document.getElementById("endRunNotes").value = "";
 
-    // START SKID: Still asks for a count override
-            function openStartSkidModal(runId, machine, part, component, operator, run, prodNumber) {
+        const endCountInput = document.getElementById("endRunFinalCount");
+        const defaultValue = endCountInput.value; // usually "0"
+
+        let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
+        modal.show();
+
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                if(endCountInput.value === defaultValue) {
+                    endCountInput.value = data.deviceCount || 0;
+                }
+            })
+            .catch(err => console.error("Error fetching device count:", err));
+    }
+
+    // START SKID: Asks for a count override
+    function openStartSkidModal(runId, machine, part, component, operator, run, prodNumber) {
         console.log("openStartSkidModal called with", runId, machine, part, component, operator, run, prodNumber);
         document.getElementById("startSkidRunId").value = runId;
         document.getElementById("startSkidRunValue").value = run;
         document.getElementById("startSkidMachineHidden").value = machine;
         document.getElementById("startSkidPartHidden").value = part;
-        document.getElementById("startSkidComponentHidden").value = component; // Set the component here
+        document.getElementById("startSkidComponentHidden").value = component;
         document.getElementById("startSkidOperatorHidden").value = operator;
         document.getElementById("startSkidProdHidden").value = prodNumber;
 
@@ -333,13 +317,9 @@
             .catch(err => console.error("Error fetching device count:", err));
     }
 
-
-
-
 </script>
 
 <!-- Inline Modals -->
-<!-- (A) Login Modal (without count) -->
 <!-- (A) Login Modal (without count) -->
 <div id="LoginModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -351,7 +331,6 @@
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogin">
                     <input type="hidden" id="loginPartHidden" name="part" />
-                    <!-- New hidden field for component -->
                     <input type="hidden" id="loginComponentHidden" name="component" />
                     <input type="hidden" id="loginMachineHidden" name="machine" />
                     <input type="hidden" id="loginProdHidden" name="ProdNumber" />
@@ -384,7 +363,6 @@
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
                     <input type="hidden" id="logoutRunId" name="runId" />
-                    <!-- Removed count input -->
                     <div class="mb-3">
                         <label class="form-label">Scrap:</label>
                         <input type="number" id="logoutScrap" name="scrap" class="form-control" value="0" />
@@ -400,7 +378,7 @@
     </div>
 </div>
 
-<!-- (C) End Run Modal (still asks for count; use this modal if it applies to skid-ending or run-ending as needed) -->
+<!-- (C) End Run Modal (asks for count; ends main run & any open skid) -->
 <div id="EndRunCountModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -423,6 +401,13 @@
                         <label class="form-label">Notes:</label>
                         <textarea id="endRunNotes" name="notes" class="form-control"></textarea>
                     </div>
+
+                    <!-- New checkbox for "Order Complete?" -->
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="endRunOrderComplete" name="orderComplete" value="true" />
+                        <label class="form-check-label" for="endRunOrderComplete">Order Complete?</label>
+                    </div>
+
                     <button type="submit" class="btn btn-primary w-100">Confirm End Run</button>
                 </form>
             </div>
@@ -430,8 +415,7 @@
     </div>
 </div>
 
-<!-- (D) Start Skid Modal (still asks for skid count) -->
-<!-- (D) Start Skid Modal (still asks for skid count) -->
+<!-- (D) Start Skid Modal (asks for starting count) -->
 <div id="StartSkidModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -440,16 +424,13 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <!-- The form posts to the StartSkid action; field names must match your controller parameters -->
                 <form method="post" asp-controller="PressRunLog" asp-action="StartSkid">
                     <input type="hidden" id="startSkidRunId" name="runId" />
                     <input type="hidden" id="startSkidRunValue" name="run" />
                     <input type="hidden" id="startSkidMachineHidden" name="machine" />
                     <input type="hidden" id="startSkidPartHidden" name="part" />
-                    <!-- New hidden field for component -->
                     <input type="hidden" id="startSkidComponentHidden" name="component" />
                     <input type="hidden" id="startSkidOperatorHidden" name="operator" />
-                    <!-- Hidden field for Production Number -->
                     <input type="hidden" id="startSkidProdHidden" name="prodNumber" />
 
                     <div class="mb-3">

@@ -358,7 +358,7 @@ ORDER BY
             throw new Exception($"No device found for machine: {machine}");
         }
 
-        public async Task<DataTable> GetLatestPartFactorDetailsAsync(string partNumber, DateTime? startDate, DateTime endDate)
+        public async Task<DataTable> GetLatestPartFactorDetailsAsync(string partNumber, DateTime? startDate, DateTime? endDate)
         {
             DataTable dt = new DataTable();
             using (var connection = new SqlConnection(_connectionStringSQLExpress))

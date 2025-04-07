@@ -12,6 +12,7 @@ namespace DashboardReportApp.Controllers
         private readonly PressRunLogService _pressRunLogService;
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
+
         public PressRunLogController(PressRunLogService servicePressRun, SharedService serviceShared, MoldingService serviceMolding)
         {
             _pressRunLogService = servicePressRun;
@@ -34,66 +35,45 @@ namespace DashboardReportApp.Controllers
             return View(allRuns); // the Index.cshtml
         }
 
-        // ==================== LOGIN =====================
-        // GET /PressRunLog/LoadLoginModal?machine=xxx
+        // ============== LOGIN ==============
         [HttpGet]
         public async Task<IActionResult> LoadLoginModal(string machine)
         {
             int? deviceCount = await _moldingService.TryGetDeviceCountOrNull(machine);
             ViewBag.Machine = machine;
             ViewBag.DeviceCount = deviceCount ?? 0;
-
-            Console.WriteLine("DeviceCount: " + deviceCount);
-            Console.WriteLine("Machine: " + machine);
             return PartialView("_LoginCountModal");
         }
 
         [HttpPost]
         public async Task<IActionResult> ConfirmLogin(PressRunLogModel model)
         {
-            Console.WriteLine("Received ProdNumber: " + model.ProdNumber);
-            Console.WriteLine("Received Component: " + model.Component);  // Debug component value
-
             var formModel = new PressRunLogModel
             {
                 Operator = model.Operator,
                 Part = model.Part,
-                Component = model.Component,  // <-- Include the component!
+                Component = model.Component,
                 Machine = model.Machine,
                 Run = model.Run,
                 StartDateTime = DateTime.Now,
                 ProdNumber = model.ProdNumber
             };
+
             await _pressRunLogService.HandleLogin(formModel);
             return RedirectToAction("Index");
         }
 
-
-        // ==================== START SKID =====================
-        // Updated action name and parameter names to match the modal form
+        // ============== START SKID ==============
         [HttpPost]
         public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart)
         {
-            Console.WriteLine("Received Start Skid Request");
-            Console.WriteLine($"Run ID: {model.Run}");
-            Console.WriteLine($"Machine: {model.Machine}");
-            Console.WriteLine($"Part: {model.Part}");
-            Console.WriteLine($"Operator: {model.Operator}");
-            Console.WriteLine($"Prod Number: {model.ProdNumber}");
-            Console.WriteLine($"Pcs Start Received: {pcsStart}");
-
-           
+            // This will end the previous skid if open, auto-print its tag,
+            // then start the new skid, auto-print its tag.
             await _pressRunLogService.HandleStartSkidAsync(model);
-
-
-            Console.WriteLine("Start Skid Processed Successfully");
             return RedirectToAction("Index");
         }
 
-
-
-        // ==================== LOGOUT =====================
-        // GET /PressRunLog/LoadLogoutModal => user sees device count => typed final count
+        // ============== LOGOUT ==============
         [HttpGet]
         public async Task<IActionResult> LoadLogoutModal(int runId, string machine)
         {
@@ -107,13 +87,12 @@ namespace DashboardReportApp.Controllers
         [HttpPost]
         public async Task<IActionResult> ConfirmLogout(int runId, int finalCount, int scrap, string notes)
         {
-            // Update the main run record with endDateTime, pcsEnd, scrap, and notes.
+            // Logs out main run, does not forcibly end the run, but sets endDateTime for that operator
             await _pressRunLogService.HandleLogoutAsync(runId, finalCount, scrap, notes);
             return RedirectToAction("Index");
         }
 
-        // ==================== END RUN =====================
-        // GET /PressRunLog/LoadEndRunModal?runId=xxx&machine=xxx => partial
+        // ============== END RUN ==============
         [HttpGet]
         public async Task<IActionResult> LoadEndRunModal(int runId, string machine)
         {
@@ -123,43 +102,53 @@ namespace DashboardReportApp.Controllers
             ViewBag.DeviceCount = deviceCount ?? 0;
             return PartialView("_EndRunCountModal");
         }
+
         [HttpGet]
         public async Task<IActionResult> ApiGetDeviceCount(string machine)
         {
-            // 1) Call your service to get device count or null
             int? count = await _moldingService.TryGetDeviceCountOrNull(machine);
-            // 2) Return JSON
             return Json(new { deviceCount = count ?? 0 });
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes)
+        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes, bool orderComplete)
         {
-            await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes);
+            // Ends main run and automatically ends any open skid(s) for that run
+            await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes, orderComplete);
             return RedirectToAction("Index");
         }
 
+
+        // ============== MANUAL PRINT TAG (BUTTON) ==============
         [HttpPost]
         public async Task<IActionResult> GenerateRouterTag(PressRunLogModel model)
         {
-
+            // The user can manually click to print a tag for the skid.
             string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);
 
-
             string computerName = Environment.MachineName;
-            Console.WriteLine("Computer Name: " + computerName);
+            // The path to the network file
+            string filePath = @"\\sintergydc2024\vol1\vsp\testcomputername.txt";
 
-            if(computerName == "Mold02")
+
+            // Build the text you want to write: date/time + computer name
+            string textToWrite = $"{DateTime.Now}: The computer name is {computerName}";
+
+            // Append the text to the file (creates if it doesn't exist)
+            System.IO.File.AppendAllText(filePath, textToWrite + System.Environment.NewLine);
+
+
+            if (computerName == "Mold02")
             {
                 _sharedService.PrintFile("Mold02", pdfFilePath);
             }
-            else if(computerName == "Mold03")
+            else if (computerName == "Mold03")
             {
                 _sharedService.PrintFile("Mold03", pdfFilePath);
             }
             else
             {
-
+                // Adjust as needed for other machines or do nothing
             }
 
             return RedirectToAction("Index");

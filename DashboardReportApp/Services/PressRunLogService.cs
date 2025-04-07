@@ -3,25 +3,19 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Net.Http;
-using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using System.Data.Common;
 using System.Data;
-using iText.Layout.Element;
-using System.Reflection.PortableExecutable;
 using iText.IO.Font.Constants;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
-using iText.Layout.Properties;
 using iText.Layout;
-using System.Collections;
-using System.Data.Odbc;
-using iText.Forms.Fields.Properties;
-using iText.Layout.Borders;
+using iText.Layout.Properties;
 using iText.Kernel.Pdf.Canvas.Draw;
 using iText.Kernel.Pdf.Canvas;
 using iText.Kernel.Geom;
+using Microsoft.Extensions.Configuration;
+using iText.Layout.Element;
+using iText.Layout.Borders;
 
 namespace DashboardReportApp.Services
 {
@@ -31,6 +25,7 @@ namespace DashboardReportApp.Services
         private readonly string _connectionStringDataflex;
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
+
         public PressRunLogService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
@@ -39,42 +34,23 @@ namespace DashboardReportApp.Services
             _moldingService = moldingService;
         }
 
-        #region Device Mapping / Count
+        #region Public CRUD Methods
 
-        /// <summary>
-        /// Maps a machine value to its device IP.
-        /// If the machine string already contains a dot, it is assumed to be an IP.
-        /// Otherwise, it is mapped using a dictionary.
-        /// </summary>
-        // Instead of your private MapMachineToIp method, you can do:
-       
-
-        /// <summary>
-        /// Attempts to query the device’s count.
-        /// Returns an integer if successful; otherwise, null.
-        /// This method uses multiple parsing strategies.
-        /// </summary>
-        
-
-
-        #endregion
-
-        #region Main Run Logic (Login, Logout, EndRun)
-
+        // ========== LOGIN ==========
         public async Task HandleLogin(PressRunLogModel formModel)
         {
             const string insertMainRun = @"
 INSERT INTO pressrun 
-    (operator, part, component,  machine, prodNumber, run, startDateTime, skidNumber)
+    (operator, part, component, machine, prodNumber, run, startDateTime, skidNumber)
 VALUES 
     (@operator, @part, @component, @machine, @prodNumber, @run, @startTime, 0)";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
+
             await using var cmd = new MySqlCommand(insertMainRun, conn);
             cmd.Parameters.AddWithValue("@operator", formModel.Operator);
             cmd.Parameters.AddWithValue("@part", formModel.Part);
             cmd.Parameters.AddWithValue("@component", formModel.Component);
-            // Store the raw machine value.
             cmd.Parameters.AddWithValue("@machine", formModel.Machine);
             cmd.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
             cmd.Parameters.AddWithValue("@run", formModel.Run);
@@ -82,7 +58,102 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Updated Logout: now accepts scrap and notes.
+        // ========== START SKID ==========
+        public async Task HandleStartSkidAsync(PressRunLogModel model)
+        {
+            // Ends the previous skid if open, auto-prints a tag, then inserts a new skid, auto-prints a tag.
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // 1) Find the current highest skid number for this run
+            int currentSkidNumber = 0;
+            const string getSkids = @"
+SELECT IFNULL(MAX(skidNumber), 0)
+FROM pressrun
+WHERE run = @run
+  AND skidNumber > 0";
+            using (var cmd = new MySqlCommand(getSkids, conn))
+            {
+                cmd.Parameters.AddWithValue("@run", model.Run);
+                var result = await cmd.ExecuteScalarAsync();
+                if (result != null && int.TryParse(result.ToString(), out int c))
+                    currentSkidNumber = c;
+            }
+
+            // 2) If a skid is currently open (skidNumber == currentSkidNumber > 0 and endDateTime IS NULL),
+            //    end it, fill pcsEnd, and mark open=1 so we know it's closed.
+            if (currentSkidNumber > 0)
+            {
+                const string endSkidSql = @"
+UPDATE pressrun
+SET endDateTime = NOW(),
+    pcsEnd = @pcsEnd,
+    open = 1
+WHERE run = @run
+  AND skidNumber = @skidNum
+  AND endDateTime IS NULL
+LIMIT 1";
+                using var endCmd = new MySqlCommand(endSkidSql, conn);
+                endCmd.Parameters.AddWithValue("@run", model.Run);
+                endCmd.Parameters.AddWithValue("@skidNum", currentSkidNumber);
+                // We'll use the new 'start' count to close out the old skid's end count
+                endCmd.Parameters.AddWithValue("@pcsEnd", model.PcsStart);
+                int rowsUpdated = await endCmd.ExecuteNonQueryAsync();
+
+                if (rowsUpdated > 0)
+                {
+                    // We ended the previous skid => auto-print a router tag for it.
+                    // 3a) Get that ended skid record from DB
+                    PressRunLogModel endedSkid = await GetPressRunRecordAsync(conn, model.Run, currentSkidNumber);
+                    if (endedSkid != null)
+                    {
+                        // 3b) Generate PDF
+                        string filePath = await GenerateRouterTagAsync(endedSkid);
+                        // 3c) Print
+                        PrintFileByMachineName(filePath);
+                    }
+                }
+            }
+
+            // 3) Insert the new skid
+            int newSkidNumber = (currentSkidNumber == 0) ? 1 : currentSkidNumber + 1;
+            const string insertNext = @"
+INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
+VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart);
+SELECT LAST_INSERT_ID();";
+
+            int newId = 0;
+            using (var insSkid = new MySqlCommand(insertNext, conn))
+            {
+                insSkid.Parameters.AddWithValue("@run", model.Run);
+                insSkid.Parameters.AddWithValue("@part", model.Part);
+                insSkid.Parameters.AddWithValue("@component", model.Component);
+                insSkid.Parameters.AddWithValue("@operator", model.Operator);
+                insSkid.Parameters.AddWithValue("@machine", model.Machine);
+                insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                insSkid.Parameters.AddWithValue("@skidNumber", newSkidNumber);
+                insSkid.Parameters.AddWithValue("@pcsStart", model.PcsStart);
+
+                object obj = await insSkid.ExecuteScalarAsync();
+                if (obj != null && int.TryParse(obj.ToString(), out int insertedId))
+                {
+                    newId = insertedId;
+                }
+            }
+
+            // 4) Auto-print router tag for the newly started skid
+            if (newId > 0)
+            {
+                var newSkid = await GetPressRunRecordByIdAsync(conn, newId);
+                if (newSkid != null)
+                {
+                    string filePath = await GenerateRouterTagAsync(newSkid);
+                    PrintFileByMachineName(filePath);
+                }
+            }
+        }
+
+        // ========== LOGOUT (No forced run end) ==========
         public async Task HandleLogoutAsync(int runId, int finalCount, int scrap, string notes)
         {
             const string sql = @"
@@ -103,29 +174,31 @@ LIMIT 1";
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Updated EndRun: ends any open skid record, then ends the main run.
-        public async Task HandleEndRunAsync(int runId, int finalCount, int scrap, string notes)
+        // ========== END RUN (also ends any open skids) ==========
+        public async Task HandleEndRunAsync(int runId, int finalCount, int scrap, string notes, bool orderComplete)
         {
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            // 1) Retrieve the run identifier from the main run record.
+            // 1) Find the run identifier from the main run (skidNumber=0)
             string mainRunIdentifier = "";
             const string selectMainRun = @"
-SELECT run FROM pressrun
-WHERE id = @runId AND skidNumber = 0
+SELECT run
+FROM pressrun
+WHERE id = @runId
+  AND skidNumber = 0
+ORDER BY id desc
 LIMIT 1";
             using (var selectCmd = new MySqlCommand(selectMainRun, conn))
             {
                 selectCmd.Parameters.AddWithValue("@runId", runId);
                 object obj = await selectCmd.ExecuteScalarAsync();
-                if (obj != null)
-                    mainRunIdentifier = obj.ToString();
+                if (obj != null) mainRunIdentifier = obj.ToString();
             }
 
             if (!string.IsNullOrEmpty(mainRunIdentifier))
             {
-                // 2) End any open skid record for this run and update its pcsEnd.
+                // 2) End any open skid record for this run
                 const string endSkidQuery = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
@@ -138,11 +211,59 @@ WHERE run = @runIdentifier
                 {
                     endSkidCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
                     endSkidCmd.Parameters.AddWithValue("@finalCount", finalCount);
-                    await endSkidCmd.ExecuteNonQueryAsync();
+                    int skidRows = await endSkidCmd.ExecuteNonQueryAsync();
+
+                    // If we ended one or more skids, print their tags
+                    if (skidRows > 0)
+                    {
+                        // Grab all the newly ended skids for printing
+                        string fetchEndedSkids = @"
+SELECT id
+FROM pressrun
+WHERE run = @runIdentifier
+  AND skidNumber > 0
+  AND open = 1
+  AND endDateTime IS NOT NULL";
+                        using (var fetchCmd = new MySqlCommand(fetchEndedSkids, conn))
+                        {
+                            fetchCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
+                            var endedSkidIds = new List<int>();
+
+                            using (var rdr = await fetchCmd.ExecuteReaderAsync())
+                            {
+                                while (await rdr.ReadAsync())
+                                {
+                                    endedSkidIds.Add(rdr.GetInt32(0));
+                                }
+                            }
+
+                            // Generate & print each
+                            foreach (int skidId in endedSkidIds)
+                            {
+                                PressRunLogModel endedSkid = await GetPressRunRecordByIdAsync(conn, skidId);
+                                if (endedSkid != null)
+                                {
+                                    string filePath = await GenerateRouterTagAsync(endedSkid);
+                                    PrintFileByMachineName(filePath);
+                                }
+                            }
+
+                            // Mark them so we don't reprint later
+                            string markPrinted = @"
+UPDATE pressrun
+SET open = 2
+WHERE id IN (" + string.Join(",", endedSkidIds) + ")";
+                            if (endedSkidIds.Count > 0)
+                            {
+                                using var markCmd = new MySqlCommand(markPrinted, conn);
+                                await markCmd.ExecuteNonQueryAsync();
+                            }
+                        }
+                    }
                 }
             }
 
-            // 3) End the main run record.
+            // 3) End the main run
             const string endMainRun = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
@@ -159,184 +280,115 @@ LIMIT 1";
                 await endMainCmd.ExecuteNonQueryAsync();
             }
 
-            // 3.5) end any other run records but dont send scrap
-            // 3) End the main run record.
-            const string endMainRun2 = @"
-UPDATE pressrun
-SET endDateTime = NOW()
-WHERE run = @runIdentifier
-  AND skidNumber = 0";
-            using (var endMainCmd = new MySqlCommand(endMainRun2, conn))
-            {
-                endMainCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
-                await endMainCmd.ExecuteNonQueryAsync();
-            }
-
-
-
-            // 4) Mark the run as closed in the presssetup table.
+            // 4) Also mark presssetup open=0
             const string closeSetup = @"
-UPDATE presssetup
-SET open = 0
-WHERE run = (
-    SELECT run FROM pressrun WHERE id = @runId AND skidNumber = 0
-)
-LIMIT 1";
+    UPDATE presssetup
+    SET open = 0
+    WHERE run = (
+        SELECT run 
+        FROM pressrun 
+        WHERE id = @runId 
+          AND skidNumber = 0
+    )";
+
             using (var closeCmd = new MySqlCommand(closeSetup, conn))
             {
                 closeCmd.Parameters.AddWithValue("@runId", runId);
-                await closeCmd.ExecuteNonQueryAsync();
+                int rowsAffected = await closeCmd.ExecuteNonQueryAsync();
+
+                Console.WriteLine($"Rows updated in presssetup = {rowsAffected}");
             }
 
-           
+
+
+            // 5) If the user marked "Not Order Complete?", set schedule.open=1
+            if (!orderComplete && !string.IsNullOrEmpty(mainRunIdentifier))
+            {
+                const string updateSchedule = @"
+            UPDATE schedule
+            SET open = 1
+            WHERE run = @theRun
+            LIMIT 1";
+                using var schedCmd = new MySqlCommand(updateSchedule, conn);
+                schedCmd.Parameters.AddWithValue("@theRun", mainRunIdentifier);
+                await schedCmd.ExecuteNonQueryAsync();
+            }
         }
 
         #endregion
 
-        #region Skid Logic
+        #region Generate Tag PDF (with part factor & statistics)
 
-        public async Task HandleStartSkidAsync(PressRunLogModel model)
+        /// <summary>
+        /// Generates a router tag PDF using iText, returns the file path,
+        /// now including part-factor details and statistics for MOLD operations.
+        /// </summary>
+        public async Task<string> GenerateRouterTagAsync(PressRunLogModel model)
         {
-            Console.WriteLine("Handling Start Skid in Service...");
-            Console.WriteLine($"Run: {model.Run}");
-            Console.WriteLine($"Machine: {model.Machine}");
-            Console.WriteLine($"Part: {model.Part}");
-            Console.WriteLine($"Operator: {model.Operator}");
-            Console.WriteLine($"Prod Number: {model.ProdNumber}");
-            Console.WriteLine($"Initial Pcs Start: {model.PcsStart}");
-
-            await using var conn = new MySqlConnection(_connectionStringMySQL);
-            await conn.OpenAsync();
-
-            // 1) Count existing skid records for this run (skidNumber > 0)
-            int currentSkidNumber = 0;
-            const string getSkids = @"
-    SELECT IFNULL(MAX(skidNumber), 0)
-    FROM pressrun
-    WHERE run = @run
-      AND skidNumber > 0";
-            using (var cmd = new MySqlCommand(getSkids, conn))
+            string part;
+            // Gather the order of operations
+            if(model.Component == "" | model.Component == null)
             {
-                cmd.Parameters.AddWithValue("@run", model.Run);
-                var result = await cmd.ExecuteScalarAsync();
-                if (result != null && int.TryParse(result.ToString(), out int c))
-                    currentSkidNumber = c;
-            }
-
-           
-            // 3) Insert the first skid if no skids exist
-            if (currentSkidNumber == 0)
-            {
-                const string insertFirst = @"
-        INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-        VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, 1, @pcsStart)";
-                using var insCmd = new MySqlCommand(insertFirst, conn);
-                insCmd.Parameters.AddWithValue("@run", model.Run);
-                insCmd.Parameters.AddWithValue("@part", model.Part);
-                insCmd.Parameters.AddWithValue("@component", model.Component);
-                insCmd.Parameters.AddWithValue("@operator", model.Operator);
-                insCmd.Parameters.AddWithValue("@machine", model.Machine);
-                insCmd.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                insCmd.Parameters.AddWithValue("@pcsStart", model.PcsStart);  // Now using manual input
-                await insCmd.ExecuteNonQueryAsync();
+                part = model.Part;
+                Console.WriteLine("Part: " + model.Part);
             }
             else
             {
-                // 4) End previous skid and insert a new one
-                int newSkidNumber = currentSkidNumber + 1;
-
-                const string endSkidSql = @"
-        UPDATE pressrun p
-        JOIN (
-            SELECT run, MAX(skidNumber) AS maxSkid
-            FROM pressrun
-            WHERE run = @run
-              AND skidNumber > 0
-              AND endDateTime IS NULL
-            GROUP BY run
-        ) t ON p.run = @run AND p.skidNumber = t.maxSkid
-        SET p.endDateTime = NOW(),
-            p.pcsEnd = @pcsEnd,
-            p.open = 1
-        WHERE p.endDateTime IS NULL";
-                using var endCmd = new MySqlCommand(endSkidSql, conn);
-                endCmd.Parameters.AddWithValue("@run", model.Run);
-                endCmd.Parameters.AddWithValue("@pcsEnd", model.PcsStart); // End previous skid with same count
-                await endCmd.ExecuteNonQueryAsync();
-
-                // 5) Insert a new skid
-                const string insertNext = @"
-        INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-        VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
-                using var insSkid = new MySqlCommand(insertNext, conn);
-                insSkid.Parameters.AddWithValue("@run", model.Run);
-                insSkid.Parameters.AddWithValue("@part", model.Part);
-                insSkid.Parameters.AddWithValue("@component", model.Component);
-                insSkid.Parameters.AddWithValue("@operator", model.Operator);
-                insSkid.Parameters.AddWithValue("@machine", model.Machine);
-                insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                insSkid.Parameters.AddWithValue("@skidNumber", newSkidNumber);
-                insSkid.Parameters.AddWithValue("@pcsStart", model.PcsStart);  // Now using manual input
-                await insSkid.ExecuteNonQueryAsync();
+                part = model.Component;
+                Console.WriteLine("Component: " + model.Component);
             }
 
-            Console.WriteLine("Start Skid Processed Successfully.");
-        }
-
-
-        public async Task<string> GenerateRouterTagAsync(PressRunLogModel model)
-        {
-            // Get the order of operations (unchanged).
-            List<string> result = _sharedService.GetOrderOfOps(model.Part);
-
-            // Generate the PDF file path.
+            List<string> operations = _sharedService.GetOrderOfOps(part);
+            // PDF file path (unique by pressrun id, or use a timestamp).
             string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\RouterTag_" + model.Id + ".pdf";
 
-            // Predefined fonts.
+            // Prepare fonts
             PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
             PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
-            // Create writer and PDF document.
             PdfWriter writer = new PdfWriter(filePath);
             PdfDocument pdf = new PdfDocument(writer);
 
             using (var document = new Document(pdf))
             {
-                // Set overall document margins (increased bottom margin for footer).
                 document.SetMargins(20, 20, 40, 20);
 
-                // Title at top center.
+                // Title
                 document.Add(new Paragraph("Sintergy Tracer Tag")
                     .SetFont(boldFont)
                     .SetFontSize(18)
                     .SetTextAlignment(TextAlignment.CENTER));
 
-                // Format start and end date/time using a custom format.
-                string formattedStartDateTime = model.StartDateTime.ToString();
-                string formattedEndDateTime = model.EndDateTime.ToString();
-
-                string id = string.IsNullOrWhiteSpace(model.Id.ToString()) ? "N/A" : model.Id.ToString();
-
-                // Add a horizontal line separator.
+                // Horizontal line
                 document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
 
-                // Order of Operations header (centered).
+                // Format date/times
+                string formattedStart = (model.StartDateTime == default(DateTime))
+                                        ? ""
+                                        : model.StartDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string formattedEnd = (model.EndDateTime == null)
+                                        ? ""
+                                        : model.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string id = model.Id.ToString();
+
+                // Operations heading
                 document.Add(new Paragraph("Order of Operations:")
                     .SetFont(boldFont)
                     .SetFontSize(14)
                     .SetTextAlignment(TextAlignment.CENTER)
                     .SetMarginBottom(2));
 
-                // Loop through each order operation item.
-                foreach (var item in result)
+                foreach (var op in operations)
                 {
-                    document.Add(new Paragraph(_sharedService.processDesc(item))
+                    document.Add(new Paragraph(_sharedService.processDesc(op))
                         .SetFont(boldFont)
                         .SetFontSize(12)
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(2));
 
-                    if (item.ToLower().Contains("machin"))
+                    if (op.ToLower().Contains("machin"))
                     {
                         document.Add(new Paragraph("Machine #: ____________ Signature: __________________________   Date: __________________")
                             .SetFont(normalFont)
@@ -344,7 +396,7 @@ LIMIT 1";
                             .SetTextAlignment(TextAlignment.CENTER)
                             .SetMarginBottom(5));
                     }
-                    else if (item.ToLower().Contains("sinter"))
+                    else if (op.ToLower().Contains("sinter"))
                     {
                         document.Add(new Paragraph("Loaded By: __________________   Unloaded By: __________________   Date: __________________")
                             .SetFont(normalFont)
@@ -352,128 +404,136 @@ LIMIT 1";
                             .SetTextAlignment(TextAlignment.CENTER)
                             .SetMarginBottom(5));
                     }
-                    else if (item.ToLower().Contains("mold"))
+                    else if (op.ToLower().Contains("mold"))
                     {
-                        // Create a header table with 3 columns.
-                        Table headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1 }))
+                        // Table with 3 columns for initial details
+                        var headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1 }))
                             .UseAllAvailableWidth()
-                            .SetMarginBottom(10)
-                            .SetBorder(Border.NO_BORDER);
+                            .SetMarginBottom(10);
 
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Part: " + model.Part + " " + model.Component)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Press Run ID: " + id)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Skid Number: " + model.SkidNumber)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Machine: " + model.Machine)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Prod Number: " + model.ProdNumber)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Starting Pcs: " + model.PcsStart)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Operator: " + model.Operator)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Run: " + model.Run)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
-                        headerTable.AddCell(new Cell().Add(new Paragraph("Ending Pcs: " + ((model.PcsEnd ?? 0) == 0 ? "" : model.PcsEnd.ToString()))
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Part: " + model.Part + " " + model.Component)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Press Run ID: " + id)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Skid Number: " + model.SkidNumber)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Machine: " + model.Machine)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Prod Number: " + model.ProdNumber)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Starting Pcs: " + model.PcsStart)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Operator: " + model.Operator)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Run: " + model.Run)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
+
+                        // PcsEnd
+                        headerTable.AddCell(new Cell().Add(
+                            new Paragraph("Ending Pcs: " + ((model.PcsEnd ?? 0) == 0 ? "" : model.PcsEnd.ToString()))
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
 
                         document.Add(headerTable);
 
-                        // Create a header table with 2 columns for date/time.
-                        Table headerTable2 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1 }))
+                        // A small table for Start/End times
+                        var timeTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1 }))
                             .UseAllAvailableWidth()
-                            .SetMarginBottom(10)
-                            .SetBorder(Border.NO_BORDER);
+                            .SetMarginBottom(10);
 
-                        headerTable2.AddCell(new Cell().Add(new Paragraph("Start DateTime: " + formattedStartDateTime)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
+                        timeTable.AddCell(new Cell().Add(
+                            new Paragraph("Start DateTime: " + formattedStart)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
 
-                        headerTable2.AddCell(new Cell().Add(new Paragraph("End DateTime: " + formattedEndDateTime)
-                            .SetFont(normalFont)
-                            .SetFontSize(12))
-                            .SetBorder(Border.NO_BORDER)
-                            .SetTextAlignment(TextAlignment.LEFT));
+                        timeTable.AddCell(new Cell().Add(
+                            new Paragraph("End DateTime: " + formattedEnd)
+                                .SetFont(normalFont)
+                                .SetFontSize(12))
+                            .SetBorder(Border.NO_BORDER));
 
-                        document.Add(headerTable2);
+                        document.Add(timeTable);
 
-                        // ---------------------------
-                        // Section: Latest Part Factor Details
-                        // ---------------------------
-                        // Use DateTime.Now as the end date when fetching the latest part factor details.
-                        string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(model.Part);
-                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(qcc_file_desc, model.StartDateTime, DateTime.Now);
+                        // ----------------------------------
+                        //  PART FACTOR DETAILS
+                        // ----------------------------------
+                        string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(part);
+                        // We'll use the run's EndDateTime if present, else "now"
+                        DateTime? endDt = model.EndDateTime ?? DateTime.Now;
 
-                        // Create a header table for displaying factor details.
-                        Table headerTable3 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }))
-                            .UseAllAvailableWidth()
-                            .SetMarginBottom(10)
-                            .SetBorder(Border.NO_BORDER);
+                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(
+                            qcc_file_desc, null, null);
 
+                        // For demonstration: let's assume the "factor details" might contain rows describing mix, etc.
+                        // We'll mimic the example from your older snippet:
                         if (partFactorDetails != null && partFactorDetails.Rows.Count >= 4)
                         {
-                            // Loop through rows 3 and 4 (zero-indexed rows 2 and 3)
+                            Table headerTable3 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }))
+                                .UseAllAvailableWidth()
+                                .SetMarginBottom(10)
+                                .SetBorder(Border.NO_BORDER);
+
+                            // Suppose rows #2 and #3 (zero-based) contain interesting data:
                             for (int rowIndex = 2; rowIndex <= 3; rowIndex++)
                             {
                                 DataRow row = partFactorDetails.Rows[rowIndex];
-                                // Assume first column is "Mix Lot" and second column is "Mix #"
+                                // Example: row[0] = "Mix Lot", row[1] = "Mix #"
                                 string mixLot = row[0].ToString();
                                 string mixNumber = row[1].ToString();
 
-                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixLot)
-                                    .SetFont(normalFont)
-                                    .SetFontSize(12))
-                                    .SetBorder(Border.NO_BORDER)
-                                    .SetTextAlignment(TextAlignment.LEFT));
+                                headerTable3.AddCell(new Cell().Add(
+                                    new Paragraph(mixLot).SetFont(normalFont).SetFontSize(12))
+                                    .SetBorder(Border.NO_BORDER));
 
-                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixNumber)
-                                    .SetFont(normalFont)
-                                    .SetFontSize(12))
-                                    .SetBorder(Border.NO_BORDER)
-                                    .SetTextAlignment(TextAlignment.LEFT));
+                                headerTable3.AddCell(new Cell().Add(
+                                    new Paragraph(mixNumber).SetFont(normalFont).SetFontSize(12))
+                                    .SetBorder(Border.NO_BORDER));
                             }
+                            document.Add(headerTable3);
                         }
                         else
                         {
-                            headerTable3.AddCell(new Paragraph("Not enough data rows available.").SetFont(normalFont));
+                            document.Add(new Paragraph("Not enough part-factor detail data available.")
+                                .SetFont(normalFont)
+                                .SetMarginBottom(10));
                         }
-                        document.Add(headerTable3);
 
-                        // ---------------------------
-                        // Section: Statistics
-                        // ---------------------------
-                        // Leave the GetStatisticsAsync call as it is.
+                        // ----------------------------------
+                        //  STATISTICS
+                        // ----------------------------------
                         DataTable statistics = await _sharedService.GetStatisticsAsync(qcc_file_desc, model.StartDateTime);
                         document.Add(new Paragraph("Statistics:")
                             .SetFont(boldFont)
@@ -485,28 +545,35 @@ LIMIT 1";
                         if (statistics != null && statistics.Rows.Count > 0)
                         {
                             int totalColumns = statistics.Columns.Count - 1;
+                            if (totalColumns <= 0) totalColumns = 1; // fallback
+
                             Table statsTable = new Table(UnitValue.CreatePercentArray(totalColumns))
                                 .UseAllAvailableWidth();
 
-                            // Add header cells starting from the second column.
+                            // Add header cells starting from second column
                             for (int i = 1; i < statistics.Columns.Count; i++)
                             {
-                                statsTable.AddHeaderCell(new Cell().Add(new Paragraph(statistics.Columns[i].ColumnName).SetFont(boldFont)));
+                                statsTable.AddHeaderCell(new Cell().Add(
+                                    new Paragraph(statistics.Columns[i].ColumnName)
+                                        .SetFont(boldFont)));
                             }
 
-                            // Add data rows, skipping the first column.
+                            // Add data rows
                             foreach (DataRow row in statistics.Rows)
                             {
                                 for (int i = 1; i < statistics.Columns.Count; i++)
                                 {
-                                    statsTable.AddCell(new Cell().Add(new Paragraph(row[i].ToString()).SetFont(normalFont)));
+                                    statsTable.AddCell(new Cell().Add(
+                                        new Paragraph(row[i].ToString())
+                                            .SetFont(normalFont)));
                                 }
                             }
                             document.Add(statsTable);
                         }
                         else
                         {
-                            document.Add(new Paragraph("No Statistics available.").SetFont(normalFont));
+                            document.Add(new Paragraph("No Statistics available.")
+                                .SetFont(normalFont));
                         }
                     }
                     else
@@ -519,21 +586,23 @@ LIMIT 1";
                     }
                 }
 
-                // Add footer text on each page.
+                // Footer on each page
                 int pageCount = pdf.GetNumberOfPages();
                 for (int i = 1; i <= pageCount; i++)
                 {
-                    PdfPage page = pdf.GetPage(i);
-                    Rectangle pageSize = page.GetPageSize();
-                    PdfCanvas pdfCanvas = new PdfCanvas(page);
-                    Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
+                    var page = pdf.GetPage(i);
+                    var pageSize = page.GetPageSize();
+                    var pdfCanvas = new PdfCanvas(page);
+                    var footerCanvas = new Canvas(pdfCanvas, pageSize);
+
                     footerCanvas.ShowTextAligned(
-                        new Paragraph(model.Part)
+                        new Paragraph(part + " Skid # " + model.SkidNumber)
                             .SetFont(boldFont)
                             .SetFontSize(25),
                         pageSize.GetWidth() / 2,
                         pageSize.GetBottom() + 33,
                         TextAlignment.CENTER);
+
                     footerCanvas.Close();
                 }
             }
@@ -541,6 +610,91 @@ LIMIT 1";
             return filePath;
         }
 
+        #endregion
+
+        #region Helpers
+
+        private void PrintFileByMachineName(string pdfFilePath)
+        {
+            // Looks at local machine name, calls SharedService to print the PDF
+            string computerName = Environment.MachineName;
+            if (computerName == "Mold02")
+            {
+                _sharedService.PrintFile("Mold02", pdfFilePath);
+            }
+            else if (computerName == "Mold03")
+            {
+                _sharedService.PrintFile("Mold03", pdfFilePath);
+            }
+            else
+            {
+                // Adjust for other machines or do nothing
+            }
+        }
+
+        private async Task<PressRunLogModel> GetPressRunRecordAsync(MySqlConnection conn, string run, int skidNumber)
+        {
+            const string sql = @"
+SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
+FROM pressrun
+WHERE run = @run
+  AND skidNumber = @skidNumber
+ORDER BY id DESC
+LIMIT 1";
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", run);
+            cmd.Parameters.AddWithValue("@skidNumber", skidNumber);
+
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (await rdr.ReadAsync())
+            {
+                return ParseRunFromReader(rdr);
+            }
+            return null;
+        }
+
+        private async Task<PressRunLogModel> GetPressRunRecordByIdAsync(MySqlConnection conn, int id)
+        {
+            const string sql = @"
+SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
+FROM pressrun
+WHERE id = @id
+LIMIT 1";
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", id);
+
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (await rdr.ReadAsync())
+            {
+                return ParseRunFromReader(rdr);
+            }
+            return null;
+        }
+
+        private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
+        {
+            var model = new PressRunLogModel
+            {
+                Id = rdr.GetInt32("id"),
+                Timestamp = rdr.GetDateTime("timestamp"),
+                ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber")) ? "" : rdr.GetString("prodNumber"),
+                Run = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
+                StartDateTime = rdr.GetDateTime("startDateTime"),
+                EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime")) ? null : rdr.GetDateTime("endDateTime"),
+                Operator = rdr["operator"]?.ToString(),
+                Machine = rdr["machine"]?.ToString(),
+                PcsStart = rdr.IsDBNull(rdr.GetOrdinal("pcsStart")) ? (int?)null : rdr.GetInt32("pcsStart"),
+                PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd")) ? (int?)null : rdr.GetInt32("pcsEnd"),
+                Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap")) ? (int?)null : rdr.GetInt32("scrap"),
+                Notes = rdr["notes"]?.ToString(),
+                SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber")) ? 0 : rdr.GetInt32("skidNumber")
+            };
+            return model;
+        }
 
         #endregion
 
@@ -557,7 +711,7 @@ ORDER BY name";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
-            await using var rdr = await cmd.ExecuteReaderAsync();
+            using var rdr = await cmd.ExecuteReaderAsync();
             while (await rdr.ReadAsync())
             {
                 ops.Add(rdr.GetString(0));
@@ -569,15 +723,15 @@ ORDER BY name";
         {
             var list = new List<PressSetupModel>();
             const string sql = @"
-        SELECT id, timestamp, part, component, prodNumber, run, operator, endDateTime, machine, notes
-        FROM presssetup
-        WHERE open = 1
-        ORDER BY part, run";
+SELECT id, timestamp, part, component, prodNumber, run, operator, endDateTime, machine, notes
+FROM presssetup
+WHERE open = 1
+ORDER BY part, run";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
-            await using var rdr = await cmd.ExecuteReaderAsync();
+            using var rdr = await cmd.ExecuteReaderAsync();
             while (await rdr.ReadAsync())
             {
                 var model = new PressSetupModel
@@ -585,31 +739,20 @@ ORDER BY name";
                     Id = rdr.GetInt32("id"),
                     Timestamp = rdr.GetDateTime("timestamp"),
                     Part = rdr.GetString("part"),
-                    Component = rdr.IsDBNull(rdr.GetOrdinal("component"))
-                                 ? ""
-                                 : rdr.GetString("component"),                  
-
-                    // Safely read prodNumber
-                    ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
-                                 ? ""
-                                 : rdr.GetString("prodNumber"),
+                    Component = rdr.IsDBNull(rdr.GetOrdinal("component")) ? "" : rdr.GetString("component"),
+                    ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber")) ? "" : rdr.GetString("prodNumber"),
                     Run = rdr.GetString("run"),
                     Operator = rdr.GetString("operator"),
                     EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime"))
-                                 ? (DateTime?)null
-                                 : rdr.GetDateTime("endDateTime"),
+                        ? (DateTime?)null
+                        : rdr.GetDateTime("endDateTime"),
                     Machine = rdr.GetString("machine"),
-                    Notes = rdr.IsDBNull(rdr.GetOrdinal("notes"))
-                                 ? ""
-                                 : rdr.GetString("notes")
+                    Notes = rdr.IsDBNull(rdr.GetOrdinal("notes")) ? "" : rdr.GetString("notes")
                 };
-
                 list.Add(model);
             }
             return list;
         }
-
-
 
         public async Task<List<PressRunLogModel>> GetLoggedInRunsAsync()
         {
@@ -623,7 +766,7 @@ WHERE endDateTime IS NULL";
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
-            await using var rdr = await cmd.ExecuteReaderAsync();
+            using var rdr = await cmd.ExecuteReaderAsync();
             while (await rdr.ReadAsync())
             {
                 list.Add(ParseRunFromReader(rdr));
@@ -633,52 +776,13 @@ WHERE endDateTime IS NULL";
 
         public async Task<List<PressRunLogModel>> GetAllRunsAsync()
         {
-            var list = new List<PressRunLogModel>();
-            list = _moldingService.GetPressRuns();
+            // In your original code, it calls the MoldingService to get them. 
+            // If you want to see them from MySQL directly, you can do so here. 
+            // For consistency, let's do exactly what your original code says:
+            var list = _moldingService.GetPressRuns();
             return list;
         }
 
-        private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
-        {
-            var model = new PressRunLogModel
-            {
-                Id = rdr.GetInt32("id"),
-                Timestamp = rdr.GetDateTime("timestamp"),
-                // Safely read prodNumber:
-                ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber"))
-                             ? ""
-                             : rdr.GetString("prodNumber"),
-                Run = rdr["run"]?.ToString(),
-                Part = rdr["part"]?.ToString(),
-                Component = rdr["component"]?.ToString(),
-                StartDateTime = rdr.GetDateTime("startDateTime"),
-                EndDateTime = rdr.IsDBNull(rdr.GetOrdinal("endDateTime"))
-                                ? null
-                                : rdr.GetDateTime("endDateTime"),
-                Operator = rdr["operator"]?.ToString(),
-                Machine = rdr["machine"]?.ToString(),
-                PcsStart = rdr.IsDBNull(rdr.GetOrdinal("pcsStart"))
-    ? (int?)null
-    : rdr.GetInt32("pcsStart"),
-                PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd"))
-    ? (int?)null
-    : rdr.GetInt32("pcsEnd"),
-
-                Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap"))
-        ? (int?)null
-        : rdr.GetInt32("scrap"),
-
-                Notes = rdr["notes"]?.ToString(),
-                SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber"))
-                                ? 0
-                                : rdr.GetInt32("skidNumber")
-            };
-            return model;
-        }
-
-        
         #endregion
-
-
     }
 }
