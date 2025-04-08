@@ -614,10 +614,21 @@ LIMIT 1";
 
         #region Helpers
 
-        private void PrintFileByMachineName(string pdfFilePath)
+        public void PrintFileByMachineName(string pdfFilePath)
         {
             // Looks at local machine name, calls SharedService to print the PDF
             string computerName = Environment.MachineName;
+
+            // The path to the network file
+            string filePath = @"\\sintergydc2024\vol1\vsp\testcomputername.txt";
+
+
+            // Build the text you want to write: date/time + computer name
+            string textToWrite = $"{DateTime.Now}: The computer name is {computerName}";
+
+            // Append the text to the file (creates if it doesn't exist)
+            System.IO.File.AppendAllText(filePath, textToWrite + System.Environment.NewLine);
+
             if (computerName == "Mold02")
             {
                 _sharedService.PrintFile("Mold02", pdfFilePath);

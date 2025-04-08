@@ -130,48 +130,85 @@ public class SinterRunLogService
         Console.WriteLine($"➡️ Operator: {model.Operator}");
         Console.WriteLine($"➡️ Part: {model.Part}");
         Console.WriteLine($"➡️ ProdNumber: {model.ProdNumber}");
-        Console.WriteLine($"➡️ Run: {model.Run}");  // Check if this prints correctly
+        Console.WriteLine($"➡️ Run: {model.Run}");
         Console.WriteLine($"➡️ Furnace: {model.Machine}");
         Console.WriteLine($"➡️ Process: {model.Process}");
         Console.WriteLine($"➡️ Notes: {model.Notes}");
-        Console.WriteLine($"Pcs:  {model.Pcs}");
+        Console.WriteLine($"➡️ Pcs (requested): {model.Pcs}");
 
-        string query = "INSERT INTO " + datatable + " (prodNumber,  run, part, startDateTime, operator, oven, process, notes, skidNumber, pcs ) " +
-                   "VALUES (@prodNumber, @run, @part,  @startDateTime, @operator, @oven, @process, @notes, @skidNumber, @pcs)";
+        // Build our insert statement
+        // We'll keep pcs in the columns, because we DO want the first row to have it.
+        string insertQuery = @"
+        INSERT INTO sinterrun
+            (prodNumber, run, part, startDateTime, operator, oven, process, notes, skidNumber, pcs)
+        VALUES
+            (@prodNumber, @run, @part, @startDateTime, @operator, @oven, @process, @notes, @skidNumber, @pcs)";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
             connection.Open();
-            using (var command = new MySqlCommand(query, connection))
+
+            // 1) Check if there's already a row with pcs > 0
+            //    for the same (prodNumber, part, run, skidNumber).
+            //    If so, that means "this skid" was already started before,
+            //    and we only want the first row to hold pcs.
+            //    We'll set pcs = 0 for subsequent inserts.
+            string checkQuery = @"
+            SELECT COUNT(*) 
+            FROM sinterrun
+            WHERE prodNumber = @prodNumber
+              AND part       = @part
+              AND (run = @run OR (@run IS NULL AND run IS NULL))
+              AND skidNumber = @skidNumber
+              AND pcs > 0";
+
+            using (var checkCommand = new MySqlCommand(checkQuery, connection))
             {
+                checkCommand.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                checkCommand.Parameters.AddWithValue("@part", model.Part);
+                // run can be null, so handle that carefully
+                checkCommand.Parameters.AddWithValue("@run", string.IsNullOrEmpty(model.Run) ? (object)DBNull.Value : model.Run);
+                checkCommand.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
 
-                command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                command.Parameters.AddWithValue("@run", string.IsNullOrWhiteSpace(model.Run) ? (object)DBNull.Value : model.Run);
-
-                command.Parameters.AddWithValue("@part", model.Part.ToUpper());
-                command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
-                command.Parameters.AddWithValue("@operator", model.Operator);
-                command.Parameters.AddWithValue("@oven", model.Machine);
-                command.Parameters.AddWithValue("@process", model.Process);
-                command.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(model.Notes) ? DBNull.Value : model.Notes);
-                command.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
-                command.Parameters.AddWithValue("@pcs", model.Pcs);
-
-                command.ExecuteNonQuery();
+                long existingRowsWithPcs = (long)checkCommand.ExecuteScalar();
+                if (existingRowsWithPcs > 0)
+                {
+                    // Already a row with pcs for this skid => set pcs=0 for this new record
+                    Console.WriteLine("⚠️  A row for this skid already has pcs. Setting current row's pcs = 0...");
+                    model.Pcs = 0;
+                }
             }
 
-            // If run isn't null or empty
+            // 2) Now do the INSERT
+            using (var insertCommand = new MySqlCommand(insertQuery, connection))
+            {
+                insertCommand.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                insertCommand.Parameters.AddWithValue("@run", string.IsNullOrWhiteSpace(model.Run) ? (object)DBNull.Value : model.Run);
+                insertCommand.Parameters.AddWithValue("@part", model.Part.ToUpper());
+                insertCommand.Parameters.AddWithValue("@startDateTime", DateTime.Now);
+                insertCommand.Parameters.AddWithValue("@operator", model.Operator);
+                insertCommand.Parameters.AddWithValue("@oven", model.Machine);
+                insertCommand.Parameters.AddWithValue("@process", model.Process);
+                insertCommand.Parameters.AddWithValue("@notes", string.IsNullOrEmpty(model.Notes) ? (object)DBNull.Value : model.Notes);
+                insertCommand.Parameters.AddWithValue("@skidNumber", model.SkidNumber);
+                insertCommand.Parameters.AddWithValue("@pcs", model.Pcs);
+
+                int rowsInserted = insertCommand.ExecuteNonQuery();
+                Console.WriteLine($"✅ Rows inserted in sinterrun: {rowsInserted}");
+            }
+
+            // 3) If run isn't null or empty, close the pressrun skid
             if (!string.IsNullOrEmpty(model.Run))
             {
                 string updatePressrunQuery = @"
-            UPDATE pressrun
-            SET open = 0
-            WHERE prodNumber = @prodNumber
-              AND run        = @run
-              AND part       = @part
-              AND skidNumber = @skidNumber
-            ORDER BY id DESC
-            LIMIT 1";
+                UPDATE pressrun
+                SET open = 0
+                WHERE prodNumber = @prodNumber
+                  AND run        = @run
+                  AND part       = @part
+                  AND skidNumber = @skidNumber
+                ORDER BY id DESC
+                LIMIT 1";
 
                 using (var updateCommand = new MySqlCommand(updatePressrunQuery, connection))
                 {
@@ -186,15 +223,15 @@ public class SinterRunLogService
             }
             else
             {
-                // If run is null or empty, update the assembly table
+                // 4) Otherwise, if run is null, close the assembly skid
                 string updateAssemblyQuery = @"
-            UPDATE assembly
-            SET open = 0
-            WHERE prodNumber = @prodNumber
-              AND skidNumber = @skidNumber
-              AND part       = @part
-            ORDER BY id DESC
-            LIMIT 1";
+                UPDATE assembly
+                SET open = 0
+                WHERE prodNumber = @prodNumber
+                  AND skidNumber = @skidNumber
+                  AND part       = @part
+                ORDER BY id DESC
+                LIMIT 1";
 
                 using (var updateCommand = new MySqlCommand(updateAssemblyQuery, connection))
                 {
@@ -206,14 +243,20 @@ public class SinterRunLogService
                     Console.WriteLine($"✅ Rows Updated in assembly: {rowsAffected}");
                 }
             }
-
         }
     }
+
     // Close a specific skid for a part and furnace, now including skidNumber
+    // Service code: SinterRunLogService.cs
+
     public void LogoutOfSkid(string part, string run, string skidNumber, string prodNumber)
     {
-        string query = "UPDATE " + datatable + " SET endDateTime = NOW() " +
-                       "WHERE part = @part AND prodNumber = @prodNumber AND skidNumber = @skidNumber";
+        // 1) Close the sinter record by setting endDateTime
+        string query = "UPDATE " + datatable + " " +
+                       "SET endDateTime = NOW() " +
+                       "WHERE part = @part " +
+                       "  AND prodNumber = @prodNumber " +
+                       "  AND skidNumber = @skidNumber";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -225,23 +268,32 @@ public class SinterRunLogService
                 command.Parameters.AddWithValue("@skidNumber", skidNumber);
 
                 int rowsAffected = command.ExecuteNonQuery();
-                Console.WriteLine($"✅ Rows Updated: {rowsAffected}");
+                Console.WriteLine($"✅ Rows Updated in {datatable}: {rowsAffected}");
             }
         }
 
-        if (string.IsNullOrWhiteSpace(run))
+        // 2) Re-open the green skid in the correct table
+        //    If 'run' is not empty => belongs to pressrun
+        //    If 'run' is empty     => belongs to assembly
+        if (!string.IsNullOrWhiteSpace(run))
         {
-            // If run is null/empty, update the pressrun table.
-            string updateQuery2 = "UPDATE pressrun " +
-                                  "SET open = 1, run = @run, skidNumber = @skidNumber " +
-                                  "ORDER BY id DESC LIMIT 1 " +
-                                  "WHERE run = @run AND skidNumber = @skidNumber";
+            string updatePressrunQuery = @"
+            UPDATE pressrun
+               SET open = 1
+             WHERE prodNumber = @prodNumber
+               AND run        = @run
+               AND part       = @part
+               AND skidNumber = @skidNumber
+             ORDER BY id DESC
+             LIMIT 1";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 connection.Open();
-                using (var updateCommand = new MySqlCommand(updateQuery2, connection))
+                using (var updateCommand = new MySqlCommand(updatePressrunQuery, connection))
                 {
+                    updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
+                    updateCommand.Parameters.AddWithValue("@part", part);
                     updateCommand.Parameters.AddWithValue("@run", run);
                     updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
 
@@ -252,11 +304,14 @@ public class SinterRunLogService
         }
         else
         {
-            // Otherwise, update the assembly table using prodNumber and skidNumber.
-            string updateAssemblyQuery = "UPDATE assembly " +
-                                         "SET open = 1 " +
-                                         "WHERE prodNumber = @prodNumber " +
-                                         "AND skidNumber = @skidNumber";
+            string updateAssemblyQuery = @"
+            UPDATE assembly
+               SET open = 1
+             WHERE prodNumber = @prodNumber
+               AND skidNumber = @skidNumber
+               AND part       = @part
+             ORDER BY id DESC
+             LIMIT 1";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -265,23 +320,24 @@ public class SinterRunLogService
                 {
                     updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
                     updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
+                    updateCommand.Parameters.AddWithValue("@part", part);
 
                     int rowsAffected = updateCommand.ExecuteNonQuery();
                     Console.WriteLine($"✅ Rows Updated in assembly: {rowsAffected}");
                 }
             }
         }
-
-
     }
+
 
     // End the current skid record by updating endDateTime, pcs, and notes,
     // and matching on prodNumber, run, part, and skidNumber.
     public void EndSkid(string prodNumber, string part, string skidNumber, string pcs,
                       string run, string oper, string furnace, string process, string notes)
     {
+
         string updateQuery = "UPDATE " + datatable + " " +
-                             "SET endDateTime = NOW(), pcs = @pcs, notes = @notes " +
+                             "SET endDateTime = NOW(), notes = @notes " +
                              "WHERE prodNumber = @prodNumber " +
                              "AND part = @part " +
                              "AND skidNumber = @skidNumber " +
@@ -295,7 +351,6 @@ public class SinterRunLogService
                 updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
                 updateCommand.Parameters.AddWithValue("@part", part);
                 updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
-                updateCommand.Parameters.AddWithValue("@pcs", pcs);
                 updateCommand.Parameters.AddWithValue("@notes", notes);
 
                 int rowsAffected = updateCommand.ExecuteNonQuery();

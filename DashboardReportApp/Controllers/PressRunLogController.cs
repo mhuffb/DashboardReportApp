@@ -125,32 +125,8 @@ namespace DashboardReportApp.Controllers
         {
             // The user can manually click to print a tag for the skid.
             string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);
-
-            string computerName = Environment.MachineName;
-            // The path to the network file
-            string filePath = @"\\sintergydc2024\vol1\vsp\testcomputername.txt";
-
-
-            // Build the text you want to write: date/time + computer name
-            string textToWrite = $"{DateTime.Now}: The computer name is {computerName}";
-
-            // Append the text to the file (creates if it doesn't exist)
-            System.IO.File.AppendAllText(filePath, textToWrite + System.Environment.NewLine);
-
-
-            if (computerName == "Mold02")
-            {
-                _sharedService.PrintFile("Mold02", pdfFilePath);
-            }
-            else if (computerName == "Mold03")
-            {
-                _sharedService.PrintFile("Mold03", pdfFilePath);
-            }
-            else
-            {
-                // Adjust as needed for other machines or do nothing
-            }
-
+            _pressRunLogService.PrintFileByMachineName(pdfFilePath);
+          
             return RedirectToAction("Index");
         }
     }
