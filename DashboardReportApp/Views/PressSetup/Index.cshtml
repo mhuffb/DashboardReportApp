@@ -169,6 +169,7 @@
 </div>
 
 <!-- Modal for Stopping/Logging Out of Setup -->
+<!-- Modal for Stopping/Logging Out of Setup -->
 <div id="stopSetupModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog">
         <form id="stopSetupForm" method="post" asp-action="Logout">
@@ -216,6 +217,12 @@
                             <option value="Yes">Yes</option>
                             <option value="No">No</option>
                         </select>
+                    </div>
+
+                    <!-- First Part Inspection Checkbox (conditionally displayed when Setup Complete == Yes) -->
+                    <div class="mb-3 d-none" id="inspectionCheckboxContainer">
+                        <input type="checkbox" id="firstPartInspectionCheckbox" name="firstInspectionDone" value="true" />
+                        <label for="firstPartInspectionCheckbox">First Part Inspection Done and Sent</label>
                     </div>
 
                     <!-- Notes -->
@@ -319,4 +326,51 @@
 
 
 </script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Conditional display for the "First Part Inspection" checkbox based on "Setup Complete" selection
+        const modalSetupComplete = document.getElementById("modalSetupComplete");
+        const inspectionCheckboxContainer = document.getElementById("inspectionCheckboxContainer");
+
+        modalSetupComplete.addEventListener("change", function() {
+            if (this.value === "Yes") {
+                // Show the checkbox if setup is complete
+                inspectionCheckboxContainer.classList.remove("d-none");
+            } else {
+                // Hide the checkbox if setup is not complete and reset its state
+                inspectionCheckboxContainer.classList.add("d-none");
+                document.getElementById("firstPartInspectionCheckbox").checked = false;
+            }
+        });
+
+        // Validate the "First Part Inspection" checkbox on form submission if setup is marked complete,
+        // and handle the spinner directly for this form.
+        const stopSetupForm = document.getElementById("stopSetupForm");
+        stopSetupForm.addEventListener("submit", function(e) {
+            if (modalSetupComplete.value === "Yes") {
+                const inspectionCheckbox = document.getElementById("firstPartInspectionCheckbox");
+                if (!inspectionCheckbox.checked) {
+                    alert("First inspection must be done and sent to complete setup.");
+                    e.preventDefault(); // Prevent form submission if checkbox is not checked
+                    return;
+                }
+            }
+            // Validation passed; show the spinner and let the submission proceed.
+            showSpinner();
+        });
+
+        // Global spinner listener for all other forms
+        document.addEventListener("submit", function(e) {
+            // Exclude the stopSetupForm since we handle its spinner locally.
+            if (e.target.id === "stopSetupForm") return;
+            setTimeout(function() {
+                if (!e.defaultPrevented) {
+                    showSpinner();
+                }
+            }, 10);
+        });
+    });
+</script>
+
+
 <script src="/js/mydatatable.bundle.js"></script>

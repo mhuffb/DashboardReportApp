@@ -215,9 +215,17 @@
         }
 
         // Show spinner for *every* form submission
-        document.addEventListener("submit", function(e) {
+        // Global spinner submit listener with a delay to check for prevented events
+document.addEventListener("submit", function(e) {
+    // Delay spinner display so that any custom validation can run first
+    setTimeout(function() {
+        // Only show spinner if the event has not been canceled
+        if (!e.defaultPrevented) {
             showSpinner();
-        });
+        }
+    }, 10);
+});
+
 
         // Show spinner for any button with data-show-spinner="true"
         document.addEventListener("click", function(e) {
