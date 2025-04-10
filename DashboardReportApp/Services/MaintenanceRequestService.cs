@@ -166,8 +166,8 @@
             // Define the mapping of departments to email recipients
             var departmentEmailRecipients = new Dictionary<string, List<string>>
     {
-       // { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "rseltzer@sintergy.net", "mhuff@sintergy.net" } },
-        { "Finishing", new List<string> {"mhuff@sintergy.net" } },
+        { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "rseltzer@sintergy.net", "mhuff@sintergy.net" } },
+       // { "Finishing", new List<string> {"mhuff@sintergy.net" } },
 
         { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" , "mhuff@sintergy.net"} },
         { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net", "mhuff@sintergy.net" } },

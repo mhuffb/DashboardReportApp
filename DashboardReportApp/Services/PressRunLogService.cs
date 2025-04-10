@@ -244,14 +244,14 @@ WHERE run = @runIdentifier
                                 if (endedSkid != null)
                                 {
                                     string filePath = await GenerateRouterTagAsync(endedSkid);
-                                    _sharedService.PrintFileToSpecificPrinter("", filePath);
+                                    _sharedService.PrintFileToClosestPrinter(filePath);
                                 }
                             }
 
                             // Mark them so we don't reprint later
                             string markPrinted = @"
 UPDATE pressrun
-SET open = 2
+SET open = 1
 WHERE id IN (" + string.Join(",", endedSkidIds) + ")";
                             if (endedSkidIds.Count > 0)
                             {

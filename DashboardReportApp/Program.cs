@@ -24,9 +24,7 @@ try
     // Add services to the container
     builder.Services.AddControllersWithViews();
 
-    // Register Negotiate authentication services.
-    builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-        .AddNegotiate();
+   
 
     builder.Services.AddControllers();
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
