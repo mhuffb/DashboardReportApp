@@ -67,7 +67,7 @@
                     // Generate PDF for the request
                     string pdfPath = GeneratePdf(request);
 
-                    _sharedService.PrintFile("Maintenance", pdfPath);
+                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
 
                     // Email the PDF
                     await SendEmailWithPdfAsync(pdfPath, request);

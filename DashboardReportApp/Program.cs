@@ -1,5 +1,6 @@
 using DashboardReportApp.Services;
 using Serilog;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug() // Capture detailed logs
@@ -22,6 +23,11 @@ try
 
     // Add services to the container
     builder.Services.AddControllersWithViews();
+
+    // Register Negotiate authentication services.
+    builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+        .AddNegotiate();
+
     builder.Services.AddControllers();
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
     builder.Services.AddScoped<PressMixBagChangeService>();
@@ -45,6 +51,8 @@ try
     builder.Services.AddScoped<SharedService>();
     builder.Services.AddScoped<AssemblyService>();
     builder.Services.AddScoped<ProlinkService>();
+    builder.Services.AddHttpContextAccessor();
+
     // Add session services
     builder.Services.AddSession(options =>
     {
@@ -70,6 +78,8 @@ try
     app.UseStaticFiles();
 
     app.UseRouting();
+
+    app.UseAuthentication();
     app.UseAuthorization();
     app.UseSession(); // Enable session middleware
     app.MapControllerRoute(

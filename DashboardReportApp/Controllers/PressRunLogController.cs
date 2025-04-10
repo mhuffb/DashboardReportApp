@@ -1,5 +1,6 @@
 ﻿using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
+    [Authorize]
     public class PressRunLogController : Controller
     {
         private readonly PressRunLogService _pressRunLogService;
@@ -123,9 +125,10 @@ namespace DashboardReportApp.Controllers
         [HttpPost]
         public async Task<IActionResult> GenerateRouterTag(PressRunLogModel model)
         {
+
             // The user can manually click to print a tag for the skid.
             string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);
-            _pressRunLogService.PrintFileByMachineName(pdfFilePath);
+            _sharedService.PrintFileToClosestPrinter(pdfFilePath);
           
             return RedirectToAction("Index");
         }

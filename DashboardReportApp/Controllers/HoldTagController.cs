@@ -75,7 +75,7 @@ namespace DashboardReportApp.Controllers
                 string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
 
 
-                _sharedService.PrintFile("QAHoldTags", pdfPath, record.Quantity.GetValueOrDefault(1));
+                _sharedService.PrintFileToSpecificPrinter("QAHoldTags", pdfPath, record.Quantity.GetValueOrDefault(1));
 
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";

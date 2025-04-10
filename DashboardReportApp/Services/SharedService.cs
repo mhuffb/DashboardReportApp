@@ -15,78 +15,22 @@ namespace DashboardReportApp.Services
         private readonly string _connectionStringSQLExpress;
         private readonly string _connectionStringDataflex;
         private readonly string _uploadFolder;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public SharedService(IConfiguration configuration)
+        public SharedService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
         {
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
             _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public SharedService()
         {
         }
 
-        public void PrintFile(string printerName, string pdfPath, int copies = 1)
-        {
-            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
-            {
-                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
-            }
-
-            if (copies < 1)
-            {
-                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
-            }
-
-            try
-            {
-                string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
-
-                // Validate printer existence
-                if (!PrinterSettings.InstalledPrinters.Cast<string>()
-                    .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    throw new Exception($"Printer '{printerName}' is not installed.");
-                }
-
-                // Validate SumatraPDF existence
-                if (!File.Exists(sumatraPath))
-                {
-                    throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
-                }
-
-                // Build command arguments
-                // Only add the copies setting if more than one copy is requested.
-                string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
-                string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
-
-                // Start the process
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = sumatraPath,
-                        Arguments = arguments,
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    throw new Exception($"Printing process exited with code {process.ExitCode}.");
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Failed to print PDF: {ex.Message}");
-            }
-        }
+       
 
         public string SaveFileToUploads(IFormFile file, string prefix)
         {
@@ -504,5 +448,170 @@ ORDER BY
             return partName;
         }
 
+        public void PrintFileToClosestPrinter(string pdfPath, int copies = 1)
+        {
+            // Safely access the current HttpContext and then the User's identity
+            var user = _httpContextAccessor.HttpContext?.User;
+            string userName = user?.Identity?.Name ?? "Unknown User";
+
+            // Prepare the log message. Adjust the text if needed.
+            string textToWrite = $"{DateTime.Now}: User name is {userName}";
+
+            // Define the shared file path
+            string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
+
+            try
+            {
+                // Append the text to the file (creates the file if it doesn't exist)
+                System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
+            }
+            catch (Exception ex)
+            {
+                // Consider proper logging or error handling here
+                // For example, log the error to a logging service or a local file if file access fails
+                throw new Exception("Error writing to log file", ex);
+            }
+
+            // Get the corresponding printer based on the user
+            string printerName = GetPrinterForUser(userName);
+
+            Console.WriteLine("User: " + userName + " Printer: " + GetPrinterForUser(userName));
+
+            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
+            {
+                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
+            }
+
+            if (copies < 1)
+            {
+                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
+            }
+
+            try
+            {
+                string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
+
+                // Validate printer existence
+                if (!PrinterSettings.InstalledPrinters.Cast<string>()
+                    .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new Exception($"Printer '{printerName}' is not installed.");
+                }
+
+                // Validate SumatraPDF existence
+                if (!File.Exists(sumatraPath))
+                {
+                    throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
+                }
+
+                // Build command arguments
+                // Only add the copies setting if more than one copy is requested.
+                string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
+                string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
+
+                // Start the process
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = sumatraPath,
+                        Arguments = arguments,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"Printing process exited with code {process.ExitCode}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to print PDF: {ex.Message}");
+            }
+        }
+
+        private string GetPrinterForUser(string userName)
+        {
+            // Example mapping of users (or locations) to printers
+            var userPrinterMappings = new Dictionary<string, string>
+    {
+        { @"OFFICE01\Office01", "Printer_A" },
+        { @"DOMAIN\\User2", "Printer_B" },
+        // Add additional mappings as needed
+    };
+
+            // Try to get the printer name from the dictionary
+            if (userPrinterMappings.TryGetValue(userName, out string printerName))
+            {
+                return printerName;
+            }
+
+            // Fallback option if not found
+            return "Default_Printer";
+        }
+        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies = 1)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
+            {
+                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
+            }
+
+            if (copies < 1)
+            {
+                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
+            }
+
+            try
+            {
+                string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
+
+                // Validate printer existence
+                if (!PrinterSettings.InstalledPrinters.Cast<string>()
+                    .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new Exception($"Printer '{printerName}' is not installed.");
+                }
+
+                // Validate SumatraPDF existence
+                if (!File.Exists(sumatraPath))
+                {
+                    throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
+                }
+
+                // Build command arguments
+                // Only add the copies setting if more than one copy is requested.
+                string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
+                string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
+
+                // Start the process
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = sumatraPath,
+                        Arguments = arguments,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"Printing process exited with code {process.ExitCode}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to print PDF: {ex.Message}");
+            }
+        }
     }
 }

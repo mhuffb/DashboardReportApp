@@ -110,7 +110,7 @@ LIMIT 1";
                         // 3b) Generate PDF
                         string filePath = await GenerateRouterTagAsync(endedSkid);
                         // 3c) Print
-                        PrintFileByMachineName(filePath);
+                        _sharedService.PrintFileToClosestPrinter(filePath);
                     }
                 }
             }
@@ -148,7 +148,7 @@ SELECT LAST_INSERT_ID();";
                 if (newSkid != null)
                 {
                     string filePath = await GenerateRouterTagAsync(newSkid);
-                    PrintFileByMachineName(filePath);
+                    _sharedService.PrintFileToClosestPrinter(filePath);
                 }
             }
         }
@@ -244,7 +244,7 @@ WHERE run = @runIdentifier
                                 if (endedSkid != null)
                                 {
                                     string filePath = await GenerateRouterTagAsync(endedSkid);
-                                    PrintFileByMachineName(filePath);
+                                    _sharedService.PrintFileToSpecificPrinter("", filePath);
                                 }
                             }
 
@@ -614,34 +614,6 @@ LIMIT 1";
 
         #region Helpers
 
-        public void PrintFileByMachineName(string pdfFilePath)
-        {
-            // Looks at local machine name, calls SharedService to print the PDF
-            string computerName = Environment.MachineName;
-
-            // The path to the network file
-            string filePath = @"\\sintergydc2024\vol1\vsp\testcomputername.txt";
-
-
-            // Build the text you want to write: date/time + computer name
-            string textToWrite = $"{DateTime.Now}: The computer name is {computerName}";
-
-            // Append the text to the file (creates if it doesn't exist)
-            System.IO.File.AppendAllText(filePath, textToWrite + System.Environment.NewLine);
-
-            if (computerName == "Mold02")
-            {
-                _sharedService.PrintFile("Mold02", pdfFilePath);
-            }
-            else if (computerName == "Mold03")
-            {
-                _sharedService.PrintFile("Mold03", pdfFilePath);
-            }
-            else
-            {
-                // Adjust for other machines or do nothing
-            }
-        }
 
         private async Task<PressRunLogModel> GetPressRunRecordAsync(MySqlConnection conn, string run, int skidNumber)
         {

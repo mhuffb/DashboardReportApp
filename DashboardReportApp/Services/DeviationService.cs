@@ -202,7 +202,7 @@ namespace DashboardReportApp.Services
                     .SetTextAlignment(TextAlignment.CENTER));
             }
             Console.WriteLine("Printing file: " + filePath);
-            _sharedService.PrintFile("QC1", filePath);
+            _sharedService.PrintFileToSpecificPrinter("QC1", filePath);
             return filePath;
         }
 
