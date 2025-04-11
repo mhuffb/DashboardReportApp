@@ -351,7 +351,7 @@ LIMIT 1";
 
             using (var document = new Document(pdf))
             {
-                document.SetMargins(20, 20, 40, 20);
+                document.SetMargins(40, 20, 60, 20);
 
                 // Title
                 document.Add(new Paragraph("Sintergy Tracer Tag")
@@ -474,13 +474,13 @@ LIMIT 1";
                             .SetMarginBottom(10);
 
                         timeTable.AddCell(new Cell().Add(
-                            new Paragraph("Start DateTime: " + formattedStart)
+                            new Paragraph($"Start DateTime: {model.StartDateTime}")
                                 .SetFont(normalFont)
                                 .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER));
 
                         timeTable.AddCell(new Cell().Add(
-                            new Paragraph("End DateTime: " + formattedEnd)
+                            new Paragraph($"End DateTime: {model.EndDateTime}")
                                 .SetFont(normalFont)
                                 .SetFontSize(12))
                             .SetBorder(Border.NO_BORDER));

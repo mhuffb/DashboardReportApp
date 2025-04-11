@@ -66,11 +66,12 @@
 
                     // Generate PDF for the request
                     string pdfPath = GeneratePdf(request);
-
-                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
-
                     // Email the PDF
-                    await SendEmailWithPdfAsync(pdfPath, request);
+                    //await SendEmailWithPdfAsync(pdfPath, request);
+
+                   // _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
+
+                    
 
                     return true;
                 }
@@ -85,6 +86,7 @@
             string inputFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "workorderinput.pdf");
 
             Console.WriteLine("InputPdf: " + inputFilePath);
+            Console.WriteLine("FileAddress1: " + request.FileAddress1);
 
             string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequest_{request.Id}.pdf";
 

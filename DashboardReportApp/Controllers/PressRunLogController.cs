@@ -126,30 +126,7 @@ namespace DashboardReportApp.Controllers
         [HttpPost]
         public async Task<IActionResult> GenerateRouterTag(PressRunLogModel model)
         {
-            string clientIp = HttpContext.Connection.RemoteIpAddress?.ToString();
-
-            // Optional: Reverse lookup to get a host name, if your network DNS is set up
-             string clientHostName = Dns.GetHostEntry(clientIp).HostName;
-            Console.WriteLine("Client IP: " + clientIp + "ClientHostName: " + clientHostName);
-            
-
-            // Prepare the log message. Adjust the text if needed.
-            string textToWrite = $"{DateTime.Now}: User name is {clientHostName} Ip is {clientIp}";
-
-            // Define the shared file path
-            string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
-
-            try
-            {
-                // Append the text to the file (creates the file if it doesn't exist)
-                System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
-            }
-            catch (Exception ex)
-            {
-                // Consider proper logging or error handling here
-                // For example, log the error to a logging service or a local file if file access fails
-                throw new Exception("Error writing to log file", ex);
-            }
+          
 
             // The user can manually click to print a tag for the skid.
             string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);

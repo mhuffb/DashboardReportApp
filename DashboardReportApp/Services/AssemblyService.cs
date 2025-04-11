@@ -354,7 +354,7 @@ ORDER BY startDateTime DESC";
                     PdfCanvas pdfCanvas = new PdfCanvas(page);
                     Canvas footerCanvas = new Canvas(pdfCanvas, pageSize);
                     footerCanvas.ShowTextAligned(
-                        new Paragraph(model.Part)
+                        new Paragraph(model.Part + " Skid # " + model.SkidNumber)
                             .SetFont(boldFont)
                             .SetFontSize(25),
                         pageSize.GetWidth() / 2,

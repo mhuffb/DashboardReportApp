@@ -143,64 +143,43 @@ namespace DashboardReportApp.Services
         public int CheckIfPartNeedsSintergySecondary(string part)
         {
             List<string> result = _sharedService.GetOrderOfOps(part);
-
-            bool sintergyFound = false;
-            bool machineFound = false;
-            bool tapFound = false;
-            bool honingFound = false; // Changed from "honeFound" to "honingFound"
+            int count = 0;
 
             foreach (var op in result)
             {
                 Console.WriteLine("Checking: " + op);
-                if (op.IndexOf("Sintergy", StringComparison.OrdinalIgnoreCase) >= 0)
+
+                // Check for a combined condition in the current op
+                bool hasSintergy = op.IndexOf("Sintergy", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool hasMachining = op.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (hasSintergy && hasMachining)
                 {
-                    sintergyFound = true;
-                    Console.WriteLine("Found 'Sintergy' in: " + op);
+                    count++;
+                    Console.WriteLine("Combined condition met in operation: " + op);
+                    continue; // Skip further checks if the op qualifies as combined
                 }
-                if (op.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    machineFound = true;
-                    Console.WriteLine("Found 'Machin' in: " + op);
-                }
+
+                // Check for "Tap"
                 if (op.IndexOf("Tap", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    tapFound = true;
-                    Console.WriteLine("Found 'Tap' in: " + op);
+                    count++;
+                    Console.WriteLine("Condition met: 'Tap' found in: " + op);
+                    continue;
                 }
-                // Updated check to "Honing" instead of "Hone"
+
+                // Check for "Honing"
                 if (op.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    honingFound = true;
-                    Console.WriteLine("Found 'Honing' in: " + op);
+                    count++;
+                    Console.WriteLine("Condition met: 'Honing' found in: " + op);
                 }
             }
 
-            int count = 0;
-
-            // Combined condition: if both Sintergy and Machine are found, add one.
-            if (sintergyFound && machineFound)
-            {
-                count++;
-                Console.WriteLine("Combined condition met: Both 'Sintergy' and 'Machine' found.");
-            }
-            // Condition for "Tap"
-            if (tapFound)
-            {
-                count++;
-                Console.WriteLine("Condition met: 'Tap' found.");
-            }
-            // Condition for "Honing"
-            if (honingFound)
-            {
-                count++;
-                Console.WriteLine("Condition met: 'Honing' found.");
-            }
-
-            Console.WriteLine($"Debug: sintergyFound = {sintergyFound}, machineFound = {machineFound}, tapFound = {tapFound}, honingFound = {honingFound}");
             Console.WriteLine("Debug: Total sintergy secondary ops count = " + count);
-
             return count;
         }
+
 
 
 

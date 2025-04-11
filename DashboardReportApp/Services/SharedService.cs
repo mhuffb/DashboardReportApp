@@ -262,7 +262,7 @@ ORDER BY
                     }
                 }
             }
-           // Console.WriteLine(result.ToArray());
+            Console.WriteLine(result.ToArray());
             return result;
         }
 
@@ -450,37 +450,80 @@ ORDER BY
 
         public void PrintFileToClosestPrinter(string pdfPath, int copies = 1)
         {
-           
-
-
-            // Safely access the current HttpContext and then the User's identity
-            //var user = _httpContextAccessor.HttpContext?.User;
-            //string userName = user?.Identity?.Name ?? "Unknown User";
-            string userName = "None";
-
-            // Prepare the log message. Adjust the text if needed.
-            string textToWrite = $"{DateTime.Now}: User name is {userName}";
-
-            // Define the shared file path
-            string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
-
-            try
+            var context = _httpContextAccessor.HttpContext;
+            string clientHostName = "Unknown";
+            if (context != null)
             {
-                // Append the text to the file (creates the file if it doesn't exist)
-                System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
+                string clientIp = context.Connection.RemoteIpAddress?.ToString();
+
+                // Reverse DNS (optional, and may be slow if DNS is not set up or unresponsive)
+                
+                try
+                {
+                    if (!string.IsNullOrEmpty(clientIp))
+                    {
+                        var entry = Dns.GetHostEntry(clientIp);
+                        clientHostName = entry.HostName;
+                    }
+                }
+                catch (System.Net.Sockets.SocketException)
+                {
+                    // Reverse DNS failed or not possible
+                }
+
+                // Prepare the log message. Adjust the text if needed.
+                string textToWrite = $"{DateTime.Now}: User name is {clientHostName} Ip is {clientIp}";
+
+                // Define the shared file path
+                string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
+
+                try
+                {
+                    // Append the text to the file (creates the file if it doesn't exist)
+                    System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
+                }
+                catch (Exception ex)
+                {
+                    // Consider proper logging or error handling here
+                    // For example, log the error to a logging service or a local file if file access fails
+                    throw new Exception("Error writing to log file", ex);
+                }
             }
-            catch (Exception ex)
+            else
             {
-                // Consider proper logging or error handling here
-                // For example, log the error to a logging service or a local file if file access fails
-                throw new Exception("Error writing to log file", ex);
+                Console.WriteLine("No active HttpContext available.");
             }
 
             // Get the corresponding printer based on the user
-            string printerName = GetPrinterForUser(userName);
+            string printerName = GetPrinterForUser(clientHostName);
 
-            Console.WriteLine("User: " + userName + " Printer: " + printerName);
+            PrintFileToSpecificPrinter(printerName, pdfPath);
+           
+        }
 
+        private string GetPrinterForUser(string userName)
+        {
+            // Example mapping of users (or locations) to printers
+            var userPrinterMappings = new Dictionary<string, string>
+    {
+        { @"Office01.sintergyinc.local", "None" },
+        { @"mold02.sintergyinc.local", "Mold02" },
+        { @"MOLD03.sintergyinc.local", "Mold03" },
+        { @"MOLD04-PC", "Mold04" },
+        // Add additional mappings as needed
+    };
+
+            // Try to get the printer name from the dictionary
+            if (userPrinterMappings.TryGetValue(userName, out string printerName))
+            {
+                return printerName;
+            }
+
+            // Fallback option if not found
+            return "None";
+        }
+        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies = 1)
+        {
             if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
             {
                 throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
@@ -539,86 +582,6 @@ ORDER BY
                 {
                     throw new Exception($"Failed to print PDF: {ex.Message}");
                 }
-            }
-
-        }
-
-        private string GetPrinterForUser(string userName)
-        {
-            // Example mapping of users (or locations) to printers
-            var userPrinterMappings = new Dictionary<string, string>
-    {
-        { @"OFFICE01\Office01", "None" },
-        { @"None", "None" },
-        // Add additional mappings as needed
-    };
-
-            // Try to get the printer name from the dictionary
-            if (userPrinterMappings.TryGetValue(userName, out string printerName))
-            {
-                return printerName;
-            }
-
-            // Fallback option if not found
-            return "None";
-        }
-        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies = 1)
-        {
-            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
-            {
-                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
-            }
-
-            if (copies < 1)
-            {
-                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
-            }
-
-            try
-            {
-                string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
-
-                // Validate printer existence
-                if (!PrinterSettings.InstalledPrinters.Cast<string>()
-                    .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    throw new Exception($"Printer '{printerName}' is not installed.");
-                }
-
-                // Validate SumatraPDF existence
-                if (!File.Exists(sumatraPath))
-                {
-                    throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
-                }
-
-                // Build command arguments
-                // Only add the copies setting if more than one copy is requested.
-                string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
-                string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
-
-                // Start the process
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = sumatraPath,
-                        Arguments = arguments,
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    throw new Exception($"Printing process exited with code {process.ExitCode}.");
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Failed to print PDF: {ex.Message}");
             }
         }
     }
