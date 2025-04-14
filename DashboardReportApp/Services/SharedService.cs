@@ -32,7 +32,7 @@ namespace DashboardReportApp.Services
 
        
 
-        public string SaveFileToUploads(IFormFile file, string prefix)
+        public string SaveFileToUploads(IFormFile file, string prefix, int id)
         {
             //Prefixes HoldTagFile1, HoldTagFile2, 
             if (file == null || file.Length == 0)
@@ -48,8 +48,8 @@ namespace DashboardReportApp.Services
 
             // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
             var extension = Path.GetExtension(file.FileName);
-            var uniqueName = "_" + DateTime.Now.Ticks + extension;
-            var finalPath = Path.Combine(_uploadFolder, uniqueName);
+            //var uniqueName = "_" + DateTime.Now.Ticks + extension;
+            var finalPath = Path.Combine(_uploadFolder, prefix + "_" + id + extension);
 
             // Copy the file to disk
             using (var stream = new FileStream(finalPath, FileMode.Create))
@@ -60,7 +60,7 @@ namespace DashboardReportApp.Services
             // Return the path so we can save it in record.FileAddress1
             return finalPath;
         }
-        public void SendEmailWithAttachment(string receiverEmail, string attachmentPath, string subject, string body)
+        public void SendEmailWithAttachment(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
         {
             string senderEmail = "notifications@sintergy.net";
             string senderPassword = "$inT15851";
@@ -79,6 +79,12 @@ namespace DashboardReportApp.Services
             {
                 Attachment attachment = new Attachment(attachmentPath);
                 mail.Attachments.Add(attachment);
+            }
+            // Attach the PDF if it exists
+            if (!string.IsNullOrEmpty(attachmentPath2))
+            {
+                Attachment attachment2 = new Attachment(attachmentPath2);
+                mail.Attachments.Add(attachment2);
             }
 
             // Configure SMTP client

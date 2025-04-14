@@ -32,7 +32,7 @@
         }
 
       
-        public async Task<bool> AddRequestAsync(MaintenanceRequestModel request)
+        public async Task<int> AddRequestAsync(MaintenanceRequestModel request)
         {
             string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, FileAddress1, department, downStartDateTime, status) 
                      VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @FileAddress1, @department, @downStartDateTime, @status);
@@ -58,22 +58,22 @@
                     if (result != null && int.TryParse(result.ToString(), out int insertedId))
                     {
                         request.Id = insertedId; // Assign the generated ID to the request
+                        Console.WriteLine("Request ID: " + insertedId);
                     }
                     else
                     {
                         throw new InvalidOperationException("Failed to retrieve the inserted ID.");
                     }
-
                     // Generate PDF for the request
                     string pdfPath = GeneratePdf(request);
                     // Email the PDF
-                    //await SendEmailWithPdfAsync(pdfPath, request);
+                    await SendEmailWithPdfAsync(pdfPath, request);
 
-                   // _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
+                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
 
                     
 
-                    return true;
+                    return request.Id;
                 }
             }
         }
@@ -81,12 +81,10 @@
 
         public string GeneratePdf(MaintenanceRequestModel request)
         {
-
+           
             // Path to the input PDF template in wwwroot
             string inputFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "workorderinput.pdf");
 
-            Console.WriteLine("InputPdf: " + inputFilePath);
-            Console.WriteLine("FileAddress1: " + request.FileAddress1);
 
             string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequest_{request.Id}.pdf";
 
@@ -148,6 +146,10 @@
                             {
                                 document.Add(new Paragraph("Image Attached").SetFixedPosition(450, 460, 200));
                             }
+                            else
+                            {
+                                document.Add(new Paragraph("No Image Attached").SetFixedPosition(450, 460, 200));
+                            }
                         }
                     }
                 }
@@ -197,7 +199,6 @@
                 try
                 {
                     await SendIndividualEmailAsync(pdfPath, recipient, request);
-                    Console.WriteLine($"Email sent to {recipient}");
                 }
                 catch (Exception ex)
                 {
@@ -230,6 +231,12 @@ Problem: {request.Problem}"
             else
             {
                 Console.WriteLine($"PDF file not found at {pdfPath}");
+            }
+
+            // Attach the PDF
+            if (File.Exists(request.FileAddress1))
+            {
+                builder.Attachments.Add(request.FileAddress1);
             }
 
             email.Body = builder.ToMessageBody();
@@ -357,7 +364,7 @@ Problem: {request.Problem}"
         }
 
 
-        public async Task<bool> UpdateFile1Link(int id, string imagePath)
+        public async Task<string> UpdateFile1Link(int id, string imagePath)
         {
             try
             {
@@ -368,24 +375,21 @@ Problem: {request.Problem}"
                     await connection.OpenAsync();
                     using (var command = new MySqlCommand(query, connection))
                     {
-                        Console.WriteLine($"[DEBUG] Updating FileAddress1 for ID: {id}");
-                        Console.WriteLine($"[DEBUG] File Path: {imagePath}");
 
                         // Ensure NULL safety
                         command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
                         command.Parameters.AddWithValue("@id", id);
 
                         int rowsAffected = await command.ExecuteNonQueryAsync();
-                        Console.WriteLine($"[DEBUG] Rows Affected: {rowsAffected}");
 
-                        return rowsAffected > 0;
+                        return imagePath;
                     }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] UpdateFileAddress1 failed: {ex.Message}");
-                return false;
+                return null;
             }
         }
 

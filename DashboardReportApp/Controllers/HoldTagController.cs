@@ -55,13 +55,7 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                // 1) If a file was uploaded, save it and set FileAddress1
-                if (file != null && file.Length > 0)
-                {
-                    // We'll call a new service method to do the file saving
-                    string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1");
-                    record.FileAddress1 = savedPath;
-                }
+                
 
                 // 2) Set default date
                 record.Date = DateTime.Now;
@@ -70,12 +64,21 @@ namespace DashboardReportApp.Controllers
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
 
                 record.Id = newId;
+                // 1) If a file was uploaded, save it and set FileAddress1
+                if (file != null && file.Length > 0)
+                {
+                    // We'll call a new service method to do the file saving
+                    string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1", record.Id);
+                    record.FileAddress1 = savedPath;
+                    await _holdTagService.UpdateFileAddress1Async(record.Id, savedPath);
+                }
 
+                
                 // 4) Generate PDF using the record that now contains the ID.
                 string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
 
 
-                _sharedService.PrintFileToSpecificPrinter("QAHoldTags", pdfPath, record.Quantity.GetValueOrDefault(1));
+                //_sharedService.PrintFileToSpecificPrinter("QAHoldTags", pdfPath, record.Quantity.GetValueOrDefault(1));
 
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
@@ -85,7 +88,7 @@ namespace DashboardReportApp.Controllers
                               $"Issued Date: {record.Date:MM/dd/yyyy}";
 
                 //5) Send email 
-                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, subject, body);
+               // _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1 ,subject, body);
 
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
@@ -160,9 +163,10 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                // 1) Save the file on disk
-                var savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1");
 
+                // 1) Save the file on disk
+                string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1", id);
+                Console.WriteLine("TEst " + savedPath);
                 // 2) Update the DB record with this path
                 await _holdTagService.UpdateFileAddress1Async(id, savedPath);
 

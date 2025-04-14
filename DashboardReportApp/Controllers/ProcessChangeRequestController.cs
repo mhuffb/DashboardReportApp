@@ -67,7 +67,7 @@ namespace DashboardReportApp.Controllers
                     filePath = _serviceProcessChangeRequest.UpdateFileAddress1(newRequestId, file);
                 }
 
-                _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", filePath, "Process Change Request", model.Request);
+                _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", filePath, null ,"Process Change Request", model.Request);
 
                 return RedirectToAction("Index");
             }
