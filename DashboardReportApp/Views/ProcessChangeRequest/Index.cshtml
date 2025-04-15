@@ -110,10 +110,10 @@
                         </td>
                         <td>
                             <!-- "Add File" for FileAddress1 only -->
-                            <button type="button" class="btn btn-secondary btn-sm add-file-btn"
-                                    data-id="@item.Id">
+                            <button type="button" class="btn btn-secondary btn-sm add-file-btn" data-id="@item.Id">
                                 Add File 1
                             </button>
+
                         </td>
                     </tr>
                 }
@@ -178,34 +178,15 @@
             </form>
         </div>
     </div>
+    <form asp-action="UpdateFileAddress1" method="post" enctype="multipart/form-data"
+          id="updateFileForm" style="display:none;">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" id="update-file-id" />
+        <input type="file" name="file" id="update-file-input" />
+    </form>
+
 </div>
 
-<!-- Modal: Add File (FileAddress1 only) -->
-<div class="modal fade" id="addFileModal" tabindex="-1" aria-labelledby="addFileModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-md">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Attach File 1</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <!-- This form posts to UpdateFileAddress1 -->
-            <form asp-action="UpdateFileAddress1" method="post" enctype="multipart/form-data">
-                <div class="modal-body">
-                    <!-- The hidden field to hold the record ID -->
-                    <input type="hidden" name="id" id="add-file-id" />
-                    <div class="mb-3">
-                        <label for="add-fileinput" class="form-label">Select File</label>
-                        <input type="file" name="file" id="add-fileinput" class="form-control" required />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Attach File</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <!-- File Preview Modal (Image or PDF) -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
@@ -426,16 +407,38 @@
                 document.body.style = '';
             });
 
-            //---------------------------------------------------------
-            // 3) Show "Add File 1" Modal
-            const addFileModal = new bootstrap.Modal(document.getElementById('addFileModal'));
+          
+        });
+
+                document.addEventListener('DOMContentLoaded', function () {
+            // ...
+
+            // 3) When user clicks "Add File 1," directly open the file picker, then submit.
+            const fileInput = document.getElementById('update-file-input');
+            const hiddenId = document.getElementById('update-file-id');
+            const updateForm = document.getElementById('updateFileForm');
+
             document.querySelectorAll('.add-file-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const requestId = btn.dataset.id;
-                    document.getElementById('add-file-id').value = requestId;
-                    addFileModal.show();
+                    // 1) Put the ID in the hidden field
+                    hiddenId.value = requestId;
+
+                    // 2) Programmatically open the file picker
+                    fileInput.value = ""; // reset the file input in case user cancels
+                    fileInput.click();
                 });
             });
+
+            // Whenever a file is chosen, auto-submit the form
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    updateForm.submit();
+                }
+            });
+
+            // ...
         });
+
     </script>
 }
