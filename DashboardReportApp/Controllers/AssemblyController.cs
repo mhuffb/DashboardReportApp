@@ -65,13 +65,7 @@ namespace DashboardReportApp.Controllers
                 // Now generate the PDF report using the updated model.
                 string pdfFilePath = await _assemblyService.GenerateAssemblyReportAsync(assemblyModel);
 
-                string computerName = Environment.MachineName;
-                Console.WriteLine("Computer Name: " + computerName);
-
-               // if (computerName == "Mold02")
-               // {
-              //      _sharedService.PrintFile("Mold02", pdfFilePath);
-              //  }
+                _sharedService.PrintFileToClosestPrinter(pdfFilePath);
 
             }
             catch (Exception ex)
