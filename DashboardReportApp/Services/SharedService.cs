@@ -515,7 +515,7 @@ ORDER BY
         { @"Office01.sintergyinc.local", "None" },
         { @"mold02.sintergyinc.local", "Mold02" },
         { @"MOLD03.sintergyinc.local", "Mold03" },
-        { @"MOLD04-PC", "Mold04" },
+        { @"MOLD04-PC", "Mold004" },
         // Add additional mappings as needed
     };
 
