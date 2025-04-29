@@ -49,7 +49,7 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model)
+        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart)
         {
             var formModel = new PressRunLogModel
             {
@@ -59,12 +59,15 @@ namespace DashboardReportApp.Controllers
                 Machine = model.Machine,
                 Run = model.Run,
                 StartDateTime = DateTime.Now,
-                ProdNumber = model.ProdNumber
+                ProdNumber = model.ProdNumber,
+                PcsStart = pcsStart
             };
 
             await _pressRunLogService.HandleLogin(formModel);
             return RedirectToAction("Index");
         }
+
+
 
         // ============== START SKID ==============
         [HttpPost]
@@ -84,16 +87,18 @@ namespace DashboardReportApp.Controllers
             ViewBag.RunId = runId;
             ViewBag.Machine = machine;
             ViewBag.DeviceCount = deviceCount ?? 0;
-            return PartialView("_LogoutCountModal");
+            return PartialView("_LogoutCountModal"); // we’ll create this modal next
         }
+
 
         [HttpPost]
         public async Task<IActionResult> ConfirmLogout(int runId, int finalCount, int scrap, string notes)
         {
-            // Logs out main run, does not forcibly end the run, but sets endDateTime for that operator
             await _pressRunLogService.HandleLogoutAsync(runId, finalCount, scrap, notes);
             return RedirectToAction("Index");
         }
+
+
 
         // ============== END RUN ==============
         [HttpGet]

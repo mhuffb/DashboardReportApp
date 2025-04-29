@@ -246,24 +246,64 @@
     });
 
     // LOGIN: Set hidden values (including component) and open the modal
-    function openLoginModalForRun(part, component, run, machine, prodNumber) {
-        console.log("openLoginModalForRun called with", part, component, run, machine, prodNumber);
+           function openLoginModalForRun(part, component, run, machine, prodNumber) {
         document.getElementById("loginPartHidden").value = part;
         document.getElementById("loginComponentHidden").value = component;
         document.getElementById("loginRunHidden").value = run;
         document.getElementById("loginMachineHidden").value = machine;
         document.getElementById("loginProdHidden").value = prodNumber;
         document.getElementById("loginOperatorSelect").selectedIndex = 0;
+
+        const pcsStartInput = document.getElementById("loginPcsStart");
+        pcsStartInput.value = "Loading...";
+
         let modal = new bootstrap.Modal(document.getElementById("LoginModal"));
         modal.show();
+
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                pcsStartInput.value = data.deviceCount ?? 0;
+            })
+            .catch(err => {
+                console.error("Error fetching count:", err);
+                pcsStartInput.value = "Error";
+            });
     }
 
+
+
     // LOGOUT: Set hidden value and open modal (no device count fetch)
-    function openLogoutModal(runId, machine) {
+           function openLogoutModal(runId, machine) {
         document.getElementById("logoutRunId").value = runId;
+        document.getElementById("logoutScrap").value = "0";
+        document.getElementById("logoutNotes").value = "";
+
         let modal = new bootstrap.Modal(document.getElementById("LogoutModal"));
         modal.show();
+
+        const display = document.getElementById("logoutDeviceCountDisplay");
+        const original = display.value;
+
+        fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
+            .then(response => response.json())
+            .then(data => {
+                const count = data.deviceCount ?? 0;
+
+                // Only update if user hasn't touched it yet
+                if (display.value === "" || display.value === "0" || display.value === original || display.value === "Loading...") {
+                    display.value = count;
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching count:", err);
+                if (display.value === "" || display.value === "Loading...") {
+                    display.value = "Error";
+                }
+            });
     }
+
+
 
     // END RUN: Asks for count; also ends any open skids
     function openEndRunModal(runId, machine) {
@@ -335,6 +375,13 @@
                     <input type="hidden" id="loginMachineHidden" name="machine" />
                     <input type="hidden" id="loginProdHidden" name="ProdNumber" />
                     <input type="hidden" id="loginRunHidden" name="Run" />
+                    <!-- Show current count -->
+                    <div class="mb-3">
+                        <label class="form-label">Starting Device Count (editable):</label>
+                        <input type="number" id="loginPcsStart" name="pcsStart" class="form-control" value="0" />
+                    </div>
+
+
                     <div class="mb-3">
                         <label for="loginOperatorSelect" class="form-label">Operator</label>
                         <select id="loginOperatorSelect" name="operator" class="form-select" required>
@@ -363,6 +410,13 @@
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
                     <input type="hidden" id="logoutRunId" name="runId" />
+                    <!-- Display current count -->
+                    <div class="mb-3">
+                        <label class="form-label">Current Device Count:</label>
+                        <input type="text" id="logoutDeviceCountDisplay" class="form-control" name="finalCount" />
+                    </div>
+
+
                     <div class="mb-3">
                         <label class="form-label">Scrap:</label>
                         <input type="number" id="logoutScrap" name="scrap" class="form-control" value="0" />
@@ -371,6 +425,7 @@
                         <label class="form-label">Notes:</label>
                         <textarea id="logoutNotes" name="notes" class="form-control"></textarea>
                     </div>
+
                     <button type="submit" class="btn btn-primary w-100">Confirm Logout</button>
                 </form>
             </div>

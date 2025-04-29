@@ -6,6 +6,8 @@ using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
 using System.Data.Odbc;
 using System.Data;
+using iText.StyledXmlParser.Jsoup.Select;
+using Mysqlx.Crud;
 
 namespace DashboardReportApp.Services
 {
@@ -354,17 +356,41 @@ ORDER BY
 
         public async Task<string> GetMostCurrentProlinkPart(string searchString)
         {
+            Console.WriteLine("searchstring: " + searchString);
             string partResult = null;
-            string query = @"
-        SELECT TOP 1 qf.qcc_file_desc
-        FROM part p
-        INNER JOIN qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
-        WHERE qf.qcc_file_desc LIKE '%' + @searchString + '%'
-          AND qf.qcc_file_desc LIKE '%MOLD%'
-          AND qf.qcc_file_desc NOT LIKE '%IM%'
-          AND qf.qcc_file_desc NOT LIKE '%SETUP%'
-          AND qf.qcc_file_desc NOT LIKE '%CALIBRATION%'
-        ORDER BY p.measure_date DESC";
+            string query;
+            if(searchString.Contains("SL"))
+            {
+                query = @"SELECT TOP 1 qf.qcc_file_desc
+FROM part p
+INNER JOIN qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
+WHERE qf.qcc_file_desc LIKE @searchString + '-%'
+  AND qf.qcc_file_desc LIKE '%MOLD%'
+  AND qf.qcc_file_desc LIKE '%SL%'
+  AND qf.qcc_file_desc NOT LIKE '%IM%'
+  AND qf.qcc_file_desc NOT LIKE '%SETUP%'
+  AND qf.qcc_file_desc NOT LIKE '%CALIBRATION%'
+ORDER BY p.measure_date DESC"
+;
+            }
+            else
+            {
+                query = @"
+       SELECT TOP 1 qf.qcc_file_desc
+FROM part p
+INNER JOIN qcc_file qf ON p.qcc_file_id = qf.qcc_file_id
+WHERE qf.qcc_file_desc LIKE @searchString + '-%'
+  AND qf.qcc_file_desc LIKE '%MOLD%'
+  AND qf.qcc_file_desc NOT LIKE '%SL%'
+  AND qf.qcc_file_desc NOT LIKE '%IM%'
+  AND qf.qcc_file_desc NOT LIKE '%SETUP%'
+  AND qf.qcc_file_desc NOT LIKE '%CALIBRATION%'
+ORDER BY p.measure_date DESC
+
+
+";
+            }
+           
 
             string prolinkPartNumber = "";
 

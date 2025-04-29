@@ -431,44 +431,53 @@ public class SinterRunLogService
         string query = @"
 (
     SELECT 
-         id, 
-         timestamp, 
-         prodNumber, 
-         run, 
-         part, 
-         component, 
-         endDateTime, 
-         operator, 
-         machine, 
-         pcsStart, 
-         pcsEnd, 
-         notes, 
-         skidNumber,
-         startDateTime
+        MIN(id) AS id,
+        MIN(timestamp) AS timestamp,
+        prodNumber,
+        GROUP_CONCAT(DISTINCT run) AS run,
+        GROUP_CONCAT(DISTINCT part) AS part,
+        GROUP_CONCAT(DISTINCT component) AS component,
+        MAX(endDateTime) AS endDateTime,
+        GROUP_CONCAT(DISTINCT operator) AS operator,
+        GROUP_CONCAT(DISTINCT machine) AS machine,
+        MIN(pcsStart) AS pcsStart,
+        MAX(pcsEnd) AS pcsEnd,
+        '' AS notes,
+        skidNumber,
+        MIN(startDateTime) AS startDateTime
     FROM pressrun
     WHERE open = 1 AND skidNumber > 0
+    GROUP BY prodNumber, skidNumber
 )
+
 UNION ALL
+
 (
     SELECT 
-         id, 
-         timestamp, 
-         prodNumber, 
-         '' AS run,           -- assembly table has no run; default to empty string
-         part, 
-         '' AS component,     -- no component in assembly; default to empty string
-         endDateTime, 
-         operator, 
-         '' AS machine,       -- no machine info; default to empty string
-         0 AS pcsStart,       -- default value for pcsStart
-         pcs AS pcsEnd,       -- assembly's pcs value goes to pcsEnd
-         '' AS notes,         -- no notes provided; default to empty string
-         skidNumber,
-         endDateTime AS startDateTime   -- use endDateTime for ordering if no startDateTime exists
+        MIN(id) AS id,
+        MIN(timestamp) AS timestamp,
+        prodNumber,
+        '' AS run,
+        GROUP_CONCAT(DISTINCT part) AS part,
+        '' AS component,
+        MAX(endDateTime) AS endDateTime,
+        GROUP_CONCAT(DISTINCT operator) AS operator,
+        '' AS machine,
+        0 AS pcsStart,
+        MAX(pcs) AS pcsEnd,
+        '' AS notes,
+        skidNumber,
+        MAX(endDateTime) AS startDateTime
     FROM assembly
     WHERE open = 1
+    GROUP BY prodNumber, skidNumber
 )
-ORDER BY startDateTime DESC";
+
+ORDER BY part, skidNumber;
+
+
+
+";
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();

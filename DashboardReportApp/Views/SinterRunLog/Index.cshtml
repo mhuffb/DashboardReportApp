@@ -32,11 +32,11 @@
                                 <th>Timestamp</th>
                                 <th>Production Number</th>
                                 <th>Run</th>
-                                <th>Part</th>
-                                <th>Component</th> <!-- New Column -->
                                 <th>Start Time</th>
                                 <th>Operator</th>
                                 <th>Furnace</th>
+                                <th>Part</th>
+                                <th>Component</th> <!-- New Column -->
                                 <th>Skid Number</th>
                                 <th>PCS</th>
                                 <th>Process</th>
@@ -59,11 +59,11 @@
                                     <td>@skid.Timestamp</td>
                                     <td>@skid.ProdNumber</td>
                                     <td>@skid.Run</td>
-                                    <td>@skid.Part</td>
-                                    <td>@skid.Component</td> <!-- Display Component -->
                                     <td>@skid.StartDateTime</td>
                                     <td>@skid.Operator</td>
                                     <td>@skid.Machine</td>
+                                    <td>@skid.Part</td>
+                                    <td>@skid.Component</td> <!-- Display Component -->
                                     <td>@skid.SkidNumber</td>
                                     <td>@skid.Pcs</td>
                                     <td>@skid.Process</td>
@@ -119,11 +119,11 @@
                                 <th>ID</th>
                                 <th>Prod Number</th>
                                 <th>Run</th>
-                                <th>Part</th>
-                                <th>Component</th> <!-- New Column -->
                                 <th>End DateTime</th>
                                 <th>Operator</th>
                                 <th>Machine</th>
+                                <th>Part</th>
+                                <th>Component</th> <!-- New Column -->
                                 <th>Skid Number</th>
                                 <th>Pcs</th>
                                 <th>Notes</th>
@@ -137,11 +137,11 @@
                                     <td>@pressRun.Id</td>
                                     <td>@pressRun.ProdNumber</td>
                                     <td>@pressRun.Run</td>
-                                    <td>@pressRun.Part</td>
-                                    <td>@pressRun.Component</td> <!-- Display Component -->
                                     <td>@(pressRun.EndDateTime?.ToString("g") ?? "N/A")</td>
                                     <td>@pressRun.Operator</td>
                                     <td>@pressRun.Machine</td>
+                                    <td>@pressRun.Part</td>
+                                    <td>@pressRun.Component</td> <!-- Display Component -->
                                     <td>@pressRun.SkidNumber</td>
                                     <td>@(pressRun.PcsEnd - pressRun.PcsStart)</td>
                                     <td>@pressRun.Notes</td>

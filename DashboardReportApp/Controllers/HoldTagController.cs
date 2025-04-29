@@ -78,7 +78,7 @@ namespace DashboardReportApp.Controllers
                 string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
 
 
-                //_sharedService.PrintFileToSpecificPrinter("QAHoldTags", pdfPath, record.Quantity.GetValueOrDefault(1));
+                _sharedService.PrintFileToSpecificPrinter("QaholdTags", pdfPath, record.Quantity.GetValueOrDefault(1));
 
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
@@ -88,7 +88,7 @@ namespace DashboardReportApp.Controllers
                               $"Issued Date: {record.Date:MM/dd/yyyy}";
 
                 //5) Send email 
-               // _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1 ,subject, body);
+                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1 ,subject, body);
 
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";

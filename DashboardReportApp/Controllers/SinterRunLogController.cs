@@ -26,18 +26,7 @@ namespace DashboardReportApp.Controllers
             var openGreenSkids = await _sinterRunLogService.GetOpenGreenSkidsAsync();
             ViewBag.OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>();
 
-            // 3) Create a dictionary of (Part, Run) => Furnace for dropdown selection from open skids
-           var openParts = openGreenSkids.ToDictionary(
-    r => (r.Part, r.Run, r.SkidNumber),
-    r => r.Machine
-);
-
-            ViewData["OpenParts"] = openParts;
-            foreach (var partRun in openParts)
-            {
-                Console.WriteLine($"Part: {partRun.Key.Item1}, Run: {partRun.Key.Item2}, Furnace: {partRun.Value}");
-            }
-
+           
            
 
             // 4) Get all sinter run records for the React table
