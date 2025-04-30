@@ -9,5 +9,7 @@
         public int QtyReturnedNonMachined { get; set; }
         public string Notes { get; set; }
         public DateTime Timestamp { get; set; }
+        public string ProdNumber { get; set; }
+        public string Op { get; set; }
     }
 }

@@ -33,6 +33,30 @@
                     </select>
                     <span asp-validation-for="Operator" class="text-danger"></span>
                 </div>
+                <!-- Prod Number -->
+                <div class="mb-3">
+                    <label for="ProdNumber" class="form-label">Prod Number</label>
+                    <input type="text"
+                           id="ProdNumber"
+                           name="ProdNumber"
+                           asp-for="ProdNumber"
+                           class="form-control"
+                           required />
+                    <span asp-validation-for="ProdNumber" class="text-danger"></span>
+                </div>
+
+                <!-- Op -->
+                <div class="mb-3">
+                    <label for="Op" class="form-label">Op</label>
+                    <input type="number"
+                           id="Op"
+                           min="0"
+                           name="Op"
+                           asp-for="Op"
+                           class="form-control"
+                           required />
+                    <span asp-validation-for="Op" class="text-danger"></span>
+                </div>
 
                 <div class="mb-3">
                     <label for="Run" class="form-label">Run</label>

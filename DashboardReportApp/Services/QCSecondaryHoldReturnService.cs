@@ -39,8 +39,13 @@ namespace DashboardReportApp.Services
         public async Task AddHoldReturnAsync(QCSecondaryHoldReturnModel record)
         {
             string query = @"
-        INSERT INTO qcsecondaryholdreturn (operator, run, qtyreturned_machined, qtyreturned_nonmachined, notes, timestamp)
-        VALUES (@operator, @run, @qtyreturned_machined, @qtyreturned_nonmachined, @notes, @timestamp)";
+INSERT INTO qcsecondaryholdreturn
+    (operator, prodNumber, op, run,
+     qtyreturned_machined, qtyreturned_nonmachined, notes, timestamp)
+VALUES
+    (@operator, @prodNumber, @op, @run,
+     @qtyreturned_machined, @qtyreturned_nonmachined, @notes, @timestamp)";
+
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -52,6 +57,8 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@qtyreturned_machined", record.QtyReturnedMachined);
                     command.Parameters.AddWithValue("@qtyreturned_nonmachined", record.QtyReturnedNonMachined);
                     command.Parameters.AddWithValue("@notes", record.Notes ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@prodNumber", record.ProdNumber);   
+                    command.Parameters.AddWithValue("@op", record.Op);
                     command.Parameters.AddWithValue("@timestamp", DateTime.Now);
 
                     await command.ExecuteNonQueryAsync();
