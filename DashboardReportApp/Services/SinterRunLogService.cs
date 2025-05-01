@@ -208,7 +208,7 @@ public class SinterRunLogService
                   AND part       = @part
                   AND skidNumber = @skidNumber
                 ORDER BY id DESC
-                LIMIT 1";
+                ";
 
                 using (var updateCommand = new MySqlCommand(updatePressrunQuery, connection))
                 {
@@ -341,7 +341,7 @@ public class SinterRunLogService
                              "WHERE prodNumber = @prodNumber " +
                              "AND part = @part " +
                              "AND skidNumber = @skidNumber " +
-                             "ORDER BY id DESC LIMIT 1";
+                             "ORDER BY id DESC";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {

@@ -215,6 +215,16 @@
 <!-- JavaScript for React Table -->
 <script src="/js/mydatatable.bundle.js"></script>
 <script>
+    const deviceIPs = {
+        "1":"192.168.1.30",  "2":"192.168.1.31",  "41":"192.168.1.32",
+        "45":"192.168.1.33", "50":"192.168.1.34", "51":"192.168.1.35",
+        "57":"192.168.1.36", "59":"192.168.1.37", "70":"192.168.1.38",
+        "74":"192.168.1.39", "92":"192.168.1.40", "95":"192.168.1.41",
+        "102":"192.168.1.42","112":"192.168.1.43","124":"192.168.1.44",
+        "125":"192.168.1.45","154":"192.168.1.46","156":"192.168.1.47",
+        "175":"192.168.1.48"
+    };
+
     document.addEventListener("DOMContentLoaded", function () {
         const container = document.getElementById("myReactPressRunTableRoot");
         if (!container) return;
@@ -264,6 +274,7 @@
             .then(response => response.json())
             .then(data => {
                 pcsStartInput.value = data.deviceCount ?? 0;
+                pcsStartInput.dataset.originalCount = pcsStartInput.value;
             })
             .catch(err => {
                 console.error("Error fetching count:", err);
@@ -278,6 +289,7 @@
         document.getElementById("logoutRunId").value = runId;
         document.getElementById("logoutScrap").value = "0";
         document.getElementById("logoutNotes").value = "";
+        document.getElementById("logoutMachineHidden").value = machine;   
 
         let modal = new bootstrap.Modal(document.getElementById("LogoutModal"));
         modal.show();
@@ -294,6 +306,8 @@
                 if (display.value === "" || display.value === "0" || display.value === original || display.value === "Loading...") {
                     display.value = count;
                 }
+
+            display.dataset.originalCount = display.value;
             })
             .catch(err => {
                 console.error("Error fetching count:", err);
@@ -310,6 +324,7 @@
         document.getElementById("endRunId").value = runId;
         document.getElementById("endRunScrap").value = "0";
         document.getElementById("endRunNotes").value = "";
+         document.getElementById("endRunMachineHidden").value = machine;
 
         const endCountInput = document.getElementById("endRunFinalCount");
         const defaultValue = endCountInput.value; // usually "0"
@@ -323,6 +338,9 @@
                 if(endCountInput.value === defaultValue) {
                     endCountInput.value = data.deviceCount || 0;
                 }
+
+                endCountInput.dataset.originalCount = endCountInput.value;
+
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
@@ -351,11 +369,70 @@
             .then(data => {
                 if (pcsStartInput.value === defaultValue) {
                     pcsStartInput.value = data.deviceCount || 0;
+    pcsStartInput.dataset.originalCount = pcsStartInput.value;   // NEW
+
                     console.log("Updated Pcs Start Value from API:", pcsStartInput.value);
                 }
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
+
+
+        function wireCountSetter(modalId, countInputId, checkboxId, machineHiddenId){
+        const modal = document.getElementById(modalId);
+        if(!modal) return;
+        const form = modal.querySelector("form");
+
+        form.addEventListener("submit", function(ev){
+            const cb   = document.getElementById(checkboxId);
+            if(!cb || !cb.checked) return;                 // user unchecked → nothing to do
+
+            const countEl   = document.getElementById(countInputId);
+            const original  = countEl.dataset.originalCount ?? "";
+            const current   = countEl.value.trim();
+            if(current === original) return;               // user didn’t change the number
+
+            const machine   = document.getElementById(machineHiddenId).value;
+            const ip        = deviceIPs[machine];
+            if(!ip){ console.warn("Unknown IP for machine", machine); return; }
+
+            ev.preventDefault();                           // pause the normal post-back
+
+            // POST to the pico just like Update-Press page does
+            fetch(`http://${ip}/update`,{
+                method:"POST",
+                headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+                body:`count_value=${encodeURIComponent(current)}`
+            })
+            .catch(e=>console.error("Count push failed:",e))
+            .finally(()=> form.submit());                  // always resume MVC post
+        });
+    }
+
+    // hook up all three modals
+    document.addEventListener("DOMContentLoaded", ()=>{
+
+        wireCountSetter("LoginModal",
+                        "loginPcsStart",
+                        "loginSetCountDevice",
+                        "loginMachineHidden");
+
+        wireCountSetter("LogoutModal",
+                        "logoutDeviceCountDisplay",
+                        "logoutSetCountDevice",
+                        "logoutMachineHidden");
+
+        wireCountSetter("StartSkidModal",
+                        "startSkidPcsStart",
+                        "startSkidSetCountDevice",
+                        "startSkidMachineHidden");
+
+    wireCountSetter("EndRunCountModal",
+                    "endRunFinalCount",
+                    "endRunSetCountDevice",
+                    "endRunMachineHidden");
+
+    });
 
 </script>
 
@@ -379,6 +456,14 @@
                     <div class="mb-3">
                         <label class="form-label">Starting Device Count (editable):</label>
                         <input type="number" id="loginPcsStart" name="pcsStart" class="form-control" value="0" />
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="loginSetCountDevice" checked>
+                        <label class="form-check-label" for="loginSetCountDevice">
+                            Set count on device
+                        </label>
                     </div>
 
 
@@ -411,9 +496,18 @@
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
                     <input type="hidden" id="logoutRunId" name="runId" />
                     <!-- Display current count -->
+                    <input type="hidden" id="logoutMachineHidden" />
+
                     <div class="mb-3">
                         <label class="form-label">Current Device Count:</label>
                         <input type="text" id="logoutDeviceCountDisplay" class="form-control" name="finalCount" />
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="logoutSetCountDevice" checked>
+                        <label class="form-check-label" for="logoutSetCountDevice">
+                            Set count on device
+                        </label>
                     </div>
 
 
@@ -444,6 +538,7 @@
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmEndRun">
                     <input type="hidden" id="endRunId" name="runId" />
+                    <input type="hidden" id="endRunMachineHidden" />
                     <div class="mb-3">
                         <label class="form-label">Final Count (Override if needed):</label>
                         <input type="number" id="endRunFinalCount" name="finalCount" class="form-control" value="0" />
@@ -457,10 +552,16 @@
                         <textarea id="endRunNotes" name="notes" class="form-control"></textarea>
                     </div>
 
-                    <!-- New checkbox for "Order Complete?" -->
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="endRunOrderComplete" name="orderComplete" value="true" />
                         <label class="form-check-label" for="endRunOrderComplete">Order Complete?</label>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input"
+                               id="endRunSetCountDevice" checked>
+                        <label class="form-check-label" for="endRunSetCountDevice">
+                            Set count on device
+                        </label>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100">Confirm End Run</button>
@@ -491,6 +592,13 @@
                     <div class="mb-3">
                         <label class="form-label">Pcs Start (Override if needed):</label>
                         <input type="number" id="startSkidPcsStart" name="pcsStart" class="form-control" value="0" />
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="startSkidSetCountDevice" checked>
+                        <label class="form-check-label" for="startSkidSetCountDevice">
+                            Set count on device
+                        </label>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100">Confirm Start Skid</button>

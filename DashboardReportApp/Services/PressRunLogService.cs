@@ -172,7 +172,7 @@ LIMIT 1";
                         // 3b) Generate PDF
                         string filePath = await GenerateRouterTagAsync(endedSkid);
                         // 3c) Print
-                        _sharedService.PrintFileToClosestPrinter(filePath);
+                        _sharedService.PrintFileToClosestPrinter(filePath, 1);
                     }
                 }
             }
@@ -210,7 +210,7 @@ SELECT LAST_INSERT_ID();";
                 if (newSkid != null)
                 {
                     string filePath = await GenerateRouterTagAsync(newSkid);
-                    _sharedService.PrintFileToClosestPrinter(filePath);
+                    _sharedService.PrintFileToClosestPrinter(filePath, 1);
                 }
             }
         }
@@ -360,7 +360,7 @@ LIMIT 1";
                                 if (endedSkid != null)
                                 {
                                     string filePath = await GenerateRouterTagAsync(endedSkid);
-                                    _sharedService.PrintFileToClosestPrinter(filePath);
+                                    _sharedService.PrintFileToClosestPrinter(filePath, 1);
                                 }
                             }
 

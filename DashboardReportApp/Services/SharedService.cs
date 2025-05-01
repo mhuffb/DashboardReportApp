@@ -480,7 +480,7 @@ ORDER BY p.measure_date DESC
             return partName;
         }
 
-        public void PrintFileToClosestPrinter(string pdfPath, int copies = 1)
+        public void PrintFileToClosestPrinter(string pdfPath, int copies)
         {
             var context = _httpContextAccessor.HttpContext;
             string clientHostName = "Unknown";
@@ -529,7 +529,7 @@ ORDER BY p.measure_date DESC
             // Get the corresponding printer based on the user
             string printerName = GetPrinterForUser(clientHostName);
 
-            PrintFileToSpecificPrinter(printerName, pdfPath);
+            PrintFileToSpecificPrinter(printerName, pdfPath, copies);
            
         }
 
@@ -554,7 +554,7 @@ ORDER BY p.measure_date DESC
             // Fallback option if not found
             return "None";
         }
-        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies = 1)
+        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies)
         {
             if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
             {

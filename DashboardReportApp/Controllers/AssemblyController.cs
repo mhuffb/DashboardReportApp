@@ -65,7 +65,7 @@ namespace DashboardReportApp.Controllers
                 // Now generate the PDF report using the updated model.
                 string pdfFilePath = await _assemblyService.GenerateAssemblyReportAsync(assemblyModel);
 
-                _sharedService.PrintFileToClosestPrinter(pdfFilePath);
+                _sharedService.PrintFileToClosestPrinter(pdfFilePath, 1);
 
             }
             catch (Exception ex)

@@ -69,7 +69,7 @@
                     // Email the PDF
                     await SendEmailWithPdfAsync(pdfPath, request);
 
-                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath);
+                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
 
                     
 

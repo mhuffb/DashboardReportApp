@@ -135,7 +135,7 @@ namespace DashboardReportApp.Controllers
 
             // The user can manually click to print a tag for the skid.
             string pdfFilePath = await _pressRunLogService.GenerateRouterTagAsync(model);
-            _sharedService.PrintFileToClosestPrinter(pdfFilePath);
+            _sharedService.PrintFileToClosestPrinter(pdfFilePath, 1);
           
             return RedirectToAction("Index");
         }
