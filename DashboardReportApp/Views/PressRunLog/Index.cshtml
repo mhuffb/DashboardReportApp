@@ -538,7 +538,8 @@
             <div class="modal-body">
                 <form method="post" asp-controller="PressRunLog" asp-action="ConfirmEndRun">
                     <input type="hidden" id="endRunId" name="runId" />
-                    <input type="hidden" id="endRunMachineHidden" />
+                    <input type="hidden" id="endRunMachineHidden" name="machine" />
+
                     <div class="mb-3">
                         <label class="form-label">Final Count (Override if needed):</label>
                         <input type="number" id="endRunFinalCount" name="finalCount" class="form-control" value="0" />

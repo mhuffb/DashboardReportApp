@@ -119,10 +119,54 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes, bool orderComplete)
+        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes, bool orderComplete, string machine)
         {
             // Ends main run and automatically ends any open skid(s) for that run
             await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes, orderComplete);
+            if (orderComplete)
+            {
+                var deviceIPs = new Dictionary<string, string>
+                {
+                    ["1"] = "192.168.1.30",
+                    ["2"] = "192.168.1.31",
+                    ["41"] = "192.168.1.32",
+                    ["45"] = "192.168.1.33",
+                    ["50"] = "192.168.1.34",
+                    ["51"] = "192.168.1.35",
+                    ["57"] = "192.168.1.36",
+                    ["59"] = "192.168.1.37",
+                    ["70"] = "192.168.1.38",
+                    ["74"] = "192.168.1.39",
+                    ["92"] = "192.168.1.40",
+                    ["95"] = "192.168.1.41",
+                    ["102"] = "192.168.1.42",
+                    ["112"] = "192.168.1.43",
+                    ["124"] = "192.168.1.44",
+                    ["125"] = "192.168.1.45",
+                    ["154"] = "192.168.1.46",
+                    ["156"] = "192.168.1.47",
+                    ["175"] = "192.168.1.48"
+                };
+
+                if (deviceIPs.TryGetValue(machine, out var ip))
+                {
+                    using var http = new HttpClient();
+                    var content = new FormUrlEncodedContent(new[]
+                    {
+                new KeyValuePair<string, string>("count_value", "0")
+            });
+
+                    try
+                    {
+                        await http.PostAsync($"http://{ip}/update", content);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to reset device count for machine {machine}: {ex.Message}");
+                    }
+                }
+            }
+
             return RedirectToAction("Index");
         }
 
