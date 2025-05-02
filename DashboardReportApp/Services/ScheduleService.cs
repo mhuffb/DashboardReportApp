@@ -23,8 +23,6 @@ namespace DashboardReportApp.Services
 
         public List<SintergyComponent> GetComponentsForMasterId(string masterId, int quantity)
         {
-            // 1. Load the entire BOM from masteras into a dictionary.
-            //    Keys are parent part numbers; values are lists of (child, qty) pairs.
             var bom = new Dictionary<string, List<(string Child, int Qty)>>(StringComparer.OrdinalIgnoreCase);
             using (var connection = new OdbcConnection(_connectionStringDataflex))
             using (var command = new OdbcCommand("SELECT master_id, cmaster_id, qty FROM masteras", connection))
@@ -34,7 +32,6 @@ namespace DashboardReportApp.Services
                 {
                     while (reader.Read())
                     {
-                        // Trim fields in case DataFlex uses fixed-length fields.
                         string parent = reader["master_id"].ToString().Trim();
                         string child = reader["cmaster_id"].ToString().Trim();
                         int qty = Convert.ToInt32(reader["qty"]);
@@ -45,17 +42,11 @@ namespace DashboardReportApp.Services
                 }
             }
 
-            // 2. Initialize run and prod numbers once.
             int nextRunNumber = GetNextRunNumber();
             int nextProdNumber = GetNextProdNumber();
 
-            // 3. Use BFS to walk the BOM.
-            //    The queue holds a tuple: (CurrentParent, CurrentPart, CumulativeMultiplier)
-            //    For each edge (CurrentPart -> Child), we output a record with:
-            //      Part = CurrentPart and Component = Child.
             var results = new List<SintergyComponent>();
             var queue = new Queue<(string Parent, string Current, int Multiplier)>();
-            // Start with the top-level master.
             queue.Enqueue((masterId.Trim(), masterId.Trim(), quantity));
 
             while (queue.Count > 0)
@@ -64,27 +55,44 @@ namespace DashboardReportApp.Services
 
                 if (bom.ContainsKey(current))
                 {
+                    bool addedSLChild = false; // ★ ADDED
+
                     foreach (var (child, qtyNeeded) in bom[current])
                     {
                         int newMultiplier = multiplier * qtyNeeded;
-                        // Add a record for the edge: current -> child.
+
                         results.Add(new SintergyComponent
                         {
-                            // Use the immediate parent's name as the part.
                             MasterId = current,
                             Component = child,
                             QtyNeededFor1Assy = qtyNeeded,
                             QtyToSchedule = newMultiplier,
                             Run = (nextRunNumber++).ToString(),
-                            ProdNumber = (nextProdNumber).ToString()
+                            ProdNumber = nextProdNumber.ToString()
                         });
-                        // Enqueue the child so that its children are processed.
+
+                        if (child.Contains("SL", StringComparison.OrdinalIgnoreCase)) // ★ ADDED
+                            addedSLChild = true;
+
                         queue.Enqueue((child, child, newMultiplier));
+                    }
+
+                    // ★ ADDITIONAL ENTRY IF parent doesn't contain 'Y' and has SL child
+                    if (!current.Contains("Y", StringComparison.OrdinalIgnoreCase) && addedSLChild)
+                    {
+                        results.Add(new SintergyComponent
+                        {
+                            MasterId = current,
+                            Component = null,
+                            QtyNeededFor1Assy = 1,
+                            QtyToSchedule = multiplier,
+                            Run = (nextRunNumber++).ToString(),
+                            ProdNumber = nextProdNumber.ToString()
+                        });
                     }
                 }
             }
 
-            // 4. If the master has no children, return it as a leaf.
             if (results.Count == 0)
             {
                 results.Add(new SintergyComponent
@@ -94,7 +102,7 @@ namespace DashboardReportApp.Services
                     QtyNeededFor1Assy = 1,
                     QtyToSchedule = quantity,
                     Run = (nextRunNumber++).ToString(),
-                    ProdNumber = (nextProdNumber).ToString()
+                    ProdNumber = nextProdNumber.ToString()
                 });
             }
 

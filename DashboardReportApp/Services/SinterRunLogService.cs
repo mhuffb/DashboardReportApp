@@ -445,8 +445,15 @@ public class SinterRunLogService
         '' AS notes,
         skidNumber,
         MIN(startDateTime) AS startDateTime
-    FROM pressrun
-    WHERE open = 1 AND skidNumber > 0
+    FROM (
+        SELECT * FROM pressrun
+        WHERE open = 1 
+          AND skidNumber > 0
+          AND (
+              component IS NULL
+              OR (component NOT LIKE '%SL%' AND component NOT LIKE '%C%')
+          )
+    ) AS filtered_pressrun
     GROUP BY prodNumber, skidNumber
 )
 
@@ -474,10 +481,11 @@ UNION ALL
 )
 
 ORDER BY part, skidNumber;
-
-
-
 ";
+
+
+
+
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
