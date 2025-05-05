@@ -12,7 +12,6 @@ public class SinterRunLogService
 {
     private readonly string _connectionStringMySQL;
     private readonly string _connectionStringDataflex;
-    private string datatable = "sinterrun";
 
     public SinterRunLogService(IConfiguration configuration)
     {
@@ -27,9 +26,9 @@ public class SinterRunLogService
         var allRuns = new List<SinterRunSkid>();
 
         string query = @"
-            SELECT id, timestamp, operator, prodNumber, run, part, component, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
-            FROM " + datatable +
-                " ORDER BY id DESC";
+            SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
+            FROM sintertime 
+                 ORDER BY id DESC";
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
@@ -58,7 +57,6 @@ public class SinterRunLogService
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
-                Component = reader["component"]?.ToString(), // <-- New field
                 Machine = reader["oven"]?.ToString(),
                 Process = reader["process"]?.ToString(),
                 StartDateTime = startDateTime,
@@ -252,7 +250,7 @@ public class SinterRunLogService
     public void LogoutOfSkid(string part, string run, string skidNumber, string prodNumber)
     {
         // 1) Close the sinter record by setting endDateTime
-        string query = "UPDATE " + datatable + " " +
+        string query = "UPDATE sinterrun " +
                        "SET endDateTime = NOW() " +
                        "WHERE part = @part " +
                        "  AND prodNumber = @prodNumber " +
@@ -268,7 +266,7 @@ public class SinterRunLogService
                 command.Parameters.AddWithValue("@skidNumber", skidNumber);
 
                 int rowsAffected = command.ExecuteNonQuery();
-                Console.WriteLine($"✅ Rows Updated in {datatable}: {rowsAffected}");
+                Console.WriteLine($"✅ Rows Updated in sinterrun: {rowsAffected}");
             }
         }
 
@@ -336,7 +334,7 @@ public class SinterRunLogService
                       string run, string oper, string furnace, string process, string notes)
     {
 
-        string updateQuery = "UPDATE " + datatable + " " +
+        string updateQuery = "UPDATE sinterrun " +
                              "SET endDateTime = NOW(), notes = @notes " +
                              "WHERE prodNumber = @prodNumber " +
                              "AND part = @part " +
@@ -411,7 +409,7 @@ public class SinterRunLogService
     // End skids on the same furnace if one is already running
     public void EndSkidsByMachineIfNeeded(string furnace)
     {
-        string query = "UPDATE " + datatable + " SET endDateTime = @endDateTime WHERE oven = @furnace AND endDateTime IS NULL";
+        string query = "UPDATE sinterrun SET endDateTime = @endDateTime WHERE oven = @furnace AND endDateTime IS NULL";
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
