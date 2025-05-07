@@ -121,9 +121,8 @@ form {
     color: black !important;
     border: 1px solid goldenrod !important;
 }
-.card {
-    background-color: black !important;
-    color: goldenrod !important;
+.cardstyle {
+    color: black !important;
     border: 1px solid goldenrod;
 }
 .container-fluid px-3 mt-4{

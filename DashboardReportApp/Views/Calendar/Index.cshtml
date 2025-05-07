@@ -1,0 +1,214 @@
+﻿@model List<DashboardReportApp.Models.CalendarModel>
+
+@{
+    var sorted = Model.OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
+    ViewData["Title"] = "Service Record Calendar";
+}
+
+<!-- STYLES -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" />
+<style>    .is-invalid {
+        border-color: red;
+        box-shadow: 0 0 3px red
+    }</style>
+
+<div class="container mt-4">
+    <h2 class="text-center mb-4">@ViewData["Title"]</h2>
+    <div class="d-flex justify-content-center mb-3">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#serviceModal">Add Request</button>
+    </div>
+    <div id="calendar" class="p-3 bg-light border rounded shadow-sm"></div>
+</div>
+
+<!-- ─────────  ADD REQUEST MODAL ───────── -->
+<div class="modal fade" id="serviceModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form asp-action="Submit" asp-antiforgery="true" method="post" id="mainForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Submit Time‑Off Request</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+
+                        <!-- Employee -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Employee</label>
+                            <select class="form-select" id="employeeSelect" required>
+                                <option value="">Select…</option>
+                                @for (int i = 0; i < sorted.Count; i++)
+                                {
+                                    <option value="@i">@sorted[i].LastName, @sorted[i].FirstName</option>
+                                }
+                            </select>
+                            <input type="hidden" name="FirstName" />
+                        </div>
+
+                        <!-- Department / Shift / Schedule -->
+                        <div class="col-md-6">
+                            <label class="form-label">Department</label>
+                            <select name="Department" class="form-select" required>
+                                <option value="">Select…</option>
+                                <option>Sintering</option>
+                                <option>Secondary</option>
+                                <option>Molding</option>
+                                <option>QC</option>
+                                <option>Maintenance</option>
+                                <option>Packin</option>
+                                <option>Admin</option>
+                                <option>GreenAssembly</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Shift</label>
+                            <select name="Shift" class="form-select" required><option>1</option><option>2</option><option>3</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Schedule</label>
+                            <select name="Schedule" class="form-select" required><option>A</option><option>B</option><option>C</option></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Time‑Off Type</label>
+                            <select name="TimeOffType" class="form-select" required><option>Paid Vacation</option><option>Unpaid Time Off</option></select>
+                        </div>
+
+                        <!-- Attribute optional -->
+                        <div class="col-md-12">
+                            <label class="form-label">Attribute <span class="text-muted">(optional)</span></label>
+                            <select name="Attribute" class="form-select">
+                                <option value="" selected>— None —</option>
+                                <option>Failed to Punch In</option>
+                                <option>Reported Late</option>
+                                <option>Failed to Report Off</option>
+                                <option>Called Off</option>
+                                <option>Failed to Punch Out</option>
+                                <option>Early Out</option>
+                                <option>Lack of Work</option>
+                                <option>Disciplinary Action</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Explanation</label>
+                            <textarea name="Explanation" class="form-control" rows="2"></textarea>
+                        </div>
+
+                        <!-- Date picker -->
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Dates Requested</label>
+                            <input type="text" name="DatesRequested" class="form-control datepicker" required>
+                        </div>
+
+                        <!-- Balances -->
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Current Balance</label>
+                                <input type="text" id="currBal" class="form-control" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Balance After Approval</label>
+                                <input type="text" id="afterBal" class="form-control" readonly>
+                            </div>
+                        </div>
+
+                        <!-- Hidden fields -->
+                        <input type="hidden" id="lname" name="LastName" />
+                        <input type="hidden" id="date_employed" name="DateEmployed" />
+                        <input type="hidden" id="active_status" name="ActiveStatus" />
+                        <input type="hidden" id="email" name="Email" />
+                        <input type="hidden" id="vac_balance" name="VacationBalance" />
+
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success">Submit</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ─────────  SCRIPTS ───────── -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    const empData=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(sorted));
+
+    document.addEventListener('DOMContentLoaded',()=>{
+
+      /* Calendar */
+      const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{
+        initialView:'dayGridMonth',height:500,
+        headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},
+        events:'/Calendar/GetEvents',
+        eventClick:e=>{
+          const p=e.event.extendedProps;
+          const balNum=parseFloat(p.vacBalance||0);
+          const reqDays=parseFloat(p.reqDays||0);
+          const balStr=balNum.toFixed(2);
+          const newBalStr=(balNum-reqDays).toFixed(2);
+          const approved=e.event.backgroundColor==='#28a745';
+
+          Swal.fire({
+              html:`<b>${e.event.title}</b><hr>
+    Status&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <b>${approved?'Approved':'Waiting'}</b><br>
+    Current Bal&nbsp;: <b>${balStr}</b><br>
+    After Approval: <b>${newBalStr}</b><hr>
+    ${approved?'':'Approve this request?'}`,
+              showCancelButton:!approved,
+              confirmButtonText:'Approve',
+              showConfirmButton:!approved
+          }).then(r=>{
+            if(r.isConfirmed){
+              fetch('/Calendar/Approve',{
+                 method:'POST',
+                 headers:{'Content-Type':'application/x-www-form-urlencoded',
+                          'RequestVerificationToken':
+                            document.querySelector('input[name="__RequestVerificationToken"]').value},
+                 body:`id=${e.event.id}`})
+              .then(res=>{if(res.ok)e.event.setProp('backgroundColor','#28a745');});
+            }
+          });
+        }
+      });
+      cal.render();
+
+      /* Flatpickr for dates */
+      let fp=flatpickr(".datepicker",{mode:"multiple",dateFormat:"m/d/Y",
+          onChange:updateAfter});
+      function updateAfter(){
+         const bal=parseFloat(document.getElementById('currBal').value||0);
+         document.getElementById('afterBal').value=(bal-fp.selectedDates.length).toFixed(2);
+      }
+
+      /* Employee dropdown autofill */
+      const sel=document.getElementById('employeeSelect');
+      sel.addEventListener('change',()=>{
+         const emp=empData[+sel.value]; if(!emp)return;
+         const bal=emp.vacationBalance??emp.VacationBalance;
+         document.querySelector('input[name="FirstName"]').value=emp.firstName??emp.FirstName;
+         document.getElementById('lname').value=emp.lastName??emp.LastName;
+         document.getElementById('vac_balance').value=bal;
+         document.getElementById('currBal').value=parseFloat(bal).toFixed(2);
+         updateAfter();
+      });
+
+      /* Submit guard */
+      document.getElementById('mainForm').addEventListener('submit',ev=>{
+          if(!document.querySelector('input[name="FirstName"]').value){
+              ev.preventDefault(); Swal.fire("Pick Employee","Please select an employee.","warning");
+          }
+      });
+    });
+</script>
+
+@if (TempData["Success"] != null)
+{
+    <script>    Swal.fire({icon:'success',title:'Done',text:'@TempData["Success"]',
+        timer:2000,showConfirmButton:false});</script>
+}

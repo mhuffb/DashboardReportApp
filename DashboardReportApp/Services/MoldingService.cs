@@ -289,6 +289,122 @@ namespace DashboardReportApp.Services
 
             return result;
         }
+        public async Task<object> GetMachineStatusAsync(string machine)
+        {
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1. Running
+            using (var runCmd = new MySqlCommand(@"
+        SELECT part, component, operator FROM pressrun 
+        WHERE machine = @machine AND endDateTime IS NULL AND skidNumber > 0 
+        ORDER BY id DESC LIMIT 1", conn))
+            {
+                runCmd.Parameters.AddWithValue("@machine", machine);
+                using var reader = await runCmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    string part = reader["part"]?.ToString();
+                    string component = reader["component"]?.ToString();
+                    string operatorName = reader["operator"]?.ToString();
+
+                    return new
+                    {
+                        status = "running",
+                        part = part,
+                        component = component,
+                        operatorName = operatorName
+                    };
+                }
+            }
+
+            // 2. Previously setup
+            using (var availCmd = new MySqlCommand(@"
+        SELECT part, component FROM presssetup 
+        WHERE machine = @machine AND `open` = 1 
+        ORDER BY id DESC LIMIT 1", conn))
+            {
+                availCmd.Parameters.AddWithValue("@machine", machine);
+                using var reader = await availCmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    string part = reader["part"]?.ToString();
+                    string component = reader["component"]?.ToString();
+
+                    return new
+                    {
+                        status = "available",
+                        part = part,
+                        component = component
+                    };
+                }
+            }
+
+            // 3. Setting up
+            using (var setupCmd = new MySqlCommand(@"
+        SELECT part, component FROM presssetup 
+        WHERE machine = @machine AND endDateTime IS NULL 
+        ORDER BY id DESC LIMIT 1", conn))
+            {
+                setupCmd.Parameters.AddWithValue("@machine", machine);
+                using var reader = await setupCmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    string part = reader["part"]?.ToString();
+                    string component = reader["component"]?.ToString();
+
+                    return new
+                    {
+                        status = "setup",
+                        part = part,
+                        component = component
+                    };
+                }
+            }
+
+            return new { status = "idle" };
+        }
+
+        public async Task<int?> GetScheduledQuantityForMachine(string machine)
+        {
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1. Try to find open pressrun
+            string runQuery = @"
+        SELECT s.quantity
+        FROM schedule s
+        JOIN pressrun r ON s.run = r.run
+        WHERE r.machine = @machine AND r.endDateTime IS NULL
+        ORDER BY r.id DESC LIMIT 1";
+
+            using (var runCmd = new MySqlCommand(runQuery, conn))
+            {
+                runCmd.Parameters.AddWithValue("@machine", machine);
+                var result = await runCmd.ExecuteScalarAsync();
+                if (result != null && int.TryParse(result.ToString(), out int qty))
+                    return qty;
+            }
+
+            // 2. Fallback: try presssetup
+            string setupQuery = @"
+        SELECT s.quantity
+        FROM schedule s
+        JOIN presssetup p ON s.run = p.run
+        WHERE p.machine = @machine AND p.endDateTime IS NULL
+        ORDER BY p.id DESC LIMIT 1";
+
+            using (var setupCmd = new MySqlCommand(setupQuery, conn))
+            {
+                setupCmd.Parameters.AddWithValue("@machine", machine);
+                var result = await setupCmd.ExecuteScalarAsync();
+                if (result != null && int.TryParse(result.ToString(), out int qty))
+                    return qty;
+            }
+
+            return null;
+        }
+
 
         #endregion
     }

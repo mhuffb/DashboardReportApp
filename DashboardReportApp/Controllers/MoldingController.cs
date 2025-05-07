@@ -41,14 +41,10 @@ namespace DashboardReportApp.Controllers
                 return BadRequest("Machine parameter is required.");
             }
 
-            string partName = await _sharedService.GetLatestProlinkPartForMachineAsync(machine);
-            if (string.IsNullOrEmpty(partName))
-            {
-                return NotFound("No part found for the specified machine in the last hour.");
-            }
-
-            return Json(new { partName });
+            var statusInfo = await _moldingService.GetMachineStatusAsync(machine);
+            return Json(statusInfo);
         }
+
 
         // New endpoint to get inspection data for a given part.
         [HttpGet("GetInspectionData")]
@@ -64,5 +60,15 @@ namespace DashboardReportApp.Controllers
                 return StatusCode(500, ex.Message);
             }
         }
+        [HttpGet("ApiGetScheduledQuantity")]
+        public async Task<IActionResult> ApiGetScheduledQuantity([FromQuery] string machine)
+        {
+            if (string.IsNullOrWhiteSpace(machine))
+                return BadRequest("Machine is required.");
+
+            var quantity = await _moldingService.GetScheduledQuantityForMachine(machine);
+            return Json(new { quantity });
+        }
+
     }
 }
