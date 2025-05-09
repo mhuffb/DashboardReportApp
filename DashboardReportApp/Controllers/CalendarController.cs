@@ -82,9 +82,9 @@ Submitted on {model.SubmittedOn:g}
             $"Time‑Off Request: {model.LastName}, {model.FirstName}",
             body);
 
-        /* ---------- User feedback ---------- */
-        TempData["Success"] = "Record submitted and e‑mail sent!";
-        return RedirectToAction("Index");
+            /* ---------- User feedback ---------- */
+            TempData["Success"] = "Record submitted and e-mail sent!";
+            return RedirectToAction("Index");
     }
 
 
@@ -112,18 +112,130 @@ Submitted on {model.SubmittedOn:g}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Approve(int id)
+        public IActionResult Approve(int id, string pin)
+        {
+            const string approvalPin = "1234";   // TODO: move to config
+
+            if (pin != approvalPin)
+                return BadRequest("Invalid PIN");
+
+            using var conn = new MySqlConnection(_mysql);
+            conn.Open();
+
+            var cmd = new MySqlCommand(
+                "UPDATE servicerecords SET status='Approved' WHERE id = @id", conn);
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+
+            // ─── Try e-mail, but don't fail approval if it blows up ───
+            try
+            {
+                var rec = _calendarService.GetServiceRecordById(id);
+                if (!string.IsNullOrWhiteSpace(rec?.Email))
+                {
+                    string body =
+                        $"Time-off request for {rec.LastName}, {rec.FirstName} has been approved.";
+                    _sharedService.SendEmailWithAttachment(
+                        rec.Email, null, null,
+                        "Your Time-Off Request Has Been Approved",
+                        body);
+                }
+            }
+            catch (Exception ex)
+            {
+                // log and continue
+                Console.WriteLine($"E-mail failed: {ex.Message}");
+            }
+
+            return Ok();   // JS sees 200 → success
+        }
+
+
+        [HttpGet]
+        public IActionResult VerifyAdminPin(string pin)
+        {
+            if (pin == "1234") return Ok();
+            return Unauthorized();
+        }
+
+        [HttpGet]
+        public JsonResult GetRecord(int id)
+        {
+            var rec = _calendarService.GetServiceRecordById(id);
+            using var conn = new MySqlConnection(_mysql);
+            conn.Open();
+            var dates = new List<string>();
+
+            var cmd = new MySqlCommand("SELECT requested_date FROM servicerecord_dates WHERE servicerecord_id = @id", conn);
+            cmd.Parameters.AddWithValue("@id", id);
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                dates.Add(Convert.ToDateTime(rdr["requested_date"]).ToString("MM/dd/yyyy"));
+
+            return Json(new
+            {
+                timeOffType = rec.TimeOffType,
+                shift = rec.Shift,
+                explanation = rec.Explanation,
+                dates = dates
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult EditRecord(int id, string type, string shift, string explanation, string dates)
         {
             using var conn = new MySqlConnection(_mysql);
             conn.Open();
-            var cmd = new MySqlCommand(
-                "UPDATE servicerecords SET status='Approved' WHERE id=@id", conn);
-            cmd.Parameters.AddWithValue("@id", id);
-            cmd.ExecuteNonQuery();
-            TempData["Success"] = "Request approved.";
-            return RedirectToAction("Index");
+            using var tran = conn.BeginTransaction();
+
+            var update = new MySqlCommand(@"
+        UPDATE servicerecords
+        SET time_off_type = @type, shift = @shift, explanation = @expl
+        WHERE id = @id", conn, tran);
+            update.Parameters.AddWithValue("@type", type);
+            update.Parameters.AddWithValue("@shift", shift);
+            update.Parameters.AddWithValue("@expl", explanation);
+            update.Parameters.AddWithValue("@id", id);
+            update.ExecuteNonQuery();
+
+            var del = new MySqlCommand("DELETE FROM servicerecord_dates WHERE servicerecord_id = @id", conn, tran);
+            del.Parameters.AddWithValue("@id", id);
+            del.ExecuteNonQuery();
+
+            foreach (var dateStr in dates.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (DateTime.TryParse(dateStr.Trim(), out var d))
+                {
+                    var ins = new MySqlCommand("INSERT INTO servicerecord_dates (servicerecord_id, requested_date) VALUES (@id, @dt)", conn, tran);
+                    ins.Parameters.AddWithValue("@id", id);
+                    ins.Parameters.AddWithValue("@dt", d.Date);
+                    ins.ExecuteNonQuery();
+                }
+            }
+
+            tran.Commit();
+            return Ok();
         }
-        
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeleteRecord(int id)
+        {
+            using var conn = new MySqlConnection(_mysql);
+            conn.Open();
+
+            var deleteDates = new MySqlCommand("DELETE FROM servicerecord_dates WHERE servicerecord_id = @id", conn);
+            deleteDates.Parameters.AddWithValue("@id", id);
+            deleteDates.ExecuteNonQuery();
+
+            var deleteMain = new MySqlCommand("DELETE FROM servicerecords WHERE id = @id", conn);
+            deleteMain.Parameters.AddWithValue("@id", id);
+            deleteMain.ExecuteNonQuery();
+
+            return Ok();
+        }
 
     }
 

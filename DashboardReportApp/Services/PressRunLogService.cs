@@ -37,183 +37,215 @@ namespace DashboardReportApp.Services
         #region Public CRUD Methods
 
         // ========== LOGIN ==========
-        public async Task HandleLogin(PressRunLogModel formModel)
+        /// <summary>Result returned by HandleLoginAsync so the UI knows what happened.</summary>
+        public class LoginResult
         {
-            //insert main run record (skidnumber = 0)
-            const string insertMainRun = @"
-INSERT INTO pressrun 
-    (operator, part, component, machine, prodNumber, run, startDateTime, skidNumber)
-VALUES 
-    (@operator, @part, @component, @machine, @prodNumber, @run, @startTime, 0)";
+            public int SkidNumber { get; set; }   // 1‑based
+            public bool NewSkid { get; set; }   // true = we created a new skid
+            public string Message { get; set; }   // “Logged in and started skid 1” …
+        }
 
-            await using var conn = new MySqlConnection(_connectionStringMySQL);
-            await conn.OpenAsync();
+       
 
-            await using var cmd = new MySqlCommand(insertMainRun, conn);
-            cmd.Parameters.AddWithValue("@operator", formModel.Operator);
-            cmd.Parameters.AddWithValue("@part", formModel.Part);
-            cmd.Parameters.AddWithValue("@component", formModel.Component);
-            cmd.Parameters.AddWithValue("@machine", formModel.Machine);
-            cmd.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
-            cmd.Parameters.AddWithValue("@run", formModel.Run);
-            cmd.Parameters.AddWithValue("@startTime", formModel.StartDateTime);
-
-            await cmd.ExecuteNonQueryAsync();
-
-
-            //change operator on current skid
-            await using var conn2 = new MySqlConnection(_connectionStringMySQL);
-            await conn2.OpenAsync();
-
-            // Get the current highest skidNumber for this run
-            int currentSkid = 0;
-            const string getSkidSql = @"
-        SELECT IFNULL(MAX(skidNumber), 0)
-        FROM pressrun
-        WHERE run = @run AND skidNumber > 0";
-            using (var cmd2 = new MySqlCommand(getSkidSql, conn2))
-            {
-                cmd2.Parameters.AddWithValue("@run", formModel.Run);
-                var result = await cmd2.ExecuteScalarAsync();
-                int.TryParse(result?.ToString(), out currentSkid);
-            }
-
-            if (currentSkid > 0)
-            {
-                const string closeSkidSql = @"
-UPDATE pressrun
-SET endDateTime = NOW(),
-    pcsEnd = @pcsEnd,
-    open = 1
-WHERE run = @run
-  AND skidNumber = @skidNum
-  AND endDateTime IS NULL
-LIMIT 1";
-
-                using var closeCmd = new MySqlCommand(closeSkidSql, conn);
-                closeCmd.Parameters.AddWithValue("@run", formModel.Run);
-                closeCmd.Parameters.AddWithValue("@skidNum", currentSkid);
-                closeCmd.Parameters.AddWithValue("@pcsEnd", formModel.PcsStart); // Close using new count
-                await closeCmd.ExecuteNonQueryAsync();
-
-                const string insertSql = @"
-        INSERT INTO pressrun 
-            (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-        VALUES 
-            (@run, @part, @component, @startDateTime, @operator, @machine, @prodNumber, @skidNumber, @pcsStart)";
-                using (var insert = new MySqlCommand(insertSql, conn))
-                {
-                    insert.Parameters.AddWithValue("@run", formModel.Run);
-                    insert.Parameters.AddWithValue("@part", formModel.Part);
-                    insert.Parameters.AddWithValue("@component", formModel.Component);
-                    insert.Parameters.AddWithValue("@startDateTime", formModel.StartDateTime);
-                    insert.Parameters.AddWithValue("@operator", formModel.Operator);
-                    insert.Parameters.AddWithValue("@machine", formModel.Machine);
-                    insert.Parameters.AddWithValue("@prodNumber", formModel.ProdNumber);
-                    insert.Parameters.AddWithValue("@skidNumber", currentSkid);
-                    insert.Parameters.AddWithValue("@pcsStart", formModel.PcsStart);
-                    await insert.ExecuteNonQueryAsync();
-                }
-
-            }
-
-          
+        /// <summary>Returned by HandleStartSkidAsync so the UI can tell the user what happened.</summary>
+        public class StartSkidResult
+        {
+            public int SkidNumber { get; set; }   // the skid that just started
+            public string Message { get; set; }   // e.g. "Started skid 4."
         }
 
         // ========== START SKID ==========
-        public async Task HandleStartSkidAsync(PressRunLogModel model)
+        // ======================= START SKID (unchanged logic) ==================
+        public async Task<StartSkidResult> HandleStartSkidAsync(PressRunLogModel model, int pcsStart)
         {
-            // Ends the previous skid if open, auto-prints a tag, then inserts a new skid, auto-prints a tag.
+            var result = new StartSkidResult();
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            // 1) Find the current highest skid number for this run
+            // 1) Highest skid so far
             int currentSkidNumber = 0;
             const string getSkids = @"
-SELECT IFNULL(MAX(skidNumber), 0)
-FROM pressrun
-WHERE run = @run
-  AND skidNumber > 0";
+        SELECT IFNULL(MAX(skidNumber),0)
+        FROM pressrun
+        WHERE run = @run AND skidNumber > 0;";
             using (var cmd = new MySqlCommand(getSkids, conn))
             {
                 cmd.Parameters.AddWithValue("@run", model.Run);
-                var result = await cmd.ExecuteScalarAsync();
-                if (result != null && int.TryParse(result.ToString(), out int c))
-                    currentSkidNumber = c;
+                currentSkidNumber = Convert.ToInt32(await cmd.ExecuteScalarAsync());
             }
 
-            // 2) If a skid is currently open (skidNumber == currentSkidNumber > 0 and endDateTime IS NULL),
-            //    end it, fill pcsEnd, and mark open=1 so we know it's closed.
+            // 2) Close the open skid (if any)
             if (currentSkidNumber > 0)
             {
-                const string endSkidSql = @"
-UPDATE pressrun
-SET endDateTime = NOW(),
-    pcsEnd = @pcsEnd,
-    open = 1
-WHERE run = @run
-  AND skidNumber = @skidNum
-  AND endDateTime IS NULL
-LIMIT 1";
-                using var endCmd = new MySqlCommand(endSkidSql, conn);
-                endCmd.Parameters.AddWithValue("@run", model.Run);
-                endCmd.Parameters.AddWithValue("@skidNum", currentSkidNumber);
-                // We'll use the new 'start' count to close out the old skid's end count
-                endCmd.Parameters.AddWithValue("@pcsEnd", model.PcsStart);
-                int rowsUpdated = await endCmd.ExecuteNonQueryAsync();
+                const string closeSql = @"
+            UPDATE pressrun
+            SET endDateTime = NOW(),
+                pcsEnd      = @pcsEnd,
+                open        = 1
+            WHERE run = @run AND skidNumber = @skid AND endDateTime IS NULL
+            LIMIT 1;";
+                using var closeCmd = new MySqlCommand(closeSql, conn);
+                closeCmd.Parameters.AddWithValue("@run", model.Run);
+                closeCmd.Parameters.AddWithValue("@skid", currentSkidNumber);
+                closeCmd.Parameters.AddWithValue("@pcsEnd", pcsStart);
+                await closeCmd.ExecuteNonQueryAsync();
+            }
 
-                if (rowsUpdated > 0)
+            // 3) Insert the next skid
+            int newSkidNumber = (currentSkidNumber == 0) ? 1 : currentSkidNumber + 1;
+            const string insertSql = @"
+        INSERT INTO pressrun
+              (run, part, component, startDateTime, operator,
+               machine, prodNumber, skidNumber, pcsStart)
+        VALUES (@run, @part, @component, NOW(), @operator,
+                @machine, @prod, @skid, @pcsStart);";
+            using (var ins = new MySqlCommand(insertSql, conn))
+            {
+                ins.Parameters.AddWithValue("@run", model.Run);
+                ins.Parameters.AddWithValue("@part", model.Part);
+                ins.Parameters.AddWithValue("@component", model.Component);
+                ins.Parameters.AddWithValue("@operator", model.Operator);
+                ins.Parameters.AddWithValue("@machine", model.Machine);
+                ins.Parameters.AddWithValue("@prod", model.ProdNumber);
+                ins.Parameters.AddWithValue("@skid", newSkidNumber);
+                ins.Parameters.AddWithValue("@pcsStart", pcsStart);
+                await ins.ExecuteNonQueryAsync();
+            }
+
+            result.SkidNumber = newSkidNumber;
+            result.Message = $"Started skid {newSkidNumber}.";
+            return result;
+        }
+
+        // =======================  LOGIN  =======================
+        public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m)
+        {
+            var result = new LoginResult();
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // Always create the main run record (Skid 0)
+            const string insertMain = @"
+        INSERT INTO pressrun
+              (operator, part, component, machine, prodNumber, run, startDateTime, skidNumber)
+        VALUES (@operator, @part, @component, @machine, @prod, @run, @start, 0);";
+            using (var cmd = new MySqlCommand(insertMain, conn))
+            {
+                cmd.Parameters.AddWithValue("@operator", m.Operator);
+                cmd.Parameters.AddWithValue("@part", m.Part);
+                cmd.Parameters.AddWithValue("@component", m.Component);
+                cmd.Parameters.AddWithValue("@machine", m.Machine);
+                cmd.Parameters.AddWithValue("@prod", m.ProdNumber);
+                cmd.Parameters.AddWithValue("@run", m.Run);
+                cmd.Parameters.AddWithValue("@start", m.StartDateTime);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Look at all skids for this run
+            const string checkSkids = @"
+        SELECT skidNumber, open
+        FROM pressrun
+        WHERE run = @run AND skidNumber > 0
+        ORDER BY skidNumber;";
+            var openSkidNumber = 0;
+            var allClosed = true;
+            var maxSkid = 0;
+
+            using (var cmd = new MySqlCommand(checkSkids, conn))
+            {
+                cmd.Parameters.AddWithValue("@run", m.Run);
+                using var rdr = await cmd.ExecuteReaderAsync();
+                while (await rdr.ReadAsync())
                 {
-                    // We ended the previous skid => auto-print a router tag for it.
-                    // 3a) Get that ended skid record from DB
-                    PressRunLogModel endedSkid = await GetPressRunRecordAsync(conn, model.Run, currentSkidNumber);
-                    if (endedSkid != null)
+                    int skid = rdr.IsDBNull("skidNumber") ? 0 : rdr.GetInt32("skidNumber");
+                    bool isOpen = !rdr.IsDBNull("open") && rdr.GetBoolean("open");
+
+                    if (skid > maxSkid) maxSkid = skid;
+                    if (isOpen)
                     {
-                        // 3b) Generate PDF
-                        string filePath = await GenerateRouterTagAsync(endedSkid);
-                        // 3c) Print
-                        _sharedService.PrintFileToClosestPrinter(filePath, 1);
+                        openSkidNumber = skid;
+                        allClosed = false;
                     }
                 }
             }
 
-            // 3) Insert the new skid
-            int newSkidNumber = (currentSkidNumber == 0) ? 1 : currentSkidNumber + 1;
-            const string insertNext = @"
-INSERT INTO pressrun (run, part, component, startDateTime, operator, machine, prodNumber, skidNumber, pcsStart)
-VALUES (@run, @part, @component, NOW(), @operator, @machine, @prodNumber, @skidNumber, @pcsStart);
-SELECT LAST_INSERT_ID();";
-
-            int newId = 0;
-            using (var insSkid = new MySqlCommand(insertNext, conn))
+            if (allClosed)
             {
-                insSkid.Parameters.AddWithValue("@run", model.Run);
-                insSkid.Parameters.AddWithValue("@part", model.Part);
-                insSkid.Parameters.AddWithValue("@component", model.Component);
-                insSkid.Parameters.AddWithValue("@operator", model.Operator);
-                insSkid.Parameters.AddWithValue("@machine", model.Machine);
-                insSkid.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                insSkid.Parameters.AddWithValue("@skidNumber", newSkidNumber);
-                insSkid.Parameters.AddWithValue("@pcsStart", model.PcsStart);
+                // All previous skids closed → increment
+                int newSkid = maxSkid + 1;
+                result.SkidNumber = newSkid;
+                result.NewSkid = true;
+                result.Message = $"Logged in and started skid {newSkid}.";
 
-                object obj = await insSkid.ExecuteScalarAsync();
-                if (obj != null && int.TryParse(obj.ToString(), out int insertedId))
-                {
-                    newId = insertedId;
-                }
+                const string insertSkid = @"
+            INSERT INTO pressrun
+                  (run, part, component, startDateTime, operator,
+                   machine, prodNumber, skidNumber, pcsStart)
+            VALUES (@run, @part, @component, NOW(), @operator,
+                    @machine, @prodNumber, @skid, @pcsStart);";
+                using var newSkidCmd = new MySqlCommand(insertSkid, conn);
+                newSkidCmd.Parameters.AddWithValue("@run", m.Run);
+                newSkidCmd.Parameters.AddWithValue("@part", m.Part);
+                newSkidCmd.Parameters.AddWithValue("@component", m.Component);
+                newSkidCmd.Parameters.AddWithValue("@operator", m.Operator);
+                newSkidCmd.Parameters.AddWithValue("@machine", m.Machine);
+                newSkidCmd.Parameters.AddWithValue("@prodNumber", m.ProdNumber);
+                newSkidCmd.Parameters.AddWithValue("@skid", newSkid);
+                newSkidCmd.Parameters.AddWithValue("@pcsStart", m.PcsStart);
+                await newSkidCmd.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                // Continuing an open skid
+                result.SkidNumber = openSkidNumber;
+                result.NewSkid = false;
+                result.Message = $"Logged in to existing skid {openSkidNumber}.";
+
+                const string insertSkid = @"
+            INSERT INTO pressrun
+                  (run, part, component, startDateTime, operator,
+                   machine, prodNumber, skidNumber, pcsStart)
+            VALUES (@run, @part, @component, NOW(), @operator,
+                    @machine, @prodNumber, @skid, @pcsStart);";
+                using var insert = new MySqlCommand(insertSkid, conn);
+                insert.Parameters.AddWithValue("@run", m.Run);
+                insert.Parameters.AddWithValue("@part", m.Part);
+                insert.Parameters.AddWithValue("@component", m.Component);
+                insert.Parameters.AddWithValue("@operator", m.Operator);
+                insert.Parameters.AddWithValue("@machine", m.Machine);
+                insert.Parameters.AddWithValue("@prodNumber", m.ProdNumber);
+                insert.Parameters.AddWithValue("@skid", openSkidNumber);
+                insert.Parameters.AddWithValue("@pcsStart", m.PcsStart);
+                await insert.ExecuteNonQueryAsync();
             }
 
-            // 4) Auto-print router tag for the newly started skid
-            if (newId > 0)
-            {
-                var newSkid = await GetPressRunRecordByIdAsync(conn, newId);
-                if (newSkid != null)
-                {
-                    string filePath = await GenerateRouterTagAsync(newSkid);
-                    _sharedService.PrintFileToClosestPrinter(filePath, 1);
-                }
-            }
+            return result;
         }
+
+
+
+        private static async Task InsertSkidRowAsync(MySqlConnection conn,
+                                              PressRunLogModel m, int skidNo)
+        {
+            const string ins = @"
+        INSERT INTO pressrun (run, part, component, startDateTime, operator,
+                              machine, prodNumber, skidNumber, pcsStart, open)
+        VALUES (@run,@part,@component,NOW(),@operator,
+                @machine,@prod,@skid,@pcsStart,1);";   // open = 1 → current active line
+            using var cmd = new MySqlCommand(ins, conn);
+            cmd.Parameters.AddWithValue("@run", m.Run);
+            cmd.Parameters.AddWithValue("@part", m.Part);
+            cmd.Parameters.AddWithValue("@component", m.Component);
+            cmd.Parameters.AddWithValue("@operator", m.Operator);
+            cmd.Parameters.AddWithValue("@machine", m.Machine);
+            cmd.Parameters.AddWithValue("@prod", m.ProdNumber);
+            cmd.Parameters.AddWithValue("@skid", skidNo);
+            cmd.Parameters.AddWithValue("@pcsStart", m.PcsStart ?? 0);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+
         public async Task<string> GetMachineForRunAsync(int runId)
         {
             const string sql = @"SELECT machine FROM pressrun WHERE id = @id LIMIT 1";

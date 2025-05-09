@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
+using static DashboardReportApp.Services.PressRunLogService;
 
 namespace DashboardReportApp.Controllers
 {
@@ -49,35 +50,47 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart)
         {
-            var formModel = new PressRunLogModel
-            {
-                Operator = model.Operator,
-                Part = model.Part,
-                Component = model.Component,
-                Machine = model.Machine,
-                Run = model.Run,
-                StartDateTime = DateTime.Now,
-                ProdNumber = model.ProdNumber,
-                PcsStart = pcsStart
-            };
+            model.PcsStart = pcsStart;
+            model.StartDateTime = DateTime.Now;
 
-            await _pressRunLogService.HandleLogin(formModel);
+            LoginResult res = await _pressRunLogService.HandleLoginAsync(model);
+
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                          Request.Headers["Accept"].ToString().Contains("application/json");
+
+            if (isAjax)
+            {
+                return Json(new { ok = true, message = res.Message });
+            }
+
+            TempData["Toast"] = res.Message;
             return RedirectToAction("Index");
         }
 
 
 
-        // ============== START SKID ==============
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart)
         {
-            // This will end the previous skid if open, auto-print its tag,
-            // then start the new skid, auto-print its tag.
-            await _pressRunLogService.HandleStartSkidAsync(model);
+            StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart);
+
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                          Request.Headers["Accept"].ToString().Contains("application/json");
+
+            if (isAjax)
+            {
+                return Json(new { ok = true, message = res.Message });
+            }
+
+            TempData["Toast"] = res.Message;
             return RedirectToAction("Index");
         }
+
+
 
         // ============== LOGOUT ==============
         [HttpGet]
@@ -92,9 +105,20 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmLogout(int runId, int finalCount, int scrap, string notes)
         {
             await _pressRunLogService.HandleLogoutAsync(runId, finalCount, scrap, notes);
+
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                          Request.Headers["Accept"].ToString().Contains("application/json");
+
+            if (isAjax)
+            {
+                return Json(new { ok = true, message = "Logged out successfully." });
+            }
+
+            TempData["Toast"] = "Logged out successfully.";
             return RedirectToAction("Index");
         }
 
@@ -121,8 +145,10 @@ namespace DashboardReportApp.Controllers
         [HttpPost]
         public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes, bool orderComplete, string machine)
         {
-            // Ends main run and automatically ends any open skid(s) for that run
+            // Ends main run and any open skids, prints tags, and updates presssetup
             await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes, orderComplete);
+
+            // If order is complete, reset device counter to 0
             if (orderComplete)
             {
                 var deviceIPs = new Dictionary<string, string>
@@ -150,24 +176,23 @@ namespace DashboardReportApp.Controllers
 
                 if (deviceIPs.TryGetValue(machine, out var ip))
                 {
-                    using var http = new HttpClient();
-                    var content = new FormUrlEncodedContent(new[]
-                    {
-                new KeyValuePair<string, string>("count_value", "0")
-            });
-
                     try
                     {
+                        using var http = new HttpClient();
+                        var content = new FormUrlEncodedContent(new[] {
+                    new KeyValuePair<string, string>("count_value", "0")
+                });
                         await http.PostAsync($"http://{ip}/update", content);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to reset device count for machine {machine}: {ex.Message}");
+                        Console.WriteLine($"Failed to reset count for machine {machine}: {ex.Message}");
                     }
                 }
             }
 
-            return RedirectToAction("Index");
+            // Return JSON for frontend SweetAlert + reload
+            return Json(new { ok = true, message = "Run ended successfully." });
         }
 
 

@@ -1,39 +1,44 @@
 ﻿@model List<DashboardReportApp.Models.CalendarModel>
-
 @{
     var sorted = Model.OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
     ViewData["Title"] = "Service Record Calendar";
 }
 
-<!-- STYLES -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" />
-<style>    .is-invalid {
+<style>
+    .is-invalid {
         border-color: red;
         box-shadow: 0 0 3px red
-    }</style>
+    }
+
+    .btn-swal {
+        margin: 0 .4rem
+    }
+</style>
 
 <div class="container mt-4">
     <h2 class="text-center mb-4">@ViewData["Title"]</h2>
     <div class="d-flex justify-content-center mb-3">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#serviceModal">Add Request</button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#serviceModal">Time‑Off Request</button>
     </div>
     <div id="calendar" class="p-3 bg-light border rounded shadow-sm"></div>
+    <!-- global anti‑forgery token for AJAX -->
+    <form id="afForm" asp-antiforgery="true" style="display:none"></form>
 </div>
 
-<!-- ─────────  ADD REQUEST MODAL ───────── -->
-<div class="modal fade" id="serviceModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+<!-- ADD REQUEST MODAL -->
+<div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form asp-action="Submit" asp-antiforgery="true" method="post" id="mainForm">
                 <div class="modal-header">
-                    <h5 class="modal-title">Submit Time‑Off Request</h5>
+                    <h5 class="modal-title">New Time‑Off Request</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
-
                         <!-- Employee -->
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Employee</label>
@@ -46,7 +51,6 @@
                             </select>
                             <input type="hidden" name="FirstName" />
                         </div>
-
                         <!-- Department / Shift / Schedule -->
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
@@ -72,14 +76,17 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Time‑Off Type</label>
-                            <select name="TimeOffType" class="form-select" required><option>Paid Vacation</option><option>Unpaid Time Off</option></select>
+                            <select name="TimeOffType" class="form-select" required>
+                                <option>Paid Vacation</option>
+                                <option>Unpaid Time Off</option>
+                                <option>Other</option>
+                            </select>
                         </div>
-
-                        <!-- Attribute optional -->
+                        <!-- Optional Attribute -->
                         <div class="col-md-12">
                             <label class="form-label">Attribute <span class="text-muted">(optional)</span></label>
                             <select name="Attribute" class="form-select">
-                                <option value="" selected>— None —</option>
+                                <option value="" selected>— None —</option>
                                 <option>Failed to Punch In</option>
                                 <option>Reported Late</option>
                                 <option>Failed to Report Off</option>
@@ -94,13 +101,11 @@
                             <label class="form-label">Explanation</label>
                             <textarea name="Explanation" class="form-control" rows="2"></textarea>
                         </div>
-
                         <!-- Date picker -->
                         <div class="col-md-12">
                             <label class="form-label fw-bold">Dates Requested</label>
                             <input type="text" name="DatesRequested" class="form-control datepicker" required>
                         </div>
-
                         <!-- Balances -->
                         <div class="row mt-2">
                             <div class="col-md-6">
@@ -112,103 +117,201 @@
                                 <input type="text" id="afterBal" class="form-control" readonly>
                             </div>
                         </div>
-
                         <!-- Hidden fields -->
                         <input type="hidden" id="lname" name="LastName" />
                         <input type="hidden" id="date_employed" name="DateEmployed" />
                         <input type="hidden" id="active_status" name="ActiveStatus" />
                         <input type="hidden" id="email" name="Email" />
                         <input type="hidden" id="vac_balance" name="VacationBalance" />
-
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-success">Submit</button>
+                    <button type="submit" class="btn btn-success">Submit</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<!-- ... existing modal markup ... -->
 
-<!-- ─────────  SCRIPTS ───────── -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
     const empData=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(sorted));
 
+    // ---------- Calendar init ----------
     document.addEventListener('DOMContentLoaded',()=>{
-
-      /* Calendar */
       const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{
         initialView:'dayGridMonth',height:500,
         headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},
         events:'/Calendar/GetEvents',
-        eventClick:e=>{
-          const p=e.event.extendedProps;
-          const balNum=parseFloat(p.vacBalance||0);
-          const reqDays=parseFloat(p.reqDays||0);
-          const balStr=balNum.toFixed(2);
-          const newBalStr=(balNum-reqDays).toFixed(2);
-          const approved=e.event.backgroundColor==='#28a745';
-
-          Swal.fire({
-              html:`<b>${e.event.title}</b><hr>
-    Status&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <b>${approved?'Approved':'Waiting'}</b><br>
-    Current Bal&nbsp;: <b>${balStr}</b><br>
-    After Approval: <b>${newBalStr}</b><hr>
-    ${approved?'':'Approve this request?'}`,
-              showCancelButton:!approved,
-              confirmButtonText:'Approve',
-              showConfirmButton:!approved
-          }).then(r=>{
-            if(r.isConfirmed){
-              fetch('/Calendar/Approve',{
-                 method:'POST',
-                 headers:{'Content-Type':'application/x-www-form-urlencoded',
-                          'RequestVerificationToken':
-                            document.querySelector('input[name="__RequestVerificationToken"]').value},
-                 body:`id=${e.event.id}`})
-              .then(res=>{if(res.ok)e.event.setProp('backgroundColor','#28a745');});
-            }
-          });
-        }
+        eventClick:handleEventClick
       });
       cal.render();
 
-      /* Flatpickr for dates */
-      let fp=flatpickr(".datepicker",{mode:"multiple",dateFormat:"m/d/Y",
-          onChange:updateAfter});
+      // ---- flatpickr for modal date field ----
+      const fp=flatpickr('.datepicker',{mode:'multiple',dateFormat:'m/d/Y',onChange:updateAfter});
+
+      // ---- update balance after selecting dates or changing type ----
       function updateAfter(){
-         const bal=parseFloat(document.getElementById('currBal').value||0);
-         document.getElementById('afterBal').value=(bal-fp.selectedDates.length).toFixed(2);
+        const bal=parseFloat(document.getElementById('currBal').value||0);
+        const type=document.querySelector('[name="TimeOffType"]').value;
+        const deduct=type==='Paid Vacation';
+        document.getElementById('afterBal').value=deduct?(bal-fp.selectedDates.length).toFixed(2):bal.toFixed(2);
       }
+      document.querySelector('[name="TimeOffType"]').addEventListener('change',updateAfter);
 
-      /* Employee dropdown autofill */
-      const sel=document.getElementById('employeeSelect');
-      sel.addEventListener('change',()=>{
-         const emp=empData[+sel.value]; if(!emp)return;
-         const bal=emp.vacationBalance??emp.VacationBalance;
-         document.querySelector('input[name="FirstName"]').value=emp.firstName??emp.FirstName;
-         document.getElementById('lname').value=emp.lastName??emp.LastName;
-         document.getElementById('vac_balance').value=bal;
-         document.getElementById('currBal').value=parseFloat(bal).toFixed(2);
-         updateAfter();
-      });
-
-      /* Submit guard */
-      document.getElementById('mainForm').addEventListener('submit',ev=>{
-          if(!document.querySelector('input[name="FirstName"]').value){
-              ev.preventDefault(); Swal.fire("Pick Employee","Please select an employee.","warning");
-          }
+      // ---- employee dropdown autofill ----
+      document.getElementById('employeeSelect').addEventListener('change',e=>{
+        const emp=empData[+e.target.value]; if(!emp) return;
+        document.querySelector('input[name="FirstName"]').value=emp.firstName||emp.FirstName;
+        document.getElementById('lname').value=emp.lastName||emp.LastName;
+        document.getElementById('vac_balance').value=emp.vacationBalance||emp.VacationBalance;
+        document.getElementById('currBal').value=parseFloat(emp.vacationBalance||emp.VacationBalance).toFixed(2);
+        updateAfter();
       });
     });
-</script>
 
+        // ---------- Event click handler ----------
+    function handleEventClick(info) {
+      const ev       = info.event;
+      const props    = ev.extendedProps;
+      const bal      = parseFloat(props.vacBalance || 0);
+      const req      = parseFloat(props.reqDays    || 0);
+      const approved = ev.backgroundColor === '#28a745';
+
+      // decide if this request is a PAID vacation (only deduct then)
+      const typeText = ev.title.split(/[-–—]/).pop().trim().toLowerCase();
+      const deduct   = typeText.startsWith('paid');   // ← simple & safe → Unpaid ≠ Paid
+
+      const afterBal = bal - (deduct ? req : 0);
+
+      Swal.fire({
+        title: 'Request Options',
+        html: `<b>${ev.title}</b><hr>
+               Status: <b>${approved ? 'Approved' : 'Waiting'}</b><br>
+               Current Bal: <b>${bal.toFixed(2)}</b><br>
+               After Approval: <b>${afterBal.toFixed(2)}</b><hr>
+               <div class="text-center">
+                 <button id="swApprove" class="btn btn-success btn-swal">Approve</button>
+                 <button id="swEdit"    class="btn btn-primary btn-swal">Edit</button>
+                 <button id="swDelete"  class="btn btn-danger  btn-swal">Delete</button>
+               </div>`,
+        showConfirmButton: false,
+        willOpen: popup => {
+          popup.querySelector('#swApprove').addEventListener('click', () => doApprove(ev));
+          popup.querySelector('#swEdit').addEventListener('click', () =>
+            adminGate(() => showEditModal(ev.id)));
+          popup.querySelector('#swDelete').addEventListener('click', () =>
+            adminGate(() => confirmDelete(ev.id)));
+        }
+      });
+    }
+
+
+
+    // ---------- Approve ----------
+    function doApprove(event){
+      Swal.fire({title:'Approval PIN',input:'password',inputAttributes:{name:'pin',autocomplete:'one-time-code'},showCancelButton:true,confirmButtonText:'Approve'}).then(r=>{
+        if(!r.isConfirmed||!r.value)return;
+        fetch('/Calendar/Approve',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','RequestVerificationToken':getToken()},body:`id=${event.id}&pin=${encodeURIComponent(r.value)}`})
+          .then(res=>res.ok?res.text():Promise.reject())
+          .then(()=>{event.setProp('backgroundColor','#28a745');Swal.fire('Approved','Request approved','success');})
+          .catch(()=>Swal.fire('Error','Invalid PIN','error'));
+      });
+    }
+
+    // ---------- Admin gate (edit/delete) ----------
+    function adminGate(onSuccess){
+      Swal.fire({title:'Admin PIN',input:'password',inputAttributes:{name:'pin',autocomplete:'one-time-code'},showCancelButton:true,confirmButtonText:'Verify'}).then(r=>{
+        if(!r.isConfirmed||!r.value)return;
+        fetch(`/Calendar/VerifyAdminPin?pin=${encodeURIComponent(r.value)}`)
+          .then(res=>res.ok?onSuccess():Swal.fire('Denied','Incorrect PIN','error'));
+      });
+    }
+        // ---------- Edit modal ----------
+    function showEditModal(id){
+      fetch(`/Calendar/GetRecord?id=${id}`)
+        .then(r => r.json())
+        .then(data => {
+
+          Swal.fire({
+            title: 'Edit Request',
+            html: `
+              <label>Type</label>
+              <select id="edType" class="form-select mb-2">
+                <option ${sel(data.timeOffType,'Paid Vacation')}>Paid Vacation</option>
+                <option ${sel(data.timeOffType,'Unpaid Time Off')}>Unpaid Time Off</option>
+                <option ${sel(data.timeOffType,'Other')}>Other</option>
+              </select>
+
+              <label>Shift</label>
+              <select id="edShift" class="form-select mb-2">
+                <option ${sel(data.shift,'1')}>1</option>
+                <option ${sel(data.shift,'2')}>2</option>
+                <option ${sel(data.shift,'3')}>3</option>
+              </select>
+
+              <label>Explanation</label>
+              <textarea id="edExp" class="form-control mb-2">${data.explanation||''}</textarea>
+
+              <label>Dates</label>
+              <input id="edDates" class="form-control mb-2">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Save',
+            didOpen: popup => {
+              /* --- initialise flatpickr on the new input --- */
+              flatpickr(popup.querySelector('#edDates'), {
+                mode:        'multiple',
+                dateFormat:  'm/d/Y',
+                defaultDate: data.dates || []          // pre-select original dates
+              });
+            }
+          }).then(r=>{
+            if(!r.isConfirmed) return;
+
+            // flatpickr writes a CSV string back into the input → just use .value
+            const body = `id=${id}&type=${encodeURIComponent(document.getElementById('edType').value)}`
+                       + `&shift=${document.getElementById('edShift').value}`
+                       + `&explanation=${encodeURIComponent(document.getElementById('edExp').value)}`
+                       + `&dates=${encodeURIComponent(document.getElementById('edDates').value)}`;
+
+            fetch('/Calendar/EditRecord', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'RequestVerificationToken': getToken()
+              },
+              body
+            }).then(res =>
+              res.ok
+                ? Swal.fire('Saved','Changes applied','success').then(()=>location.reload())
+                : Swal.fire('Error','Save failed','error')
+            );
+          });
+      });
+    }
+
+
+    // ---------- Delete ----------
+    function confirmDelete(id){
+      Swal.fire({title:'Delete request?',icon:'warning',showCancelButton:true,confirmButtonText:'Delete'}).then(r=>{
+        if(!r.isConfirmed)return;
+        fetch('/Calendar/DeleteRecord',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','RequestVerificationToken':getToken()},body:`id=${id}`})
+          .then(res=>res.ok?Swal.fire('Deleted','Request removed','success').then(()=>location.reload()):Swal.fire('Error','Delete failed','error'));
+      });
+    }
+
+    // ---------- Helpers ----------
+    function getToken(){
+      return document.querySelector('#afForm input[name="__RequestVerificationToken"]').value;
+    }
+    function sel(v,t){return v===t?'selected':'';}
+</script>
 @if (TempData["Success"] != null)
 {
-    <script>    Swal.fire({icon:'success',title:'Done',text:'@TempData["Success"]',
-        timer:2000,showConfirmButton:false});</script>
+    <script>Swal.fire({icon:'success',title:'Done',text:'@TempData["Success"]',timer:2000,showConfirmButton:false});</script>
 }

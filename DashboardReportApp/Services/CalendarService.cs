@@ -135,6 +135,35 @@ ORDER BY sr.id, d.requested_date";
             return results;
         }
 
+        public CalendarModel GetServiceRecordById(int id)
+        {
+            using var conn = new MySqlConnection(_mysqlConnection);
+            conn.Open();
+            var cmd = new MySqlCommand(@"
+        SELECT id, fname, lname, email, vac_balance, department, shift, schedule, time_off_type
+        FROM servicerecords
+        WHERE id = @id", conn);
+            cmd.Parameters.AddWithValue("@id", id);
+
+            using var rdr = cmd.ExecuteReader();
+            if (rdr.Read())
+            {
+                return new CalendarModel
+                {
+                    Id = rdr.GetInt32("id"),
+                    FirstName = rdr["fname"].ToString(),
+                    LastName = rdr["lname"].ToString(),
+                    Email = rdr["email"].ToString(),
+                    VacationBalance = Convert.ToDecimal(rdr["vac_balance"]),
+                    Shift = rdr["shift"].ToString(),
+                    Schedule = rdr["schedule"].ToString(),
+                    Department = rdr["department"].ToString(),
+
+                    TimeOffType = rdr["time_off_type"].ToString()
+                };
+            }
+            return null;
+        }
 
     }
 

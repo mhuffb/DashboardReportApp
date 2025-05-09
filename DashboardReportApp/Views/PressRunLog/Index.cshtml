@@ -378,40 +378,58 @@
     }
 
 
-        function wireCountSetter(modalId, countInputId, checkboxId, machineHiddenId){
+
+
+               function wireCountSetter(modalId, countInputId, checkboxId, machineHiddenId) {
         const modal = document.getElementById(modalId);
-        if(!modal) return;
+        if (!modal) return;
         const form = modal.querySelector("form");
 
-        form.addEventListener("submit", function(ev){
-            const cb   = document.getElementById(checkboxId);
-            if(!cb || !cb.checked) return;                 // user unchecked → nothing to do
+        form.addEventListener("submit", async function (ev) {
+            if (form.dataset.submitted === "true") return;  // Already handled
+            const cb = document.getElementById(checkboxId);
+            if (!cb || !cb.checked) return;
 
-            const countEl   = document.getElementById(countInputId);
-            const original  = countEl.dataset.originalCount ?? "";
-            const current   = countEl.value.trim();
-            if(current === original) return;               // user didn’t change the number
+            const countEl = document.getElementById(countInputId);
+            const original = countEl.dataset.originalCount ?? "";
+            const current = countEl.value.trim();
+            if (current === original) return;
 
-            const machine   = document.getElementById(machineHiddenId).value;
-            const ip        = deviceIPs[machine];
-            if(!ip){ console.warn("Unknown IP for machine", machine); return; }
+            const machine = document.getElementById(machineHiddenId).value;
+            const ip = deviceIPs[machine];
+            if (!ip) {
+                console.warn("Unknown IP for machine", machine);
+                return;
+            }
 
-            ev.preventDefault();                           // pause the normal post-back
+            ev.preventDefault();
 
-            // POST to the pico just like Update-Press page does
-            fetch(`http://${ip}/update`,{
-                method:"POST",
-                headers:{ "Content-Type":"application/x-www-form-urlencoded" },
-                body:`count_value=${encodeURIComponent(current)}`
-            })
-            .catch(e=>console.error("Count push failed:",e))
-            .finally(()=> form.submit());                  // always resume MVC post
+            try {
+                await fetch(`http://${ip}/update`, {
+                    method: "POST",
+                        headers: {
+        "Accept": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    ,
+                    body: `count_value=${encodeURIComponent(current)}`
+                });
+            } catch (e) {
+                console.error("Count push failed:", e);
+            }
+
+            // Guard flag and trigger ajaxify manually
+            form.dataset.submitted = "true";
+
+            // Simulate AJAX call instead of re-triggering submit
+            ajaxifySubmit(form);
         });
     }
 
-    // hook up all three modals
-    document.addEventListener("DOMContentLoaded", ()=>{
 
+
+
+       document.addEventListener("DOMContentLoaded", () => {
         wireCountSetter("LoginModal",
                         "loginPcsStart",
                         "loginSetCountDevice",
@@ -427,12 +445,12 @@
                         "startSkidSetCountDevice",
                         "startSkidMachineHidden");
 
-    wireCountSetter("EndRunCountModal",
-                    "endRunFinalCount",
-                    "endRunSetCountDevice",
-                    "endRunMachineHidden");
-
+        wireCountSetter("EndRunCountModal",
+                        "endRunFinalCount",
+                        "endRunSetCountDevice",
+                        "endRunMachineHidden");
     });
+
 
 </script>
 
@@ -446,7 +464,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogin">
+                <form id="loginForm" method="post" asp-controller="PressRunLog" asp-action="ConfirmLogin">
+                    @Html.AntiForgeryToken()
                     <input type="hidden" id="loginPartHidden" name="part" />
                     <input type="hidden" id="loginComponentHidden" name="component" />
                     <input type="hidden" id="loginMachineHidden" name="machine" />
@@ -455,12 +474,12 @@
                     <!-- Show current count -->
                     <div class="mb-3">
                         <label class="form-label">Starting Device Count (editable):</label>
-                        <input type="number" id="loginPcsStart" class="ajaxify" name="pcsStart"  value="0" />
+                        <input type="number" id="loginPcsStart" class="form-control" name="pcsStart" value="0" />
                     </div>
                     
                     <div class="mb-3 form-check">
                         <input class="form-check-input" type="checkbox"
-                               id="loginSetCountDevice" class="ajaxify" checked>
+                               id="loginSetCountDevice"  checked>
                         <label class="form-check-label" for="loginSetCountDevice">
                             Set count on device
                         </label>
@@ -493,7 +512,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
+                <form id="logoutForm" method="post" asp-controller="PressRunLog" asp-action="ConfirmLogout">
                     <input type="hidden" id="logoutRunId" name="runId" />
                     <!-- Display current count -->
                     <input type="hidden" id="logoutMachineHidden" />
@@ -536,7 +555,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="post" asp-controller="PressRunLog" asp-action="ConfirmEndRun">
+                <form id="endRunForm" method="post"  asp-controller="PressRunLog" asp-action="ConfirmEndRun">
                     <input type="hidden" id="endRunId" name="runId" />
                     <input type="hidden" id="endRunMachineHidden" name="machine" />
 
@@ -581,7 +600,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="post" asp-controller="PressRunLog" asp-action="StartSkid">
+                <form id="startSkidForm" method="post" asp-controller="PressRunLog" asp-action="StartSkid">
+                    @Html.AntiForgeryToken()
                     <input type="hidden" id="startSkidRunId" name="runId" />
                     <input type="hidden" id="startSkidRunValue" name="run" />
                     <input type="hidden" id="startSkidMachineHidden" name="machine" />
@@ -608,3 +628,13 @@
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@if (TempData["Toast"] != null)
+{
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            Swal.fire({ icon: "success", title: "@TempData["Toast"]" });
+        });
+    </script>
+}
+

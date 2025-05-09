@@ -12,7 +12,7 @@
         public decimal VacationBalance { get; set; }
 
         public string Department { get; set; }
-        public int Shift { get; set; }
+        public string Shift { get; set; }
         public string Schedule { get; set; }
         public string Attribute { get; set; }
         public string Explanation { get; set; }

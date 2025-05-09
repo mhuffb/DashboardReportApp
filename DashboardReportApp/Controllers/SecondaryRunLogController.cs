@@ -38,12 +38,22 @@ namespace DashboardReportApp.Controllers
             await _secondaryRunLogService.HandleLoginAsync(model);
             return RedirectToAction("Index");
         }
-       
+
 
         [HttpPost]
         public async Task<IActionResult> Logout(int id, int pcs, int scrapMach, int scrapNonMach, string notes)
         {
             await _secondaryRunLogService.HandleLogoutAsync(pcs, scrapMach, scrapNonMach, notes, id);
+
+            // Detect AJAX (SweetAlert expects JSON)
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                          Request.Headers["Accept"].ToString().Contains("application/json");
+
+            if (isAjax)
+            {
+                return Json(new { ok = true, message = "Logged out successfully." });
+            }
+
             return RedirectToAction("Index");
         }
 
