@@ -258,7 +258,7 @@ namespace DashboardReportApp.Services
             return result?.ToString() ?? "";
         }
 
-        // ========== LOGOUT (No forced run end) ==========
+        // ========== LOGOUT  ==========
         public async Task HandleLogoutAsync(int runId, int finalCount, int scrap, string notes)
         {
             const string sql = @"
@@ -319,148 +319,61 @@ LIMIT 1";
         }
 
         // ========== END RUN (also ends any open skids) ==========
-        public async Task HandleEndRunAsync(int runId, int finalCount, int scrap, string notes, bool orderComplete)
+        public async Task HandleEndRunAsync(string run, int finalCount, int scrap, string notes, bool orderComplete)
         {
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            // 1) Find the run identifier from the main run (skidNumber=0)
-            string mainRunIdentifier = "";
-            const string selectMainRun = @"
-SELECT run
-FROM pressrun
-WHERE id = @runId
-  AND skidNumber = 0
-ORDER BY id desc
-LIMIT 1";
-            using (var selectCmd = new MySqlCommand(selectMainRun, conn))
-            {
-                selectCmd.Parameters.AddWithValue("@runId", runId);
-                object obj = await selectCmd.ExecuteScalarAsync();
-                if (obj != null) mainRunIdentifier = obj.ToString();
-            }
-
-            if (!string.IsNullOrEmpty(mainRunIdentifier))
-            {
-                // 2) End any open skid record for this run
-                const string endSkidQuery = @"
+            // End any open skid
+            const string endSkidQuery = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
     pcsEnd = @finalCount,
     open = 1
-WHERE run = @runIdentifier
+WHERE run = @run
   AND skidNumber > 0
   AND endDateTime IS NULL";
-                using (var endSkidCmd = new MySqlCommand(endSkidQuery, conn))
-                {
-                    endSkidCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
-                    endSkidCmd.Parameters.AddWithValue("@finalCount", finalCount);
-                    int skidRows = await endSkidCmd.ExecuteNonQueryAsync();
-
-                    // If we ended one or more skids, print their tags
-                    if (skidRows > 0)
-                    {
-                        // Grab the most recently ended skid for printing
-                        string fetchEndedSkids = @"
-SELECT id
-FROM pressrun
-WHERE run = @runIdentifier
-  AND skidNumber > 0
-  AND open = 1
-  AND endDateTime IS NOT NULL
-ORDER BY endDateTime DESC
-LIMIT 1";
-
-                        using (var fetchCmd = new MySqlCommand(fetchEndedSkids, conn))
-                        {
-                            fetchCmd.Parameters.AddWithValue("@runIdentifier", mainRunIdentifier);
-                            var endedSkidIds = new List<int>();
-
-                            using (var rdr = await fetchCmd.ExecuteReaderAsync())
-                            {
-                                if (await rdr.ReadAsync())
-                                {
-                                    endedSkidIds.Add(rdr.GetInt32(0));
-                                }
-
-                            }
-
-                            // Generate & print each
-                            foreach (int skidId in endedSkidIds)
-                            {
-                                PressRunLogModel endedSkid = await GetPressRunRecordByIdAsync(conn, skidId);
-                                if (endedSkid != null)
-                                {
-                                    string filePath = await GenerateRouterTagAsync(endedSkid);
-                                    _sharedService.PrintFileToClosestPrinter(filePath, 1);
-                                }
-                            }
-
-                            // Mark them so we don't reprint later
-                            string markPrinted = @"
-UPDATE pressrun
-SET open = 1
-WHERE id IN (" + string.Join(",", endedSkidIds) + ")";
-                            if (endedSkidIds.Count > 0)
-                            {
-                                using var markCmd = new MySqlCommand(markPrinted, conn);
-                                await markCmd.ExecuteNonQueryAsync();
-                            }
-                        }
-                    }
-                }
+            using (var endSkidCmd = new MySqlCommand(endSkidQuery, conn))
+            {
+                endSkidCmd.Parameters.AddWithValue("@run", run);
+                endSkidCmd.Parameters.AddWithValue("@finalCount", finalCount);
+                await endSkidCmd.ExecuteNonQueryAsync();
             }
 
-            // 3) End the main run
+            // End the main run
             const string endMainRun = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
     scrap = @scrap,
     notes = @notes
-WHERE id = @runId
+WHERE run = @run
   AND skidNumber = 0
 LIMIT 1";
             using (var endMainCmd = new MySqlCommand(endMainRun, conn))
             {
-                endMainCmd.Parameters.AddWithValue("@runId", runId);
+                endMainCmd.Parameters.AddWithValue("@run", run);
                 endMainCmd.Parameters.AddWithValue("@scrap", scrap);
                 endMainCmd.Parameters.AddWithValue("@notes", notes ?? "");
                 await endMainCmd.ExecuteNonQueryAsync();
             }
 
-            // 4) Also mark presssetup open=0
-            const string closeSetup = @"
-    UPDATE presssetup
-    SET open = 0
-    WHERE run = (
-        SELECT run 
-        FROM pressrun 
-        WHERE id = @runId 
-          AND skidNumber = 0
-    )";
-
+            // Update presssetup
+            const string closeSetup = @"UPDATE presssetup SET open = 0 WHERE run = @run";
             using (var closeCmd = new MySqlCommand(closeSetup, conn))
             {
-                closeCmd.Parameters.AddWithValue("@runId", runId);
-                int rowsAffected = await closeCmd.ExecuteNonQueryAsync();
-
-                Console.WriteLine($"Rows updated in presssetup = {rowsAffected}");
+                closeCmd.Parameters.AddWithValue("@run", run);
+                await closeCmd.ExecuteNonQueryAsync();
             }
 
-
-
-            // 5) If the user marked "Not Order Complete?", set schedule.open=1
-            if (!orderComplete && !string.IsNullOrEmpty(mainRunIdentifier))
+            // Reopen schedule if needed
+            if (!orderComplete)
             {
-                const string updateSchedule = @"
-            UPDATE schedule
-            SET open = 1
-            WHERE run = @theRun
-            LIMIT 1";
+                const string updateSchedule = @"UPDATE schedule SET open = 1 WHERE run = @run LIMIT 1";
                 using var schedCmd = new MySqlCommand(updateSchedule, conn);
-                schedCmd.Parameters.AddWithValue("@theRun", mainRunIdentifier);
+                schedCmd.Parameters.AddWithValue("@run", run);
                 await schedCmd.ExecuteNonQueryAsync();
             }
+
         }
 
         #endregion

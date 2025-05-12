@@ -143,10 +143,10 @@ namespace DashboardReportApp.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ConfirmEndRun(int runId, int finalCount, int scrap, string notes, bool orderComplete, string machine)
+        public async Task<IActionResult> ConfirmEndRun(string run, int finalCount, int scrap, string notes, bool orderComplete, string machine)
         {
             // Ends main run and any open skids, prints tags, and updates presssetup
-            await _pressRunLogService.HandleEndRunAsync(runId, finalCount, scrap, notes, orderComplete);
+            await _pressRunLogService.HandleEndRunAsync(run, finalCount, scrap, notes, orderComplete);
 
             // If order is complete, reset device counter to 0
             if (orderComplete)

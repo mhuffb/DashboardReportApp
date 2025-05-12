@@ -67,6 +67,11 @@
                                             onclick="openLoginModalForRun('@item.Part', '@item.Component', '@item.Run', '@item.Machine', '@item.ProdNumber')">
                                         Login to Run
                                     </button>
+                                    <span>&nbsp;</span>
+                                    <button class="btn btn-danger btn-sm"
+                                            onclick="openEndRunModalByRun('@item.Run', '@item.Machine')">
+                                        End Run
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -112,11 +117,7 @@
                                                 onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
                                             Logout
                                         </button>
-                                        <span>&nbsp;</span>
-                                        <button class="btn btn-secondary btn-sm"
-                                                onclick="openEndRunModal('@rec.Id', '@rec.Machine')">
-                                            End Run
-                                        </button>
+                                        
                                         <span>&nbsp;</span>
                                         <button class="btn btn-info btn-sm"
                                                 onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Component', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
@@ -319,15 +320,13 @@
 
 
 
-    // END RUN: Asks for count; also ends any open skids
-    function openEndRunModal(runId, machine) {
-        document.getElementById("endRunId").value = runId;
-        document.getElementById("endRunScrap").value = "0";
-        document.getElementById("endRunNotes").value = "";
-         document.getElementById("endRunMachineHidden").value = machine;
+       function openEndRunModalByRun(run, machine) {
+        document.getElementById("endRunRunValue").value = run;
+        document.getElementById("endRunMachineHidden").value = machine;
 
         const endCountInput = document.getElementById("endRunFinalCount");
-        const defaultValue = endCountInput.value; // usually "0"
+        endCountInput.value = "0";
+        endCountInput.dataset.originalCount = "0";
 
         let modal = new bootstrap.Modal(document.getElementById("EndRunCountModal"));
         modal.show();
@@ -335,15 +334,12 @@
         fetch(`/PressRunLog/ApiGetDeviceCount?machine=${encodeURIComponent(machine)}`)
             .then(response => response.json())
             .then(data => {
-                if(endCountInput.value === defaultValue) {
-                    endCountInput.value = data.deviceCount || 0;
-                }
-
+                endCountInput.value = data.deviceCount ?? 0;
                 endCountInput.dataset.originalCount = endCountInput.value;
-
             })
             .catch(err => console.error("Error fetching device count:", err));
     }
+
 
     // START SKID: Asks for a count override
     function openStartSkidModal(runId, machine, part, component, operator, run, prodNumber) {
@@ -556,7 +552,8 @@
             </div>
             <div class="modal-body">
                 <form id="endRunForm" method="post"  asp-controller="PressRunLog" asp-action="ConfirmEndRun">
-                    <input type="hidden" id="endRunId" name="runId" />
+                    <input type="hidden" id="endRunRunValue" name="run" />
+
                     <input type="hidden" id="endRunMachineHidden" name="machine" />
 
                     <div class="mb-3">
