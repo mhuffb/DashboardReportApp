@@ -143,17 +143,7 @@
                             <input type="text" name="DatesRequested" class="form-control datepicker" required>
                         </div>
 
-                        <!-- vacation balances -->
-                        <div class="row mt-2">
-                            <div class="col-md-6">
-                                <label class="form-label">Current Balance</label>
-                                <input type="text" id="currBal" class="form-control" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Balance After Approval</label>
-                                <input type="text" id="afterBal" class="form-control" readonly>
-                            </div>
-                        </div>
+                       
 
                         <!-- hidden fields -->
                         <input type="hidden" id="lname" name="LastName" />
@@ -315,8 +305,6 @@
         html:`<b>${ev.title}</b><hr>
               Status: <b>${approved?'Approved':'Waiting'}</b><br>
               Explanation: <i>${explanation}</i><br>
-              Current Bal: <b>${bal.toFixed(2)}</b><br>
-              After Approval: <b>${afterBal.toFixed(2)}</b><hr>
               <div class="text-center">
                 <button id="swApprove" class="btn btn-success btn-swal">Approve</button>
                 <button id="swEdit"    class="btn btn-primary btn-swal">Edit</button>
