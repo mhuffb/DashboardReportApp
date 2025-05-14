@@ -276,5 +276,29 @@ WHERE id=@id", conn);
             cmd.Parameters.AddWithValue("@id", id);
             cmd.ExecuteNonQuery();
         }
+
+        public List<DateTime> GetRequestedDates(int serviceRecordId)
+        {
+            var dates = new List<DateTime>();
+
+            using (var conn = new MySqlConnection(_mysqlConnection))
+            {
+                conn.Open();
+                using var cmd = new MySqlCommand(
+                    "SELECT requested_date FROM servicerecord_dates WHERE servicerecord_id = @id",
+                    conn);
+                cmd.Parameters.AddWithValue("@id", serviceRecordId);
+
+                using var rdr = cmd.ExecuteReader();
+                while (rdr.Read())
+                {
+                    // assuming the column is DATE or DATETIME
+                    dates.Add(rdr.GetDateTime("requested_date").Date);
+                }
+            }
+
+            return dates;
+        }
     }
 }
+
