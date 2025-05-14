@@ -219,6 +219,13 @@ namespace DashboardReportApp.Services
                 insert.Parameters.AddWithValue("@pcsStart", m.PcsStart);
                 await insert.ExecuteNonQueryAsync();
             }
+            var latestRecord = await GetPressRunRecordAsync(conn, m.Run, result.SkidNumber);
+
+            if (latestRecord != null)
+            {
+                string pdfFilePath = await GenerateRouterTagAsync(latestRecord);
+                _sharedService.PrintFileToClosestPrinter(pdfFilePath, 1);
+            }
 
             return result;
         }
