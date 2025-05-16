@@ -111,7 +111,7 @@ http://192.168.1.6:5000/Calendar
         [ValidateAntiForgeryToken]
         public IActionResult Approve(int id, string pin)
         {
-            const string approvalPin = "1234";
+            const string approvalPin = "9412";
             if (pin != approvalPin)
                 return BadRequest("Invalid PIN");
 
@@ -565,7 +565,7 @@ http://192.168.1.6:5000/Calendar
         [HttpGet]
         public IActionResult VerifyAdminPin(string pin)
         {
-            const string adminPin = "1234";
+            const string adminPin = "9412";
             // 200 OK if pin matches, 401 otherwise
             if (pin == adminPin)
                 return Ok();
