@@ -178,42 +178,62 @@ namespace DashboardReportApp.Services
 
         public async Task<List<ScheduleItem>> GetAvailableScheduleItemsAsync()
         {
-            var items = new List<ScheduleItem>();
-            string query = @"
-        SELECT prodNumber, part, 
-               CASE WHEN COUNT(DISTINCT run) = 1 THEN MAX(run) ELSE NULL END AS run,
-               numberOfSintergySecondaryOps
-        FROM schedule 
-        WHERE needsSintergySecondary = 1 
-          AND openToSecondary = 1 
-        GROUP BY prodNumber, part, numberOfSintergySecondaryOps";
+            /*  This UNION ALL “explodes” rows where secondaryWorkFlag = 3
+                into two result-rows ― one for the parent, one for the component.
+                ────────────────────────────────────────────────────────────────
+                Branch A → rows that show the PART   (flag 1  or 3)
+                Branch B → rows that show COMPONENT  (flag 2  or 3)
+            */
+            const string sql = @"
+        /* ── A. PART when flag is 1 or 3 ─────────────────────────── */
+        SELECT  prodNumber,
+                part            AS itemToSetup,
+                CASE WHEN COUNT(DISTINCT run)=1 THEN MAX(run) ELSE NULL END AS run,
+                numberOfSintergySecondaryOps
+        FROM    schedule
+        WHERE   needsSintergySecondary = 1
+          AND   openToSecondary        = 1
+          AND   secondaryWorkFlag IN (1,3)
+        GROUP BY prodNumber, part, numberOfSintergySecondaryOps
 
-            using (var connection = new MySqlConnection(_connectionStringMySQL))
+        UNION ALL
+
+        /* ── B. COMPONENT when flag is 2 or 3 ─────────────────────── */
+        SELECT  prodNumber,
+                component        AS itemToSetup,
+                CASE WHEN COUNT(DISTINCT run)=1 THEN MAX(run) ELSE NULL END AS run,
+                numberOfSintergySecondaryOps
+        FROM    schedule
+        WHERE   needsSintergySecondary = 1
+          AND   openToSecondary        = 1
+          AND   secondaryWorkFlag IN (2,3)
+          AND   component IS NOT NULL         /* safety */
+        GROUP BY prodNumber, component, numberOfSintergySecondaryOps
+
+        /* Order however you like */
+        ORDER BY prodNumber DESC, itemToSetup";
+
+            var list = new List<ScheduleItem>();
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            await using var rdr = await cmd.ExecuteReaderAsync();
+
+            while (await rdr.ReadAsync())
             {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                using (var reader = await command.ExecuteReaderAsync())
+                list.Add(new ScheduleItem
                 {
-                    while (await reader.ReadAsync())
-                    {
-                        // Assume ScheduleItem.Run is of type int? (nullable int)
-                        int? runValue = reader.IsDBNull(reader.GetOrdinal("run"))
-                                        ? (int?)null
-                                        : Convert.ToInt32(reader["run"]);
-
-                        var item = new ScheduleItem
-                        {
-                            Part = reader["part"].ToString(),
-                            ProdNumber = reader["prodNumber"].ToString(),
-                            Run = runValue,  // will be null if there are multiple run values
-                            NumberOfSintergySecondaryOps = Convert.ToInt32(reader["numberOfSintergySecondaryOps"])
-                        };
-                        items.Add(item);
-                    }
-                }
+                    Part = rdr["itemToSetup"].ToString(),            // one line per target
+                    ProdNumber = rdr["prodNumber"].ToString(),
+                    Run = rdr.IsDBNull("run") ? (int?)null : rdr.GetInt32("run"),
+                    NumberOfSintergySecondaryOps = rdr.GetInt32("numberOfSintergySecondaryOps")
+                });
             }
-            return items;
+            return list;
         }
+
+
 
 
 

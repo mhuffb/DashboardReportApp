@@ -197,49 +197,81 @@ namespace DashboardReportApp.Services
 
         public void ScheduleComponents(ScheduleModel viewModel)
         {
-            Console.WriteLine("Scheduling...");
+            Console.WriteLine("Scheduling…");
             int nextProdNumber = GetNextProdNumber();
 
-            string queryWithComponent = "INSERT INTO schedule (part, component, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary, numberOfSintergySecondaryOps, openToSecondary) VALUES (@Part, @Component, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary, @numberOfSintergySecondaryOps, @openToSecondary)";
-            string queryWithoutComponent = "INSERT INTO schedule (part, quantity, run, date, open, prodNumber, qtyNeededFor1Assy, needsSintergySecondary, numberOfSintergySecondaryOps, openToSecondary) VALUES (@Part, @Quantity, @Run, @Date, @Open, @ProdNumber, @QtyNeededFor1Assy, @NeedsSintergySecondary, @numberOfSintergySecondaryOps, @openToSecondary)";
+            const string sqlWithComponent = @"
+        INSERT INTO schedule
+        (part, component, quantity, run, date, open,
+         prodNumber, qtyNeededFor1Assy,
+         needsSintergySecondary, numberOfSintergySecondaryOps,
+         openToSecondary, secondaryWorkFlag)
+        VALUES (@part, @comp, @qty, @run, @date, 1,
+                @prod, @q1,
+                @needsSec, @opsCnt,
+                @openToSec, @flag)";
 
-            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            const string sqlNoComponent = @"
+        INSERT INTO schedule
+        (part, quantity, run, date, open,
+         prodNumber, qtyNeededFor1Assy,
+         needsSintergySecondary, numberOfSintergySecondaryOps,
+         openToSecondary, secondaryWorkFlag)
+        VALUES (@part, @qty, @run, @date, 1,
+                @prod, @q1,
+                @needsSec, @opsCnt,
+                @openToSec, @flag)";
+
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+
+            foreach (var c in viewModel.AllComponents)
             {
-                connection.Open();
-                foreach (var component in viewModel.AllComponents)
+                bool hasChild = !string.IsNullOrWhiteSpace(c.Component);
+                string parentId = c.MasterId.Trim();
+                string childId = hasChild ? c.Component.Trim() : null;
+
+                // ── evaluate each ID independently ────────────────────────────────
+                int parentOps = CheckIfPartNeedsSintergySecondary(parentId);
+                int childOps = hasChild ? CheckIfPartNeedsSintergySecondary(childId) : 0;
+
+                // flag logic
+                int flag = 0;
+                if (parentOps > 0 && childOps > 0) flag = 3;
+                else if (childOps > 0) flag = 2;
+                else if (parentOps > 0) flag = 1;
+
+                int totalOps = flag switch           // how many ops we store
                 {
-                    bool hasComponent = !string.IsNullOrWhiteSpace(component.Component);
+                    1 => parentOps,
+                    2 => childOps,
+                    3 => parentOps + childOps,
+                    _ => 0
+                };
 
-                    using (var command = new MySqlCommand(hasComponent ? queryWithComponent : queryWithoutComponent, connection))
-                    {
-                        command.Parameters.AddWithValue("@Part", component.MasterId);
-                        command.Parameters.AddWithValue("@Quantity", component.QtyToSchedule);
-                        command.Parameters.AddWithValue("@Run", component.Run);
-                        command.Parameters.AddWithValue("@Date", DateTime.Now);
-                        command.Parameters.AddWithValue("@Open", 1);
-                        command.Parameters.AddWithValue("@ProdNumber", nextProdNumber);
-                        command.Parameters.AddWithValue("@QtyNeededFor1Assy", component.QtyNeededFor1Assy);
+                bool needsSecondary = flag != 0;
 
-                        int sintergySecondaryOpsCount = CheckIfPartNeedsSintergySecondary(component.MasterId);
+                using var cmd = new MySqlCommand(hasChild ? sqlWithComponent : sqlNoComponent, conn);
 
-                        // Set NeedsSintergySecondary to 1 if count > 0, otherwise 0.
-                        command.Parameters.AddWithValue("@NeedsSintergySecondary", sintergySecondaryOpsCount > 0 ? 1 : 0);
-                        // Set the numberOfSintergySecondaryOps parameter to the count.
-                        command.Parameters.AddWithValue("@numberOfSintergySecondaryOps", sintergySecondaryOpsCount);
+                cmd.Parameters.AddWithValue("@part", parentId);
+                if (hasChild) cmd.Parameters.AddWithValue("@comp", childId);
 
-                        // Assuming openToSecondary should be set to 1
-                        command.Parameters.AddWithValue("@openToSecondary", 1);
+                cmd.Parameters.AddWithValue("@qty", c.QtyToSchedule);
+                cmd.Parameters.AddWithValue("@run", c.Run);
+                cmd.Parameters.AddWithValue("@date", DateTime.Now);
+                cmd.Parameters.AddWithValue("@prod", nextProdNumber);
+                cmd.Parameters.AddWithValue("@q1", c.QtyNeededFor1Assy);
 
-                        if (hasComponent)
-                        {
-                            command.Parameters.AddWithValue("@Component", component.Component);
-                        }
+                cmd.Parameters.AddWithValue("@needsSec", needsSecondary ? 1 : 0);
+                cmd.Parameters.AddWithValue("@opsCnt", totalOps);
+                cmd.Parameters.AddWithValue("@openToSec", needsSecondary ? 1 : 0);
+                cmd.Parameters.AddWithValue("@flag", flag);
 
-                        command.ExecuteNonQuery();
-                    }
-                }
+                cmd.ExecuteNonQuery();
             }
         }
+
+
 
 
         public int GetNextRunNumber()
@@ -304,6 +336,22 @@ namespace DashboardReportApp.Services
                 }
             }
         }
+        // put anywhere inside ScheduleService (private scope)
+        private (int OpsCount, bool NeedsSecondary, bool UseComponent) GetSecondaryInfo(string parent, string child)
+        {
+            int partOps = CheckIfPartNeedsSintergySecondary(parent);
+            int compOps = string.IsNullOrWhiteSpace(child) ? 0 : CheckIfPartNeedsSintergySecondary(child);
+
+            // decide which number is actually going to secondary
+            if (compOps > 0)              // component needs it
+                return (compOps, true, true);
+
+            if (partOps > 0)              // only the parent needs it
+                return (partOps, true, false);
+
+            return (0, false, false);     // neither needs it
+        }
+
 
 
     }
