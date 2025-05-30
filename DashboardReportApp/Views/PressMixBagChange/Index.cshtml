@@ -2,116 +2,119 @@
     ViewData["Title"] = "Press Mix Bag Change";
     var operators = ViewData["OperatorList"] as List<string> ?? new List<string>();
     var equipment = ViewData["EquipmentList"] as List<string> ?? new List<string>();
-
-    // Dictionary containing Part → (Run, Machine)
-    var openPartsWithRunsAndMachines = ViewData["OpenPartsWithRunsAndMachines"] as Dictionary<string, (string Run, string Machine)>
-                                       ?? new Dictionary<string, (string, string)>();
-
+    var openParts = ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel>
+                    ?? new List<DashboardReportApp.Models.PressSetupModel>();
     var allRecords = ViewData["AllRecords"] as List<DashboardReportApp.Models.PressMixBagChangeModel>
                      ?? new List<DashboardReportApp.Models.PressMixBagChangeModel>();
 }
 
+<!-- ───────────────────── Alerts ───────────────────── -->
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="bi bi-check-circle-fill"></i> @TempData["Success"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
-
 @if (TempData["Error"] != null && !ViewContext.HttpContext.Request.Method.Equals("GET"))
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <i class="bi bi-exclamation-triangle-fill"></i> @TempData["Error"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 
+<!-- ───────────────────── Page Header & Button ───────────────────── -->
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Mix Bag Change</h1>
-
-    <!-- Submit Bag Change button at the top center -->
     <div class="text-center mb-4">
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bagChangeModal">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bagChangeModal">
             Submit Bag Change
         </button>
     </div>
 
-    <!-- Modal containing the bag change form -->
-    <div class="modal fade" id="bagChangeModal" tabindex="-1" aria-labelledby="bagChangeModalLabel" aria-hidden="true">
+    <!-- ──────────────── Bag-Change Modal ──────────────── -->
+    <div class="modal fade" id="bagChangeModal" tabindex="-1" aria-labelledby="bagChangeModalLabel">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 id="bagChangeModalLabel" class="modal-title">Log Mix Change</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+
                 <form asp-action="Submit" method="post">
                     <div class="modal-body">
-                        <!-- Part Selection -->
+
+                        <!-- Part dropdown -->
                         <div class="mb-3">
-                            <label for="partNumber" class="form-label">Part:</label>
+                            <label class="form-label" for="partNumber">Part:</label>
                             <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
                                 <option value="">-- Select Part --</option>
-                                @foreach (var entry in ViewData["Parts"] as List<DashboardReportApp.Models.PressSetupModel> ?? new List<DashboardReportApp.Models.PressSetupModel>())
+                                @foreach (var p in openParts)
                                 {
-                                    <option value="@entry.Part"
-                                            data-component="@entry.Component"
-                                            data-prodnumber="@entry.ProdNumber"
-                                            data-run="@entry.Run"
-                                            data-operator="@entry.Operator"
-                                            data-machine="@entry.Machine">
-                                        @entry.Part -> @entry.Component (Production Number: @entry.ProdNumber, Run: @entry.Run)
+                                    <option value="@p.Part"
+                                            data-component="@p.Component"
+                                            data-prodnumber="@p.ProdNumber"
+                                            data-run="@p.Run"
+                                            data-operator="@p.Operator"
+                                            data-machine="@p.Machine">
+                                        @p.Part -> @p.Component (Prod: @p.ProdNumber, Run: @p.Run)
                                     </option>
                                 }
                             </select>
-                            <!-- Hidden fields to send extra data -->
                             <input type="hidden" id="RunNumber" name="Run" />
                             <input type="hidden" id="Component" name="Component" />
                             <input type="hidden" id="ProdNumber" name="ProdNumber" />
                         </div>
 
-
-                        <!-- Operator Field (dropdown) -->
+                        <!-- Operator -->
                         <div class="mb-3">
-                            <label for="operatorName" class="form-label">Operator</label>
+                            <label class="form-label" for="operatorName">Operator</label>
                             <select id="operatorName" name="Operator" class="form-control" required>
                                 <option value="">-- Select Operator --</option>
                                 @foreach (var op in operators)
                                 {
                                     <option value="@op">@op</option>
+                                    ;
                                 }
                             </select>
                         </div>
 
-                        <!-- Machine Field -->
+                        <!-- Machine (readonly) -->
                         <div class="mb-3">
-                            <label for="machine" class="form-label">Machine</label>
-                            <input type="text" id="machine" name="Machine" class="form-control" readonly />
+                            <label class="form-label" for="machine">Machine</label>
+                            <input id="machine" name="Machine" class="form-control" readonly />
                         </div>
 
-                        <!-- Lot Number -->
-                        <div class="mb-3">
-                            <label for="LotNumber" class="form-label">Lot Number:</label>
-                            <input type="text" id="LotNumber" name="LotNumber" class="form-control" required />
+                        <!-- Lot & Mix -->
+                        <div class="row g-3">
+                            <div class="col">
+                                <label class="form-label" for="LotNumber">Lot Number</label>
+                                <input id="LotNumber" name="LotNumber" class="form-control" required />
+                            </div>
+                            <div class="col">
+                                <label class="form-label" for="MixNumber">Mix Number</label>
+                                <input id="MixNumber" name="MixNumber" class="form-control" required />
+                            </div>
                         </div>
 
-                        <!-- Mix Number -->
-                        <div class="mb-3">
-                            <label for="MixNumber" class="form-label">Mix Number:</label>
-                            <input type="text" id="MixNumber" name="MixNumber" class="form-control" required />
+                        <!-- Scan button -->
+                        <div class="mt-3 text-end">
+                            <button type="button" class="btn btn-outline-primary" onclick="openScanModal()">
+                                <i class="bi bi-upc-scan"></i> Scan QR (Only for devices with cameras)
+                            </button>
                         </div>
 
                         <!-- Notes -->
-                        <div class="mb-3">
-                            <label for="Note" class="form-label">Notes:</label>
+                        <div class="mb-3 mt-3">
+                            <label class="form-label" for="Note">Notes</label>
                             <textarea id="Note" name="Notes" class="form-control text-area-large"></textarea>
                         </div>
                     </div>
+
                     <div class="modal-footer">
-                        <!-- Cancel Button -->
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <!-- Smaller Submit Button -->
-                        <button type="submit" class="btn btn-primary btn-sm" style="width: auto;">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm">
                             <i class="bi bi-check-circle"></i> Submit
                         </button>
                     </div>
@@ -120,71 +123,144 @@
         </div>
     </div>
 
-    <!-- Display All Records in React Component -->
+    <!-- ──────────────── Camera QR Modal ──────────────── -->
+    <div class="modal fade" id="qrScanModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Scan Label QR Code</h5>
+                    <button class="btn-close" data-bs-dismiss="modal" onclick="stopScanner()"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="qr-reader" style="width:100%"></div>
+                    <p class="text-muted small mt-2">Point the camera at the label.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ──────────────── Records Table (React) ──────────────── -->
     <h2 class="text-center mt-4">All Mix Bag Change Records</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
             <div class="container-fluid px-3 mt-4">
                 <div id="mixBagChangeTableRoot"
-                     data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'>
-                </div>
+                     data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'></div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- ───────────────────── Scripts ───────────────────── -->
+<script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
+<script src="/js/mydatatable.bundle.js"></script>
+
 <script>
-        function updateFields() {
-        const partSelect = document.getElementById("partNumber");
-        const runHidden = document.getElementById("RunNumber");
-        const componentHidden = document.getElementById("Component");
-        const prodNumberHidden = document.getElementById("ProdNumber");
-        const operatorSelect = document.getElementById("operatorName");
-        const machineField = document.getElementById("machine");
-
-        const selectedOption = partSelect.options[partSelect.selectedIndex];
-        if (!selectedOption) return;
-
-        // Update hidden and form fields based on selected option's data attributes
-        runHidden.value = selectedOption.getAttribute("data-run") || "";
-        componentHidden.value = selectedOption.getAttribute("data-component") || "";
-        prodNumberHidden.value = selectedOption.getAttribute("data-prodnumber") || "";
-
-        const opValue = selectedOption.getAttribute("data-operator") || "";
-        operatorSelect.value = opValue;
-        machineField.value = selectedOption.getAttribute("data-machine") || "";
+    /* ------- dropdown auto-fill (unchanged) ------- */
+    function updateFields() {
+        const opt          = partNumber.options[partNumber.selectedIndex];
+        if (!opt) return;
+        RunNumber.value    = opt.dataset.run        || "";
+        Component.value    = opt.dataset.component  || "";
+        ProdNumber.value   = opt.dataset.prodnumber || "";
+        operatorName.value = opt.dataset.operator   || "";
+        machine.value      = opt.dataset.machine    || "";
     }
 
-</script>
-<script src="/js/mydatatable.bundle.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const container = document.getElementById('mixBagChangeTableRoot');
-        if (!container) return;
+    /* =====================================================
+       1 ⭢ GS-1 parser  (handles ASCII 29, “029/29”, or no sep)
+       ===================================================== */
+        function parseGs1(raw) {
+        raw = raw.trim().replace(/^\]..../, "");        // strip ]Q3 prefix if present
+        const GS = String.fromCharCode(29);
 
-        const rawData = container.getAttribute('data-records');
-        const data = JSON.parse(rawData); // This is your List<PressMixBagChangeModel>
+        /* 1 ▸ normalise every fake FNC-1   (029 or 29 → ASCII 29) */
+        raw = raw.replace(/0?29/g, GS);
 
-        // Define columns to match PressMixBagChangeModel's properties
-        const columns = [
-            { key: 'Id', label: 'ID' },
-            { key: 'Part', label: 'Part' },
-            { key: 'Component', label: 'Component' },
-            { key: 'ProdNumber', label: 'Production Number' },
-            { key: 'Run', label: 'Run' },
-            { key: 'Operator', label: 'Operator' },
-            { key: 'Machine', label: 'Machine' },
-            { key: 'LotNumber', label: 'Lot Number' },
-            { key: 'MixNumber', label: 'Mix Number' },
-            { key: 'SentDateTime', label: 'Sent Time' },
-            { key: 'Notes', label: 'Notes' }
-        ];
-
-        // Render the React table component
-        if (window.renderMyDataTable) {
-            window.renderMyDataTable("mixBagChangeTableRoot", data, columns, true);
-        } else {
-            console.error("React table render function not found!");
+        /* 2 ▸ fast split when real GS is present */
+        if (raw.includes(GS)) {
+            let sty="", lot="";
+            raw.split(GS).forEach(c => {
+                if (c.startsWith("240")) sty = c.slice(3);
+                else if (c.startsWith("10")) lot = c.slice(2);
+            });
+            return { sty, lot };
         }
+
+        /* 3 ▸ final fallback (no separator at all) */
+        const m = raw.match(/^240([A-Z0-9]+?)10([A-Z0-9]+)$/i);
+        return m ? { sty: m[1], lot: m[2] } : { sty:"", lot:"" };
+    }
+
+    /* =====================================================
+       2 ⭢ USB / HID gun capture on whole modal
+       ===================================================== */
+    const bagModal = document.getElementById('bagChangeModal');
+    let gunBuf  = "", gunTimer = null;
+
+    bagModal.addEventListener('keydown', e => {
+        if (!bagModal.classList.contains('show')) return;
+
+        if (e.key.length === 1) {           // printable char
+            gunBuf += e.key;
+            clearTimeout(gunTimer);
+            gunTimer = setTimeout(finishScan, 120);  // silence timeout
+            return;
+        }
+        if (e.key === 'Enter') {            // gun usually ends with CR
+            e.preventDefault();
+            finishScan();
+        }
+    });
+
+    function finishScan() {
+        if (!gunBuf) return;
+        console.log("RAW SCAN:", gunBuf);
+
+        const { sty, lot } = parseGs1(gunBuf);
+        gunBuf = "";                        // reset
+
+        if (sty) MixNumber.value = sty;
+        if (lot) LotNumber.value = lot;
+        flash(MixNumber); flash(LotNumber);
+    }
+    function flash(el) {
+        el.classList.add('bg-success','text-white');
+        setTimeout(()=>el.classList.remove('bg-success','text-white'),600);
+    }
+
+    /* =====================================================
+       3 ⭢ html5-qrcode camera helper
+       ===================================================== */
+    let html5Qr = null;
+    function openScanModal() {
+        bootstrap.Modal.getOrCreateInstance(qrScanModal).show();
+        setTimeout(() => {
+            html5Qr = new Html5Qrcode("qr-reader");
+            html5Qr.start({ facingMode:"environment" }, { fps:10, qrbox:250 },
+                txt => { const {sty,lot}=parseGs1(txt);
+                         if(sty) MixNumber.value=sty;
+                         if(lot) LotNumber.value=lot;
+                         flash(MixNumber); flash(LotNumber);
+                         stopScanner();
+                         bootstrap.Modal.getInstance(qrScanModal).hide(); },
+                err => {});
+        }, 200);
+    }
+    function stopScanner() {
+        if (html5Qr) { html5Qr.stop().then(()=>html5Qr.clear()); html5Qr=null; }
+    }
+
+    /* ------- React table render (unchanged) ------- */
+    document.addEventListener('DOMContentLoaded', () => {
+        const data = JSON.parse(document.getElementById('mixBagChangeTableRoot').dataset.records || "[]");
+        const cols = [
+            {key:'Id',label:'ID'},{key:'Part',label:'Part'},{key:'Component',label:'Component'},
+            {key:'ProdNumber',label:'Production Number'},{key:'Run',label:'Run'},
+            {key:'Operator',label:'Operator'},{key:'Machine',label:'Machine'},
+            {key:'LotNumber',label:'Lot Number'},{key:'MixNumber',label:'Mix Number'},
+            {key:'SentDateTime',label:'Sent Time'},{key:'Notes',label:'Notes'}
+        ];
+        window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
     });
 </script>
