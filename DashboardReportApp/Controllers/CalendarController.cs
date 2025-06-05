@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using System.Globalization;
 using System.Linq;
-
 namespace DashboardReportApp.Controllers
 {
     public class CalendarController : Controller
@@ -25,47 +24,67 @@ namespace DashboardReportApp.Controllers
             _logger = logger;      // ← store
             _mysql = cfg.GetConnectionString("MySQLConnection");
         }
+        /* ───────────────────────── INDEX VIEW ───────────────────────── */
+
+
         public IActionResult Index()
         {
-            var employees = _calendarService.GetEmployees();
-            return View(employees);
+            var vm = new CalendarIndexViewModel
+            {
+                Employees = _calendarService.GetEmployees(),
+                ServiceRecords = _calendarService.GetServiceRecords()
+            };
+            return View(vm);
         }
 
 
-[HttpPost]
-    [ValidateAntiForgeryToken]
-    public IActionResult Submit(CalendarModel model, string DatesRequested)
-    {
-        /* ---------- Trim employee names ---------- */
-        model.FirstName = model.FirstName?.Trim();
-        model.LastName = model.LastName?.Trim();
 
-        /* ---------- Robust multi‑date parse ---------- */
-        var parsedDates = new List<DateTime>();
-        if (!string.IsNullOrWhiteSpace(DatesRequested))
+        /* ───────────────────────── SUBMIT (Time‑Off) ───────────────────────── */
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Submit(CalendarModel model, string DatesRequested)
         {
-            foreach (var tok in DatesRequested.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                if (DateTime.TryParse(tok.Trim(), out var dt))
-                    parsedDates.Add(dt.Date);
-        }
-        model.DatesRequested = parsedDates;
+            model.FirstName = model.FirstName?.Trim();
+            model.LastName = model.LastName?.Trim();
 
-        model.SubmittedOn = DateTime.Now;            // set timestamp
+            if (string.IsNullOrWhiteSpace(model.Email))
+            {
+                // look up the employee in memory — you already queried the list for the view
+                var emp = _calendarService.GetEmployees()
+                                          .FirstOrDefault(e => e.FirstName == model.FirstName
+                                                            && e.LastName == model.LastName);
+                if (emp != null)
+                {
+                    model.Email = emp.Email;
+                    model.ActiveStatus = emp.ActiveStatus;
+                    model.DateEmployed = emp.DateEmployed;
+                }
+            }
 
-        /* ---------- Persist to database ---------- */
-        _calendarService.SaveServiceRecord(model);
 
-        /* ---------- Build full e‑mail body ---------- */
-        string dateList = parsedDates.Any()
-            ? string.Join(", ", parsedDates.Select(d => d.ToString("MM/dd/yyyy")))
-            : "(none)";
+            /* parse multiple CSV date list */
+            var parsed = new List<DateTime>();
+            if (!string.IsNullOrWhiteSpace(DatesRequested))
+            {
+                foreach (var tok in DatesRequested.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    if (DateTime.TryParse(tok.Trim(), out var d))
+                        parsed.Add(d.Date);
+            }
+            model.DatesRequested = parsed;
+            model.SubmittedOn = DateTime.Now;
 
-        string attrLine = string.IsNullOrWhiteSpace(model.Attribute)
-            ? "(none)"
-            : model.Attribute;
+            /* auto‑approve when Attribute present */
+            bool needsApproval = string.IsNullOrWhiteSpace(model.Attribute);
+            model.Status = needsApproval ? "Waiting" : "Approved";
 
-        string body = $@"
-A new time‑off request is waiting for approval.
+            _calendarService.SaveServiceRecord(model);
+
+            /* build e‑mail (only if waiting for approval) */
+            if (needsApproval)
+            {
+                string list = parsed.Any() ? string.Join(", ", parsed.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
+
+                string body = $@"A new time‑off request is waiting for approval.
 
 Status     : Waiting
 Employee   : {model.LastName}, {model.FirstName}
@@ -73,135 +92,79 @@ Department : {model.Department}
 Shift      : {model.Shift}
 Schedule   : {model.Schedule}
 Type       : {model.TimeOffType}
-Attribute  : {attrLine}
-Dates      : {dateList}
+Attribute  : {(string.IsNullOrWhiteSpace(model.Attribute) ? "(none)" : model.Attribute)}
+Dates      : {list}
 
 Explanation:
 {model.Explanation}
 
 Submitted on {model.SubmittedOn:g}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
--------------------------------------------------------------------";
+http://192.168.1.6:5000/Calendar";
 
-        _sharedService.SendEmailWithAttachment(
-            "mhuff@sintergy.net",  // to mhuff
-            null, null,
-            $"Time‑Off Request: {model.LastName}, {model.FirstName}",
-            body);
+                _sharedService.SendEmailWithAttachment("hr@sintergy.net", null, null,
+                    $"Time‑Off Request: {model.LastName}, {model.FirstName}", body);
 
-            _sharedService.SendEmailWithAttachment(
-            "hr@sintergy.net",  // to hr
-           null, null,
-            $"Time‑Off Request: {model.LastName}, {model.FirstName}",
-            body);
+                _sharedService.SendEmailWithAttachment("mhuff@sintergy.net", null, null,
+                    $"Time‑Off Request: {model.LastName}, {model.FirstName}", body);
+            }
 
-
-            /* ---------- User feedback ---------- */
-            TempData["Success"] = "Record submitted and e-mail sent!";
+            TempData["Success"] = "Record submitted";
             return RedirectToAction("Index");
-    }
+        }
 
-
-
-
-
-
+        /* ───────────────────────── APPROVE ───────────────────────── */
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Approve(int id, string pin)
+        public IActionResult Approve(int id, string pin, string occ)
         {
             const string approvalPin = "9412";
-            if (pin != approvalPin)
-                return BadRequest("Invalid PIN");
+            if (pin != approvalPin) return BadRequest("Invalid PIN");
 
-            // 1️⃣  Mark the record approved
+            /* mark approved & store occurrence */
             using (var conn = new MySqlConnection(_mysql))
             {
                 conn.Open();
-                var cmd = new MySqlCommand(
-                    "UPDATE servicerecords SET status='Approved' WHERE id=@id", conn);
+                var cmd = new MySqlCommand("UPDATE servicerecords SET status='Approved', occurrence=@occ WHERE id=@id", conn);
+                cmd.Parameters.AddWithValue("@occ", occ);
                 cmd.Parameters.AddWithValue("@id", id);
                 cmd.ExecuteNonQuery();
             }
 
-            // 2️⃣  Re-load all the details for the e-mail
             CalendarModel rec = _calendarService.GetServiceRecordById(id);
-            List<string> dateList = new List<string>();
-            string attribute = "";
-            string explanation = "";
-            DateTime? submittedOn = null;
+            List<DateTime> dates = _calendarService.GetRequestedDates(id);
+            string datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
 
-            using (var conn = new MySqlConnection(_mysql))
-            {
-                conn.Open();
-
-                // pull attribute, explanation, submitted_on
-                using (var cmd = new MySqlCommand(
-                    "SELECT attribute, explanation, submitted_on " +
-                    "FROM servicerecords WHERE id=@id", conn))
-                {
-                    cmd.Parameters.AddWithValue("@id", id);
-                    using var rdr = cmd.ExecuteReader();
-                    if (rdr.Read())
-                    {
-                        attribute = rdr["attribute"].ToString();
-                        explanation = rdr["explanation"].ToString();
-                        submittedOn = rdr.GetDateTime("submitted_on");
-                    }
-                }
-
-                // pull each requested date
-                using (var cmd = new MySqlCommand(
-                    "SELECT requested_date FROM servicerecord_dates WHERE servicerecord_id=@id",
-                    conn))
-                {
-                    cmd.Parameters.AddWithValue("@id", id);
-                    using var rdr = cmd.ExecuteReader();
-                    while (rdr.Read())
-                        dateList.Add(rdr.GetDateTime("requested_date")
-                                         .ToString("MM/dd/yyyy"));
-                }
-            }
-
-            // 3️⃣  Build the full approval e-mail body
-            string datesText = dateList.Any()
-                ? string.Join(", ", dateList)
-                : "(none)";
-
-            string body = $@"
-Time-off request has been *approved*.
+            string body = $@"Time‑off request has been *approved*.
 
 Employee   : {rec.LastName}, {rec.FirstName}
 Department : {rec.Department}
 Shift      : {rec.Shift}
 Schedule   : {rec.Schedule}
 Type       : {rec.TimeOffType}
-Attribute  : {(!string.IsNullOrWhiteSpace(attribute) ? attribute : "(none)")}
+Occurrence : {occ}
 Dates      : {datesText}
 
-Explanation:
-{explanation}
+Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}";
 
-Submitted on {submittedOn:MM/dd/yyyy h:mm tt}
-Approved on  {DateTime.Now:MM/dd/yyyy h:mm tt}
-Link to Calendar:
-http://192.168.1.6:5000/Calendar
-";
+            if (!string.IsNullOrWhiteSpace(rec.Email))
+            {
+                _sharedService.SendEmailWithAttachment(rec.Email, null, null,
+                    "Your time‑off request was approved", body);
+                _sharedService.SendEmailWithAttachment("calendar@sintergy.net", null, null,
+                    "Your time‑off request was approved", body);
+            }
+            else
+            {
+                // inside your controller fallback
+                _sharedService.PrintPlainText("HPFront", body, 1);
 
-
-            _sharedService.SendEmailWithAttachment(
-               "calendar@sintergy.net",                // to calendar
-               null,
-               null,
-               $"Time-Off Request Has Been Approved",
-               body);
+            }
 
             return Ok();
         }
 
 
-      
 
         [HttpGet]
         public JsonResult GetRecord(int id)
@@ -362,49 +325,50 @@ http://192.168.1.6:5000/Calendar
             return Ok();
         }
 
+        /* ───────────────────────── SCHEDULE EVENT ───────────────────────── */
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult ScheduleEvent(string Title, string Location, string Description,
-                                           string Date, string StartTime, string EndTime)
+                                           string Date, string StartTime, string EndTime,
+                                           string Scheduler,
+                                           string Recur, string RecurUntil)
         {
-            var model = new CalendarEventModel
+            var first = new CalendarEventModel
             {
                 Title = Title?.Trim(),
                 Location = Location,
                 Description = Description,
                 Date = DateTime.Parse(Date),
                 StartTime = TimeSpan.Parse(StartTime),
-                EndTime = TimeSpan.Parse(EndTime)
+                EndTime = TimeSpan.Parse(EndTime),
+                Scheduler = Scheduler
             };
 
-            _calendarService.SaveCalendarEvent(model);
+            _calendarService.SaveCalendarEvent(first);
 
-            // ─── Email Notification ───
-            string body = $@"
-A new calendar event has been scheduled.
-
-Title      : {model.Title}
-Location   : {model.Location}
-Date       : {model.Date:MM/dd/yyyy}
-Start Time : {model.StartTime:hh\:mm}
-End Time   : {model.EndTime:hh\:mm}
-
-Description:
-{model.Description ?? "(none)"}
-
-Submitted on {DateTime.Now:g}
-Link to Calendar:
-http://192.168.1.6:5000/Calendar
--------------------------------------------------------------------";
-
-            _sharedService.SendEmailWithAttachment(
-                "calendar@sintergy.net",  // to calendar
-                null, null,
-                $"Scheduled Event: {model.Title}",
-                body);
+            /* simple recurrence */
+            if (!string.IsNullOrWhiteSpace(Recur))
+            {
+                DateTime until = DateTime.TryParse(RecurUntil, out var u) ? u.Date : first.Date;
+                DateTime next = first.Date;
+                while (true)
+                {
+                    next = Recur switch
+                    {
+                        "Daily" => next.AddDays(1),
+                        "Weekly" => next.AddDays(7),
+                        "Monthly" => next.AddMonths(1),
+                        _ => until.AddDays(1) /* break */
+                    };
+                    if (next > until) break;
+                    first.Date = next;
+                    _calendarService.SaveCalendarEvent(first);
+                }
+            }
 
             return Ok();
         }
+
 
 
         [HttpGet]

@@ -5,42 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Sintergy Dashboard</title>
 
-    <!-- Bootstrap CSS -->
+    <!-- ─── CSS & vendor assets ─── -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-datatables@latest/dist/vanilla-dataTables.min.css">
     <link rel="stylesheet" href="~/css/custom.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-    <!-- Vanilla DataTables CSS -->
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/vanilla-datatables@latest/dist/vanilla-dataTables.min.css" />
 
-    <!-- Vanilla DataTables JS (no jQuery needed) -->
-    <script src="https://cdn.jsdelivr.net/npm/vanilla-datatables@latest/dist/vanilla-dataTables.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <script src="/js/mydatatable.bundle.js?v=@DateTime.Now.Ticks"></script>
-
-    <!-- Site-wide Spinner CSS -->
+    <!-- spinner overlay CSS -->
     <style>
-        /* Spinner Overlay */
         #spinnerOverlay {
-            display: none; /* hidden by default */
+            display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            inset: 0;
             z-index: 9999;
-            background-color: rgba(0, 0, 0, 0.6); /* semi-transparent black */
+            background: rgba(0,0,0,.6);
+            color: #fff;
+            display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
-            color: white;
             font-size: 1.2rem;
+            pointer-events: none /* clicks pass through when hidden */
         }
 
         .spinner {
@@ -49,47 +35,149 @@
             border: 6px solid #ccc;
             border-top: 6px solid #000;
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-bottom: 1rem;
+            animation: spin .8s linear infinite;
+            margin-bottom: 1rem
         }
 
-        /* Razor escaping for CSS keyframes */
         @@keyframes spin {
             0% {
-                transform: rotate(0deg);
+                transform: rotate(0)
             }
 
             100% {
-                transform: rotate(360deg);
+                transform: rotate(360deg)
             }
         }
+
+        .text-light {
+            color: goldenrod !important
+        }
     </style>
+
+    <!-- vendor JS loaded at top so dropdowns / modals are ready ASAP -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanilla-datatables@latest/dist/vanilla-dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/mydatatable.bundle.js?v=@DateTime.Now.Ticks"></script>
 </head>
+
 <body class="d-flex flex-column min-vh-100">
-    <!-- Ensures full-height layout -->
-    <!-- The spinner overlay -->
+    <!-- ─── spinner overlay ─── -->
     <div id="spinnerOverlay">
         <div class="spinner"></div>
-        <div>Loading, please wait...</div>
+        <div>Loading, please wait…</div>
     </div>
 
-    <!-- Navbar -->
+    <!-- ─── SPINNER HELPER (must sit after the overlay) ─── -->
+    <script>
+        (() => {
+            const overlay = document.getElementById('spinnerOverlay');
+            let   ref     = 0;
+
+            function showSpinner(){
+                if(++ref === 1){
+                    overlay.style.display       = 'flex';
+                    overlay.style.pointerEvents = 'auto';   // block clicks while visible
+                }
+            }
+            function hideSpinner(){
+                ref = 0;
+                overlay.style.display       = 'none';
+                overlay.style.pointerEvents = 'none';      // allow clicks
+            }
+
+            /* expose helpers */
+            window.showSpinner      = showSpinner;
+            window.hideSpinner      = hideSpinner;
+            window.fetchWithSpinner = (u,o)=>{showSpinner();return fetch(u,o).finally(hideSpinner);};
+
+            /* guarantee overlay is off when HTML finished parsing */
+            if(document.readyState !== 'loading') hideSpinner();
+            else document.addEventListener('DOMContentLoaded', hideSpinner, { once:true });
+
+            /* belt-and-suspenders: hide again right after window load */
+            window.addEventListener('load', () => setTimeout(hideSpinner, 0), { once:true });
+
+            /* --------------- press-run device counter forms --------------- */
+            function wireCountAndAjax(formId,cntId,chkId,machId){
+                const f=document.getElementById(formId); if(!f) return;
+                f.addEventListener('submit', async ev=>{
+                    if(f.dataset.submitted==='true'){ ev.preventDefault(); return; }
+                    ev.preventDefault(); f.dataset.submitted='true';
+
+                    /* optional device push */
+                    try{
+                        const cnt=document.getElementById(cntId);
+                        const chk=document.getElementById(chkId);
+                        const mach=document.getElementById(machId).value;
+                        const ip=(window.deviceIPs||{})[mach];
+                        const orig=cnt?.dataset.originalCount ?? '';
+                        if(chk?.checked && cnt && ip && cnt.value.trim()!==orig){
+                            await fetch(`http://${ip}/update`,{
+                                method:'POST',
+                                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                                body:`count_value=${encodeURIComponent(cnt.value)}`
+                            });
+                        }
+                    }catch(e){ console.warn('Device push failed:',e); }
+
+                    /* main AJAX submit */
+                    try{
+                        const fd=new FormData(f);
+                        const tok=f.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                        const resp=await fetchWithSpinner(f.action,{
+                            method:f.method,
+                            headers:{
+                                'Accept':'application/json',
+                                'X-Requested-With':'XMLHttpRequest',
+                                ...(tok?{RequestVerificationToken:tok}: {})
+                            },
+                            body:fd
+                        });
+                        const json=await resp.json();
+                        if(json.ok){
+                            await Swal.fire({icon:'success',title:json.message||'Done',timer:3000,showConfirmButton:false});
+                            location.reload();
+                        }else throw new Error(json.message||'Request failed');
+                    }catch(err){
+                        Swal.fire('Error',err.message||'Network error','error');
+                    }finally{
+                        f.dataset.submitted='false';
+                    }
+                });
+            }
+
+            /* wire forms only if they exist on the current view */
+            document.addEventListener('DOMContentLoaded',()=>{
+                wireCountAndAjax('loginForm','loginPcsStart','loginSetCountDevice','loginMachineHidden');
+                wireCountAndAjax('logoutForm','logoutDeviceCountDisplay','logoutSetCountDevice','logoutMachineHidden');
+                wireCountAndAjax('startSkidForm','startSkidPcsStart','startSkidSetCountDevice','startSkidMachineHidden');
+                wireCountAndAjax('endRunForm','endRunFinalCount','endRunSetCountDevice','endRunMachineHidden');
+            });
+        })();
+    </script>
+
+    <!-- ───────── NAVBAR (restored) ───────── -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow">
         <div class="container-fluid">
             <a class="navbar-brand" asp-controller="Home" asp-action="Index">
                 <i class="bi bi-speedometer2"></i> Sintergy Dashboard
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarNav" aria-controls="navbarNav"
+                    aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
 
-                    <!-- Molding Dropdown -->
+                    <!-- Molding -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="moldingDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="moldingDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-box-seam"></i> Molding
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="moldingDropdown">
@@ -98,13 +186,13 @@
                             <li><a class="dropdown-item" asp-controller="PressMixBagChange" asp-action="Index"><i class="bi bi-bag"></i> Bag Change</a></li>
                             <li><a class="dropdown-item" asp-controller="Counter" asp-action="Index"><i class="bi bi-journal"></i> Press Counters</a></li>
                             <li><a class="dropdown-item" asp-controller="Molding" asp-action="Index"><i class="bi bi-journal"></i> Dashboard</a></li>
-
                         </ul>
                     </li>
 
-                    <!-- Assembly Dropdown -->
+                    <!-- Assembly -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="assemblyDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="assemblyDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-fire"></i> Assembly
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="assemblyDropdown">
@@ -112,9 +200,10 @@
                         </ul>
                     </li>
 
-                    <!-- Sintering Dropdown -->
+                    <!-- Sintering -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="sinteringDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="sinteringDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-fire"></i> Sintering
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="sinteringDropdown">
@@ -122,21 +211,22 @@
                         </ul>
                     </li>
 
-                    <!-- Secondary Dropdown -->
+                    <!-- Secondary -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="secondaryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="secondaryDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-tools"></i> Secondary
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="secondaryDropdown">
                             <li><a class="dropdown-item" asp-controller="SecondarySetupLog" asp-action="Index"><i class="bi bi-hammer"></i> Setup</a></li>
                             <li><a class="dropdown-item" asp-controller="SecondaryRunLog" asp-action="Index"><i class="bi bi-journal"></i> Run Logs</a></li>
-
                         </ul>
                     </li>
 
-                    <!-- Maintenance Dropdown -->
+                    <!-- Maintenance -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="maintenanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="maintenanceDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-wrench"></i> Maintenance
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="maintenanceDropdown">
@@ -144,9 +234,10 @@
                         </ul>
                     </li>
 
-                    <!-- QC Dropdown -->
+                    <!-- QC -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="qcDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="qcDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-check-circle"></i> QC
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="qcDropdown">
@@ -158,9 +249,10 @@
                         </ul>
                     </li>
 
-                    <!-- Admin Dropdown -->
+                    <!-- Admin -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown"
+                           role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle"></i> Admin
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="adminDropdown">
@@ -173,7 +265,6 @@
                             <li><a class="dropdown-item" asp-controller="Calendar" asp-action="Index"><i class="bi bi-wrench-adjustable"></i> Service Memos & Event Calendar</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item text-danger" asp-controller="Admin" asp-action="Logout"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
-
                         </ul>
                     </li>
 
@@ -182,8 +273,7 @@
         </div>
     </nav>
 
-
-    <!-- Main Content -->
+    <!-- ─── main content ─── -->
     <div class="container flex-grow-1 mt-4">
         <div class="row">
             <div class="col-md-12">
@@ -194,7 +284,7 @@
         </div>
     </div>
 
-    <!-- Footer at Bottom -->
+    <!-- ─── footer ─── -->
     <footer class="footer bg-dark text-light text-center py-3 mt-auto">
         <div class="container">
             <p class="mb-0">&copy; @DateTime.Now.Year - Sintergy Dashboard</p>
@@ -202,128 +292,6 @@
         </div>
     </footer>
 
-    <!-- Bootstrap JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-
-    <script>
-        function showSpinner() {
-            document.getElementById("spinnerOverlay").style.display = "flex";
-        }
-
-        function hideSpinner() {
-            document.getElementById("spinnerOverlay").style.display = "none";
-        }
-
-                       function wireCountAndAjax(formId, countInputId, checkboxId, machineHiddenId) {
-            const form = document.getElementById(formId);
-            if (!form) return;
-
-            form.addEventListener("submit", async function (e) {
-                if (form.dataset.submitted === "true") {
-                    e.preventDefault();
-                    return;
-                }
-
-                e.preventDefault();
-                form.dataset.submitted = "true";
-
-                const countEl = document.getElementById(countInputId);
-                const checkbox = document.getElementById(checkboxId);
-                const machine = document.getElementById(machineHiddenId).value;
-                const ip = deviceIPs[machine];
-                const original = countEl?.dataset.originalCount ?? "";
-                const current = countEl?.value.trim();
-
-                if (checkbox?.checked && current !== original && ip) {
-                    try {
-                        await fetch(`http://${ip}/update`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                            body: `count_value=${encodeURIComponent(current)}`
-                        });
-                    } catch (err) {
-                        console.warn("Failed to push count to device:", err);
-                    }
-                }
-
-                showSpinner();
-                try {
-                    const formData = new FormData(form);
-                    const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
-
-                    const response = await fetch(form.action, {
-                        method: form.method,
-                        headers: {
-                            "Accept": "application/json",
-                            "X-Requested-With": "XMLHttpRequest",
-                            ...(token ? { "RequestVerificationToken": token } : {})
-                        },
-                        body: formData
-                    });
-
-                    const text = await response.text();
-                    let json;
-
-                    try {
-                        json = JSON.parse(text);
-                    } catch {
-                        hideSpinner();
-                        Swal.fire({
-                            icon: "error",
-                            title: "Unexpected response",
-                            text: "Something went wrong. Try again.",
-                            showConfirmButton: true
-                        });
-                        return;
-                    }
-
-                    hideSpinner();
-                    if (json.ok) {
-                        await Swal.fire({
-                            icon: "success",
-                            title: json.message || "Action completed.",
-                            timer: 5000,
-                            timerProgressBar: true,
-                            showConfirmButton: true
-                        });
-                        location.reload();
-                    } else {
-                        Swal.fire({
-                            icon: "error",
-                            title: "Error",
-                            text: json.message || "Something went wrong.",
-                            showConfirmButton: true
-                        });
-                    }
-
-                } catch (err) {
-                    hideSpinner();
-                    Swal.fire("Error", "Network/server error", "error");
-                }
-            });
-        }
-              
-
-        document.addEventListener("DOMContentLoaded", () => {
-            wireCountAndAjax("loginForm",     "loginPcsStart",         "loginSetCountDevice",     "loginMachineHidden");
-            wireCountAndAjax("logoutForm",    "logoutDeviceCountDisplay", "logoutSetCountDevice",  "logoutMachineHidden");
-            wireCountAndAjax("startSkidForm", "startSkidPcsStart",     "startSkidSetCountDevice", "startSkidMachineHidden");
-            wireCountAndAjax("endRunForm",    "endRunFinalCount",      "endRunSetCountDevice",    "endRunMachineHidden");
-        });
-
-    </script>
-
-
-
     @await RenderSectionAsync("Scripts", required: false)
-
 </body>
 </html>
-
-
-<style>
-    .text-light {
-        color: goldenrod !important;
-    }
-</style>

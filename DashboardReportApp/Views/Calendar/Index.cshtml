@@ -1,17 +1,21 @@
-﻿@model List<DashboardReportApp.Models.CalendarModel>
+﻿@model DashboardReportApp.Models.CalendarIndexViewModel
 
-<!--─────────────────────────  SERVER-SIDE SETUP  ───────────────────────── -->
 @{
-    var sorted = Model.OrderBy(e => e.LastName)
+    var sorted = Model.Employees
+                      .OrderBy(e => e.LastName)
                       .ThenBy(e => e.FirstName)
                       .ToList();
     ViewData["Title"] = "Service Record Calendar";
 }
 
-<!-- ─────────────────────────────  VENDOR CSS  ──────────────────────────── -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" />
+
+<!-- ─────────────────────────── VENDOR CSS ─────────────────────────── -->
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" />
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
 
 <style>
     .is-invalid {
@@ -32,28 +36,86 @@
     <h2 class="text-center mb-4">@ViewData["Title"]</h2>
 
     <div class="d-flex justify-content-center mb-3">
-        <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#serviceModal">
+        <button class="btn btn-primary me-2"
+                data-bs-toggle="modal" data-bs-target="#serviceModal">
             Time-Off Request
         </button>
-        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#eventModal">
+        <button class="btn btn-info"
+                data-bs-toggle="modal" data-bs-target="#eventModal">
             Schedule Event
         </button>
     </div>
 
     <div id="calendar" class="p-3 bg-light border rounded shadow-sm"></div>
 
-    <!-- hidden antiforgery token for AJAX -->
+    <hr class="my-5">
+
+    <h3 class="text-center">Vacation-day usage by employee / date range</h3>
+
+    <div class="row gy-3 justify-content-center">
+        <div class="col-md-3">
+            <label class="form-label">Employee</label>
+            <select id="reportEmp" class="form-select">
+                <option value="">— Select —</option>
+                @foreach (var emp in sorted)
+                {
+                    <option value="@emp.FirstName|@emp.LastName">
+                        @emp.LastName, @emp.FirstName
+                    </option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Start</label>
+            <input id="reportStart" type="date" class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">End</label>
+            <input id="reportEnd" type="date" class="form-control">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button id="btnRunReport" class="btn btn-primary w-100">
+                Run&nbsp;Report
+            </button>
+        </div>
+    </div>
+
+    <div id="reportSummary" class="text-center mt-4 fw-bold"></div>
+    <div id="reportTableWrapper" class="mt-3"></div>
+
+
+    <!-- ────────────────────────── REACT TABLE  ────────────────────────── -->
+    <h3 class="text-center mt-5">All Time-Off Service Records</h3>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <!-- ▼ add this exactly here ▼ -->
+            <div id="myReactCalendarTableRoot"
+                 + data-records='@Html.Raw(
+System.Text.Json.JsonSerializer.Serialize(
+Model.ServiceRecords))'>
+                +
+            </div>
+
+        </div>
+    </div>
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+
+    
+
+    <!-- antiforgery token holder -->
     <form asp-antiforgery="true" style="display:none"></form>
 </div>
 
-<!-- ──────────────────────────  TIME-OFF MODAL  ────────────────────────── -->
+<!-- ===================================================================
+     TIME-OFF MODAL
+     =================================================================== -->
 <div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form asp-action="Submit" asp-antiforgery="true" method="post" id="mainForm">
+            <form id="mainForm" asp-action="Submit" method="post" asp-antiforgery="true">
                 <div class="modal-header">
                     <h5 class="modal-title">New Time-Off Request</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
@@ -61,7 +123,7 @@
                         <!-- employee -->
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Employee</label>
-                            <select class="form-select" id="employeeSelect" required>
+                            <select id="employeeSelect" class="form-select" required>
                                 <option value="">Select…</option>
                                 @for (int i = 0; i < sorted.Count; i++)
                                 {
@@ -70,7 +132,6 @@
                             </select>
                             <input type="hidden" name="FirstName" />
                         </div>
-
                         <!-- department -->
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
@@ -86,7 +147,6 @@
                                 <option>Sintering</option>
                             </select>
                         </div>
-
                         <!-- shift / schedule -->
                         <div class="col-md-4">
                             <label class="form-label">Shift</label>
@@ -104,7 +164,6 @@
                                 <option>C</option>
                             </select>
                         </div>
-
                         <!-- type -->
                         <div class="col-md-4">
                             <label class="form-label">Time-Off Type</label>
@@ -114,68 +173,73 @@
                                 <option>Other</option>
                             </select>
                         </div>
-
                         <!-- attribute -->
                         <div class="col-md-12">
                             <label class="form-label">Attribute <span class="text-muted">(optional)</span></label>
                             <select name="Attribute" class="form-select">
                                 <option value="" selected>— None —</option>
-                                <option>Failed to Punch In</option>
                                 <option>Reported Late</option>
                                 <option>Failed to Report Off</option>
                                 <option>Called Off</option>
-                                <option>Failed to Punch Out</option>
                                 <option>Early Out</option>
                                 <option>Lack of Work</option>
                                 <option>Disciplinary Action</option>
                             </select>
                         </div>
-
                         <!-- explanation -->
                         <div class="col-md-12">
                             <label class="form-label">Explanation</label>
-                            <textarea name="Explanation" class="form-control" rows="2"></textarea>
+                            <textarea name="Explanation" rows="2" class="form-control"></textarea>
                         </div>
-
                         <!-- dates -->
                         <div class="col-md-12">
                             <label class="form-label fw-bold">Dates Requested</label>
-                            <input type="text" name="DatesRequested" class="form-control datepicker" required>
+                            <input name="DatesRequested" class="form-control datepicker" required>
                         </div>
-
-                       
-
-                        <!-- hidden fields -->
+                        <!-- hidden -->
                         <input type="hidden" id="lname" name="LastName" />
                         <input type="hidden" id="date_employed" name="DateEmployed" />
                         <input type="hidden" id="active_status" name="ActiveStatus" />
                         <input type="hidden" id="email" name="Email" />
                         <input type="hidden" id="vac_balance" name="VacationBalance" />
+                        <input type="hidden" id="currBal" />
+                        <input type="hidden" id="afterBal" />
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">Submit</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success" type="submit">Submit</button>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- ─────────────────────────  SCHEDULE-EVENT MODAL  ───────────────────────── -->
+<!-- ===================================================================
+     SCHEDULE-EVENT MODAL
+     =================================================================== -->
 <div class="modal fade" id="eventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form asp-action="ScheduleEvent" asp-antiforgery="true" method="post" id="eventForm">
+            <form id="eventForm" asp-action="ScheduleEvent" method="post" asp-antiforgery="true">
                 <div class="modal-header">
                     <h5 class="modal-title">Schedule Event</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
                     <label class="form-label fw-bold">Event Name</label>
-                    <input type="text" name="Title" class="form-control mb-2" required>
+                    <input name="Title" class="form-control mb-2" required>
+
+                    <label class="form-label">Scheduler</label>
+                    <select name="Scheduler" class="form-select mb-2" required>
+                        <option disabled selected value="">Select…</option>
+                        @foreach (var e in sorted)
+                        {
+                            <option>@e.FirstName @e.LastName</option>
+                        }
+                    </select>
 
                     <label class="form-label">Location</label>
                     <select name="Location" class="form-select mb-2" required>
@@ -189,342 +253,459 @@
                     <textarea name="Description" class="form-control mb-2"></textarea>
 
                     <label class="form-label fw-bold">Date</label>
-                    <input type="text" name="Date" class="form-control single-date mb-2" required>
+                    <input name="Date" class="form-control single-date mb-2" required>
 
                     <div class="row g-2">
-                        <div class="col">
-                            <label class="form-label">Start</label>
-                            <input type="text" name="StartTime" class="form-control timepick" required>
+                        <div class="col"><label class="form-label">Start</label><input name="StartTime" class="form-control timepick" required></div>
+                        <div class="col"><label class="form-label">End</label><input name="EndTime" class="form-control timepick" required></div>
+                    </div>
+
+                    <hr>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Repeat</label>
+                            <select name="Recur" class="form-select">
+                                <option value="\">None</option>
+                                <option>Daily</option>
+                                <option>Weekly</option>
+                                <option>Monthly</option>
+                            </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label">End</label>
-                            <input type="text" name="EndTime" class="form-control timepick" required>
+                        <div class="col-md-6">
+                            <label class="form-label">Until</label>
+                            <input name="RecurUntil" class="form-control single-date">
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">Save</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success" type="submit">Save</button>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- ─────────────────────────────  VENDOR JS  ────────────────────────────── -->
+<!-- ─────────────────────────── VENDOR JS ─────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
+@section Scripts
+{
 <script>
-    /* ───────────────────── helpers & constants ───────────────────── */
-    const empData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(sorted));
+    /* ===== helpers =================================================== */
+    const empData  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(sorted));
+    const antiF    = o => ({...o,__RequestVerificationToken:document.querySelector('input[name=\"__RequestVerificationToken\"]').value});
+    const fmt      = d => d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
 
-    function getToken(){
-        return document.querySelector('input[name="__RequestVerificationToken"]').value;
-    }
-    function addAntiForgery(obj){
-        return { ...obj, __RequestVerificationToken:getToken() };
-    }
-    function formatDT(dt){
-        return dt.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
-    }
+    /* ===== init ====================================================== */
+    document.addEventListener('DOMContentLoaded',() => {
+        /* fullcalendar */
+        const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{
+            initialView:'dayGridMonth',
+            height:500,
+            headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},
+            events:'/Calendar/GetEvents',
+            eventClick:handleEventClick
+        });
+        cal.render();
 
-    /* ───────────────────── calendar init ───────────────────── */
-    document.addEventListener('DOMContentLoaded', () => {
-      const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
-        initialView:'dayGridMonth',
-        height:500,
-        headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},
-        events:'/Calendar/GetEvents',
-        eventClick:handleEventClick
-      });
-      cal.render();
+        /* pickers */
+        const fpMulti = flatpickr('.datepicker',{mode:'multiple',dateFormat:'m/d/Y',onChange:updateAfter});
+        flatpickr('.single-date',{dateFormat:'m/d/Y'});
+        flatpickr('.timepick',{enableTime:true,noCalendar:true,dateFormat:'H:i'});
 
-      const fpReq = flatpickr('.datepicker',{mode:'multiple',dateFormat:'m/d/Y',onChange:updateAfter});
-      flatpickr('.single-date',{dateFormat:'m/d/Y'});
-      flatpickr('.timepick',{enableTime:true,noCalendar:true,dateFormat:'H:i'});
+        /* current vs after-balance preview */
+        document.querySelector('[name=\"TimeOffType\"]').addEventListener('change',updateAfter);
+        function updateAfter(){
+            const bal  = parseFloat(document.getElementById('currBal').value||0);
+            const deduct = document.querySelector('[name=\"TimeOffType\"]').value.startsWith('Paid');
+            document.getElementById('afterBal').value=(deduct?bal-fpMulti.selectedDates.length:bal).toFixed(2);
+        }
 
-      document.querySelector('[name="TimeOffType"]').addEventListener('change',updateAfter);
-      function updateAfter(){
-        const bal=parseFloat(document.getElementById('currBal').value||0);
-        const type=document.querySelector('[name="TimeOffType"]').value;
-        const deduct=type.startsWith('Paid');
-        document.getElementById('afterBal').value=
-            (deduct?bal-fpReq.selectedDates.length:bal).toFixed(2);
-      }
-
-      document.getElementById('employeeSelect').addEventListener('change',e=>{
-        const emp=empData[+e.target.value];
-        if(!emp) return;
-        document.querySelector('input[name="FirstName"]').value=emp.firstName||emp.FirstName;
-        document.getElementById('lname').value       =emp.lastName ||emp.LastName;
-        document.getElementById('vac_balance').value =emp.vacationBalance||emp.VacationBalance;
-        document.getElementById('currBal').value     =parseFloat(emp.vacationBalance||emp.VacationBalance).toFixed(2);
-        updateAfter();
-      });
+        /* employee dropdown auto-fill */
+        document.getElementById('employeeSelect').addEventListener('change',e=>{
+            const emp=empData[+e.target.value]; if(!emp) return;
+            document.querySelector('input[name=\"FirstName\"]').value=emp.firstName||emp.FirstName;
+            document.getElementById('lname').value      =emp.lastName ||emp.LastName;
+            document.getElementById('vac_balance').value=emp.vacationBalance||emp.VacationBalance;
+            document.getElementById('currBal').value    =parseFloat(emp.vacationBalance||emp.VacationBalance).toFixed(2);
+            document.getElementById('email').value         = emp.Email         || '';   // <-- email
+            document.getElementById('active_status').value = emp.ActiveStatus  || '';   // <-- active status
+            document.getElementById('date_employed').value = emp.DateEmployed            // <-- hire date
+            ? new Date(emp.DateEmployed).toISOString().split('T')[0] : '';
+            updateAfter();
+        });
     });
 
-    /* ───────────────────── EVENT CLICK HANDLER ───────────────────── */
-    function handleEventClick(info){
-      const ev = info.event;
+    /* ===== wire forms =============================================== */
+            function wireFormWithSpinner(id, url) {
+            const f = document.getElementById(id);
+            if (!f) return;
 
-      /* blue events (calendar events) */
-      if(ev.id.startsWith('EV')){
-        const startTxt = ev.start ? formatDT(ev.start) : '';
-        const endTxt   = ev.end   ? formatDT(ev.end)   : '';
+            f.addEventListener('submit', e => {
+                e.preventDefault();
+               if (f.dataset.submitted === 'true') return;
+                f.dataset.submitted = 'true';
+               const data = new URLSearchParams(new FormData(f));
 
-        Swal.fire({
-          title: ev.title,
-          html : `${startTxt ? `<b>${startTxt} – ${endTxt}</b><hr>` : '' }
-                  <div class="text-center">
-                    <button id="evEdit"   class="btn btn-primary btn-swal">Edit</button>
-                    <button id="evDelete" class="btn btn-danger  btn-swal">Delete</button>
-                  </div>`,
-          showConfirmButton:false,
-          willOpen: pop=>{
-            pop.querySelector('#evEdit')  .addEventListener('click',()=>showEditEventModal(ev.id));
-            pop.querySelector('#evDelete').addEventListener('click',()=>confirmDeleteEvent(ev.id));
-          }
-        });
-        return;
-      }
-
-      /* yellow / green service-record requests */
-      const bal        = parseFloat(ev.extendedProps.vacBalance||0);
-      const reqDays    = parseFloat(ev.extendedProps.reqDays||0);
-      const approved   = ev.backgroundColor==='#28a745';
-      const explanation= ev.extendedProps.explanation || '(none)';
-      const typeText   = ev.title.split(/[-–—]/).pop().trim().toLowerCase();
-      const deduct     = typeText.startsWith('paid');
-      const afterBal   = bal-(deduct?reqDays:0);
-
-      Swal.fire({
-        title:'Request Options',
-        html:`<b>${ev.title}</b><hr>
-              Status: <b>${approved?'Approved':'Waiting'}</b><br>
-              Explanation: <i>${explanation}</i><br>
-              <div class="text-center">
-                <button id="swApprove" class="btn btn-success btn-swal">Approve</button>
-                <button id="swEdit"    class="btn btn-primary btn-swal">Edit</button>
-                <button id="swDelete"  class="btn btn-danger  btn-swal">Delete</button>
-              </div>`,
-        showConfirmButton:false,
-        willOpen: pop=>{
-          pop.querySelector('#swApprove').addEventListener('click',()=>doApprove(ev));
-          pop.querySelector('#swEdit')   .addEventListener('click',()=>adminGate(()=>showEditModal(ev.id)));
-          pop.querySelector('#swDelete') .addEventListener('click',()=>adminGate(()=>confirmDelete(ev.id)));
-        }
-      });
-    }
-
-    /* ───────────────────── APPROVE REQUEST ───────────────────── */
-    function doApprove(event){
-      Swal.fire({title:'Approval PIN',input:'password',showCancelButton:true,confirmButtonText:'Approve'})
-        .then(r=>{
-          if(!r.isConfirmed||!r.value) return;
-
-          const payload = addAntiForgery({
-            id : event.id.replace('SR',''),
-            pin: r.value
-          });
-
-          fetch('/Calendar/Approve',{
-            method :'POST',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body   : new URLSearchParams(payload)
-          })
-          .then(res=>res.ok?res.text():Promise.reject())
-          .then(()=>{
-            event.setProp('backgroundColor','#28a745');
-            Swal.fire('Approved','Request approved','success');
-          })
-          .catch(()=>Swal.fire('Error','Invalid PIN','error'));
-        });
-    }
-
-    /* ───────────────────── ADMIN GATE (GET only) ───────────────────── */
-    function adminGate(cb){
-      Swal.fire({title:'Admin PIN',input:'password',showCancelButton:true,confirmButtonText:'Verify'})
-        .then(r=>{
-          if(!r.isConfirmed||!r.value) return;
-          fetch(`/Calendar/VerifyAdminPin?pin=${encodeURIComponent(r.value)}`)
-            .then(res=>res.ok?cb():Swal.fire('Denied','Incorrect PIN','error'));
-        });
-    }
-
-    /* ───────────────────── EDIT & DELETE BLUE EVENTS ───────────────────── */
-    function showEditEventModal(id){
-      fetch(`/Calendar/GetCalendarEvent?id=${id.replace('EV','')}`)
-        .then(r=>r.json())
-        .then(data=>{
-          Swal.fire({
-            title: 'Edit Event',
-            html: `
-              <label>Title</label>
-              <input id="evTitle" class="form-control mb-2" value="${data.title || ''}">
-              <label>Location</label>
-              <select id="evLoc" class="form-select mb-2">
-                ${['Conference Room','Lunch Room','Other']
-                    .map(l=>`<option ${l===data.location?'selected':''}>${l}</option>`).join('')}
-              </select>
-              <label>Description</label>
-              <textarea id="evDesc" class="form-control mb-2">${data.description||''}</textarea>
-              <label>Date</label>
-              <input id="evDate" class="form-control mb-2">
-              <div class="row g-2">
-                <div class="col"><label>Start</label><input id="evStart" class="form-control timepick"></div>
-                <div class="col"><label>End</label><input id="evEnd" class="form-control timepick"></div>
-              </div>`,
-            showCancelButton:true,
-            confirmButtonText:'Save',
-            didOpen: pop=>{
-              /* date picker */
-              const dateInput = pop.querySelector('#evDate');
-              flatpickr(dateInput,{
-                dateFormat:'m/d/Y',
-                defaultDate:new Date(data.date)
-              });
-              /* start/end */
-              const s=pop.querySelector('#evStart'); const e=pop.querySelector('#evEnd');
-              s.value=(data.startTime||'00:00').substring(0,5);
-              e.value=(data.endTime  ||'00:00').substring(0,5);
-              flatpickr([s,e],{enableTime:true,noCalendar:true,dateFormat:'H:i'});
-            }
-          }).then(r=>{
-            if(!r.isConfirmed) return;
-
-            const payload = addAntiForgery({
-              id        : id.replace('EV',''),
-              Title     : document.getElementById('evTitle').value,
-              Location  : document.getElementById('evLoc').value,
-              Description:document.getElementById('evDesc').value,
-              Date      : document.getElementById('evDate').value,
-              StartTime : document.getElementById('evStart').value,
-              EndTime   : document.getElementById('evEnd').value
+                fetchWithSpinner(url, { method:'POST', body:data })
+                    .then(r => r.ok
+                        ? Swal.fire('Saved', 'Success', 'success').then(() => location.reload())
+                        : Swal.fire('Error', 'Save failed', 'error'))
+                    .finally(() => { f.dataset.submitted = 'false'; });
             });
+        }
 
-            fetch('/Calendar/EditCalendarEvent',{
-              method :'POST',
-              headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body   : new URLSearchParams(payload)
-            })
-            .then(res=>res.ok
-              ? Swal.fire('Saved','Event updated','success').then(()=>location.reload())
-              : Swal.fire('Error','Save failed','error'));
-          });
+    wireFormWithSpinner('mainForm','/Calendar/Submit');
+    wireFormWithSpinner('eventForm','/Calendar/ScheduleEvent');
+
+    /* ===== event click ============================================== */
+    function handleEventClick(info){
+        const ev=info.event;
+        ev.id.startsWith('EV') ? showBlueOptions(ev) : showServiceOptions(ev);
+    }
+
+    function showBlueOptions(ev){
+        const start=ev.start?fmt(ev.start):'', end=ev.end?fmt(ev.end):'';
+        Swal.fire({
+            title:ev.title,
+            html:`${start?`<b>${start} – ${end}</b><hr>`:''}
+                  <div class='text-center'>
+                     <button id='evEdit' class='btn btn-primary btn-swal'>Edit</button>
+                     <button id='evDelete' class='btn btn-danger btn-swal'>Delete</button>
+                  </div>`,
+            showConfirmButton:false,
+            willOpen:p=>{
+                p.querySelector('#evEdit').addEventListener('click',()=>showEditEventModal(ev.id));
+                p.querySelector('#evDelete').addEventListener('click',()=>confirmDeleteEvent(ev.id));
+            }
         });
+    }
+
+    function showServiceOptions(ev){
+        const approved=ev.backgroundColor==='#28a745';
+        const explanation=ev.extendedProps.explanation||'(none)';
+        Swal.fire({
+            title:'Request Options',
+            html:`<b>${ev.title}</b><hr>
+                  Status: <b>${approved?'Approved':'Waiting'}</b><br>
+                  Explanation: <i>${explanation}</i><br>
+                  <div class='text-center'>
+                     <button id='swApprove' class='btn btn-success btn-swal'>Approve</button>
+                     <button id='swEdit'    class='btn btn-primary btn-swal'>Edit</button>
+                     <button id='swDelete'  class='btn btn-danger  btn-swal'>Delete</button>
+                  </div>`,
+            showConfirmButton:false,
+            willOpen:p=>{
+                p.querySelector('#swApprove').addEventListener('click',()=>doApprove(ev));
+                p.querySelector('#swEdit')   .addEventListener('click',()=>adminGate(()=>showEditModal(ev.id)));
+                p.querySelector('#swDelete') .addEventListener('click',()=>adminGate(()=>confirmDelete(ev.id)));
+            }
+        });
+    }
+
+    /* ===== approve =================================================== */
+    function doApprove(ev){
+        Swal.fire({
+            title:'Approval',
+            html:`<input id='pinBox' class='form-control mb-2' type='password' placeholder='PIN'>
+                  <label>Disciplinary Occurrence</label>
+                  <select id='occ' class='form-select'>
+                     <option>No occurrence</option>
+                     <option>SEPP occurrence</option>
+                     <option>Profit share occurrence</option>
+                  </select>`,
+            showCancelButton:true,confirmButtonText:'Approve'
+        }).then(r=>{
+            if(!r.isConfirmed) return;
+            const payload=antiF({id:ev.id.replace('SR',''),pin:document.getElementById('pinBox').value,occ:document.getElementById('occ').value});
+            fetchWithSpinner('/Calendar/Approve',{method:'POST',body:new URLSearchParams(payload)})
+              .then(resp=>resp.ok?(ev.setProp('backgroundColor','#28a745'),
+                                   Swal.fire('Approved','Please enter record into TA and Employee Tracking.','success'))
+                                  :Swal.fire('Error','Invalid PIN','error'));
+        });
+    }
+
+    /* ===== admin gate ================================================ */
+    function adminGate(cb){
+        Swal.fire({title:'Admin PIN',input:'password',showCancelButton:true,confirmButtonText:'Verify'})
+          .then(r=>{
+              if(!r.isConfirmed) return;
+              fetch(`/Calendar/VerifyAdminPin?pin=${encodeURIComponent(r.value)}`)
+                .then(res=>res.ok?cb():Swal.fire('Denied','Incorrect PIN','error'));
+          });
+    }
+
+    /* ===== blue events edit/delete =================================== */
+    function showEditEventModal(id){
+        fetch(`/Calendar/GetCalendarEvent?id=${id.replace('EV','')}`)
+          .then(r=>r.json())
+          .then(d=>{
+              Swal.fire({
+                  title:'Edit Event',
+                  html:`<label>Title</label><input id='evTitle' class='form-control mb-2' value='${d.title||''}'>
+                        <label>Location</label>
+                        <select id='evLoc' class='form-select mb-2'>
+                          ${['Conference Room','Lunch Room','Other']
+                             .map(l=>`<option ${l===d.location?'selected':''}>${l}</option>`).join('')}
+                        </select>
+                        <label>Description</label>
+                        <textarea id='evDesc' class='form-control mb-2'>${d.description||''}</textarea>
+                        <label>Date</label><input id='evDate' class='form-control mb-2'>
+                        <div class='row g-2'>
+                            <div class='col'><label>Start</label><input id='evStart' class='form-control timepick'></div>
+                            <div class='col'><label>End</label><input id='evEnd' class='form-control timepick'></div>
+                        </div>`,
+                  didOpen:p=>{
+                      flatpickr(p.querySelector('#evDate'),{dateFormat:'m/d/Y',defaultDate:new Date(d.date)});
+                      const s=p.querySelector('#evStart'),e=p.querySelector('#evEnd');
+                      s.value=(d.startTime||'00:00').substring(0,5);
+                      e.value=(d.endTime  ||'00:00').substring(0,5);
+                      flatpickr([s,e],{enableTime:true,noCalendar:true,dateFormat:'H:i'});
+                  },
+                  showCancelButton:true,confirmButtonText:'Save'
+              }).then(res=>{
+                  if(!res.isConfirmed) return;
+                  const payload=antiF({
+                      Id:d.id,Title:document.getElementById('evTitle').value,
+                      Location:document.getElementById('evLoc').value,
+                      Description:document.getElementById('evDesc').value,
+                      Date:document.getElementById('evDate').value,
+                      StartTime:document.getElementById('evStart').value,
+                      EndTime:document.getElementById('evEnd').value
+                  });
+                  fetchWithSpinner('/Calendar/EditCalendarEvent',{method:'POST',body:new URLSearchParams(payload)})
+                    .then(r=>r.ok?Swal.fire('Saved','Event updated','success').then(()=>location.reload())
+                                  :Swal.fire('Error','Save failed','error'));
+              });
+          });
     }
 
     function confirmDeleteEvent(id){
-      Swal.fire({title:'Delete event?',icon:'warning',showCancelButton:true,confirmButtonText:'Delete'})
-        .then(r=>{
-          if(!r.isConfirmed) return;
-
-          const payload = addAntiForgery({ id:id.replace('EV','') });
-
-          fetch('/Calendar/DeleteCalendarEvent',{
-            method :'POST',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body   : new URLSearchParams(payload)
-          })
-          .then(res=>res.ok
-            ? Swal.fire('Deleted','Event removed','success').then(()=>location.reload())
-            : Swal.fire('Error','Delete failed','error'));
-        });
+        Swal.fire({title:'Delete event?',icon:'warning',showCancelButton:true,confirmButtonText:'Delete'})
+          .then(r=>{
+              if(!r.isConfirmed) return;
+              fetchWithSpinner('/Calendar/DeleteCalendarEvent',{
+                  method:'POST',
+                  body:new URLSearchParams(antiF({id:id.replace('EV','')}))
+              }).then(resp=>resp.ok?Swal.fire('Deleted','Event removed','success').then(()=>location.reload())
+                                    :Swal.fire('Error','Delete failed','error'));
+          });
     }
 
-    /* ───────────────────── EDIT & DELETE SERVICE-RECORDS ───────────────────── */
+    /* ===== service-record edit/delete ================================= */
     function showEditModal(id){
-      const numericId=id.replace('SR','');
-      fetch(`/Calendar/GetRecord?id=${numericId}`)
-        .then(r=>r.json())
-        .then(data=>{
-          Swal.fire({
-            title:'Edit Request',
-            html:`<label>Time-Off Type</label>
-                  <select id="edType" class="form-select mb-2">
-                    <option ${data.timeOffType==='Paid Vacation'?'selected':''}>Paid Vacation</option>
-                    <option ${data.timeOffType==='Unpaid Time Off'?'selected':''}>Unpaid Time Off</option>
-                    <option ${data.timeOffType==='Other'?'selected':''}>Other</option>
-                  </select>
-                  <label>Shift</label>
-                  <select id="edShift" class="form-select mb-2">
-                    <option ${data.shift==='1'?'selected':''}>1</option>
-                    <option ${data.shift==='2'?'selected':''}>2</option>
-                    <option ${data.shift==='3'?'selected':''}>3</option>
-                  </select>
-                  <label>Explanation</label>
-                  <textarea id="edExp" class="form-control mb-2"></textarea>
-                  <label>Dates</label>
-                  <input id="edDates" class="form-control mb-2">`,
-            showCancelButton:true,
-            confirmButtonText:'Save',
-            didOpen: pop=>{
-              pop.querySelector('#edExp').value=data.explanation||'';
-              flatpickr('#edDates',{mode:'multiple',dateFormat:'m/d/Y',defaultDate:data.dates||[]});
-            }
-          }).then(r=>{
-            if(!r.isConfirmed) return;
-
-            const payload = addAntiForgery({
-              id         : numericId,
-              type       : document.getElementById('edType').value,
-              shift      : document.getElementById('edShift').value,
-              explanation: document.getElementById('edExp').value,
-              dates      : document.getElementById('edDates').value
+        const num=id.replace('SR','');
+        fetch(`/Calendar/GetRecord?id=${num}`).then(r=>r.json()).then(data=>{
+            Swal.fire({
+                title:'Edit Request',
+                html:`<label>Time-Off Type</label>
+                      <select id='edType' class='form-select mb-2'>
+                        <option ${data.timeOffType==='Paid Vacation'?'selected':''}>Paid Vacation</option>
+                        <option ${data.timeOffType==='Unpaid Time Off'?'selected':''}>Unpaid Time Off</option>
+                        <option ${data.timeOffType==='Other'?'selected':''}>Other</option>
+                      </select>
+                      <label>Shift</label>
+                      <select id='edShift' class='form-select mb-2'>
+                        <option ${data.shift==='1'?'selected':''}>1</option>
+                        <option ${data.shift==='2'?'selected':''}>2</option>
+                        <option ${data.shift==='3'?'selected':''}>3</option>
+                      </select>
+                      <label>Explanation</label>
+                      <textarea id='edExp' class='form-control mb-2'>${data.explanation||''}</textarea>
+                      <label>Dates</label>
+                      <input id='edDates' class='form-control mb-2'>`,
+                didOpen:() => flatpickr('#edDates',{mode:'multiple',dateFormat:'m/d/Y',defaultDate:data.dates||[]}),
+                showCancelButton:true,confirmButtonText:'Save'
+            }).then(r=>{
+                if(!r.isConfirmed) return;
+                fetchWithSpinner('/Calendar/EditRecord',{
+                    method:'POST',
+                    body:new URLSearchParams(antiF({
+                        id:num,
+                        type:document.getElementById('edType').value,
+                        shift:document.getElementById('edShift').value,
+                        explanation:document.getElementById('edExp').value,
+                        dates:document.getElementById('edDates').value
+                    }))
+                }).then(resp=>resp.ok?Swal.fire('Saved','Changes applied','success').then(()=>location.reload())
+                                     :Swal.fire('Error','Save failed','error'));
             });
-
-            fetch('/Calendar/EditRecord',{
-              method :'POST',
-              headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body   : new URLSearchParams(payload)
-            })
-            .then(res=>res.ok
-              ? Swal.fire('Saved','Changes applied','success').then(()=>location.reload())
-              : Swal.fire('Error','Save failed','error'));
-          });
         });
     }
 
     function confirmDelete(id){
-      Swal.fire({title:'Delete request?',icon:'warning',showCancelButton:true,confirmButtonText:'Delete'})
-        .then(r=>{
-          if(!r.isConfirmed) return;
-
-          const payload = addAntiForgery({ id:id.replace('SR','') });
-
-          fetch('/Calendar/DeleteRecord',{
-            method :'POST',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
-            body   : new URLSearchParams(payload)
-          })
-          .then(res=>res.ok
-            ? Swal.fire('Deleted','Request removed','success').then(()=>location.reload())
-            : Swal.fire('Error','Delete failed','error'));
-        });
+        Swal.fire({title:'Delete request?',icon:'warning',showCancelButton:true,confirmButtonText:'Delete'})
+          .then(r=>{
+              if(!r.isConfirmed) return;
+              fetchWithSpinner('/Calendar/DeleteRecord',{
+                  method:'POST',
+                  body:new URLSearchParams(antiF({id:id.replace('SR','')}))
+              }).then(resp=>resp.ok?Swal.fire('Deleted','Request removed','success').then(()=>location.reload())
+                                    :Swal.fire('Error','Delete failed','error'));
+          });
     }
 
-    /* ───────────────────── SCHEDULE-EVENT SUBMIT ───────────────────── */
-    document.getElementById('eventForm').addEventListener('submit',e=>{
-      e.preventDefault();
-      const fd      = Object.fromEntries(new FormData(e.target));
-      const payload = addAntiForgery(fd);
+            /* ===== React table for all service-records ========================= */
+        document.addEventListener('DOMContentLoaded', () => {
+            const holder = document.getElementById('myReactCalendarTableRoot');
+            if (!holder || !window.renderMyDataTable) return;
 
-      fetch('/Calendar/ScheduleEvent',{
-        method :'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body   : new URLSearchParams(payload)
-      })
-      .then(res=>res.ok
-        ? Swal.fire('Saved','Event scheduled','success')
-        : Promise.reject())
-      .then(()=>location.reload())
-      .catch(()=>Swal.fire('Error','Save failed','error'));
-    });
+            const raw    = holder.getAttribute('data-records');
+            const data   = JSON.parse(raw ?? '[]');
+
+            /* flatten DatesRequested → friendly text for one cell */
+            data.forEach(r => {
+                r.Dates = (r.DatesRequested || [])
+                          .map(d => new Date(d).toLocaleDateString())
+                          .join(', ');
+
+                    if (r.SubmittedOn)
+            r.Submitted = new Date(r.SubmittedOn).toLocaleString();
+            });
+
+            const columns = [
+                { key: 'Id',            label: 'ID'          },
+                { key: 'FirstName',     label: 'First'       },
+                { key: 'LastName',      label: 'Last'        },
+                { key: 'Department',    label: 'Dept'        },
+                { key: 'Shift',         label: 'Shift'       },
+                { key: 'Schedule',      label: 'Sched'       },
+                { key: 'TimeOffType',   label: 'Type'        },
+                { key: 'Attribute',     label: 'Attribute'   },
+                { key: 'Dates',         label: 'Dates'       },
+                { key: 'VacationBalance', label: 'Vac Bal'   },
+                { key: 'Status',        label: 'Status'      },
+                    { key: 'Submitted',  label: 'Submitted' }
+
+            ];
+
+            /* renderMyDataTable comes from /js/mydatatable.bundle.js */
+            window.renderMyDataTable('myReactCalendarTableRoot', data, columns, false);
+        });
+
+
+
+
+               document.getElementById('btnRunReport').addEventListener('click', () => {
+          // 1) read the inputs
+          const empVal      = document.getElementById('reportEmp').value;
+          const [first, last] = empVal.split('|').map(s => s.trim());
+          const startSerial = document.getElementById('reportStart').value; // "YYYY-MM-DD"
+          const endSerial   = document.getElementById('reportEnd').value;   // "YYYY-MM-DD"
+
+          if (!first || !last || !startSerial || !endSerial) {
+            Swal.fire('Missing input','Please pick an employee AND both dates','warning');
+            return;
+          }
+          if (endSerial < startSerial) {
+            Swal.fire('Invalid range','End date must be on/after start date','warning');
+            return;
+          }
+
+          // 2) grab the embedded JSON
+          const raw = document
+            .getElementById('myReactCalendarTableRoot')
+            ?.getAttribute('data-records')
+            || '[]';
+
+          let all;
+          try {
+            all = JSON.parse(raw);
+          } catch (err) {
+            console.error('❌ JSON parse error:', err, raw);
+            Swal.fire('Error','Could not load service records','error');
+            return;
+          }
+
+          console.log('🔍 ALL records count:', all.length);
+
+          // debug: show keys of first record
+          if (all.length) {
+            console.log('🔑 Record keys:', Object.keys(all[0]));
+          }
+
+          // 3) filter
+          const inRange = all.filter(r => {
+            // try both PascalCase and camelCase
+            const fn = ((r.FirstName || r.firstName)||'').toString().trim().toUpperCase();
+            const ln = ((r.LastName  || r.lastName )||'').toString().trim().toUpperCase();
+
+            console.log(`Checking Id=${r.Id || r.id}: Name found [${fn} ${ln}], selected [${first.toUpperCase()} ${last.toUpperCase()}]`);
+            if (fn !== first.toUpperCase() || ln !== last.toUpperCase()) {
+              return false;
+            }
+
+            // pull date array, again both spellings
+            const dates = r.DatesRequested || r.datesRequested || [];
+            console.log('  DatesRequested raw:', dates);
+
+            // see if any date string (first 10 chars) lies in the window
+            return dates.some(dt => {
+              const dd = dt.toString().slice(0,10);
+              console.log(`    comparing ${dd} to ${startSerial}–${endSerial}`);
+              return dd >= startSerial && dd <= endSerial;
+            });
+          });
+
+          console.log('🔎 inRange count:', inRange.length, inRange);
+
+          // 4) count paid-vacation days
+          let vacDays = 0;
+          inRange.forEach(r => {
+            const type = ((r.TimeOffType||r.timeOffType)||'').toLowerCase();
+            if (!type.startsWith('paid')) return;
+            (r.DatesRequested||r.datesRequested||[])
+              .map(d => d.toString().slice(0,10))
+              .forEach(dd => {
+                if (dd >= startSerial && dd <= endSerial) vacDays++;
+              });
+          });
+
+          // 5) show summary
+          document.getElementById('reportSummary').textContent =
+            `${last}, ${first} used ${vacDays} paid-vacation day${vacDays===1?'':'s'} ` +
+            `between ${new Date(startSerial).toLocaleDateString()} ` +
+            `and ${new Date(endSerial).toLocaleDateString()}.`;
+
+          // 6) build a small details table
+          const tableData = inRange.map(r => ({
+            Id:            r.Id      || r.id,
+            TimeOffType:   r.TimeOffType || r.timeOffType,
+            Attribute:     r.Attribute   || r.attribute,
+            DatesRequested: (r.DatesRequested||r.datesRequested||[])
+              .filter(dt => {
+                const dd = dt.toString().slice(0,10);
+                return dd >= startSerial && dd <= endSerial;
+              })
+              .map(dt => new Date(dt.toString().slice(0,10)).toLocaleDateString())
+              .join(', '),
+            Status:        r.Status || r.status,
+            SubmittedOn:   r.SubmittedOn || r.submittedOn
+          }));
+
+          const cols = [
+            { key:'Id',            label:'ID'       },
+            { key:'TimeOffType',   label:'Type'     },
+            { key:'Attribute',     label:'Attr'     },
+            { key:'DatesRequested',label:'Dates'    },
+            { key:'Status',        label:'Status'   },
+            { key:'SubmittedOn',   label:'Submitted'}
+          ];
+
+          // 7) render with your React helper
+          const wrap = document.getElementById('reportTableWrapper');
+          wrap.innerHTML = "<div id='reportTable'></div>";
+          window.renderMyDataTable('reportTable', tableData, cols, false);
+        });
+
+
+
+
 </script>
-
+}
 @if (TempData["Success"] != null)
 {
     <script>

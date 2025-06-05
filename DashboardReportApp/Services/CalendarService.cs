@@ -18,21 +18,17 @@ namespace DashboardReportApp.Services
             _mysqlConnection = config.GetConnectionString("MySQLConnection");
         }
 
-        /* ───────────────────────── EMPLOYEES ───────────────────────── */
+        /* ─────────────── EMPLOYEES ─────────────── */
         public List<CalendarModel> GetEmployees()
         {
-            var employees = new List<CalendarModel>();
-            using var connection = new OdbcConnection(_dataflexConnection);
-            connection.Open();
-
-            var cmd = new OdbcCommand(
-                "SELECT fname,lname,date_employed,active_status,email,vac_balance " +
-                "FROM employee WHERE active_status='A'", connection);
-
+            var list = new List<CalendarModel>();
+            using var conn = new OdbcConnection(_dataflexConnection);
+            conn.Open();
+            var cmd = new OdbcCommand("SELECT fname,lname,date_employed,active_status,email,vac_balance FROM employee WHERE active_status='A'", conn);
             using var rdr = cmd.ExecuteReader();
             while (rdr.Read())
             {
-                employees.Add(new CalendarModel
+                list.Add(new CalendarModel
                 {
                     FirstName = rdr["fname"].ToString(),
                     LastName = rdr["lname"].ToString(),
@@ -42,28 +38,24 @@ namespace DashboardReportApp.Services
                     VacationBalance = Convert.ToDecimal(rdr["vac_balance"])
                 });
             }
-            return employees;
+            return list;
         }
-
-        /* ─────────────────────────── TIME-OFF REQUESTS ─────────────────────────── */
+        /* ─────────────── SAVE SERVICE RECORD ─────────────── */
         public void SaveServiceRecord(CalendarModel m)
         {
             using var conn = new MySqlConnection(_mysqlConnection);
             conn.Open();
             using var tran = conn.BeginTransaction();
-
-            var cmd = new MySqlCommand(@"
-INSERT INTO servicerecords
+            var cmd = new MySqlCommand(@"INSERT INTO servicerecords
 (fname,lname,date_employed,active_status,email,
  vac_balance,department,shift,schedule,attribute,explanation,
- time_off_type,status,submitted_on)
+ time_off_type,status,occurrence,submitted_on)
 VALUES
 (@fn,@ln,@de,@as,@em,@vb,@dept,@shift,@sched,@attr,@expl,
- @type,'Waiting',@sub);
-SELECT LAST_INSERT_ID();", conn, tran);
+ @type,@status,@occ,@sub); SELECT LAST_INSERT_ID();", conn, tran);
 
-            cmd.Parameters.AddWithValue("@fn", m.FirstName?.Trim());
-            cmd.Parameters.AddWithValue("@ln", m.LastName?.Trim());
+            cmd.Parameters.AddWithValue("@fn", m.FirstName);
+            cmd.Parameters.AddWithValue("@ln", m.LastName);
             cmd.Parameters.AddWithValue("@de", m.DateEmployed);
             cmd.Parameters.AddWithValue("@as", m.ActiveStatus);
             cmd.Parameters.AddWithValue("@em", m.Email);
@@ -74,20 +66,19 @@ SELECT LAST_INSERT_ID();", conn, tran);
             cmd.Parameters.AddWithValue("@attr", m.Attribute);
             cmd.Parameters.AddWithValue("@expl", m.Explanation);
             cmd.Parameters.AddWithValue("@type", m.TimeOffType);
+            cmd.Parameters.AddWithValue("@status", m.Status);
+            cmd.Parameters.AddWithValue("@occ", DBNull.Value);
             cmd.Parameters.AddWithValue("@sub", m.SubmittedOn);
 
             int newId = Convert.ToInt32(cmd.ExecuteScalar());
 
             foreach (var d in m.DatesRequested)
             {
-                var dc = new MySqlCommand(
-                    "INSERT INTO servicerecord_dates(servicerecord_id,requested_date) VALUES(@id,@dt)",
-                    conn, tran);
+                var dc = new MySqlCommand("INSERT INTO servicerecord_dates(servicerecord_id,requested_date) VALUES(@id,@dt)", conn, tran);
                 dc.Parameters.AddWithValue("@id", newId);
                 dc.Parameters.AddWithValue("@dt", d);
                 dc.ExecuteNonQuery();
             }
-
             tran.Commit();
         }
 
@@ -95,14 +86,23 @@ SELECT LAST_INSERT_ID();", conn, tran);
         {
             var results = new List<CalendarModel>();
 
-            string sql = @"
-SELECT sr.id,sr.status,
-       sr.fname,sr.lname,sr.vac_balance,
-       sr.department,sr.attribute,sr.time_off_type, sr.explanation, 
+            const string sql = @"
+SELECT sr.id,
+       sr.status,
+       sr.fname,
+       sr.lname,
+       sr.vac_balance,
+       sr.department,
+       sr.shift,            -- NEW
+       sr.schedule,         -- NEW
+       sr.submitted_on,     -- NEW
+       sr.attribute,
+       sr.time_off_type,
+       sr.explanation,
        d.requested_date
-FROM servicerecords sr
-JOIN servicerecord_dates d ON sr.id=d.servicerecord_id
-ORDER BY sr.id,d.requested_date";
+FROM   servicerecords       sr
+JOIN   servicerecord_dates  d  ON sr.id = d.servicerecord_id
+ORDER  BY sr.id, d.requested_date";
 
             using var conn = new MySqlConnection(_mysqlConnection);
             conn.Open();
@@ -117,26 +117,33 @@ ORDER BY sr.id,d.requested_date";
                 int id = rdr.GetInt32("id");
                 if (id != lastId)
                 {
+                    /* ── create a new CalendarModel and copy EVERY column ── */
                     cur = new CalendarModel
                     {
                         Id = id,
                         Status = rdr["status"].ToString(),
                         FirstName = rdr["fname"].ToString(),
                         LastName = rdr["lname"].ToString(),
-                        VacationBalance = Convert.ToDecimal(rdr["vac_balance"]),
-                        Explanation = rdr["explanation"].ToString(),
+                        VacationBalance = rdr.GetDecimal("vac_balance"),
                         Department = rdr["department"].ToString(),
+                        Shift = rdr["shift"].ToString(),       // NEW
+                        Schedule = rdr["schedule"].ToString(),    // NEW
+                        SubmittedOn = rdr.GetDateTime("submitted_on"), // NEW
                         Attribute = rdr["attribute"].ToString(),
                         TimeOffType = rdr["time_off_type"].ToString(),
+                        Explanation = rdr["explanation"].ToString(),
                         DatesRequested = new List<DateTime>()
                     };
                     results.Add(cur);
                     lastId = id;
                 }
-                cur.DatesRequested.Add(Convert.ToDateTime(rdr["requested_date"]));
+
+                /* add one requested date to the list */
+                cur.DatesRequested.Add(rdr.GetDateTime("requested_date"));
             }
             return results;
         }
+
 
         public CalendarModel GetServiceRecordById(int id)
         {
@@ -169,26 +176,25 @@ FROM servicerecords WHERE id=@id", conn);
 
         /* ─────────────────────────── BLUE CALENDAR EVENTS ─────────────────────────── */
 
-        /* SAVE one event row */
+        /* ─────────────── SAVE CALENDAR EVENT ─────────────── */
         public void SaveCalendarEvent(CalendarEventModel m)
         {
             using var conn = new MySqlConnection(_mysqlConnection);
             conn.Open();
-
-            var cmd = new MySqlCommand(@"
-INSERT INTO cal_events
-(title,location,description,event_date,start_time,end_time,submitted_on)
-VALUES(@t,@l,@d,@dt,@st,@et,@sub)", conn);
-
+            var cmd = new MySqlCommand(@"INSERT INTO cal_events
+(title,location,description,event_date,start_time,end_time,scheduler,submitted_on)
+VALUES(@t,@l,@d,@dt,@st,@et,@sch,@sub)", conn);
             cmd.Parameters.AddWithValue("@t", m.Title);
             cmd.Parameters.AddWithValue("@l", m.Location);
             cmd.Parameters.AddWithValue("@d", m.Description);
             cmd.Parameters.AddWithValue("@dt", m.Date.Date);
             cmd.Parameters.AddWithValue("@st", m.StartTime);
             cmd.Parameters.AddWithValue("@et", m.EndTime);
+            cmd.Parameters.AddWithValue("@sch", m.Scheduler);
             cmd.Parameters.AddWithValue("@sub", DateTime.Now);
             cmd.ExecuteNonQuery();
         }
+
 
         /* GET all events for calendar */
         public IEnumerable<CalendarEventModel> GetCalendarEvents()

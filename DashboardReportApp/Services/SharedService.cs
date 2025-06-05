@@ -8,6 +8,9 @@ using System.Data.Odbc;
 using System.Data;
 using iText.StyledXmlParser.Jsoup.Select;
 using Mysqlx.Crud;
+using iText.Layout;
+using iText.Kernel.Pdf;
+using iText.Layout.Element;
 
 namespace DashboardReportApp.Services
 {
@@ -615,6 +618,53 @@ ORDER BY p.measure_date DESC
                     throw new Exception($"Failed to print PDF: {ex.Message}");
                 }
             }
+        }
+        public void PrintPlainText(string printerName, string text, int copies = 1)
+        {
+            if (copies < 1) throw new ArgumentException("Copies must be ≥1.", nameof(copies));
+            if (string.IsNullOrWhiteSpace(printerName) || printerName.Equals("None", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (!PrinterSettings.InstalledPrinters.Cast<string>()
+                .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+                throw new Exception($"Printer '{printerName}' is not installed.");
+
+            /* --- create temp PDF with iText 7 --- */
+            string pdfPath = Path.Combine(Path.GetTempPath(), $"txt_{Guid.NewGuid():N}.pdf");
+
+            using (var writer = new PdfWriter(pdfPath))
+            using (var pdf = new PdfDocument(writer))
+            using (var doc = new Document(pdf))
+            {
+                doc.SetMargins(40, 40, 40, 40);          // 40 pt ≈ 0.55 in
+                doc.Add(new Paragraph(text ?? string.Empty).SetFontSize(11));
+            }
+
+            /* --- silent SumatraPDF print --- */
+            string sumatra = @"C:\Tools\SumatraPDF\SumatraPDF.exe";
+            if (!File.Exists(sumatra))
+                throw new FileNotFoundException("SumatraPDF executable not found.", sumatra);
+
+            string copyArg = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
+            string args = $"-print-to \"{printerName}\"{copyArg} \"{pdfPath}\"";
+
+            var p = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = sumatra,
+                    Arguments = args,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false
+                }
+            };
+
+            p.Start();
+            p.WaitForExit();
+            if (p.ExitCode != 0) throw new Exception($"Printing exited with code {p.ExitCode}.");
+
+            try { File.Delete(pdfPath); } catch { /* ignore */ }
         }
     }
 }
