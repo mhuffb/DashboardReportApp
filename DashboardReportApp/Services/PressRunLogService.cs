@@ -407,7 +407,7 @@ LIMIT 1";
 
             using (var document = new Document(pdf))
             {
-                document.SetMargins(40, 20, 60, 20);
+                document.SetMargins(60, 20, 60, 20);
 
                 // Title
                 document.Add(new Paragraph("Sintergy Tracer Tag")
