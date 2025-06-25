@@ -28,7 +28,7 @@
     }
 
     #calendar {
-        min-height: 500px
+        height: "auto",
     }
 </style>
 
@@ -302,13 +302,19 @@ Model.ServiceRecords))'>
     /* ===== init ====================================================== */
     document.addEventListener('DOMContentLoaded',() => {
         /* fullcalendar */
-        const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{
-            initialView:'dayGridMonth',
-            height:500,
-            headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,listMonth'},
-            events:'/Calendar/GetEvents',
-            eventClick:handleEventClick
+                const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+            initialView: 'dayGridMonth',
+            height: 'auto',
+            dayMaxEventRows: false,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,listMonth'
+            },
+            events: '/Calendar/GetEvents',
+            eventClick: handleEventClick
         });
+
         cal.render();
 
         /* pickers */
@@ -416,11 +422,14 @@ Model.ServiceRecords))'>
                      <option>No occurrence</option>
                      <option>SEPP occurrence</option>
                      <option>Profit share occurrence</option>
+                         <option>SEPP Voucher required</option>
                   </select>`,
             showCancelButton:true,confirmButtonText:'Approve'
         }).then(r=>{
             if(!r.isConfirmed) return;
             const payload=antiF({id:ev.id.replace('SR',''),pin:document.getElementById('pinBox').value,occ:document.getElementById('occ').value});
+                console.log('PIN:', payload.pin);
+
             fetchWithSpinner('/Calendar/Approve',{method:'POST',body:new URLSearchParams(payload)})
               .then(resp=>resp.ok?(ev.setProp('backgroundColor','#28a745'),
                                    Swal.fire('Approved','Please enter record into TA and Employee Tracking.','success'))

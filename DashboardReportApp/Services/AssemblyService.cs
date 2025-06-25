@@ -30,7 +30,6 @@ public class AssemblyService
     public AssemblyService(IConfiguration configuration, SharedService sharedService)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
-        _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
         _sharedService = sharedService;
     }
     /// <summary>

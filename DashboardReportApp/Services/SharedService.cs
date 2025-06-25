@@ -65,6 +65,9 @@ namespace DashboardReportApp.Services
             // Return the path so we can save it in record.FileAddress1
             return finalPath;
         }
+        public void SendEmailWithAttachment2(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
+        {
+        }
         public void SendEmailWithAttachment(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
         {
             string senderEmail = "notifications@sintergy.net";

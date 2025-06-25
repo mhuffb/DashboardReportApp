@@ -74,8 +74,9 @@ namespace DashboardReportApp.Controllers
             model.SubmittedOn = DateTime.Now;
 
             /* auto‑approve when Attribute present */
-            bool needsApproval = string.IsNullOrWhiteSpace(model.Attribute);
+            bool needsApproval = string.IsNullOrWhiteSpace(model.Attribute) || model.TimeOffType == "Other";
             model.Status = needsApproval ? "Waiting" : "Approved";
+
 
             _calendarService.SaveServiceRecord(model);
 
@@ -121,7 +122,9 @@ http://192.168.1.6:5000/Calendar";
             const string approvalPin = "9412";
             if (pin != approvalPin) return BadRequest("Invalid PIN");
 
-            /* mark approved & store occurrence */
+            bool emailFailed = false;
+
+            // Update DB
             using (var conn = new MySqlConnection(_mysql))
             {
                 conn.Open();
@@ -131,9 +134,12 @@ http://192.168.1.6:5000/Calendar";
                 cmd.ExecuteNonQuery();
             }
 
+            // Build email body
             CalendarModel rec = _calendarService.GetServiceRecordById(id);
             List<DateTime> dates = _calendarService.GetRequestedDates(id);
             string datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
+
+            string voucherLine = occ == "SEPP Voucher required" ? "\n\n⚠ SEPP Voucher required" : "";
 
             string body = $@"Time‑off request has been *approved*.
 
@@ -145,23 +151,41 @@ Type       : {rec.TimeOffType}
 Occurrence : {occ}
 Dates      : {datesText}
 
-Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}";
+Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
 
-            if (!string.IsNullOrWhiteSpace(rec.Email))
+            // Send to user
+            if (!string.IsNullOrWhiteSpace(rec.Email) && rec.Email.Contains("@"))
             {
-                _sharedService.SendEmailWithAttachment(rec.Email, null, null,
-                    "Your time‑off request was approved", body);
-                _sharedService.SendEmailWithAttachment("calendar@sintergy.net", null, null,
-                    "Your time‑off request was approved", body);
+                try
+                {
+                    _sharedService.SendEmailWithAttachment(rec.Email, null, null,
+                        "Your time‑off request was approved", body);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Failed to send approval email to {rec.Email}");
+                    emailFailed = true;
+                }
             }
             else
             {
-                // inside your controller fallback
+                emailFailed = true;
                 _sharedService.PrintPlainText("HPFront", body, 1);
-
             }
 
-            return Ok();
+            // Always send internal copy
+            try
+            {
+                _sharedService.SendEmailWithAttachment("calendar@sintergy.net", null, null,
+                    "Your time‑off request was approved", body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send calendar approval email.");
+                emailFailed = true;
+            }
+
+            return Json(new { success = true, emailFailed });
         }
 
 

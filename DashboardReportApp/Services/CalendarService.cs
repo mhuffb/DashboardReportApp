@@ -38,6 +38,17 @@ namespace DashboardReportApp.Services
                     VacationBalance = Convert.ToDecimal(rdr["vac_balance"])
                 });
             }
+            // ✅ Add the test employee manually
+            list.Add(new CalendarModel
+            {
+                FirstName = "User",
+                LastName = "Test",
+                DateEmployed = DateTime.Today,
+                ActiveStatus = "A",
+                Email = "asdfff@sintergy.net",
+                VacationBalance = 999m
+            });
+
             return list;
         }
         /* ─────────────── SAVE SERVICE RECORD ─────────────── */
