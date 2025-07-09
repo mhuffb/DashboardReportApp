@@ -21,8 +21,8 @@
 
         public string Status { get; set; }   // NEW  ("Waiting" / "Approved")
         public DateTime SubmittedOn { get; set; }
-        
 
+        public string ApprovedBy { get; set; }
     }
 
 

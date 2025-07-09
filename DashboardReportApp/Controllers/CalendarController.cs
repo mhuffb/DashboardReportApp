@@ -119,17 +119,26 @@ http://192.168.1.6:5000/Calendar";
         [ValidateAntiForgeryToken]
         public IActionResult Approve(int id, string pin, string occ)
         {
-            const string approvalPin = "9412";
-            if (pin != approvalPin) return BadRequest("Invalid PIN");
+            var pinMap = new Dictionary<string, string>
+    {
+        { "9412", "Roger Jones" },
+        { "8888", "Tom Grieneisen" },
+        { "3005", "Andrea Kline" }
+    };
+
+            if (!pinMap.TryGetValue(pin, out string approver))
+                return BadRequest("Invalid PIN");
 
             bool emailFailed = false;
 
-            // Update DB
             using (var conn = new MySqlConnection(_mysql))
             {
                 conn.Open();
-                var cmd = new MySqlCommand("UPDATE servicerecords SET status='Approved', occurrence=@occ WHERE id=@id", conn);
+                var cmd = new MySqlCommand(
+                    "UPDATE servicerecords SET status='Approved', occurrence=@occ, approved_by=@by WHERE id=@id",
+                    conn);
                 cmd.Parameters.AddWithValue("@occ", occ);
+                cmd.Parameters.AddWithValue("@by", approver);
                 cmd.Parameters.AddWithValue("@id", id);
                 cmd.ExecuteNonQuery();
             }
@@ -148,6 +157,7 @@ Department : {rec.Department}
 Shift      : {rec.Shift}
 Schedule   : {rec.Schedule}
 Type       : {rec.TimeOffType}
+Attribute  : {(string.IsNullOrWhiteSpace(rec.Attribute) ? "(none)" : rec.Attribute)}
 Occurrence : {occ}
 Dates      : {datesText}
 
@@ -560,6 +570,95 @@ http://192.168.1.6:5000/Calendar
             return Unauthorized();
         }
 
+
+        [HttpGet]
+        public IActionResult CountSeppVouchers(string pin, int year)
+        {
+            pin = pin?.Trim();
+            Console.WriteLine($"Pin submitted: '{pin}'");
+
+            var validPins = new[] { "9412", "3005", "7777" };
+            if (!validPins.Contains(pin))
+                return Unauthorized();
+
+            var start = new DateTime(year - 1, 12, 1);
+            var end = new DateTime(year, 11, 30);
+
+            var detailList = new List<object>();
+            var countPerPerson = new List<object>();
+
+            using (var conn = new MySqlConnection(_mysql))
+            {
+                conn.Open();
+
+                // 🟦 Detail List Query
+                var cmdDetail = new MySqlCommand(@"
+SELECT sr.id, sr.fname, sr.lname, sr.department, sr.shift, sr.schedule, d.requested_date
+FROM servicerecords sr
+JOIN servicerecord_dates d ON sr.id = d.servicerecord_id
+WHERE sr.occurrence = 'SEPP Voucher required'
+AND d.requested_date BETWEEN @start AND @end
+ORDER BY d.requested_date", conn);
+
+                cmdDetail.Parameters.AddWithValue("@start", start);
+                cmdDetail.Parameters.AddWithValue("@end", end);
+
+                using (var rdr = cmdDetail.ExecuteReader())
+                {
+                    while (rdr.Read())
+                    {
+                        detailList.Add(new
+                        {
+                            Id = rdr.GetInt32("id"),
+                            FirstName = rdr["fname"].ToString(),
+                            LastName = rdr["lname"].ToString(),
+                            Department = rdr["department"].ToString(),
+                            Shift = rdr["shift"].ToString(),
+                            Schedule = rdr["schedule"].ToString(),
+                            Date = Convert.ToDateTime(rdr["requested_date"]).ToString("MM/dd/yyyy")
+                        });
+                    }
+                }
+
+                // 🟩 Count Per Person Query
+                // 🟩 Count Per Person Query
+                var cmdCount = new MySqlCommand(@"
+SELECT sr.fname, sr.lname, COUNT(*) AS count
+FROM servicerecords sr
+JOIN servicerecord_dates d ON sr.id = d.servicerecord_id
+WHERE sr.occurrence = 'SEPP Voucher required'
+AND d.requested_date BETWEEN @start AND @end
+GROUP BY sr.fname, sr.lname
+ORDER BY count DESC", conn);
+
+                // 🔥 🔥 Add parameters for cmdCount too!
+                cmdCount.Parameters.AddWithValue("@start", start);
+                cmdCount.Parameters.AddWithValue("@end", end);
+
+                using (var rdr = cmdCount.ExecuteReader())
+                {
+                    while (rdr.Read())
+                    {
+                        countPerPerson.Add(new
+                        {
+                            FirstName = rdr["fname"].ToString(),
+                            LastName = rdr["lname"].ToString(),
+                            Count = Convert.ToInt32(rdr["count"])
+                        });
+                    }
+                }
+
+            }
+
+            return Json(new
+            {
+                yearStart = start.ToString("MM/dd/yyyy"),
+                yearEnd = end.ToString("MM/dd/yyyy"),
+                totalOccurrences = detailList.Count,
+                countPerPerson = countPerPerson,
+                details = detailList
+            });
+        }
 
 
     }

@@ -83,6 +83,28 @@
     <div id="reportSummary" class="text-center mt-4 fw-bold"></div>
     <div id="reportTableWrapper" class="mt-3"></div>
 
+    <hr class="my-5">
+
+    <h3 class="text-center">SEPP Voucher Occurrence Check</h3>
+    <div class="row justify-content-center gy-3">
+        <div class="col-md-2">
+            <label class="form-label">Fiscal Year</label>
+            <input id="seppYear" type="number" class="form-control" value="2025">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Admin PIN</label>
+            <input id="seppPin" type="password" class="form-control" placeholder="PIN">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button onclick="checkSepp()" class="btn btn-danger w-100">Check</button>
+        </div>
+    </div>
+
+    <div id="seppResult" class="text-center fw-bold mt-3"></div>
+    <div id="seppTable" class="mt-3"></div>
+
+
+
 
     <!-- ────────────────────────── REACT TABLE  ────────────────────────── -->
     <h3 class="text-center mt-5">All Time-Off Service Records</h3>
@@ -586,7 +608,8 @@ Model.ServiceRecords))'>
                 { key: 'Attribute',     label: 'Attribute'   },
                 { key: 'Dates',         label: 'Dates'       },
                 { key: 'Status',        label: 'Status'      },
-                    { key: 'Submitted',  label: 'Submitted' }
+                    { key: 'Submitted',  label: 'Submitted' },
+                { key: 'ApprovedBy', label: 'Approved By' }
 
             ];
 
@@ -701,6 +724,7 @@ Model.ServiceRecords))'>
             { key:'DatesRequested',label:'Dates'    },
             { key:'Status',        label:'Status'   },
             { key:'SubmittedOn',   label:'Submitted'}
+
           ];
 
           // 7) render with your React helper
@@ -713,6 +737,41 @@ Model.ServiceRecords))'>
 
 
 </script>
+    <script>
+                          function checkSepp() {
+            const year = document.getElementById('seppYear').value;
+            const pin = document.getElementById('seppPin').value;
+
+            fetch(`/Calendar/CountSeppVouchers?pin=${pin}&year=${year}`)
+                .then(r => {
+                    if (!r.ok) throw 'Invalid PIN';
+                    return r.json();
+                })
+                .then(res => {
+                    console.log('✔️ Server response:', res);
+
+                    const wrap = document.getElementById('seppTable');
+                    wrap.innerHTML = ""; // Clear previous
+
+                    // 🔸 Render count per person only
+                    if (res.countPerPerson && res.countPerPerson.length) {
+                        wrap.innerHTML = "<h5>SEPP Voucher Count per Person</h5><div id='seppCountTable'></div>";
+                        const cols = [
+                            { key: 'lastName', label: 'Last' },
+                            { key: 'firstName', label: 'First' },
+                            { key: 'count', label: 'Occurrences' }
+                        ];
+                        window.renderMyDataTable('seppCountTable', res.countPerPerson, cols, false);
+                    } else {
+                        wrap.innerHTML = "<div class='text-center text-muted'>No SEPP Vouchers found for this period.</div>";
+                    }
+                })
+                .catch(err => Swal.fire('Error', err, 'error'));
+        }
+
+
+
+    </script>
 }
 @if (TempData["Success"] != null)
 {

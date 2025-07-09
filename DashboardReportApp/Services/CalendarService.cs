@@ -110,7 +110,8 @@ SELECT sr.id,
        sr.attribute,
        sr.time_off_type,
        sr.explanation,
-       d.requested_date
+       d.requested_date,
+       sr.approved_by
 FROM   servicerecords       sr
 JOIN   servicerecord_dates  d  ON sr.id = d.servicerecord_id
 ORDER  BY sr.id, d.requested_date";
@@ -143,7 +144,9 @@ ORDER  BY sr.id, d.requested_date";
                         Attribute = rdr["attribute"].ToString(),
                         TimeOffType = rdr["time_off_type"].ToString(),
                         Explanation = rdr["explanation"].ToString(),
-                        DatesRequested = new List<DateTime>()
+                        DatesRequested = new List<DateTime>(),
+                        ApprovedBy = rdr["approved_by"]?.ToString(),
+
                     };
                     results.Add(cur);
                     lastId = id;
