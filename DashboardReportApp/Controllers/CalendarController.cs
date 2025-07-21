@@ -169,7 +169,7 @@ Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
                 try
                 {
                     _sharedService.SendEmailWithAttachment(rec.Email, null, null,
-                        "Your time‑off request was approved", body);
+                        $"Time‑Off Request: {rec.LastName}, {rec.FirstName}", body);
                 }
                 catch (Exception ex)
                 {
@@ -187,7 +187,7 @@ Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
             try
             {
                 _sharedService.SendEmailWithAttachment("calendar@sintergy.net", null, null,
-                    "Your time‑off request was approved", body);
+                    $"Time‑Off Request: {rec.LastName}, {rec.FirstName}", body);
             }
             catch (Exception ex)
             {
@@ -563,12 +563,16 @@ http://192.168.1.6:5000/Calendar
         [HttpGet]
         public IActionResult VerifyAdminPin(string pin)
         {
-            const string adminPin = "9412";
-            // 200 OK if pin matches, 401 otherwise
-            if (pin == adminPin)
+            const string adminPinRogerJones = "9412";
+            const string adminPinAndreaKline = "3005"; // Replace with actual second PIN
+
+            // 200 OK if pin matches either admin PIN, 401 otherwise
+            if (pin == adminPinRogerJones || pin == adminPinAndreaKline)
                 return Ok();
+
             return Unauthorized();
         }
+
 
 
         [HttpGet]
