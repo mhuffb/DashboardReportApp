@@ -34,9 +34,16 @@
       
         public async Task<int> AddRequestAsync(MaintenanceRequestModel request)
         {
-            string query = @"INSERT INTO maintenance (equipment, requester, reqDate, problem, downStatus, hourMeter, FileAddress1, department, downStartDateTime, status) 
-                     VALUES (@equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, @FileAddress1, @department, @downStartDateTime, @status);
-                     SELECT LAST_INSERT_ID();"; // Retrieve the last inserted ID
+            string query = @"INSERT INTO maintenance (
+    equipment, requester, reqDate, problem, downStatus, hourMeter, 
+    FileAddress1, department, downStartDateTime, status, SafetyConcern
+) 
+VALUES (
+    @equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, 
+    @FileAddress1, @department, @downStartDateTime, @status, @SafetyConcern
+);
+SELECT LAST_INSERT_ID();";
+
 
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -53,6 +60,7 @@
                     command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
                     command.Parameters.AddWithValue("@status", request.Status);
+                    command.Parameters.AddWithValue("@SafetyConcern", request.SafetyConcern);
                     // Execute the query and retrieve the last inserted ID
                     object result = await command.ExecuteScalarAsync();
                     if (result != null && int.TryParse(result.ToString(), out int insertedId))
@@ -355,7 +363,10 @@ Problem: {request.Problem}"
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString(),
                             Status = reader["Status"]?.ToString(),
-                            StatusDesc = reader["StatusDesc"]?.ToString()
+                            StatusDesc = reader["StatusDesc"]?.ToString(),
+                            SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
+
+
                         });
                     }
                 }
@@ -472,6 +483,9 @@ Problem: {request.Problem}"
                                 Requester = reader["Requester"]?.ToString(),
                                 RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
                                 Problem = reader["Problem"]?.ToString(),
+                                SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
+
+
                                 // Populate additional fields as needed.
                             };
                             requests.Add(request);

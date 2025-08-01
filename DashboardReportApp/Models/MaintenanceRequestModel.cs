@@ -40,8 +40,10 @@ namespace DashboardReportApp.Models
         public string? StatusDesc { get; set; }
         public string? NewStatusDesc { get; set; }
         public string? StatusUpdatedBy { get; set; }
+        public bool SafetyConcern { get; set; }
+
 
     }
-   
+
 
 }

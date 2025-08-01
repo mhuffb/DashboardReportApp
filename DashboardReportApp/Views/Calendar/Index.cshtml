@@ -112,10 +112,10 @@
         <div class="card-body">
             <!-- ▼ add this exactly here ▼ -->
             <div id="myReactCalendarTableRoot"
-                 + data-records='@Html.Raw(
+                  data-records='@Html.Raw(
 System.Text.Json.JsonSerializer.Serialize(
 Model.ServiceRecords))'>
-                +
+                
             </div>
 
         </div>
@@ -216,7 +216,7 @@ Model.ServiceRecords))'>
                         <!-- dates -->
                         <div class="col-md-12">
                             <label class="form-label fw-bold">Dates Requested</label>
-                            <input name="DatesRequested" class="form-control datepicker" required>
+                            <input id="datesRequestedInput" name="DatesRequested" class="form-control datepicker" required>
                         </div>
                         <!-- hidden -->
                         <input type="hidden" id="lname" name="LastName" />
@@ -320,73 +320,100 @@ Model.ServiceRecords))'>
     const empData  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(sorted));
     const antiF    = o => ({...o,__RequestVerificationToken:document.querySelector('input[name=\"__RequestVerificationToken\"]').value});
     const fmt      = d => d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
-
+            /* Declare these at top-level so all functions can see them */
+        let fpMulti;
     /* ===== init ====================================================== */
     document.addEventListener('DOMContentLoaded',() => {
-        /* fullcalendar */
-                const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
-            initialView: 'dayGridMonth',
-            height: 'auto',
-            dayMaxEventRows: false,
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,listMonth'
-            },
-            events: '/Calendar/GetEvents',
-            eventClick: handleEventClick
-        });
+                 /* ─── FullCalendar ─── */
+          const cal = new FullCalendar.Calendar(
+              document.getElementById('calendar'), {
+                initialView: 'dayGridMonth',
+                height:      'auto',
+                headerToolbar:{
+                  left:'prev,next today', center:'title', right:'dayGridMonth,listMonth'
+                },
+                events:'/Calendar/GetEvents',
+                eventClick: handleEventClick
+              });
+          cal.render();
 
-        cal.render();
+          /* ─── Date/time pickers ─── */
+          fpMulti = flatpickr('.datepicker', {
+            mode:'multiple',
+            dateFormat:'m/d/Y',
+            onChange:updateAfter   // this updates after-balance AND clears red border
+          });
+          flatpickr('.single-date',{ dateFormat:'m/d/Y' });
+          flatpickr('.timepick',   { enableTime:true, noCalendar:true, dateFormat:'H:i' });
 
-        /* pickers */
-        const fpMulti = flatpickr('.datepicker',{mode:'multiple',dateFormat:'m/d/Y',onChange:updateAfter});
-        flatpickr('.single-date',{dateFormat:'m/d/Y'});
-        flatpickr('.timepick',{enableTime:true,noCalendar:true,dateFormat:'H:i'});
+          /* ─── current vs after-balance preview ─── */
+          document.querySelector('[name="TimeOffType"]')
+                  .addEventListener('change', updateAfter);
 
-        /* current vs after-balance preview */
-        document.querySelector('[name=\"TimeOffType\"]').addEventListener('change',updateAfter);
-        function updateAfter(){
-            const bal  = parseFloat(document.getElementById('currBal').value||0);
-            const deduct = document.querySelector('[name=\"TimeOffType\"]').value.startsWith('Paid');
-            document.getElementById('afterBal').value=(deduct?bal-fpMulti.selectedDates.length:bal).toFixed(2);
-        }
+          function updateAfter(){
+            const bal     = parseFloat(document.getElementById('currBal').value || 0);
+            const deduct  = document.querySelector('[name="TimeOffType"]')
+                                     .value.startsWith('Paid');
+            document.getElementById('afterBal').value =
+              (deduct ? bal - fpMulti.selectedDates.length : bal).toFixed(2);
+          }
 
-        /* employee dropdown auto-fill */
-        document.getElementById('employeeSelect').addEventListener('change',e=>{
-            const emp=empData[+e.target.value]; if(!emp) return;
-            document.querySelector('input[name=\"FirstName\"]').value=emp.firstName||emp.FirstName;
-            document.getElementById('lname').value      =emp.lastName ||emp.LastName;
-            document.getElementById('vac_balance').value=emp.vacationBalance||emp.VacationBalance;
-            document.getElementById('currBal').value    =parseFloat(emp.vacationBalance||emp.VacationBalance).toFixed(2);
-            document.getElementById('email').value         = emp.Email         || '';   // <-- email
-            document.getElementById('active_status').value = emp.ActiveStatus  || '';   // <-- active status
-            document.getElementById('date_employed').value = emp.DateEmployed            // <-- hire date
-            ? new Date(emp.DateEmployed).toISOString().split('T')[0] : '';
+          /* ─── employee dropdown auto-fill (unchanged) ─── */
+          document.getElementById('employeeSelect')
+                  .addEventListener('change', e => {
+            const emp = empData[+e.target.value]; if (!emp) return;
+            document.querySelector('input[name="FirstName"]').value = emp.firstName || emp.FirstName;
+            document.getElementById('lname').value       = emp.lastName       || emp.LastName;
+            document.getElementById('vac_balance').value = emp.vacationBalance|| emp.VacationBalance;
+            document.getElementById('currBal').value     = parseFloat(emp.vacationBalance||emp.VacationBalance).toFixed(2);
+            document.getElementById('email').value       = emp.Email         || '';
+            document.getElementById('active_status').value= emp.ActiveStatus || '';
+            document.getElementById('date_employed').value=
+                emp.DateEmployed ? new Date(emp.DateEmployed).toISOString().split('T')[0] : '';
             updateAfter();
+          });
+
+          /* ─── attach form handlers *after* fpMulti exists ─── */
+          wireFormWithSpinner('mainForm',  '/Calendar/Submit');
+          wireFormWithSpinner('eventForm', '/Calendar/ScheduleEvent');
         });
-    });
 
-    /* ===== wire forms =============================================== */
-            function wireFormWithSpinner(id, url) {
-            const f = document.getElementById(id);
-            if (!f) return;
+        /* ========== wire-up with validation ================================= */
+        function wireFormWithSpinner(id, url) {
+          const f = document.getElementById(id);
+          if (!f) return;
 
-            f.addEventListener('submit', e => {
-                e.preventDefault();
-               if (f.dataset.submitted === 'true') return;
-                f.dataset.submitted = 'true';
-               const data = new URLSearchParams(new FormData(f));
+          f.addEventListener('submit', e => {
+            e.preventDefault();
+            if (f.dataset.submitted === 'true') return;
+            f.dataset.submitted = 'true';
 
-                fetchWithSpinner(url, { method:'POST', body:data })
-                    .then(r => r.ok
-                        ? Swal.fire('Saved', 'Success', 'success').then(() => location.reload())
-                        : Swal.fire('Error', 'Save failed', 'error'))
-                    .finally(() => { f.dataset.submitted = 'false'; });
-            });
+            /* guard: empty date list */
+            const dateInput = document.getElementById('datesRequestedInput');
+            if (!fpMulti || !fpMulti.selectedDates.length) {
+              Swal.fire('Missing dates',
+                        'Please choose at least one “Dates Requested” entry.',
+                        'warning');
+              dateInput.classList.add('is-invalid');
+              f.dataset.submitted = 'false';
+              return;
+            }
+            dateInput.classList.remove('is-invalid');
+
+            const data = new URLSearchParams(new FormData(f));
+            fetchWithSpinner(url, { method:'POST', body:data })
+              .then(r => r.ok
+                ? Swal.fire('Saved','Success','success').then(() => location.reload())
+                : Swal.fire('Error','Save failed','error'))
+              .finally(() => { f.dataset.submitted = 'false'; });
+          });
         }
 
-    wireFormWithSpinner('mainForm','/Calendar/Submit');
+        /* remove red border whenever user picks at least one date */
+        function updateDateInputStyle() {
+          document.getElementById('datesRequestedInput')
+                  .classList.remove('is-invalid');
+        }
     wireFormWithSpinner('eventForm','/Calendar/ScheduleEvent');
 
     /* ===== event click ============================================== */

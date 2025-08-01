@@ -93,7 +93,7 @@ Department : {model.Department}
 Shift      : {model.Shift}
 Schedule   : {model.Schedule}
 Type       : {model.TimeOffType}
-Attribute  : {(string.IsNullOrWhiteSpace(model.Attribute) ? "(none)" : model.Attribute)}
+Attribute  : {model.Attribute}
 Dates      : {list}
 
 Explanation:
@@ -157,7 +157,7 @@ Department : {rec.Department}
 Shift      : {rec.Shift}
 Schedule   : {rec.Schedule}
 Type       : {rec.TimeOffType}
-Attribute  : {(string.IsNullOrWhiteSpace(rec.Attribute) ? "(none)" : rec.Attribute)}
+Attribute  : {rec.Attribute}
 Occurrence : {occ}
 Dates      : {datesText}
 

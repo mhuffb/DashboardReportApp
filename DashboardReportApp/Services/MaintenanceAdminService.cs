@@ -72,7 +72,9 @@ namespace DashboardReportApp.Services
                             CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
                             Department = reader["Department"]?.ToString(),
                             Status = reader["Status"]?.ToString(),
-                            StatusDesc = reader["StatusDesc"]?.ToString()
+                            StatusDesc = reader["StatusDesc"]?.ToString(),
+                            SafetyConcern = reader["SafetyConcern"] == DBNull.Value ? false : Convert.ToBoolean(reader["SafetyConcern"]),
+
                         });
                     }
                 }
@@ -99,7 +101,8 @@ namespace DashboardReportApp.Services
             FileAddress2 = @FileAddress2,
             Department = @Department,
             StatusDesc = @StatusDesc, 
-            Status = @Status
+            Status = @Status,
+            SafetyConcern = @SafetyConcern
         WHERE Id = @Id";
 
             using (var connection = new MySqlConnection(_connectionString))
@@ -119,6 +122,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@StatusDesc", model.StatusDesc);
                     command.Parameters.AddWithValue("@Status", model.Status);
                     command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@SafetyConcern", model.SafetyConcern);
 
                     int rowsAffected = command.ExecuteNonQuery();
                     Console.WriteLine($"[DEBUG] Rows affected: {rowsAffected}");
