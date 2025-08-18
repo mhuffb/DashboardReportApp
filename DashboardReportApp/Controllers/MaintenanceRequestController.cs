@@ -64,7 +64,25 @@ namespace DashboardReportApp.Controllers
                 }
                 request.Status = "Open";
 
-                
+
+
+                /* 2️⃣  If there’s a picture, save it **first** and store its path   */
+                if (file is { Length: > 0 })
+                {
+                    var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+                    Directory.CreateDirectory(uploadsFolder);                // makes folder if missing
+
+                    // Use a GUID so the name is unique even before we know the ID
+                    var ext = Path.GetExtension(file.FileName);
+                    var tempName = $"MaintenanceRequestFile1_{Guid.NewGuid()}{ext}";
+                    var tempPath = Path.Combine(uploadsFolder, tempName);
+
+                    await using var fs = new FileStream(tempPath, FileMode.Create);
+                    await file.CopyToAsync(fs);
+
+                    request.FileAddress1 = tempPath;                         // ⬅ key line
+                }
+
                 int id = await _maintenanceService.AddRequestAsync(request);
 
 

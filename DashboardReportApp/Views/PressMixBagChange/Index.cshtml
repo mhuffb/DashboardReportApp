@@ -155,19 +155,76 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
 <script src="/js/mydatatable.bundle.js"></script>
 
-<script>
-    /* ------- dropdown auto-fill (unchanged) ------- */
-    function updateFields() {
-        const opt          = partNumber.options[partNumber.selectedIndex];
-        if (!opt) return;
-        RunNumber.value    = opt.dataset.run        || "";
-        Component.value    = opt.dataset.component  || "";
-        ProdNumber.value   = opt.dataset.prodnumber || "";
-        operatorName.value = opt.dataset.operator   || "";
-        machine.value      = opt.dataset.machine    || "";
-    }
 
-    /* =====================================================
+
+<!-- ───────────────────── Scripts ───────────────────── -->
+<script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
+<script src="/js/mydatatable.bundle.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        /* ---------- element handles (Fix #1) ---------- */
+        const bagModal      = document.getElementById('bagChangeModal');
+        const qrScanModal   = document.getElementById('qrScanModal');     // ★ was missing
+        const partNumber    = document.getElementById('partNumber');
+        const RunNumber     = document.getElementById('RunNumber');
+        const Component     = document.getElementById('Component');
+        const ProdNumber    = document.getElementById('ProdNumber');
+        const operatorName  = document.getElementById('operatorName');
+        const machine       = document.getElementById('machine');
+        const MixNumber     = document.getElementById('MixNumber');
+        const LotNumber     = document.getElementById('LotNumber');
+
+        /* =====================================================
+           1 ⭢ dropdown auto-fill
+           ===================================================== */
+        function updateFields() {
+            const opt = partNumber.options[partNumber.selectedIndex];
+            if (!opt) return;
+            RunNumber.value    = opt.dataset.run        || "";
+            Component.value    = opt.dataset.component  || "";
+            ProdNumber.value   = opt.dataset.prodnumber || "";
+            operatorName.value = opt.dataset.operator   || "";
+            machine.value      = opt.dataset.machine    || "";
+        }
+
+        /* =====================================================
+           2 ⭢ USB / HID gun capture on whole modal
+           ===================================================== */
+        let gunBuf = "", gunTimer = null;
+
+        bagModal.addEventListener('keydown', e => {
+            if (!bagModal.classList.contains('show')) return;
+
+            if (e.key.length === 1) {
+                gunBuf += e.key;
+                clearTimeout(gunTimer);
+                gunTimer = setTimeout(finishScan, 120);
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                finishScan();
+            }
+        });
+
+        function finishScan() {
+            if (!gunBuf) return;
+            const { sty, lot } = parseGs1(gunBuf);
+            gunBuf = "";
+            if (sty) MixNumber.value = sty;
+            if (lot) LotNumber.value = lot;
+            flash(MixNumber); flash(LotNumber);
+        }
+
+        /* helper */
+        function flash(el) {
+            el.classList.add('bg-success','text-white');
+            setTimeout(() => el.classList.remove('bg-success','text-white'), 600);
+        }
+
+        /* =====================================================
        1 ⭢ GS-1 parser  (handles ASCII 29, “029/29”, or no sep)
        ===================================================== */
         function parseGs1(raw) {
@@ -181,78 +238,50 @@
         if (raw.includes(GS)) {
             let sty="", lot="";
             raw.split(GS).forEach(c => {
-                if (c.startsWith("240")) sty = c.slice(3);
-                else if (c.startsWith("10")) lot = c.slice(2);
+                if (c.startsWith("01")) sty = c.slice(3);
+                else if (c.startsWith("90")) lot = c.slice(2);
             });
             return { sty, lot };
         }
 
         /* 3 ▸ final fallback (no separator at all) */
-        const m = raw.match(/^240([A-Z0-9]+?)10([A-Z0-9]+)$/i);
+        const m = raw.match(/^01([A-Z0-9]+?)90([A-Z0-9]+)$/i);
         return m ? { sty: m[1], lot: m[2] } : { sty:"", lot:"" };
     }
 
-    /* =====================================================
-       2 ⭢ USB / HID gun capture on whole modal
-       ===================================================== */
-    const bagModal = document.getElementById('bagChangeModal');
-    let gunBuf  = "", gunTimer = null;
+        /* =====================================================
+           3 ⭢ html5-qrcode camera helper
+           ===================================================== */
+        let html5Qr = null;
 
-    bagModal.addEventListener('keydown', e => {
-        if (!bagModal.classList.contains('show')) return;
+        window.openScanModal = function () {
+            bootstrap.Modal.getOrCreateInstance(qrScanModal).show();
+            setTimeout(() => {
+                html5Qr = new Html5Qrcode("qr-reader");
+                html5Qr.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    txt => {
+                        const { sty, lot } = parseGs1(txt);
+                        if (sty) MixNumber.value = sty;
+                        if (lot) LotNumber.value = lot;
+                        flash(MixNumber); flash(LotNumber);
+                        stopScanner();
+                        bootstrap.Modal.getInstance(qrScanModal).hide();
+                    },
+                    err => { /* ignore */ }
+                );
+            }, 200);
+        };
 
-        if (e.key.length === 1) {           // printable char
-            gunBuf += e.key;
-            clearTimeout(gunTimer);
-            gunTimer = setTimeout(finishScan, 120);  // silence timeout
-            return;
-        }
-        if (e.key === 'Enter') {            // gun usually ends with CR
-            e.preventDefault();
-            finishScan();
-        }
-    });
+        window.stopScanner = function () {
+            if (html5Qr) { html5Qr.stop().then(() => html5Qr.clear()); html5Qr = null; }
+        };
 
-    function finishScan() {
-        if (!gunBuf) return;
-        console.log("RAW SCAN:", gunBuf);
+        /* Fix #2: stop camera no matter how the modal closes */
+        qrScanModal.addEventListener('hidden.bs.modal', stopScanner);
 
-        const { sty, lot } = parseGs1(gunBuf);
-        gunBuf = "";                        // reset
-
-        if (sty) MixNumber.value = sty;
-        if (lot) LotNumber.value = lot;
-        flash(MixNumber); flash(LotNumber);
-    }
-    function flash(el) {
-        el.classList.add('bg-success','text-white');
-        setTimeout(()=>el.classList.remove('bg-success','text-white'),600);
-    }
-
-    /* =====================================================
-       3 ⭢ html5-qrcode camera helper
-       ===================================================== */
-    let html5Qr = null;
-    function openScanModal() {
-        bootstrap.Modal.getOrCreateInstance(qrScanModal).show();
-        setTimeout(() => {
-            html5Qr = new Html5Qrcode("qr-reader");
-            html5Qr.start({ facingMode:"environment" }, { fps:10, qrbox:250 },
-                txt => { const {sty,lot}=parseGs1(txt);
-                         if(sty) MixNumber.value=sty;
-                         if(lot) LotNumber.value=lot;
-                         flash(MixNumber); flash(LotNumber);
-                         stopScanner();
-                         bootstrap.Modal.getInstance(qrScanModal).hide(); },
-                err => {});
-        }, 200);
-    }
-    function stopScanner() {
-        if (html5Qr) { html5Qr.stop().then(()=>html5Qr.clear()); html5Qr=null; }
-    }
-
-    /* ------- React table render (unchanged) ------- */
-    document.addEventListener('DOMContentLoaded', () => {
+        /* ------- React table render (unchanged) ------- */
         const data = JSON.parse(document.getElementById('mixBagChangeTableRoot').dataset.records || "[]");
         const cols = [
             {key:'Id',label:'ID'},{key:'Part',label:'Part'},{key:'Component',label:'Component'},
@@ -262,5 +291,6 @@
             {key:'SentDateTime',label:'Sent Time'},{key:'Notes',label:'Notes'}
         ];
         window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
-    });
+
+    }); // DOMContentLoaded (Fix #3)
 </script>

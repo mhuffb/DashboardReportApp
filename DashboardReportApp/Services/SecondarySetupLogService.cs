@@ -111,7 +111,7 @@ namespace DashboardReportApp.Services
             string insertQuery = "INSERT INTO secondarysetup (date, operator, op, part, prodNumber, machine, run, pcs, scrapMach, scrapNonMach, notes, setupHours, open) " +
                                  "VALUES (@date, @operator, @op, @part, @prodNumber, @machine, @run, @pcs, @scrapMach, @scrapNonMach, @notes, @setupHours, 1)";
 
-            string updateQuery = "UPDATE schedule SET openToSecondary = 0 WHERE part = @part AND prodNumber = @prodNumber";
+           // string updateQuery = "UPDATE schedule SET openToSecondary = 0 WHERE part = @part AND prodNumber = @prodNumber";
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -140,12 +140,12 @@ namespace DashboardReportApp.Services
                         }
 
                         // Update the schedule record so that openToSecondary is set to 0.
-                        using (var command = new MySqlCommand(updateQuery, connection, transaction))
-                        {
-                            command.Parameters.AddWithValue("@part", model.Part);
-                            command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
-                            await command.ExecuteNonQueryAsync();
-                        }
+                       // using (var command = new MySqlCommand(updateQuery, connection, transaction))
+                       // {
+                        //    command.Parameters.AddWithValue("@part", model.Part);
+                       //     command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                       //     await command.ExecuteNonQueryAsync();
+                      //  }
 
                         transaction.Commit();
                     }
