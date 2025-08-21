@@ -11,10 +11,11 @@ namespace DashboardReportApp.Controllers
     public class AdminProcessChangeRequestController : Controller
     {
         private readonly AdminProcessChangeRequestService _service;
-
-        public AdminProcessChangeRequestController(AdminProcessChangeRequestService service)
+        private readonly SharedService _sharedService;
+        public AdminProcessChangeRequestController(AdminProcessChangeRequestService service, SharedService sharedService)
         {
             _service = service;
+            _sharedService = sharedService;
         }
 
         //  public IActionResult Index()
@@ -232,6 +233,35 @@ namespace DashboardReportApp.Controllers
                 Console.WriteLine($"[ERROR] FetchImage exception: {ex}");
                 // Return an appropriate error response
                 return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        [HttpGet("SendProlinkNotification")]
+        public IActionResult SendProlinkNotification(int id, string part, string request, string requester, string reqdate, string updatedby, string updateresult)
+
+        {
+            try
+            {
+                string toAddress = "mhuff@sintergy.net";
+                string subject = $"Update Prolink: Part {part} (Req #{id})";
+                string body =
+    $"Please update Prolink for the following:\n\n" +
+    $"Part: {part}\n" +
+    $"Request: {request}\n" +
+    $"Requester: {requester}\n" +
+    $"Request Date: {reqdate}\n" +
+    $"Updated By: {updatedby ?? "N/A"}\n" +
+    $"Update Result: {updateresult ?? "N/A"}";
+
+
+                Console.WriteLine("DEBUG: sending to " + toAddress);
+                _sharedService.SendEmailWithAttachment(toAddress, null, null, subject, body);
+
+                return Ok("Sent");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500);
             }
         }
 

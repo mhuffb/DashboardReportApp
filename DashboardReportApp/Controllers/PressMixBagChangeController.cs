@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using DashboardReportApp.Models;
+using MySql.Data.MySqlClient;
 
 public class PressMixBagChangeController : Controller
 {
@@ -29,22 +30,84 @@ public class PressMixBagChangeController : Controller
         return View();
     }
 
+    // PressMixBagChangeController.cs
     [HttpPost]
-    public async Task<IActionResult> Submit(PressMixBagChangeModel model)
+    public async Task<IActionResult> SubmitAjax(PressMixBagChangeModel model, string? overridePin = null)
     {
-        // Only validate when the form is submitted
-        if (!ModelState.IsValid)
+        string Normalize(string? s)
         {
-            TempData["Error"] = "Invalid form submission. Please check required fields.";
-            return RedirectToAction("Index");
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            s = s.Trim().ToUpperInvariant();
+            s = s.Replace(" ", "");
+            while (s.Contains("--")) s = s.Replace("--", "-");
+            return s;
         }
 
-        try
+        if (!ModelState.IsValid)
         {
-            // Debugging: Log received values
-            Console.WriteLine($"Received: Part={model.Part}, Component={model.Component}, ProdNumber={model.ProdNumber}, Run={model.Run}, Operator={model.Operator}, Machine={model.Machine}, Lot={model.LotNumber}, Mix={model.MixNumber}, Notes={model.Notes}");
+            return BadRequest(new { code = "INVALID", message = "Invalid form submission." });
+        }
 
-            // Insert into the database with extra parameters
+        // Pull scheduled material
+        var scheduledCode = await _pressMixBagChangeService.GetScheduledMaterialCodeAsync(
+            model.Part ?? "", model.ProdNumber ?? "", model.Run ?? ""
+        );
+        var normSched = Normalize(scheduledCode);
+        var normScan = Normalize(model.MaterialCode);
+
+        var allowInsert = false;
+        var supervisorName = "";
+
+        if (string.IsNullOrEmpty(normSched))
+        {
+            // No schedule row found
+            if (!string.IsNullOrEmpty(overridePin))
+            {
+                var (ok, supName) = await _pressMixBagChangeService.VerifySupervisorPinAsync(overridePin);
+                if (!ok) return StatusCode(403, new { code = "BAD_PIN", message = "Invalid supervisor PIN." });
+
+                allowInsert = true;
+                supervisorName = supName;
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    code = "NO_SCHEDULE_ROW",
+                    message = $"No schedule row found for Part {model.Part}, Component {model.Component} (Prod {model.ProdNumber}, Run {model.Run})."
+                });
+            }
+
+        }
+        else if (!normSched.Equals(normScan, StringComparison.Ordinal))
+        {
+            // Mismatch
+            if (!string.IsNullOrEmpty(overridePin))
+            {
+                var (ok, supName) = await _pressMixBagChangeService.VerifySupervisorPinAsync(overridePin);
+                if (!ok) return StatusCode(403, new { code = "BAD_PIN", message = "Invalid supervisor PIN." });
+                allowInsert = true;
+                supervisorName = supName;
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    code = "MATERIAL_MISMATCH",
+                    scheduled = scheduledCode,
+                    scanned = model.MaterialCode,
+                    message = "Material does not match schedule."
+                });
+            }
+        }
+        else
+        {
+            // Match
+            allowInsert = true;
+        }
+
+        if (allowInsert)
+        {
             await _pressMixBagChangeService.InsertPressMixBagChangeAsync(
                 model.Part,
                 model.Component,
@@ -54,20 +117,35 @@ public class PressMixBagChangeController : Controller
                 model.Operator,
                 model.Machine,
                 model.LotNumber,
-                model.MixNumber,
-                model.Notes
+                model.MaterialCode,
+                model.WeightLbs ?? 0m,
+                model.BagNumber,
+                model.Notes,
+                isOverride: !string.IsNullOrEmpty(supervisorName),
+                overrideBy: supervisorName,
+                overrideAt: !string.IsNullOrEmpty(supervisorName) ? DateTime.Now : (DateTime?)null
             );
 
-            TempData["Success"] = "Mix Bag Change successfully logged!";
-        }
-        catch (Exception ex)
-        {
-            // Log the error
-            Console.WriteLine($"Database Insert Error: {ex.Message}");
-            TempData["Error"] = "An error occurred while saving the data. Please try again.";
+            return Ok(new { ok = true, overrideUsed = !string.IsNullOrEmpty(supervisorName), supervisor = supervisorName });
         }
 
-        return RedirectToAction("Index");
+        return BadRequest(new { code = "UNKNOWN", message = "Unhandled state." });
+    }
+
+
+
+
+
+    [HttpGet]
+    public async Task<string> GetMaterialCodeByLot(string lot)
+    {
+        return await _pressMixBagChangeService.GetMaterialCodeByLotAsync(lot);
+    }
+    [HttpGet]
+    public async Task<JsonResult> GetRunInfo(string part, string prod, string run)
+    {
+        var (op, mach) = await _pressMixBagChangeService.GetLatestRunInfoAsync(part, prod, run);
+        return Json(new { op, mach });
     }
 
 }

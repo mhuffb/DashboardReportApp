@@ -8,7 +8,12 @@
                      ?? new List<DashboardReportApp.Models.PressMixBagChangeModel>();
 }
 
-<!-- ───────────────────── Alerts ───────────────────── -->
+<style>
+    .modal-dialog.modal-xxl {
+        max-width: 90% !important;
+    }
+</style>
+
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -24,97 +29,129 @@
     </div>
 }
 
-<!-- ───────────────────── Page Header & Button ───────────────────── -->
 <div class="container mt-4">
     <h1 class="text-center mb-4">Press Mix Bag Change</h1>
+
     <div class="text-center mb-4">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bagChangeModal">
-            Submit Bag Change
+            Log Mix Bag Change
         </button>
     </div>
 
-    <!-- ──────────────── Bag-Change Modal ──────────────── -->
-    <div class="modal fade" id="bagChangeModal" tabindex="-1" aria-labelledby="bagChangeModalLabel">
-        <div class="modal-dialog">
+    <div class="modal fade" id="bagChangeModal" tabindex="-1" data-bs-focus="false" aria-labelledby="bagChangeModalLabel">
+        <div class="modal-dialog modal-xl" style="max-width:1200px;">
+
+
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 id="bagChangeModalLabel" class="modal-title">Log Mix Change</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
+                <form id="bagChangeForm" asp-action="Submit" method="post">
+                    <input type="hidden" id="SentDateTime" name="SentDateTime" value="@DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")" />
 
-                <form asp-action="Submit" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="bagChangeModalLabel">Log Mix Bag Change</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
                     <div class="modal-body">
-
-                        <!-- Part dropdown -->
-                        <div class="mb-3">
-                            <label class="form-label" for="partNumber">Part:</label>
-                            <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
-                                <option value="">-- Select Part --</option>
-                                @foreach (var p in openParts)
-                                {
-                                    <option value="@p.Part"
-                                            data-component="@p.Component"
-                                            data-prodnumber="@p.ProdNumber"
-                                            data-run="@p.Run"
-                                            data-operator="@p.Operator"
-                                            data-machine="@p.Machine">
-                                        @p.Part -> @p.Component (Prod: @p.ProdNumber, Run: @p.Run)
-                                    </option>
-                                }
-                            </select>
-                            <input type="hidden" id="RunNumber" name="Run" />
-                            <input type="hidden" id="Component" name="Component" />
-                            <input type="hidden" id="ProdNumber" name="ProdNumber" />
-                        </div>
-
-                        <!-- Operator -->
-                        <div class="mb-3">
-                            <label class="form-label" for="operatorName">Operator</label>
-                            <select id="operatorName" name="Operator" class="form-control" required>
-                                <option value="">-- Select Operator --</option>
-                                @foreach (var op in operators)
-                                {
-                                    <option value="@op">@op</option>
-                                    ;
-                                }
-                            </select>
-                        </div>
-
-                        <!-- Machine (readonly) -->
-                        <div class="mb-3">
-                            <label class="form-label" for="machine">Machine</label>
-                            <input id="machine" name="Machine" class="form-control" readonly />
-                        </div>
-
-                        <!-- Lot & Mix -->
-                        <div class="row g-3">
-                            <div class="col">
-                                <label class="form-label" for="LotNumber">Lot Number</label>
-                                <input id="LotNumber" name="LotNumber" class="form-control" required />
-                            </div>
-                            <div class="col">
-                                <label class="form-label" for="MixNumber">Mix Number</label>
-                                <input id="MixNumber" name="MixNumber" class="form-control" required />
+                        <div id="labelStep">
+                            <p class="mb-2 fw-bold text-center">Select Label Type:</p>
+                            <div class="d-flex justify-content-around">
+                                <img src="/img/advantage.jpg" class="label-img" data-type="advantage" style="height:200px;cursor:pointer;">
+                                <img src="/img/hoganas.jpg" class="label-img" data-type="hoganas" style="height:200px;cursor:pointer;">
+                                <img src="/img/hoeganaes.jpg" class="label-img" data-type="hoeganaes" style="height:200px;cursor:pointer;">
                             </div>
                         </div>
 
-                        <!-- Scan button -->
-                        <div class="mt-3 text-end">
-                            <button type="button" class="btn btn-outline-primary" onclick="openScanModal()">
-                                <i class="bi bi-upc-scan"></i> Scan QR (Only for devices with cameras)
-                            </button>
+                        <div id="scanStep" class="d-none mt-4 text-center">
+                            <p class="fw-bold">Scan the highlighted barcode:</p>
+                            <button type="button" class="btn btn-secondary btn-sm mb-2" id="backToLabelsBtn">← Back</button>
+                            <div style="position:relative;display:inline-block;">
+                                <img id="labelPreview" src="" style="height:200px;">
+                            </div>
+
+                            <!-- Single-scan input (Advantage & Hoganas) -->
+                            <input type="text" id="barcodeInput1" class="form-control mt-3" placeholder="Scan barcode here..." />
+
+                            <!-- Second input only visible for Hoeganaes -->
+                            <input type="text" id="barcodeInput2" class="form-control mt-2 d-none" placeholder="Scan second barcode..." />
                         </div>
 
-                        <!-- Notes -->
-                        <div class="mb-3 mt-3">
-                            <label class="form-label" for="Note">Notes</label>
-                            <textarea id="Note" name="Notes" class="form-control text-area-large"></textarea>
+
+                        <div id="formStep" class="d-none mt-4">
+                            <div class="row g-3">
+                                <div class="col">
+                                    <label class="form-label">Lot Number</label>
+                                    <input type="text" class="form-control" name="LotNumber" id="LotNumber" readonly />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">Material Code</label>
+                                    <input type="text" class="form-control" name="MaterialCode" id="MaterialCode" readonly />
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-2">
+                                <div class="col">
+                                    <label class="form-label">Weight (lbs)</label>
+                                    <input type="text" class="form-control" name="WeightLbs" id="WeightLbs" readonly />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">Bag Number</label>
+                                    <input type="text" class="form-control" name="BagNumber" id="BagNumber" readonly />
+                                </div>
+                            </div>
+
+                            <div class="mb-3 mt-3">
+                                <label class="form-label">Part:</label>
+                                <select id="partNumber" name="Part" class="form-control" required onchange="updateFields()">
+                                    <option value="">-- Select Part --</option>
+                                    @foreach (var p in openParts)
+                                    {
+                                        <option value="@p.Part"
+                                                data-component="@p.Component"
+                                                data-prodnumber="@p.ProdNumber"
+                                                data-run="@p.Run"
+                                                data-operator="@p.Operator"
+                                                data-machine="@p.Machine">
+                                            @p.Part -> @p.Component (Prod: @p.ProdNumber, Run: @p.Run)
+                                        </option>
+                                    }
+                                </select>
+                                <!-- 👇 ADD THESE 👇 -->
+                                <input type="hidden" id="RunNumber" name="Run" />
+                                <input type="hidden" id="Component" name="Component" />
+                                <input type="hidden" id="ProdNumber" name="ProdNumber" />
+                                
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label" for="operatorName">Operator</label>
+                                <select id="operatorName" name="Operator" class="form-control" required>
+                                    <option value="">-- Select Operator --</option>
+                                    @foreach (var op in operators)
+                                    {
+                                        <option value="@op">@op</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="operatorName">Machine</label>
+                            <select id="machine" name="Machine" class="form-control">
+                                <option value="">-- Select Machine --</option>
+                                @foreach (var m in equipment)
+                                {
+                                    <option value="@m">@m</option>
+                                }
+                            </select>
+                            </div>
+
+                            <div class="mb-3 mt-3">
+                                <label class="form-label">Notes</label>
+                                <textarea name="Notes" class="form-control"></textarea>
+                            </div>
                         </div>
                     </div>
 
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary btn-sm">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary d-none" id="submitBtn">
                             <i class="bi bi-check-circle"></i> Submit
                         </button>
                     </div>
@@ -122,24 +159,6 @@
             </div>
         </div>
     </div>
-
-    <!-- ──────────────── Camera QR Modal ──────────────── -->
-    <div class="modal fade" id="qrScanModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Scan Label QR Code</h5>
-                    <button class="btn-close" data-bs-dismiss="modal" onclick="stopScanner()"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="qr-reader" style="width:100%"></div>
-                    <p class="text-muted small mt-2">Point the camera at the label.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ──────────────── Records Table (React) ──────────────── -->
     <h2 class="text-center mt-4">All Mix Bag Change Records</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
@@ -151,146 +170,340 @@
     </div>
 </div>
 
-<!-- ───────────────────── Scripts ───────────────────── -->
-<script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
-<script src="/js/mydatatable.bundle.js"></script>
-
-
-
-<!-- ───────────────────── Scripts ───────────────────── -->
-<script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
-<script src="/js/mydatatable.bundle.js"></script>
-
 <script>
+    function updateFields() {
+           const opt = partNumber.options[partNumber.selectedIndex];
+           if (!opt) return;
+           RunNumber.value    = opt.dataset.run        || "";
+           Component.value    = opt.dataset.component  || "";
+           ProdNumber.value   = opt.dataset.prodnumber || "";
+
+          fetch(`/PressMixBagChange/GetRunInfo?part=${opt.value}&prod=${ProdNumber.value}&run=${RunNumber.value}`)
+    .then(r => r.json())
+    .then(data => {
+        operatorName.value = data.op || "";
+        machine.value      = data.mach || "";
+    });
+
+       }
+
+
     document.addEventListener('DOMContentLoaded', () => {
 
-        /* ---------- element handles (Fix #1) ---------- */
-        const bagModal      = document.getElementById('bagChangeModal');
-        const qrScanModal   = document.getElementById('qrScanModal');     // ★ was missing
         const partNumber    = document.getElementById('partNumber');
         const RunNumber     = document.getElementById('RunNumber');
         const Component     = document.getElementById('Component');
         const ProdNumber    = document.getElementById('ProdNumber');
         const operatorName  = document.getElementById('operatorName');
         const machine       = document.getElementById('machine');
-        const MixNumber     = document.getElementById('MixNumber');
-        const LotNumber     = document.getElementById('LotNumber');
 
-        /* =====================================================
-           1 ⭢ dropdown auto-fill
-           ===================================================== */
-        function updateFields() {
-            const opt = partNumber.options[partNumber.selectedIndex];
-            if (!opt) return;
-            RunNumber.value    = opt.dataset.run        || "";
-            Component.value    = opt.dataset.component  || "";
-            ProdNumber.value   = opt.dataset.prodnumber || "";
-            operatorName.value = opt.dataset.operator   || "";
-            machine.value      = opt.dataset.machine    || "";
-        }
 
-        /* =====================================================
-           2 ⭢ USB / HID gun capture on whole modal
-           ===================================================== */
-        let gunBuf = "", gunTimer = null;
 
-        bagModal.addEventListener('keydown', e => {
-            if (!bagModal.classList.contains('show')) return;
 
-            if (e.key.length === 1) {
-                gunBuf += e.key;
-                clearTimeout(gunTimer);
-                gunTimer = setTimeout(finishScan, 120);
+          const raw = document.getElementById('mixBagChangeTableRoot').dataset.records || "[]";
+    const data = JSON.parse(raw);
+
+    // Map booleans/ints to a friendly string + optional badge
+    data.forEach(r => {
+      const v = r.IsOverride;
+      const isTrue = v === true || v === 1 || v === "1";
+      const isFalse = v === false || v === 0 || v === "0";
+
+      // Choose one of these display styles:
+
+      // 1) Simple Yes/No:
+      r.IsOverrideDisplay = isTrue ? "Yes" : (isFalse ? "No" : "");
+
+
+      // Make dates pretty
+      if (r.SentDateTime)  r.SentDateTime  = new Date(r.SentDateTime).toLocaleString();
+      if (r.OverrideAt)    r.OverrideAt    = new Date(r.OverrideAt).toLocaleString();
+    });
+
+    const cols = [
+      {key:'Id',label:'ID'},
+      {key:'Part',label:'Part'},
+      {key:'Component',label:'Component'},
+      {key:'ProdNumber',label:'Production Number'},
+      {key:'Run',label:'Run'},
+      {key:'Operator',label:'Operator'},
+      {key:'Machine',label:'Machine'},
+      {key:'LotNumber',label:'Lot Number'},
+      {key:'MaterialCode',label:'Material Code'},
+      {key:'WeightLbs', label:'Weight (lbs)'},
+      {key:'BagNumber',label:'Bag #'},
+      {key:'SentDateTime',label:'Sent Time'},
+      {key:'Notes',label:'Notes'},
+
+      // Use the display field instead of the raw boolean:
+      {key:'IsOverrideDisplay', label:'Override?'},
+      {key:'OverrideBy', label:'Supervisor'},
+      {key:'OverrideAt', label:'Override Time'}
+    ];
+
+    window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
+    });
+
+  
+        let selectedType = "";
+    let scanCount = 0;
+    let tempScan1 = "";
+
+    document.querySelectorAll('.label-img').forEach(img => {
+        img.addEventListener('click', () => {
+            selectedType = img.dataset.type;
+            document.getElementById('labelStep').classList.add('d-none');
+            document.getElementById('scanStep').classList.remove('d-none');
+            document.getElementById('barcodeInput1').value = "";
+            document.getElementById('barcodeInput2').value = "";
+            document.getElementById('barcodeInput2').classList.add('d-none');
+            scanCount = 0;
+            tempScan1 = "";
+
+            if (selectedType === "advantage") {
+                document.getElementById('labelPreview').src = "/img/advantage-highlight.jpg";
+            }
+            if (selectedType === "hoganas") {
+                document.getElementById('labelPreview').src = "/img/hoganas-highlight.jpg";
+            }
+            if (selectedType === "hoeganaes") {
+                document.getElementById('labelPreview').src = "/img/hoeganaes-highlight.jpg";
+                // show second box since two scans needed
+                document.getElementById('barcodeInput2').classList.remove('d-none');
+            }
+            // Put cursor in first scan box
+            document.getElementById('barcodeInput1').focus();
+        });
+    });
+
+    // handle scan
+    document.getElementById('barcodeInput1').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = e.target.value.trim();
+            const lot = document.getElementById('LotNumber');
+            const mat = document.getElementById('MaterialCode');
+            const wgt = document.getElementById('WeightLbs');
+            const bag = document.getElementById('BagNumber');
+
+            // Advantage
+            if (selectedType === "advantage") {
+                const parts = val.split(";");
+                mat.value = parts[1] || "";
+                lot.value = parts[2] || "";
+                wgt.value = "";
+                bag.value = "";
+                gotoForm();
                 return;
             }
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                finishScan();
-            }
-        });
 
-        function finishScan() {
-            if (!gunBuf) return;
-            const { sty, lot } = parseGs1(gunBuf);
-            gunBuf = "";
-            if (sty) MixNumber.value = sty;
-            if (lot) LotNumber.value = lot;
-            flash(MixNumber); flash(LotNumber);
-        }
+               // Hoganas
+    if (selectedType === "hoganas") {
+        const b = val.slice(6,13);
+        const c = val.slice(14,17);
+        const d = val.slice(17,20);
+        lot.value = b;
+        wgt.value = Math.round(parseFloat(c) * 2.20462).toFixed(2);
+        bag.value = d;
 
-        /* helper */
-        function flash(el) {
-            el.classList.add('bg-success','text-white');
-            setTimeout(() => el.classList.remove('bg-success','text-white'), 600);
-        }
-
-        /* =====================================================
-       1 ⭢ GS-1 parser  (handles ASCII 29, “029/29”, or no sep)
-       ===================================================== */
-        function parseGs1(raw) {
-        raw = raw.trim().replace(/^\]..../, "");        // strip ]Q3 prefix if present
-        const GS = String.fromCharCode(29);
-
-        /* 1 ▸ normalise every fake FNC-1   (029 or 29 → ASCII 29) */
-        raw = raw.replace(/0?29/g, GS);
-
-        /* 2 ▸ fast split when real GS is present */
-        if (raw.includes(GS)) {
-            let sty="", lot="";
-            raw.split(GS).forEach(c => {
-                if (c.startsWith("01")) sty = c.slice(3);
-                else if (c.startsWith("90")) lot = c.slice(2);
+        // AJAX lookup to powdermix table
+        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${b}`)
+            .then(r => r.text())
+            .then(code => {
+                mat.value = code;
+                gotoForm();
             });
-            return { sty, lot };
-        }
-
-        /* 3 ▸ final fallback (no separator at all) */
-        const m = raw.match(/^01([A-Z0-9]+?)90([A-Z0-9]+)$/i);
-        return m ? { sty: m[1], lot: m[2] } : { sty:"", lot:"" };
+        return;
     }
 
-        /* =====================================================
-           3 ⭢ html5-qrcode camera helper
-           ===================================================== */
-        let html5Qr = null;
 
-        window.openScanModal = function () {
-            bootstrap.Modal.getOrCreateInstance(qrScanModal).show();
-            setTimeout(() => {
-                html5Qr = new Html5Qrcode("qr-reader");
-                html5Qr.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: 250 },
-                    txt => {
-                        const { sty, lot } = parseGs1(txt);
-                        if (sty) MixNumber.value = sty;
-                        if (lot) LotNumber.value = lot;
-                        flash(MixNumber); flash(LotNumber);
-                        stopScanner();
-                        bootstrap.Modal.getInstance(qrScanModal).hide();
-                    },
-                    err => { /* ignore */ }
-                );
-            }, 200);
-        };
+            // Hoeganaes - first scan
+            if (selectedType === "hoeganaes") {
+                tempScan1 = val;
+                // move focus to second box
+                document.getElementById('barcodeInput2').focus();
+            }
+        }
+    });
 
-        window.stopScanner = function () {
-            if (html5Qr) { html5Qr.stop().then(() => html5Qr.clear()); html5Qr = null; }
-        };
+    document.getElementById('barcodeInput2').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = e.target.value.trim();
+            const lot = document.getElementById('LotNumber');
+            const mat = document.getElementById('MaterialCode');
+            const wgt = document.getElementById('WeightLbs');
+            const bag = document.getElementById('BagNumber');
 
-        /* Fix #2: stop camera no matter how the modal closes */
-        qrScanModal.addEventListener('hidden.bs.modal', stopScanner);
+               if (selectedType === "hoeganaes") {
+        const lt = tempScan1.slice(0,10);
+        const bg = tempScan1.slice(10,14);
+        lot.value = lt;
+        bag.value = bg;
+        wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
 
-        /* ------- React table render (unchanged) ------- */
-        const data = JSON.parse(document.getElementById('mixBagChangeTableRoot').dataset.records || "[]");
-        const cols = [
-            {key:'Id',label:'ID'},{key:'Part',label:'Part'},{key:'Component',label:'Component'},
-            {key:'ProdNumber',label:'Production Number'},{key:'Run',label:'Run'},
-            {key:'Operator',label:'Operator'},{key:'Machine',label:'Machine'},
-            {key:'LotNumber',label:'Lot Number'},{key:'MixNumber',label:'Mix Number'},
-            {key:'SentDateTime',label:'Sent Time'},{key:'Notes',label:'Notes'}
-        ];
-        window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
+        // AJAX lookup to powdermix table
+        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${lt}`)
+            .then(r => r.text())
+            .then(code => {
+                mat.value = code;
+                gotoForm();
+            });
+    }
 
-    }); // DOMContentLoaded (Fix #3)
+        }
+    });
+
+    function gotoForm() {
+        document.getElementById('scanStep').classList.add('d-none');
+        document.getElementById('formStep').classList.remove('d-none');
+        document.getElementById('submitBtn').classList.remove('d-none');
+    }
+
+    document.getElementById('backToLabelsBtn').addEventListener('click', () => {
+        document.getElementById('scanStep').classList.add('d-none');
+        document.getElementById('labelStep').classList.remove('d-none');
+        document.getElementById('barcodeInput1').value = "";
+        document.getElementById('barcodeInput2').value = "";
+        document.getElementById('barcodeInput2').classList.add('d-none');
+        scanCount = 0;
+        tempScan1 = "";
+    });
+
+
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var err = '@TempData["Error"]';
+        if (err) {
+            // Open the modal again automatically
+            var myModal = new bootstrap.Modal(document.getElementById('bagChangeModal'));
+            myModal.show();
+
+            // Put the error inside the modal
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger';
+            alertDiv.innerText = err;
+            document.querySelector('#bagChangeModal .modal-body').prepend(alertDiv);
+        }
+    });
+</script>
+<form id="bagChangeForm" asp-action="Submit" method="post">
+    <!-- id added -->
+    ...
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    (() => {
+      const form = document.getElementById('bagChangeForm');
+      const modalEl = document.getElementById('bagChangeModal');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const fd = new FormData(form);
+
+        // Post to AJAX endpoint instead of full submit
+        let res = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd });
+        if (res.ok) {
+          await Swal.fire({ icon: 'success', title: 'Saved', text: 'Mix Bag Change successfully logged!' });
+          // close modal and refresh list (you can also live-append)
+          bootstrap.Modal.getInstance(modalEl)?.hide();
+          location.reload(); // or re-fetch table data if you have a function
+          return;
+        }
+
+        // Not OK -> inspect reason
+        let payload;
+        try { payload = await res.json(); } catch { payload = { code: 'UNKNOWN', message: 'Error' }; }
+
+        if (payload.code === 'MATERIAL_MISMATCH') {
+          // Offer override
+          const { value: doOverride } = await Swal.fire({
+            icon: 'warning',
+            title: 'Material Mismatch',
+            html: `
+              <div class="text-start">
+                <div><strong>Scheduled:</strong> ${payload.scheduled || '(none)'}</div>
+                <div><strong>Scanned:</strong> ${payload.scanned || '(none)'}</div>
+                <div class="mt-2">This does not match the schedule. A supervisor can override.</div>
+              </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Supervisor Override',
+            cancelButtonText: 'Cancel'
+          });
+
+          if (!doOverride) return;
+
+          const { value: pin } = await Swal.fire({
+            title: 'Enter Supervisor PIN',
+            input: 'password',
+            inputAttributes: { autocapitalize: 'off', autocomplete: 'off' },
+            inputPlaceholder: 'PIN',
+            showCancelButton: true,
+            confirmButtonText: 'Authorize'
+          });
+
+          if (!pin) return;
+
+          const fd2 = new FormData(form);
+          fd2.append('overridePin', pin);
+
+          const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
+          if (res2.ok) {
+            const okPayload = await res2.json();
+            await Swal.fire({ icon: 'success', title: 'Override Applied', text: 'Record saved with supervisor authorization.' });
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            location.reload();
+            return;
+          } else {
+            const p2 = await res2.json().catch(() => ({}));
+            if (p2.code === 'BAD_PIN') {
+              await Swal.fire({ icon: 'error', title: 'Invalid PIN', text: p2.message || 'Authorization failed.' });
+            } else {
+              await Swal.fire({ icon: 'error', title: 'Error', text: p2.message || 'Could not save with override.' });
+            }
+          }
+          return;
+        }
+
+        if (payload.code === 'NO_SCHEDULE_ROW') {
+          // No row case, also allow override
+          const { value: doOverride } = await Swal.fire({
+            icon: 'warning',
+            title: 'No Schedule Row',
+            text: payload.message || 'No schedule row found. A supervisor can override.',
+            showCancelButton: true,
+            confirmButtonText: 'Supervisor Override',
+            cancelButtonText: 'Cancel'
+          });
+          if (!doOverride) return;
+
+          const { value: pin } = await Swal.fire({
+            title: 'Enter Supervisor PIN',
+            input: 'password',
+            showCancelButton: true,
+            confirmButtonText: 'Authorize'
+          });
+          if (!pin) return;
+
+          const fd2 = new FormData(form);
+          fd2.append('overridePin', pin);
+          const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
+          if (res2.ok) {
+            await Swal.fire({ icon: 'success', title: 'Override Applied', text: 'Record saved with supervisor authorization.' });
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            location.reload();
+          } else {
+            const p2 = await res2.json().catch(() => ({}));
+            await Swal.fire({ icon: 'error', title: 'Error', text: p2.message || 'Could not save with override.' });
+          }
+          return;
+        }
+
+        // Generic error
+        await Swal.fire({ icon: 'error', title: 'Error', text: payload.message || 'An error occurred.' });
+      });
+    })();
 </script>

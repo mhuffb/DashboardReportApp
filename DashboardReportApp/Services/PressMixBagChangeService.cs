@@ -96,24 +96,27 @@
 
 
         public async Task InsertPressMixBagChangeAsync(
-     string part,
-     string component,
-     string prodNumber,
-     string run,
-     string time,
-     string op,
-     string machine,
-     string lot,
-     string mix,
-     string notes)
+      string part,
+      string component,
+      string prodNumber,
+      string run,
+      string time,
+      string op,
+      string machine,
+      string lot,
+      string materialCode,
+      decimal weight,
+      string bagNumber,
+      string notes,
+      bool isOverride = false,
+      string overrideBy = null,
+      DateTime? overrideAt = null)
         {
-            Console.WriteLine($"Inserting: Part={part}, Component={component}, ProdNumber={prodNumber}, Run={run}, Time={time}, Operator={op}, Machine={machine}, Lot={lot}, Mix={mix}, Notes={notes}");
-
             const string query = @"
-        INSERT INTO pressmixbagchange 
-            (part, component, prodNumber, run, sentDateTime, operator, machine, lotNumber, mixNumber, notes) 
-        VALUES 
-            (@part, @component, @prodNumber, @run, @sentDateTime, @operator, @machine, @lotNumber, @mixNumber, @notes)";
+    INSERT INTO pressmixbagchange 
+    (part, component, prodNumber, run, sentDateTime, operator, machine, lotNumber, materialCode, weightLbs, bagNumber, notes, isOverride, overrideBy, overrideAt) 
+    VALUES 
+    (@part, @component, @prodNumber, @run, @sentDateTime, @operator, @machine, @lotNumber, @materialCode, @weight, @bagNumber, @notes, @isOverride, @overrideBy, @overrideAt)";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -127,11 +130,18 @@
             command.Parameters.AddWithValue("@operator", op);
             command.Parameters.AddWithValue("@machine", machine);
             command.Parameters.AddWithValue("@lotNumber", lot);
-            command.Parameters.AddWithValue("@mixNumber", mix);
-            command.Parameters.AddWithValue("@notes", notes);
+            command.Parameters.AddWithValue("@materialCode", materialCode);
+            command.Parameters.AddWithValue("@weight", weight);
+            command.Parameters.AddWithValue("@bagNumber", bagNumber);
+            command.Parameters.AddWithValue("@notes", notes ?? "");
+            command.Parameters.AddWithValue("@isOverride", isOverride);
+            command.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
 
             await command.ExecuteNonQueryAsync();
         }
+
+
 
 
         public async Task<List<PressMixBagChangeModel>> GetAllMixBagChangesAsync()
@@ -139,9 +149,14 @@
             var records = new List<PressMixBagChangeModel>();
 
             const string query = @"
-        SELECT id, part, run, operator, machine, lotNumber, mixNumber, sentDateTime, notes
+        SELECT id,
+               part, component, prodNumber, run,
+               operator, machine,
+               lotNumber, materialCode, weightLbs, bagNumber,
+               sentDateTime, notes,
+               isOverride, overrideBy, overrideAt
         FROM pressmixbagchange
-        ORDER BY id DESC";
+        ORDER BY id DESC;";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -151,23 +166,113 @@
 
             while (await reader.ReadAsync())
             {
-                records.Add(new PressMixBagChangeModel
+                var m = new PressMixBagChangeModel
                 {
                     Id = reader.GetInt32("id"),
-                    Part = reader["part"]?.ToString() ?? "N/A",
-                    Run = reader["run"]?.ToString() ?? "N/A",
-                    Operator = reader["operator"]?.ToString() ?? "N/A",
-                    Machine = reader["machine"]?.ToString() ?? "N/A",
-                    LotNumber = reader["lotNumber"]?.ToString() ?? "N/A",
-                    MixNumber = reader["mixNumber"]?.ToString() ?? "N/A",
+                    Part = reader["part"]?.ToString() ?? "",
+                    Component = reader["component"]?.ToString() ?? "",
+                    ProdNumber = reader["prodNumber"]?.ToString() ?? "",
+                    Run = reader["run"]?.ToString() ?? "",
+                    Operator = reader["operator"]?.ToString() ?? "",
+                    Machine = reader["machine"]?.ToString() ?? "",
+                    LotNumber = reader["lotNumber"]?.ToString() ?? "",
+                    MaterialCode = reader["materialCode"]?.ToString() ?? "",
+                    WeightLbs = reader.IsDBNull(reader.GetOrdinal("weightLbs"))
+                                    ? (decimal?)null : reader.GetDecimal("weightLbs"),
+                    BagNumber = reader["bagNumber"]?.ToString() ?? "",
                     SentDateTime = reader.GetDateTime("sentDateTime"),
-                    Notes = reader["notes"]?.ToString() ?? "N/A"
-                });
+                    Notes = reader["notes"]?.ToString() ?? "",
+
+                    // NEW: map override fields safely
+                    IsOverride = !reader.IsDBNull(reader.GetOrdinal("isOverride"))
+                                    ? Convert.ToBoolean(reader["isOverride"])
+                                    : false,
+                    OverrideBy = reader["overrideBy"]?.ToString() ?? "",
+                    OverrideAt = reader.IsDBNull(reader.GetOrdinal("overrideAt"))
+                                    ? (DateTime?)null : reader.GetDateTime("overrideAt")
+                };
+
+                records.Add(m);
             }
 
             return records;
         }
-    }
-    
+
+
+
+        public async Task<string> GetMaterialCodeByLotAsync(string lotNumber)
+        {
+            await using var connection = new MySqlConnection(_connectionStringMySQL);
+            await connection.OpenAsync();
+
+            const string query = "SELECT materialCode FROM powdermix WHERE lotNumber = @lot LIMIT 1";
+            await using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@lot", lotNumber);
+
+            var result = await command.ExecuteScalarAsync();
+            return result?.ToString() ?? "";
+        }
+        public async Task<(string op, string mach)> GetLatestRunInfoAsync(string part, string prod, string run)
+        {
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string query = @"
+        SELECT operator, machine FROM pressrun 
+        WHERE part = @p AND prodNumber = @prod AND run = @run 
+        ORDER BY id DESC LIMIT 1";
+
+            await using var cmd = new MySqlCommand(query, conn);
+            cmd.Parameters.AddWithValue("@p", part);
+            cmd.Parameters.AddWithValue("@prod", prod);
+            cmd.Parameters.AddWithValue("@run", run);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                return (reader["operator"]?.ToString() ?? "", reader["machine"]?.ToString() ?? "");
+            }
+            return ("", "");
+        }
+        // PressMixBagChangeService.cs
+        public async Task<string?> GetScheduledMaterialCodeAsync(string part, string prodNumber, string run)
+        {
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+        SELECT materialCode
+        FROM schedule
+        WHERE part = @part
+          AND prodNumber = @prod
+          AND run = @run
+        ORDER BY id DESC        
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part);
+            cmd.Parameters.AddWithValue("@prod", prodNumber);
+            cmd.Parameters.AddWithValue("@run", run);
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString();
+        }
+
+
+        // Simple example. Replace with hashed PINs if you have them.
+        public async Task<(bool ok, string name)> VerifySupervisorPinAsync(string pin)
+        {
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"SELECT name FROM supervisors WHERE pin = @pin LIMIT 1;";
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@pin", pin);
+            var result = await cmd.ExecuteScalarAsync();
+            if (result == null) return (false, "");
+            return (true, result.ToString() ?? "");
+        }
+
 
     }
+}

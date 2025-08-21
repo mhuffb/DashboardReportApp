@@ -166,6 +166,14 @@
                         <label for="edit-updateresult" class="form-label">Update Result</label>
                         <textarea name="UpdateResult" id="edit-updateresult" class="form-control text-area-large"></textarea>
                     </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="1" id="notifyProlinkChk">
+                        <label class="form-check-label" for="notifyProlinkChk">
+                            Send Notification to Update Prolink
+                        </label>
+                    </div>
+
+
                     <!-- File Upload for FileAddress1 -->
                     <div class="mb-3">
                         <label for="edit-file1" class="form-label">File 1</label>
@@ -187,7 +195,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+                    <button type="submit" id="saveChangesBtn" class="btn btn-success"><i class="bi bi-save"></i> Save Changes</button>
+
                 </div>
             </form>
         </div>
@@ -221,6 +230,8 @@
             const modalElement = document.getElementById('imageModal');
             const modalImage = document.getElementById('modalImage');
             const modalPDF = document.getElementById('modalPDF');
+               
+        const form = document.querySelector('#editProcessChangeModal form');
 
             document.querySelectorAll('.fetch-image-btn').forEach(button => {
                 button.addEventListener('click', function () {
@@ -384,20 +395,20 @@
 
             updateTable();
 
-            // ----------------------------------
-            // Edit Modal Logic
+                // ---------------------------------- Edit Modal Logic
             document.querySelectorAll('.edit-btn').forEach(button => {
                 button.addEventListener('click', function () {
-                    const id = this.getAttribute('data-id');
-                    const part = this.getAttribute('data-part');
-                    const requester = this.getAttribute('data-requester');
-                    const reqdate = this.getAttribute('data-reqdate');
-                    const request = this.getAttribute('data-request');
-                    const updatedby = this.getAttribute('data-updatedby');
-                    const updateresult = this.getAttribute('data-updateresult');
-                    const fileaddress1 = this.getAttribute('data-fileaddress1');
-                    const fileaddress2 = this.getAttribute('data-fileaddress2');
-                    const testrequested = this.getAttribute('data-testrequested');
+
+                    const id = this.dataset.id;
+                    const part = this.dataset.part;
+                    const requester = this.dataset.requester;
+                    const reqdate = this.dataset.reqdate;
+                    const request = this.dataset.request;
+                    const updatedby = this.dataset.updatedby;
+                    const updateresult = this.dataset.updateresult;
+                    const fileaddress1 = this.dataset.fileaddress1;
+                    const fileaddress2 = this.dataset.fileaddress2;
+                    const testrequested = this.dataset.testrequested;
 
                     document.getElementById('edit-id').value = id;
                     document.getElementById('edit-part').value = part;
@@ -410,16 +421,64 @@
                     document.getElementById('edit-fileaddress2').value = fileaddress2;
                     document.getElementById('edit-testrequested').value = testrequested;
 
-                    document.getElementById('current-file1').innerHTML = fileaddress1
-                        ? '<a href="' + fileaddress1 + '" target="_blank">Current File 1</a>'
-                        : 'No file uploaded';
-                    document.getElementById('current-file2').innerHTML = fileaddress2
-                        ? '<a href="' + fileaddress2 + '" target="_blank">Current File 2</a>'
-                        : 'No file uploaded';
+                    document.getElementById('current-file1').innerHTML = fileaddress1 ? `<a href="${fileaddress1}" target="_blank">Current File 1</a>` : 'No file uploaded';
+                    document.getElementById('current-file2').innerHTML = fileaddress2 ? `<a href="${fileaddress2}" target="_blank">Current File 2</a>` : 'No file uploaded';
+
+
+                    document.getElementById('notifyProlinkChk').checked = false;
 
                     new bootstrap.Modal(document.getElementById('editProcessChangeModal')).show();
                 });
             });
+
+                  form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            const notify = document.getElementById('notifyProlinkChk').checked;
+            const modalInstance = bootstrap.Modal.getInstance(document.getElementById('editProcessChangeModal'));
+
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                body: formData
+            })
+            .then(resp => {
+                if (!resp.ok) throw new Error();
+                const id = document.getElementById('edit-id').value;
+                const part = document.getElementById('edit-part').value;
+                const request = document.getElementById('edit-request').value;
+                const requester = document.getElementById('edit-requester').value;
+                const reqdate = document.getElementById('edit-reqdate').value;
+                const updatedby = document.getElementById('edit-updatedby').value;
+                const updateresult = document.getElementById('edit-updateresult').value;
+
+                if (notify) {
+                    return fetch(`/AdminProcessChangeRequest/SendProlinkNotification?id=${id}&part=${encodeURIComponent(part)}&request=${encodeURIComponent(request)}&requester=${encodeURIComponent(requester)}&reqdate=${encodeURIComponent(reqdate)}&updatedby=${encodeURIComponent(updatedby)}&updateresult=${encodeURIComponent(updateresult)}`)
+                        .then(r => {
+                            if (!r.ok) throw new Error();
+                            return "Saved and email sent to mhuff@sintergy.net!";
+                        });
+                } else {
+                    return "Saved successfully.";
+                }
+            })
+            .then(message => {
+                alert(message);
+
+                // ✅ Close modal
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                // Optional: Reload the page to reflect updates
+                 location.reload();
+            })
+            .catch(() => {
+                alert('Error saving or sending notification.');
+            });
+        });
+
+
         });
     </script>
 }

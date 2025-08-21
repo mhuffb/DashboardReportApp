@@ -1,9 +1,14 @@
 ﻿using DashboardReportApp.Models;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Data.Odbc;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DashboardReportApp.Services
 {
@@ -116,7 +121,9 @@ namespace DashboardReportApp.Services
         public List<SintergyComponent> GetAllSchedParts()
         {
             var openParts = new List<SintergyComponent>();
-            string query = "SELECT id, date, part, component, quantity, run, prodNumber, open FROM schedule ORDER BY id desc";
+           string query = @"SELECT id, date, part, component, quantity, run, prodNumber, open, materialCode
+                 FROM schedule ORDER BY id desc";
+
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
@@ -136,7 +143,9 @@ namespace DashboardReportApp.Services
                                 QtyToSchedule = reader["quantity"] == DBNull.Value ? 0 : Convert.ToInt32(reader["quantity"]),
                                 Run = reader["run"] == DBNull.Value ? string.Empty : reader["run"].ToString(),
                                 ProdNumber = reader["prodNumber"] == DBNull.Value ? string.Empty : reader["prodNumber"].ToString(),
-                                Open = reader["open"] == DBNull.Value ? 0 : Convert.ToInt32(reader["open"])
+                                Open = reader["open"] == DBNull.Value ? 0 : Convert.ToInt32(reader["open"]),
+                                MaterialCode = reader["materialCode"] == DBNull.Value ? null : reader["materialCode"].ToString(),
+
                             };
                             openParts.Add(component);
                         }
@@ -205,22 +214,22 @@ namespace DashboardReportApp.Services
         (part, component, quantity, run, date, open,
          prodNumber, qtyNeededFor1Assy,
          needsSintergySecondary, numberOfSintergySecondaryOps,
-         openToSecondary, secondaryWorkFlag)
+         openToSecondary, secondaryWorkFlag, materialCode)
         VALUES (@part, @comp, @qty, @run, @date, 1,
                 @prod, @q1,
                 @needsSec, @opsCnt,
-                @openToSec, @flag)";
+                @openToSec, @flag, @mat)";
 
             const string sqlNoComponent = @"
         INSERT INTO schedule
         (part, quantity, run, date, open,
          prodNumber, qtyNeededFor1Assy,
          needsSintergySecondary, numberOfSintergySecondaryOps,
-         openToSecondary, secondaryWorkFlag)
+         openToSecondary, secondaryWorkFlag, materialCode)
         VALUES (@part, @qty, @run, @date, 1,
                 @prod, @q1,
                 @needsSec, @opsCnt,
-                @openToSec, @flag)";
+                @openToSec, @flag, @mat)";
 
             using var conn = new MySqlConnection(_connectionStringMySQL);
             conn.Open();
@@ -266,6 +275,7 @@ namespace DashboardReportApp.Services
                 cmd.Parameters.AddWithValue("@opsCnt", totalOps);
                 cmd.Parameters.AddWithValue("@openToSec", needsSecondary ? 1 : 0);
                 cmd.Parameters.AddWithValue("@flag", flag);
+                cmd.Parameters.AddWithValue("@mat", c.MaterialCode ?? (object)DBNull.Value);
 
                 cmd.ExecuteNonQuery();
             }
@@ -352,6 +362,160 @@ namespace DashboardReportApp.Services
             return (0, false, false);     // neither needs it
         }
 
+
+        public void ReceivePowder(string originalFilename, byte[] fileBytes, int lot, decimal weight, string material)
+        {
+            // save PDF
+            string dir = @"\\sintergydc2024\vol1\VSP\Uploads";
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd_HHmmss}_{originalFilename}");
+            File.WriteAllBytes(path, fileBytes);
+
+            // insert into DB
+            const string sql = @"INSERT INTO powdermix (lotNumber, weightLbs, materialCode, createdAt)
+                         VALUES (@lot, @wt, @mat, NOW());";
+
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@lot", lot);
+            cmd.Parameters.AddWithValue("@wt", weight);
+            cmd.Parameters.AddWithValue("@mat", material ?? (object)DBNull.Value);
+            cmd.ExecuteNonQuery();
+        }
+
+
+        private string ExtractTextFromPdf(byte[] pdfBytes)
+        {
+            var sb = new StringBuilder();
+
+            using var reader = new PdfReader(new MemoryStream(pdfBytes));
+            using var pdfDoc = new PdfDocument(reader);
+
+            for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+            {
+                var page = pdfDoc.GetPage(i);
+                var strategy = new SimpleTextExtractionStrategy();
+                var text = PdfTextExtractor.GetTextFromPage(page, strategy);
+                sb.AppendLine(text);
+            }
+
+            return sb.ToString();
+        }
+
+
+        public (long lot, decimal weight, string material) ParsePowderPdf(byte[] fileBytes)
+        {
+            string content = ExtractTextFromPdf(fileBytes);
+
+            // Normalize whitespace so regex is reliable
+            content = Regex.Replace(content, @"\s+", " ");
+
+            long lotNumber = 0;
+            decimal weightVal = 0;
+            string material = null;
+
+            // ======== MATERIAL ========
+            // Prefer "CUST CODE: XYZ" if present
+            // ======== MATERIAL ========
+            // Look for the first occurrence of "STY" and read up to the next space
+            var styMatch = Regex.Match(content, @"(STY\S+)", RegexOptions.IgnoreCase);
+            if (styMatch.Success)
+            {
+                material = styMatch.Groups[1].Value.Trim();
+            }
+
+            else
+            {
+                // fallback generic pattern e.g., STY-211 NAHvar matMatch = Regex.Match(content, @"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b");
+
+                var matMatch = Regex.Match(content, @"\b([A-Z]{2,}\-\d{2,}(?:\s*[A-Z]+)?)\b");
+                if (matMatch.Success)
+                    material = matMatch.Groups[1].Value.Trim();
+            }
+
+            // ======== LOT NUMBER ========
+            // 1) any explicit "Lot No" label
+            var lotLabel = Regex.Match(content, @"Lot\s*(No|number)\s*[:\-]?\s*(\d{5,})", RegexOptions.IgnoreCase);
+            if (lotLabel.Success)
+            {
+                long.TryParse(lotLabel.Groups[2].Value, out lotNumber);
+            }
+
+            // 2) fallback by looking for first all-digit token following material code
+            if (lotNumber == 0 && material != null)
+            {
+                int idx = content.IndexOf(material);
+                if (idx > 0)
+                {
+                    var tail = content.Substring(idx + material.Length);
+                    var parts = tail.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var p in parts)
+                    {
+                        var digitsOnly = Regex.Replace(p, @"\D", "");
+                        if (digitsOnly.Length >= 5 && long.TryParse(digitsOnly, out long ln))
+                        {
+                            lotNumber = ln;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // ======== WEIGHT ========
+            // 1) decimal lbs e.g. "19,980.29 Lbs"
+            var w1 = Regex.Match(content, @"([\d,]+\.\d+)\s*Lbs?", RegexOptions.IgnoreCase);
+            if (w1.Success)
+            {
+                decimal.TryParse(w1.Groups[1].Value.Replace(",", ""), out weightVal);
+            }
+            else
+            {
+                // 2) integer lbs e.g. "10000 lb"
+                var w2 = Regex.Match(content, @"([\d,]+)\s*lb\b", RegexOptions.IgnoreCase);
+                if (w2.Success)
+                {
+                    decimal.TryParse(w2.Groups[1].Value.Replace(",", ""), out weightVal);
+                }
+                else
+                {
+                    // 3) Quantity field (Advantage PDF): "QUANTITY: 518.00"
+                    var q = Regex.Match(content, @"QUANTITY\s*[:\-]?\s*([\d,\.]+)", RegexOptions.IgnoreCase);
+                    if (q.Success)
+                        decimal.TryParse(q.Groups[1].Value.Replace(",", ""), out weightVal);
+                }
+            }
+
+            return (lotNumber, weightVal, material);
+        }
+
+
+        public List<PowderMixEntry> GetPowderMixHistory()
+        {
+            var results = new List<PowderMixEntry>();
+
+            const string sql = @"SELECT lotNumber, weightLbs, materialCode, createdAt
+                         FROM powdermix
+                         ORDER BY createdAt DESC";
+
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+
+            using var cmd = new MySqlCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(new PowderMixEntry
+                {
+                    LotNumber = reader.GetInt32("lotNumber"),
+                    WeightLbs = reader.GetDecimal("weightLbs"),
+                    MaterialCode = reader["materialCode"] == DBNull.Value ? null : reader["materialCode"].ToString(),
+                    CreatedAt = reader.GetDateTime("createdAt")
+                });
+            }
+
+            return results;
+        }
 
 
     }

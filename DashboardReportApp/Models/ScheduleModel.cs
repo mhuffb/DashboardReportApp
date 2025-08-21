@@ -21,6 +21,8 @@
         public int Open { get; set; } // Add this property
         public string ProdNumber { get; set; }
         public sbyte GetsSintergySecondary { get; set; }
+        public string MaterialCode { get; set; }
+
     }
     public class ScheduleItem
     {
@@ -31,6 +33,13 @@
     }
 
 
+    public class PowderMixEntry
+    {
+        public int LotNumber { get; set; }
+        public decimal WeightLbs { get; set; }
+        public string MaterialCode { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
 
 
 }
