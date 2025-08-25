@@ -178,6 +178,32 @@ namespace DashboardReportApp.Controllers
         }
 
 
+        [HttpPost("UpdatePowderMix")]
+        public IActionResult UpdatePowderMix([FromBody] PowderMixEntry entry)
+        {
+            try
+            {
+                _scheduleService.UpdatePowderMix(entry);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+        [HttpPost("DeletePowderMix")]
+        public IActionResult DeletePowderMix([FromBody] int id)
+        {
+            try
+            {
+                _scheduleService.DeletePowderMix(id);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
 
     }
 }

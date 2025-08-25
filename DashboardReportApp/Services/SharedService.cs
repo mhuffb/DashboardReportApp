@@ -545,9 +545,9 @@ ORDER BY p.measure_date DESC
             var userPrinterMappings = new Dictionary<string, string>
     {
         { @"Office01.sintergyinc.local", "None" },
-        { @"mold02.sintergyinc.local", "Mold02" },
-        { @"MOLD03.sintergyinc.local", "Mold03" },
-        { @"MOLD04-PC.sintergyinc.local", "Mold004" },
+        { @"mold02", "Mold02" },
+        { @"MOLD03", "Mold03" },
+        { @"MOLD04-PC", "Mold004" },
         // Add additional mappings as needed
     };
 

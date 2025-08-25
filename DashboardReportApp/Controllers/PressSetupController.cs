@@ -27,12 +27,15 @@ namespace DashboardReportApp.Controllers
             ViewData["Operators"] = _pressSetupService.GetOperators();
             ViewData["Machines"] = _pressSetupService.GetEquipment();
             ViewData["Trainers"] = _pressSetupService.GetTrainers();
-            ViewData["SortOrder"] = sortOrder == "asc" ? "desc" : "asc";
-            var scheduledParts = _pressSetupService.GetScheduledParts();
-            ViewData["Parts"] = scheduledParts;
-            var records = _pressSetupService.GetAllRecords();
+            ViewData["Parts"] = _pressSetupService.GetScheduledParts();
 
-            return View(records);
+            // Only need open setups for the top table:
+            var openOnly = _pressSetupService
+                .GetAllRecords()
+                .Where(x => x.EndDateTime == null)
+                .ToList();
+
+            return View(openOnly);
         }
 
         [HttpPost("Login")]
@@ -77,7 +80,38 @@ namespace DashboardReportApp.Controllers
         }
 
 
+        // PressSetupController.cs
+        [HttpGet("Records")]
+        public IActionResult Records(
+            int page = 1,
+            int pageSize = 100,
+            string? search = null,
+            string? sortBy = "StartDateTime",
+            string sortDir = "desc",
+            DateTime? startDate = null,   // NEW
+            DateTime? endDate = null,     // NEW
+            string? machine = null)       // NEW
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 10, 500);
 
+            var (rows, total) = _pressSetupService.GetRecordsPage(
+                page, pageSize, search, sortBy, sortDir, startDate, endDate, machine);
+
+            return Json(new
+            {
+                page,
+                pageSize,
+                total,
+                rows
+            });
+        }
+
+        [HttpGet("ApiMachines")]
+        public IActionResult ApiMachines()
+        {
+            return Json(_pressSetupService.GetEquipment());
+        }
 
 
     }

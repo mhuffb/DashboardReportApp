@@ -35,6 +35,7 @@
 
     public class PowderMixEntry
     {
+        public int Id { get; set; }           
         public int LotNumber { get; set; }
         public decimal WeightLbs { get; set; }
         public string MaterialCode { get; set; }

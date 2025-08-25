@@ -328,24 +328,32 @@ namespace DashboardReportApp.Services
                 connection.Open();
                 string query = @"
             UPDATE schedule 
-            SET date = @Date, part = @Part, component = @Component, 
-                quantity = @Quantity, run = @Run, open = @Open, prodNumber = @ProdNumber
+            SET date = @Date, 
+                part = @Part, 
+                component = @Component, 
+                quantity = @Quantity, 
+                run = @Run, 
+                open = @Open, 
+                prodNumber = @ProdNumber,
+                materialCode = @MaterialCode      -- NEW
             WHERE id = @Id";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@Date", part.Date);
+                    command.Parameters.AddWithValue("@Date", (object?)part.Date ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Part", part.MasterId);
-                    command.Parameters.AddWithValue("@Component", part.Component ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@Component", (object?)part.Component ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Quantity", part.QtyToSchedule);
                     command.Parameters.AddWithValue("@Run", part.Run);
                     command.Parameters.AddWithValue("@Open", part.Open);
                     command.Parameters.AddWithValue("@ProdNumber", part.ProdNumber);
-                    command.Parameters.AddWithValue("@Id", part.Id); // Ensure this parameter is included
+                    command.Parameters.AddWithValue("@MaterialCode", (object?)part.MaterialCode ?? DBNull.Value); // NEW
+                    command.Parameters.AddWithValue("@Id", part.Id);
                     command.ExecuteNonQuery();
                 }
             }
         }
+
         // put anywhere inside ScheduleService (private scope)
         private (int OpsCount, bool NeedsSecondary, bool UseComponent) GetSecondaryInfo(string parent, string child)
         {
@@ -493,8 +501,7 @@ namespace DashboardReportApp.Services
         public List<PowderMixEntry> GetPowderMixHistory()
         {
             var results = new List<PowderMixEntry>();
-
-            const string sql = @"SELECT lotNumber, weightLbs, materialCode, createdAt
+            const string sql = @"SELECT id, lotNumber, weightLbs, materialCode, createdAt
                          FROM powdermix
                          ORDER BY createdAt DESC";
 
@@ -507,16 +514,43 @@ namespace DashboardReportApp.Services
             {
                 results.Add(new PowderMixEntry
                 {
+                    Id = reader.GetInt32("id"), // NEW
                     LotNumber = reader.GetInt32("lotNumber"),
                     WeightLbs = reader.GetDecimal("weightLbs"),
                     MaterialCode = reader["materialCode"] == DBNull.Value ? null : reader["materialCode"].ToString(),
                     CreatedAt = reader.GetDateTime("createdAt")
                 });
             }
-
             return results;
         }
 
+
+        public void UpdatePowderMix(PowderMixEntry entry)
+        {
+            const string sql = @"UPDATE powdermix
+                         SET lotNumber = @lot,
+                             weightLbs = @wt,
+                             materialCode = @mat
+                         WHERE id = @id";
+
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@lot", entry.LotNumber);
+            cmd.Parameters.AddWithValue("@wt", entry.WeightLbs);
+            cmd.Parameters.AddWithValue("@mat", (object?)entry.MaterialCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@id", entry.Id);
+            cmd.ExecuteNonQuery();
+        }
+        public void DeletePowderMix(int id)
+        {
+            const string sql = "DELETE FROM powdermix WHERE id = @id";
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
 
     }
 }

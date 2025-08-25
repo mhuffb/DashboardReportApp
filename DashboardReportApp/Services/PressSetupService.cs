@@ -272,6 +272,118 @@ namespace DashboardReportApp.Services
         }
 
 
+        // PressSetupService.cs
+        public (List<PressSetupModel> Rows, int Total) GetRecordsPage(
+            int page, int pageSize, string? search, string? sortBy, string sortDir,
+            DateTime? startDate, DateTime? endDate, string? machine)
+        {
+            var sortColumn = (sortBy ?? "StartDateTime") switch
+            {
+                "Id" => "id",
+                "Part" => "part",
+                "Component" => "component",
+                "ProdNumber" => "prodNumber",
+                "Run" => "run",
+                "Operator" => "operator",
+                "Machine" => "machine",
+                "StartDateTime" => "startDateTime",
+                "EndDateTime" => "endDateTime",
+                _ => "startDateTime"
+            };
+            var direction = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
+            var offset = (page - 1) * pageSize;
+
+            var rows = new List<PressSetupModel>();
+            int total = 0;
+
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            conn.Open();
+
+            // ----- Build WHERE dynamically -----
+            var whereParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(search))
+                whereParts.Add("(part LIKE @q OR component LIKE @q OR prodNumber LIKE @q OR run LIKE @q OR operator LIKE @q OR machine LIKE @q)");
+
+            if (!string.IsNullOrWhiteSpace(machine))
+                whereParts.Add("machine = @machine"); // exact match from dropdown
+
+            if (startDate.HasValue && endDate.HasValue)
+                whereParts.Add("startDateTime >= @start AND startDateTime < @endExclusive");
+            else if (startDate.HasValue)
+                whereParts.Add("startDateTime >= @start");
+            else if (endDate.HasValue)
+                whereParts.Add("startDateTime < @endExclusive");
+
+            var whereSql = whereParts.Count > 0 ? $"WHERE {string.Join(" AND ", whereParts)}" : "";
+
+            // Inclusive end-of-day handling: [start, end 23:59:59.999...)
+            var start = startDate?.Date;
+            var endExclusive = endDate?.Date.AddDays(1);
+
+            // ----- Count -----
+            using (var countCmd = new MySqlCommand($@"SELECT COUNT(*) FROM presssetup {whereSql}", conn))
+            {
+                if (!string.IsNullOrWhiteSpace(search))
+                    countCmd.Parameters.AddWithValue("@q", $"%{search}%");
+                if (!string.IsNullOrWhiteSpace(machine))
+                    countCmd.Parameters.AddWithValue("@machine", machine);
+                if (start.HasValue)
+                    countCmd.Parameters.AddWithValue("@start", start.Value);
+                if (endExclusive.HasValue)
+                    countCmd.Parameters.AddWithValue("@endExclusive", endExclusive.Value);
+
+                total = Convert.ToInt32(countCmd.ExecuteScalar());
+            }
+
+            // ----- Page -----
+            using (var cmd = new MySqlCommand($@"
+        SELECT id, part, component, prodNumber, run, operator, machine,
+               startDateTime, endDateTime, pressType, difficulty, setupComp,
+               assistanceReq, assistedBy, notes
+        FROM presssetup
+        {whereSql}
+        ORDER BY {sortColumn} {direction}
+        LIMIT @take OFFSET @skip;", conn))
+            {
+                if (!string.IsNullOrWhiteSpace(search))
+                    cmd.Parameters.AddWithValue("@q", $"%{search}%");
+                if (!string.IsNullOrWhiteSpace(machine))
+                    cmd.Parameters.AddWithValue("@machine", machine);
+                if (start.HasValue)
+                    cmd.Parameters.AddWithValue("@start", start.Value);
+                if (endExclusive.HasValue)
+                    cmd.Parameters.AddWithValue("@endExclusive", endExclusive.Value);
+
+                cmd.Parameters.AddWithValue("@take", pageSize);
+                cmd.Parameters.AddWithValue("@skip", offset);
+
+                using var rdr = cmd.ExecuteReader();
+                while (rdr.Read())
+                {
+                    rows.Add(new PressSetupModel
+                    {
+                        Id = rdr.GetInt32("id"),
+                        Part = rdr["part"]?.ToString(),
+                        Component = rdr["component"]?.ToString(),
+                        ProdNumber = rdr["prodNumber"]?.ToString(),
+                        Run = rdr["run"]?.ToString(),
+                        Operator = rdr["operator"]?.ToString(),
+                        Machine = rdr["machine"]?.ToString(),
+                        StartDateTime = rdr["startDateTime"] as DateTime?,
+                        EndDateTime = rdr["endDateTime"] as DateTime?,
+                        PressType = rdr["pressType"]?.ToString(),
+                        Difficulty = rdr["difficulty"]?.ToString(),
+                        SetupComp = rdr["setupComp"]?.ToString(),
+                        AssistanceReq = rdr["assistanceReq"]?.ToString(),
+                        AssistedBy = rdr["assistedBy"]?.ToString(),
+                        Notes = rdr["notes"]?.ToString()
+                    });
+                }
+            }
+
+            return (rows, total);
+        }
+
 
 
     }

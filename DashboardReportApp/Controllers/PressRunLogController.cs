@@ -23,21 +23,16 @@ namespace DashboardReportApp.Controllers
             _sharedService = serviceShared;
             _moldingService = serviceMolding;
         }
-
         [HttpGet]
         public async Task<IActionResult> Index()
         {
             ViewData["Operators"] = await _pressRunLogService.GetOperatorsAsync();
-
-            // openParts => for the Start Molding form
             ViewData["OpenParts"] = await _pressRunLogService.GetOpenSetups();
+            ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync();
 
-            var openRuns = await _pressRunLogService.GetLoggedInRunsAsync();
-            var allRuns = await _pressRunLogService.GetAllRunsAsync();
-
-            ViewBag.OpenRuns = openRuns;
-            return View(allRuns); // the Index.cshtml
+            return View();
         }
+
 
         // ============== LOGIN ==============
         [HttpGet]
@@ -208,5 +203,25 @@ namespace DashboardReportApp.Controllers
           
             return RedirectToAction("Index");
         }
+
+        [HttpGet]
+        public async Task<IActionResult> ApiRuns(
+    int page = 1,
+    int pageSize = 100,
+    string q = null,
+    string machine = null,
+    DateTime? start = null,
+    DateTime? end = null)
+        {
+            var result = await _pressRunLogService.GetRunsPagedAsync(page, pageSize, q, machine, start, end);
+            return Json(new { rows = result.Rows, total = result.Total, page = result.Page, pageSize = result.PageSize });
+        }
+        [HttpGet]
+        public async Task<IActionResult> ApiMachines()
+        {
+            var machines = await _pressRunLogService.GetMachinesAsync();
+            return Json(machines);
+        }
+
     }
 }

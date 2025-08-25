@@ -28,6 +28,9 @@
         <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#receivePowderModal">
             Receive Powder
         </button>
+        <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#powderMixModal">
+            Show Received Powder
+        </button>
 
     </div>
 
@@ -67,7 +70,9 @@
                             data-prodnumber="@Model.AllParts[i].ProdNumber"
                             data-run="@Model.AllParts[i].Run"
                             data-id="@Model.AllParts[i].Id"
-                            data-open="@Model.AllParts[i].Open">
+                            data-open="@Model.AllParts[i].Open"
+                            data-material="@Model.AllParts[i].MaterialCode">
+                            
                             <td>@Model.AllParts[i].Date?.ToString("yyyy-MM-dd")</td>
                             <td>@partUpper</td>
                             <td>@Model.AllParts[i].Component</td>
@@ -170,6 +175,11 @@
                         <input type="text" class="form-control" id="editComponent" name="Component" />
                     </div>
                     <div class="mb-3">
+                        <label for="editMaterialCode" class="form-label">Material Code</label>
+                        <input type="text" class="form-control" id="editMaterialCode" name="MaterialCode" />
+                    </div>
+
+                    <div class="mb-3">
                         <label for="editQtyToSchedule" class="form-label">Qty to Schedule</label>
                         <input type="number" class="form-control" id="editQtyToSchedule" name="QtyToSchedule" />
                     </div>
@@ -217,6 +227,40 @@
         </form>
     </div>
 </div>
+<div class="modal fade" id="powderMixModal" tabindex="-1" aria-labelledby="powderMixModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="powderMixModalLabel">Powder Mix History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="custom-table table-striped table-bordered shadow-sm" id="powderMixTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Lot #</th>
+                                <th>Weight (lbs)</th>
+                                <th>Material Code</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">Click <em>Edit</em> to modify a row; then click <em>Save</em>.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     .ui-autocomplete {
         z-index: 2000 !important;
@@ -302,13 +346,14 @@
                 btn.addEventListener('click', function() {
                     var row = btn.closest('tr');
                     var date = row.getAttribute('data-date');
-                    var masterId = row.getAttribute('data-masterid'); // This value is already uppercase.
+                    var masterId = row.getAttribute('data-masterid');
                     var component = row.getAttribute('data-component');
                     var qty = row.getAttribute('data-qty');
                     var prodnumber = row.getAttribute('data-prodnumber');
                     var run = row.getAttribute('data-run');
                     var open = row.getAttribute('data-open');
-                    var id = row.getAttribute('data-id'); // record id
+                    var id = row.getAttribute('data-id');
+                    var material = row.getAttribute('data-material'); // NEW
 
                     document.getElementById('editId').value = id;
                     document.getElementById('editDate').value = date;
@@ -318,6 +363,7 @@
                     document.getElementById('editProdNumber').value = prodnumber;
                     document.getElementById('editRun').value = run;
                     document.getElementById('editOpen').value = open;
+                    document.getElementById('editMaterialCode').value = material || ""; // NEW
 
                     var myModal = new bootstrap.Modal(document.getElementById('editModal'));
                     myModal.show();
@@ -325,6 +371,7 @@
             });
         });
     </script>
+
     <script>
         document.getElementById("receivePowderForm").addEventListener("submit", function (e) {
             e.preventDefault();
@@ -511,6 +558,86 @@
                 $(`input[name='AllComponents[${activeIndex}].MaterialCode']`).val(mat);
                 bootstrap.Modal.getInstance(document.getElementById('powderSelectModal')).hide();
             });
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          // Load data every time the modal is shown
+          document.getElementById('powderMixModal').addEventListener('shown.bs.modal', function () {
+            fetch('/Schedule/GetPowderList')
+              .then(r => r.json())
+              .then(data => {
+                const tbody = document.querySelector('#powderMixTable tbody');
+                tbody.innerHTML = '';
+                data.forEach(r => {
+                  const tr = document.createElement('tr');
+                  tr.innerHTML = `
+                    <td>${r.id}</td>
+                    <td><input class="form-control form-control-sm pm-lot" type="number" value="${r.lotNumber}" /></td>
+                    <td><input class="form-control form-control-sm pm-wt" type="number" step="0.01" value="${r.weightLbs}" /></td>
+                    <td><input class="form-control form-control-sm pm-mat" type="text" value="${r.materialCode ?? ''}" /></td>
+                    <td>${new Date(r.createdAt).toLocaleString()}</td>
+                    <td class="d-flex gap-2">
+                      <button class="btn btn-sm btn-primary pm-save">Save</button>
+                      <button class="btn btn-sm btn-outline-danger pm-del">Delete</button>
+                    </td>
+                  `;
+                  tbody.appendChild(tr);
+                });
+              });
+          });
+
+          // Save handler
+          document.querySelector('#powderMixTable').addEventListener('click', function (e) {
+            if (e.target.classList.contains('pm-save')) {
+              const tr = e.target.closest('tr');
+              const id = parseInt(tr.children[0].textContent.trim(), 10);
+              const lot = parseInt(tr.querySelector('.pm-lot').value, 10);
+              const wt = parseFloat(tr.querySelector('.pm-wt').value);
+              const mat = tr.querySelector('.pm-mat').value;
+
+              fetch('/Schedule/UpdatePowderMix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, lotNumber: lot, weightLbs: wt, materialCode: mat })
+              })
+              .then(r => r.json())
+              .then(res => {
+                if (res.success) {
+                  Swal.fire({ icon: 'success', title: 'Saved', timer: 1500, showConfirmButton: false });
+                } else {
+                  Swal.fire({ icon: 'error', title: 'Error', text: res.message || 'Failed to save' });
+                }
+              });
+            }
+
+            if (e.target.classList.contains('pm-del')) {
+              const tr = e.target.closest('tr');
+              const id = parseInt(tr.children[0].textContent.trim(), 10);
+              Swal.fire({
+                title: 'Delete this entry?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Delete'
+              }).then(res => {
+                if (!res.isConfirmed) return;
+                fetch('/Schedule/DeletePowderMix', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(id)
+                })
+                .then(r => r.json())
+                .then(out => {
+                  if (out.success) {
+                    tr.remove();
+                    Swal.fire({ icon: 'success', title: 'Deleted', timer: 1200, showConfirmButton: false });
+                  } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: out.message || 'Failed to delete' });
+                  }
+                });
+              });
+            }
+          });
         });
     </script>
 

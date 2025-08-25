@@ -363,11 +363,12 @@ http://192.168.1.6:5000/Calendar
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult ScheduleEvent(string Title, string Location, string Description,
-                                           string Date, string StartTime, string EndTime,
-                                           string Scheduler,
-                                           string Recur, string RecurUntil)
+                                    string Date, string StartTime, string EndTime,
+                                    string Scheduler,
+                                    string Recur, string RecurUntil)
         {
-            var first = new CalendarEventModel
+            // Seed (don’t mutate this object’s Date later so we can reuse times in the email)
+            var seed = new CalendarEventModel
             {
                 Title = Title?.Trim(),
                 Location = Location,
@@ -378,13 +379,18 @@ http://192.168.1.6:5000/Calendar
                 Scheduler = Scheduler
             };
 
-            _calendarService.SaveCalendarEvent(first);
+            // Save first occurrence
+            _calendarService.SaveCalendarEvent(seed);
 
-            /* simple recurrence */
+            // Track all occurrences for the email summary
+            var occurrences = new List<DateTime> { seed.Date };
+
+            // Simple recurrence (same as before, but we DO NOT mutate 'seed')
             if (!string.IsNullOrWhiteSpace(Recur))
             {
-                DateTime until = DateTime.TryParse(RecurUntil, out var u) ? u.Date : first.Date;
-                DateTime next = first.Date;
+                DateTime until = DateTime.TryParse(RecurUntil, out var u) ? u.Date : seed.Date;
+                DateTime next = seed.Date;
+
                 while (true)
                 {
                     next = Recur switch
@@ -392,12 +398,65 @@ http://192.168.1.6:5000/Calendar
                         "Daily" => next.AddDays(1),
                         "Weekly" => next.AddDays(7),
                         "Monthly" => next.AddMonths(1),
-                        _ => until.AddDays(1) /* break */
+                        _ => until.AddDays(1) // ensures immediate break
                     };
                     if (next > until) break;
-                    first.Date = next;
-                    _calendarService.SaveCalendarEvent(first);
+
+                    occurrences.Add(next);
+
+                    // create a copy per occurrence
+                    _calendarService.SaveCalendarEvent(new CalendarEventModel
+                    {
+                        Title = seed.Title,
+                        Location = seed.Location,
+                        Description = seed.Description,
+                        Date = next,
+                        StartTime = seed.StartTime,
+                        EndTime = seed.EndTime,
+                        Scheduler = seed.Scheduler
+                    });
                 }
+            }
+
+            // ───── Email notification ─────
+            try
+            {
+                string times = $"{seed.StartTime:hh\\:mm}-{seed.EndTime:hh\\:mm}";
+                string list = string.Join("\n", occurrences.Select(d => $"• {d:MM/dd/yyyy} {times}"));
+
+                string body = $@"
+A calendar event has been *scheduled*.
+
+Title      : {seed.Title}
+Location   : {seed.Location}
+Scheduler  : {seed.Scheduler}
+Description: {(string.IsNullOrWhiteSpace(seed.Description) ? "(none)" : seed.Description)}
+
+Occurrences:
+{list}
+
+Created on : {DateTime.Now:MM/dd/yyyy h:mm tt}
+Link to Calendar:
+http://192.168.1.6:5000/Calendar
+-------------------------------------------------------------------";
+
+                // main notification
+                TrySendMail("calendar@sintergy.net", $"New Event: {seed.Title}", body);
+
+                // try to notify the scheduler directly (look up email from Employees)
+                var parts = (seed.Scheduler ?? "").Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    var emp = _calendarService.GetEmployees()
+                                .FirstOrDefault(e => e.FirstName == parts[0] && e.LastName == parts[1]);
+                    if (!string.IsNullOrWhiteSpace(emp?.Email))
+                        TrySendMail(emp.Email, $"New Event (you scheduled): {seed.Title}", body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send new-event email");
+                // swallow (same approach as your TrySendMail helper): don’t fail the HTTP response
             }
 
             return Ok();

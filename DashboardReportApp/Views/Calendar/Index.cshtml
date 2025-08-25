@@ -382,26 +382,55 @@ Model.ServiceRecords))'>
         });
 
         /* ========== wire-up with validation ================================= */
-        function wireFormWithSpinner(id, url) {
+               /** Wire a form with spinner + optional validators */
+        function wireFormWithSpinner(id, url, opts = {}) {
           const f = document.getElementById(id);
           if (!f) return;
+
+          const {
+            requireMultiDates = false,   // only true for the time-off form
+            eventForm = false            // true for the blue “Schedule Event” form
+          } = opts;
 
           f.addEventListener('submit', e => {
             e.preventDefault();
             if (f.dataset.submitted === 'true') return;
             f.dataset.submitted = 'true';
 
-            /* guard: empty date list */
-            const dateInput = document.getElementById('datesRequestedInput');
-            if (!fpMulti || !fpMulti.selectedDates.length) {
-              Swal.fire('Missing dates',
-                        'Please choose at least one “Dates Requested” entry.',
-                        'warning');
-              dateInput.classList.add('is-invalid');
-              f.dataset.submitted = 'false';
-              return;
+            // ── A) Time-off form: must have ≥1 date in fpMulti ───────────────
+            if (requireMultiDates) {
+              const dateInput = document.getElementById('datesRequestedInput');
+              if (!window.fpMulti || !Array.isArray(fpMulti.selectedDates) || fpMulti.selectedDates.length === 0) {
+                Swal.fire('Missing dates','Please choose at least one “Dates Requested” entry.','warning');
+                dateInput?.classList.add('is-invalid');
+                f.dataset.submitted = 'false';
+                return;
+              }
+              dateInput?.classList.remove('is-invalid');
             }
-            dateInput.classList.remove('is-invalid');
+
+            // ── B) Event form: basic checks for single date + times ───────────
+            if (eventForm) {
+              const d  = f.querySelector('[name="Date"]')?.value?.trim();
+              const st = f.querySelector('[name="StartTime"]')?.value?.trim();
+              const et = f.querySelector('[name="EndTime"]')?.value?.trim();
+              const title = f.querySelector('[name="Title"]')?.value?.trim();
+
+              if (!title || !d || !st || !et) {
+                Swal.fire('Missing info','Please fill Title, Date, Start and End time.','warning');
+                f.dataset.submitted = 'false';
+                return;
+              }
+              // optional: ensure End >= Start
+              try {
+                const t = (s)=>{ const [h,m]=s.split(':').map(Number); return h*60+m; };
+                if (t(et) < t(st)) {
+                  Swal.fire('Time range','End time must be after start time.','warning');
+                  f.dataset.submitted = 'false';
+                  return;
+                }
+              } catch {}
+            }
 
             const data = new URLSearchParams(new FormData(f));
             fetchWithSpinner(url, { method:'POST', body:data })
@@ -412,12 +441,12 @@ Model.ServiceRecords))'>
           });
         }
 
-        /* remove red border whenever user picks at least one date */
-        function updateDateInputStyle() {
-          document.getElementById('datesRequestedInput')
-                  .classList.remove('is-invalid');
-        }
-    wireFormWithSpinner('eventForm','/Calendar/ScheduleEvent');
+        // ── Call these once, after flatpickr is created ───────────────────────
+        document.addEventListener('DOMContentLoaded', () => {
+          // (keep your existing fpMulti init above)
+          wireFormWithSpinner('mainForm',  '/Calendar/Submit',        { requireMultiDates:true });
+          wireFormWithSpinner('eventForm', '/Calendar/ScheduleEvent', { eventForm:true });
+        });
 
     /* ===== event click ============================================== */
     function handleEventClick(info){

@@ -122,15 +122,21 @@ namespace DashboardReportApp.Services
         public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m)
         {
             var result = new LoginResult();
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
+            await using var tx = await conn.BeginTransactionAsync();
+
+            // 🔐 Auto-logout any open main run on this machine
+            int pcsEndForPrev = m.PcsStart ?? 0; // use the current device count you read in the modal
+            var auto = await AutoLogoutIfMachineOccupiedAsync(conn, (MySqlTransaction)tx, m.Machine, pcsEndForPrev, m.Operator);
 
             // Always create the main run record (Skid 0)
             const string insertMain = @"
         INSERT INTO pressrun
               (operator, part, component, machine, prodNumber, run, startDateTime, skidNumber)
         VALUES (@operator, @part, @component, @machine, @prod, @run, @start, 0);";
-            using (var cmd = new MySqlCommand(insertMain, conn))
+            using (var cmd = new MySqlCommand(insertMain, conn, (MySqlTransaction)tx))
             {
                 cmd.Parameters.AddWithValue("@operator", m.Operator);
                 cmd.Parameters.AddWithValue("@part", m.Part);
@@ -142,7 +148,7 @@ namespace DashboardReportApp.Services
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Look at all skids for this run
+            // Look at all skids for this run (same logic as before, but inside the tx)
             const string checkSkids = @"
         SELECT skidNumber, open
         FROM pressrun
@@ -152,7 +158,7 @@ namespace DashboardReportApp.Services
             var allClosed = true;
             var maxSkid = 0;
 
-            using (var cmd = new MySqlCommand(checkSkids, conn))
+            using (var cmd = new MySqlCommand(checkSkids, conn, (MySqlTransaction)tx))
             {
                 cmd.Parameters.AddWithValue("@run", m.Run);
                 using var rdr = await cmd.ExecuteReaderAsync();
@@ -160,19 +166,13 @@ namespace DashboardReportApp.Services
                 {
                     int skid = rdr.IsDBNull("skidNumber") ? 0 : rdr.GetInt32("skidNumber");
                     bool isOpen = !rdr.IsDBNull("open") && rdr.GetBoolean("open");
-
                     if (skid > maxSkid) maxSkid = skid;
-                    if (isOpen)
-                    {
-                        openSkidNumber = skid;
-                        allClosed = false;
-                    }
+                    if (isOpen) { openSkidNumber = skid; allClosed = false; }
                 }
             }
 
             if (allClosed)
             {
-                // All previous skids closed → increment
                 int newSkid = maxSkid + 1;
                 result.SkidNumber = newSkid;
                 result.NewSkid = true;
@@ -184,7 +184,7 @@ namespace DashboardReportApp.Services
                    machine, prodNumber, skidNumber, pcsStart)
             VALUES (@run, @part, @component, NOW(), @operator,
                     @machine, @prodNumber, @skid, @pcsStart);";
-                using var newSkidCmd = new MySqlCommand(insertSkid, conn);
+                using var newSkidCmd = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 newSkidCmd.Parameters.AddWithValue("@run", m.Run);
                 newSkidCmd.Parameters.AddWithValue("@part", m.Part);
                 newSkidCmd.Parameters.AddWithValue("@component", m.Component);
@@ -197,7 +197,6 @@ namespace DashboardReportApp.Services
             }
             else
             {
-                // Continuing an open skid
                 result.SkidNumber = openSkidNumber;
                 result.NewSkid = false;
                 result.Message = $"Logged in to existing skid {openSkidNumber}.";
@@ -208,7 +207,7 @@ namespace DashboardReportApp.Services
                    machine, prodNumber, skidNumber, pcsStart)
             VALUES (@run, @part, @component, NOW(), @operator,
                     @machine, @prodNumber, @skid, @pcsStart);";
-                using var insert = new MySqlCommand(insertSkid, conn);
+                using var insert = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 insert.Parameters.AddWithValue("@run", m.Run);
                 insert.Parameters.AddWithValue("@part", m.Part);
                 insert.Parameters.AddWithValue("@component", m.Component);
@@ -219,8 +218,18 @@ namespace DashboardReportApp.Services
                 insert.Parameters.AddWithValue("@pcsStart", m.PcsStart);
                 await insert.ExecuteNonQueryAsync();
             }
-            var latestRecord = await GetPressRunRecordAsync(conn, m.Run, result.SkidNumber);
 
+            // If we auto-logged someone out, append to the message
+            if (auto.closed)
+            {
+                var who = string.IsNullOrWhiteSpace(auto.prevOperator) ? "previous operator" : auto.prevOperator;
+                result.Message += $" (Auto-logged out {who} on machine {m.Machine})";
+            }
+
+            await tx.CommitAsync();
+
+            // Print tag for the just-started/continued skid (same as your original)
+            var latestRecord = await GetPressRunRecordAsync(conn, m.Run, result.SkidNumber);
             if (latestRecord != null)
             {
                 string pdfFilePath = await GenerateRouterTagAsync(latestRecord);
@@ -658,12 +667,18 @@ LIMIT 1";
             return null;
         }
 
+        private static int TryOrdinal(DbDataReader rdr, string name)
+        {
+            try { return rdr.GetOrdinal(name); } catch { return -1; }
+        }
+
         private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
         {
+            var tsOrd = TryOrdinal(rdr, "timestamp");
             var model = new PressRunLogModel
             {
                 Id = rdr.GetInt32("id"),
-                Timestamp = rdr.GetDateTime("timestamp"),
+                Timestamp = tsOrd >= 0 && !rdr.IsDBNull(tsOrd) ? rdr.GetDateTime(tsOrd) : DateTime.MinValue,
                 ProdNumber = rdr.IsDBNull(rdr.GetOrdinal("prodNumber")) ? "" : rdr.GetString("prodNumber"),
                 Run = rdr["run"]?.ToString(),
                 Part = rdr["part"]?.ToString(),
@@ -680,6 +695,7 @@ LIMIT 1";
             };
             return model;
         }
+
 
         #endregion
 
@@ -766,6 +782,165 @@ WHERE endDateTime IS NULL";
             // For consistency, let's do exactly what your original code says:
             var list = _moldingService.GetPressRuns();
             return list;
+        }
+        public class PagedResult<T>
+        {
+            public IReadOnlyList<T> Rows { get; init; } = Array.Empty<T>();
+            public long Total { get; init; }
+            public int Page { get; init; }
+            public int PageSize { get; init; }
+        }
+
+        public async Task<PagedResult<PressRunLogModel>> GetRunsPagedAsync(
+            int page = 1,
+            int pageSize = 100,
+            string q = null,
+            string machine = null,
+            DateTime? start = null,
+            DateTime? end = null)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 25, 1000);
+            int offset = (page - 1) * pageSize;
+
+            var rows = new List<PressRunLogModel>();
+            long total;
+
+            var where = new List<string>();
+            var parms = new List<MySqlParameter>();
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                where.Add("(part LIKE @q OR component LIKE @q OR prodNumber LIKE @q OR run LIKE @q OR operator LIKE @q)");
+                parms.Add(new MySqlParameter("@q", $"%{q}%"));
+            }
+            if (!string.IsNullOrWhiteSpace(machine))
+            {
+                where.Add("machine = @machine");
+                parms.Add(new MySqlParameter("@machine", machine));
+            }
+            if (start.HasValue) { where.Add("startDateTime >= @start"); parms.Add(new MySqlParameter("@start", start.Value)); }
+            if (end.HasValue) { where.Add("startDateTime < @end"); parms.Add(new MySqlParameter("@end", end.Value)); }
+
+            string whereSql = where.Count > 0 ? ("WHERE " + string.Join(" AND ", where)) : "";
+
+            const string cols = @"id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
+                      operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // total count
+            await using (var countCmd = new MySqlCommand($"SELECT COUNT(*) FROM pressrun {whereSql}", conn))
+            {
+                countCmd.Parameters.AddRange(parms.ToArray());
+                total = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+            }
+
+            // page of rows
+            await using (var listCmd = new MySqlCommand($@"
+        SELECT {cols}
+        FROM pressrun
+        {whereSql}
+        ORDER BY startDateTime DESC
+        LIMIT @limit OFFSET @offset;", conn))
+            {
+                listCmd.Parameters.AddRange(parms.ToArray());
+                listCmd.Parameters.AddWithValue("@limit", pageSize);
+                listCmd.Parameters.AddWithValue("@offset", offset);
+
+                using var rdr = await listCmd.ExecuteReaderAsync();
+                while (await rdr.ReadAsync())
+                    rows.Add(ParseRunFromReader(rdr));
+            }
+
+            return new PagedResult<PressRunLogModel>
+            {
+                Rows = rows,
+                Total = total,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+        public async Task<List<string>> GetMachinesAsync()
+        {
+            var list = new List<string>();
+            const string sql = @"SELECT DISTINCT machine FROM pressrun ORDER BY machine";
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
+                list.Add(rdr.GetString(0));
+            return list;
+        }
+        private async Task<(bool closed, string prevOperator, string prevRun)>
+AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
+                                 string machine, int pcsEndForPrev, string newOperator)
+        {
+            // Find an open main run (skid 0) on this machine
+            const string findSql = @"
+        SELECT id, run, operator
+        FROM pressrun
+        WHERE machine = @machine AND skidNumber = 0 AND endDateTime IS NULL
+        ORDER BY id DESC
+        LIMIT 1;";
+            int prevMainId = 0;
+            string prevRun = null;
+            string prevOperator = null;
+
+            using (var find = new MySqlCommand(findSql, conn, tx))
+            {
+                find.Parameters.AddWithValue("@machine", machine);
+                using var rdr = await find.ExecuteReaderAsync();
+                if (await rdr.ReadAsync())
+                {
+                    prevMainId = rdr.GetInt32("id");
+                    prevRun = rdr["run"]?.ToString();
+                    prevOperator = rdr["operator"]?.ToString();
+                }
+            }
+
+            if (prevMainId == 0) return (false, null, null);
+
+            // Close the main run
+            const string closeMain = @"
+        UPDATE pressrun
+        SET endDateTime = NOW(),
+            notes = CONCAT(IFNULL(notes,''), 
+                   CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
+                   '[Auto-logout by ', @newOp, ' ', DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i'), ']')
+        WHERE id = @id
+        LIMIT 1;";
+            using (var cmd = new MySqlCommand(closeMain, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@newOp", newOperator ?? "");
+                cmd.Parameters.AddWithValue("@id", prevMainId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Close the most-recent open skid for that run, if any
+            const string closeSkid = @"
+        UPDATE pressrun
+        SET pcsEnd = @pcsEnd,
+            endDateTime = NOW(),
+            open = 1,
+            notes = CONCAT(IFNULL(notes,''), 
+                   CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
+                   '[Auto-logout main closed]')
+        WHERE run = @run
+          AND skidNumber > 0
+          AND endDateTime IS NULL
+        ORDER BY skidNumber DESC
+        LIMIT 1;";
+            using (var cmd = new MySqlCommand(closeSkid, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@pcsEnd", pcsEndForPrev);
+                cmd.Parameters.AddWithValue("@run", prevRun ?? "");
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            return (true, prevOperator, prevRun);
         }
 
         #endregion

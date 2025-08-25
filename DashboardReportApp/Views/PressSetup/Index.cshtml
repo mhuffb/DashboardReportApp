@@ -38,66 +38,281 @@
             @ViewData["Error"]
         </div>
     }
-
     <!-- Open Setups -->
     <h2 class="text-center mb-4">Open Setups</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
-            <div class="container-fluid px-3 mt-4">
+            @if (Model != null && Model.Any())
+            {
                 <div class="table-responsive">
-                    <table class="table table-striped table-bordered shadow-sm">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Part</th>
-                            <th>Component</th>
-                            <th>Production Number</th>
-                            <th>Run</th>
-                            <th>Operator</th>
-                            <th>Machine</th>
-                            <th>Start Time</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var login in Model.Where(x => x.EndDateTime == null))
-                        {
+                    <table class="table table-striped table-bordered align-middle">
+                        <thead class="table-dark">
                             <tr>
-                                <td>@login.Part</td>
-                                 <td>@login.Component</td>
-                                <td>@login.ProdNumber</td>
-                                <td>@login.Run</td>
-                                <td>@login.Operator</td>
-                                <td>@login.Machine</td>
-                                <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
-                                <td>
+                                <th>Part</th>
+                                <th>Component</th>
+                                <th>Production #</th>
+                                <th>Run</th>
+                                <th>Operator</th>
+                                <th>Machine</th>
+                                <th>Start Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var login in Model)  // Model already filtered to open in the controller
+                            {
+                                var startIso = login.StartDateTime?.ToString("o") ?? "";
+                                <tr>
+                                    <td>@login.Part</td>
+                                    <td>@login.Component</td>
+                                    <td>@login.ProdNumber</td>
+                                    <td>@login.Run</td>
+                                    <td>@login.Operator</td>
+                                    <td>@login.Machine</td>
+                                    <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
+                                    <td>
                                         <button class="btn btn-danger btn-sm"
-                                                onclick="openStopSetupModal('@login.Part', '@login.Run', '@login.StartDateTime', '@login.Machine')">
+                                                onclick="openStopSetupModal('@login.Part', '@login.Run', '@startIso', '@login.Machine')">
                                             Logout of Setup
                                         </button>
-
-
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-            </div>
+            }
+            else
+            {
+                <p class="mb-0">No open setups.</p>
+            }
         </div>
     </div>
 
-    <!-- Full List of Records -->
+
     <h2 class="text-center mt-4">All Setup Records</h2>
     <div class="card shadow mb-4">
         <div class="card-body">
-            <div class="container-fluid px-3 mt-4">
-                <div id="myReactTableRoot"
-                     data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model))'>
+
+            <!-- Filters -->
+            <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                <div class="d-flex flex-column">
+                    <label class="form-label mb-1" for="setupMachine">Machine</label>
+                    <select id="setupMachine" class="form-select" style="min-width:140px">
+                        <option value="">All machines</option>
+                        @foreach (var m in machines)
+                        {
+                            <option value="@m">@m</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="d-flex flex-column">
+                    <label class="form-label mb-1" for="setupStart">Start date</label>
+                    <input type="date" id="setupStart" class="form-control">
+                </div>
+
+                <div class="d-flex flex-column">
+                    <label class="form-label mb-1" for="setupEnd">End date</label>
+                    <input type="date" id="setupEnd" class="form-control">
+                </div>
+
+                <div class="flex-grow-1 d-flex flex-column" style="min-width:260px">
+                    <label class="form-label mb-1" for="setupSearch">Search</label>
+                    <input type="search" id="setupSearch" class="form-control"
+                           placeholder="part, component, run, operator, machine…">
+                </div>
+
+                <div class="d-flex flex-column">
+                    <label class="form-label mb-1" for="setupPageSize">Page size</label>
+                    <select id="setupPageSize" class="form-select">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+
+                <div class="d-flex flex-column justify-content-end">
+                    <button id="setupClear" type="button" class="btn btn-outline-secondary">
+                        Clear
+                    </button>
                 </div>
             </div>
+
+            <!-- Table -->
+            <div class="table-responsive">
+                <table class="table table-striped table-bordered shadow-sm" id="setupTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th data-key="Id">Id</th>
+                            <th data-key="Part">Part</th>
+                            <th data-key="Component">Component</th>
+                            <th data-key="ProdNumber">Production #</th>
+                            <th data-key="Run">Run</th>
+                            <th data-key="Operator">Operator</th>
+                            <th data-key="Machine">Machine</th>
+                            <th data-key="StartDateTime">Start</th>
+                            <th data-key="EndDateTime">End</th>
+                            <th data-key="Difficulty">Difficulty</th>
+                            <th data-key="SetupComp">Setup Complete</th>
+                            <th data-key="AssistanceReq">Assist Req</th>
+                            <th data-key="AssistedBy">Assisted By</th>
+                            <th data-key="Notes">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Pager + Summary -->
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <small id="setupSummary">Loading…</small>
+                <div id="setupPager" class="btn-group"></div>
+            </div>
+
         </div>
     </div>
-</div>
+
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+          const state = {
+            page: 1,
+            pageSize: 100,
+            search: "",
+            machine: "",
+            start: "", // YYYY-MM-DD
+            end: "",   // YYYY-MM-DD
+            sortBy: "StartDateTime",
+            sortDir: "desc"
+          };
+
+          const $tableBody = document.querySelector("#setupTable tbody");
+          const $summary   = document.getElementById("setupSummary");
+          const $pager     = document.getElementById("setupPager");
+
+          const $machine   = document.getElementById("setupMachine");
+          const $start     = document.getElementById("setupStart");
+          const $end       = document.getElementById("setupEnd");
+          const $search    = document.getElementById("setupSearch");
+          const $pageSize  = document.getElementById("setupPageSize");
+          const $clear     = document.getElementById("setupClear");
+
+          fetch("/PressSetup/ApiMachines").then(r => r.json()).then(list => {
+  const cur = $machine.value;
+  $machine.innerHTML = '<option value="">All machines</option>'
+    + list.map(m => `<option value="${m}">${m}</option>`).join('');
+  $machine.value = cur;
+}).catch(()=>{});
+
+
+          const debounce = (fn, ms=300) => { let t; return (...a)=>{clearTimeout(t); t=setTimeout(()=>fn(...a), ms);} };
+
+          function fmt(dt) {
+            if (!dt) return "";
+            try { return new Date(dt).toLocaleString(); } catch { return dt; }
+          }
+
+          async function load() {
+            const url = new URL("/PressSetup/Records", window.location.origin);
+            url.searchParams.set("page", state.page);
+            url.searchParams.set("pageSize", state.pageSize);
+            url.searchParams.set("sortBy", state.sortBy);
+            url.searchParams.set("sortDir", state.sortDir);
+            if (state.search)  url.searchParams.set("search", state.search);
+            if (state.machine) url.searchParams.set("machine", state.machine);
+            if (state.start)   url.searchParams.set("startDate", state.start); // backend makes end exclusive
+            if (state.end)     url.searchParams.set("endDate", state.end);
+
+            const res = await fetch(url.toString(), { headers: { "Accept": "application/json" }});
+            if (!res.ok) { console.error("Records failed", res.status); return; }
+            const { rows, total, page, pageSize } = await res.json();
+
+            state.page = page;
+            state.pageSize = pageSize;
+
+            // render rows
+            $tableBody.innerHTML = "";
+            for (const r of rows) {
+              const tr = document.createElement("tr");
+              tr.innerHTML = `
+                <td>${r.id ?? ""}</td>
+                <td>${r.part ?? ""}</td>
+                <td>${r.component ?? ""}</td>
+                <td>${r.prodNumber ?? ""}</td>
+                <td>${r.run ?? ""}</td>
+                <td>${r.operator ?? ""}</td>
+                <td>${r.machine ?? ""}</td>
+                <td>${fmt(r.startDateTime)}</td>
+                <td>${fmt(r.endDateTime)}</td>
+                <td>${r.difficulty ?? ""}</td>
+                <td>${r.setupComp ?? ""}</td>
+                <td>${r.assistanceReq ?? ""}</td>
+                <td>${r.assistedBy ?? ""}</td>
+                <td>${r.notes ?? ""}</td>`;
+              $tableBody.appendChild(tr);
+            }
+
+            renderPager(total, page, pageSize);
+            const startRow = total ? (page - 1) * pageSize + 1 : 0;
+            const endRow   = Math.min(page * pageSize, total);
+            $summary.textContent = total ? `Showing ${startRow}–${endRow} of ${total}` : "No results";
+          }
+
+          function renderPager(total, page, pageSize) {
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+            $pager.innerHTML = "";
+
+            const btn = (text, disabled, onClick) => {
+              const b = document.createElement("button");
+              b.type = "button";
+              b.className = "btn btn-outline-secondary btn-sm";
+              b.textContent = text;
+              b.disabled = disabled;
+              b.addEventListener("click", onClick);
+              $pager.appendChild(b);
+            };
+
+            btn("« First", page === 1, () => { state.page = 1; load(); });
+            btn("‹ Prev",  page === 1, () => { state.page = Math.max(1, page - 1); load(); });
+            btn("Next ›",  page >= totalPages, () => { state.page = Math.min(totalPages, page + 1); load(); });
+            btn("Last »",  page >= totalPages, () => { state.page = totalPages; load(); });
+          }
+
+          // Sorting on header click (matches PressSetupService switch)
+          document.querySelectorAll("#setupTable thead th").forEach(th => {
+            th.style.cursor = "pointer";
+            th.addEventListener("click", () => {
+              const key = th.dataset.key; // e.g. "StartDateTime"
+              if (!key) return;
+              if (state.sortBy === key) state.sortDir = (state.sortDir === "asc" ? "desc" : "asc");
+              else { state.sortBy = key; state.sortDir = "asc"; }
+              state.page = 1;
+              load();
+            });
+          });
+
+          // Filters
+          $machine.addEventListener("change", () => { state.machine = $machine.value; state.page = 1; load(); });
+          $start.addEventListener("change",   () => { state.start   = $start.value;   state.page = 1; load(); });
+          $end.addEventListener("change",     () => { state.end     = $end.value;     state.page = 1; load(); });
+          $search.addEventListener("input", debounce(e => { state.search = e.target.value.trim(); state.page = 1; load(); }, 300));
+          $pageSize.addEventListener("change", e => { state.pageSize = +e.target.value || 100; state.page = 1; load(); });
+
+          $clear.addEventListener("click", () => {
+            state.page = 1; state.pageSize = +$pageSize.value || 100;
+            state.search = ""; state.machine = ""; state.start = ""; state.end = "";
+            $search.value = ""; $machine.value = ""; $start.value = ""; $end.value = "";
+            load();
+          });
+
+          load();
+        });
+    </script>
+
+
 
 <!-- Modal for Login to Setup -->
 <div id="loginSetupModal" class="modal fade" tabindex="-1">
@@ -259,32 +474,7 @@
 
 
 
-    // ========== REACT TABLE SETUP ==========
-    document.addEventListener('DOMContentLoaded', function() {
-        const container = document.getElementById('myReactTableRoot');
-        if (!container) return;
-        const rawData = container.getAttribute('data-records');
-        const data = JSON.parse(rawData);
-        const columns = [
-            { key: 'Id', label: 'Id' },
-            { key: 'Part', label: 'Part' },
-            { key: 'Component', label: 'Component' },
-            { key: 'ProdNumber', label: 'Production Number' },
-            { key: 'Run', label: 'Run' },
-            { key: 'Operator', label: 'Operator' },
-            { key: 'Machine', label: 'Machine' },
-            { key: 'StartDateTime', label: 'Start Time' },
-            { key: 'EndDateTime', label: 'End Time' },
-            { key: 'ElapsedTime', label: 'Elapsed Time' },
-            { key: 'PressType', label: 'Press Type' },
-            { key: 'Difficulty', label: 'Difficulty' },
-            { key: 'SetupComp', label: 'Setup Complete' },
-            { key: 'AssistanceReq', label: 'Assist Required' },
-            { key: 'AssistedBy', label: 'Assisted By' },
-            { key: 'Notes', label: 'Notes' }
-        ];
-        window.renderMyDataTable('myReactTableRoot', data, columns, true);
-    });
+   
 
       function openStopSetupModal(part, run, startDateTime, machine) {
         console.log("openStopSetupModal called with machine:", machine);
@@ -371,6 +561,8 @@
         });
     });
 </script>
+
+   
 
 
 <script src="/js/mydatatable.bundle.js"></script>
