@@ -206,16 +206,61 @@ namespace DashboardReportApp.Controllers
 
         [HttpGet]
         public async Task<IActionResult> ApiRuns(
-    int page = 1,
-    int pageSize = 100,
-    string q = null,
-    string machine = null,
-    DateTime? start = null,
-    DateTime? end = null)
+      int page = 1,
+      int pageSize = 100,
+      string q = null,
+      string machine = null,
+      DateTime? start = null,
+      DateTime? end = null)
         {
             var result = await _pressRunLogService.GetRunsPagedAsync(page, pageSize, q, machine, start, end);
-            return Json(new { rows = result.Rows, total = result.Total, page = result.Page, pageSize = result.PageSize });
+
+            // Shape rows with derived values the grid expects
+            var rows = result.Rows.Select(r =>
+            {
+                var startDt = r.StartDateTime ?? DateTime.MinValue;
+                var endDt = r.EndDateTime ?? DateTime.Now;
+
+                var elapsedSec = Math.Max(0, (long)(endDt - startDt).TotalSeconds);
+
+                int? pcs = (r.PcsEnd.HasValue && r.PcsStart.HasValue)
+                    ? r.PcsEnd.Value - r.PcsStart.Value
+                    : (int?)null;
+
+                double? cycleSec = (pcs.HasValue && pcs.Value > 0)
+                    ? Math.Round(elapsedSec / (double)pcs.Value, 2)
+                    : (double?)null;
+
+                return new
+                {
+                    id = r.Id,
+                    part = r.Part,
+                    component = r.Component,
+                    prodNumber = r.ProdNumber,
+                    run = r.Run,
+                    machine = r.Machine,
+
+                    // ✅ alias Operator → operator
+                    @operator = r.Operator,
+
+                    startDateTime = r.StartDateTime,
+                    endDateTime = r.EndDateTime,
+                    skidNumber = r.SkidNumber,
+                    pcsStart = r.PcsStart,
+                    pcsEnd = r.PcsEnd,
+                    scrap = r.Scrap,
+                    notes = r.Notes,
+
+                    elapsedTime = elapsedSec,
+                    pcs = pcs,
+                    cycleTime = cycleSec
+                };
+            }).ToList();
+
+
+            return Json(new { rows, total = result.Total, page = result.Page, pageSize = result.PageSize });
         }
+
         [HttpGet]
         public async Task<IActionResult> ApiMachines()
         {

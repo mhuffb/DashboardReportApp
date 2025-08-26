@@ -10,9 +10,12 @@ namespace DashboardReportApp.Services
 {
     public class SecondaryRunLogService
     {
-        private const string _connectionStringMySQL = "server=192.168.1.6;database=sintergy;user=admin;password=N0mad2019";
+        private readonly string _connectionStringMySQL;
         private const string UpdateTable = "secondaryrun";
-
+        public SecondaryRunLogService(IConfiguration configuration)
+        {
+            _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
+        }
         public async Task<List<SecondaryRunLogModel>> GetAllRunsAsync()
         {
             var allRuns = new List<SecondaryRunLogModel>();
