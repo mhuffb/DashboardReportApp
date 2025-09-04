@@ -178,16 +178,16 @@ SELECT LAST_INSERT_ID();";
             // Define the mapping of departments to email recipients
             var departmentEmailRecipients = new Dictionary<string, List<string>>
     {
-        { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "rseltzer@sintergy.net", "mhuff@sintergy.net" } },
+        { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mhuff@sintergy.net" } },
        // { "Finishing", new List<string> {"mhuff@sintergy.net" } },
 
-        { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" , "mhuff@sintergy.net"} },
-        { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mzaffuto@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net", "mhuff@sintergy.net" } },
+        { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" , "mhuff@sintergy.net"} },
+        { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net", "mhuff@sintergy.net" } },
         { "Molding", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "bklebacha@sintergy.net", "mhuff@sintergy.net" , "rjones@sintergy.net" } },
         { "Packing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "shipping@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net" } },
         { "Quality", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net", "jemery@sintergy.net" } },
         { "Secondary", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jkramer@sintergy.net", "mhuff@sintergy.net" } },
-        { "Sintering", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "rseltzer@sintergy.net", "ameholick@sintergy.net", "mhuff@sintergy.net" } },
+        { "Sintering", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "ameholick@sintergy.net", "mhuff@sintergy.net" } },
         { "Tooling", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "cschuckers@sintergy.net", "mhuff@sintergy.net" } }
     };
 

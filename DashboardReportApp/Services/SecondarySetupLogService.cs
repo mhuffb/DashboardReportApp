@@ -178,43 +178,34 @@ namespace DashboardReportApp.Services
 
         public async Task<List<ScheduleItem>> GetAvailableScheduleItemsAsync()
         {
-            /*  This UNION ALL “explodes” rows where secondaryWorkFlag = 3
-                into two result-rows ― one for the parent, one for the component.
-                ────────────────────────────────────────────────────────────────
-                Branch A → rows that show the PART   (flag 1  or 3)
-                Branch B → rows that show COMPONENT  (flag 2  or 3)
-            */
             const string sql = @"
-        /* ── A. PART when flag is 1 or 3 ─────────────────────────── */
-        SELECT  prodNumber,
-                part            AS itemToSetup,
-                CASE WHEN COUNT(DISTINCT run)=1 THEN MAX(run) ELSE NULL END AS run,
-                numberOfSintergySecondaryOps
-        FROM    schedule
-        WHERE   needsSintergySecondary = 1
-          AND   openToSecondary        = 1
-          AND   secondaryWorkFlag IN (1,3)
-        GROUP BY prodNumber, part, numberOfSintergySecondaryOps
-
-        UNION ALL
-
-        /* ── B. COMPONENT when flag is 2 or 3 ─────────────────────── */
-        SELECT  prodNumber,
-                component        AS itemToSetup,
-                CASE WHEN COUNT(DISTINCT run)=1 THEN MAX(run) ELSE NULL END AS run,
-                numberOfSintergySecondaryOps
-        FROM    schedule
-        WHERE   needsSintergySecondary = 1
-          AND   openToSecondary        = 1
-          AND   secondaryWorkFlag IN (2,3)
-          AND   component IS NOT NULL         /* safety */
-        GROUP BY prodNumber, component, numberOfSintergySecondaryOps
-
-        /* Order however you like */
-        ORDER BY prodNumber DESC, itemToSetup";
+WITH base AS (
+  SELECT prodNumber, run, part, component, quantity, needsSintergySecondary, openToSecondary, secondaryWorkFlag
+  FROM schedule
+  WHERE needsSintergySecondary = 1 AND openToSecondary = 1
+),
+targets AS (
+  SELECT prodNumber, run, part AS itemToSetup, quantity
+  FROM base WHERE secondaryWorkFlag IN (1,3)
+  UNION ALL
+  SELECT prodNumber, run, component AS itemToSetup, quantity
+  FROM base WHERE secondaryWorkFlag IN (2,3) AND component IS NOT NULL
+),
+dedup AS (
+  SELECT
+    prodNumber,
+    itemToSetup,
+    SUM(quantity) AS totalQty,
+    CASE WHEN COUNT(DISTINCT run)=1 THEN MAX(run) ELSE NULL END AS singleRun,
+    GROUP_CONCAT(DISTINCT run ORDER BY run SEPARATOR ',') AS runsCsv
+  FROM targets
+  GROUP BY prodNumber, itemToSetup
+)
+SELECT prodNumber, itemToSetup, totalQty, singleRun, runsCsv
+FROM dedup
+ORDER BY prodNumber DESC, itemToSetup ASC;";
 
             var list = new List<ScheduleItem>();
-
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
             await using var cmd = new MySqlCommand(sql, conn);
@@ -222,18 +213,40 @@ namespace DashboardReportApp.Services
 
             while (await rdr.ReadAsync())
             {
+                var partId = rdr["itemToSetup"].ToString();
+
                 list.Add(new ScheduleItem
                 {
-                    Part = rdr["itemToSetup"].ToString(),            // one line per target
+                    Part = partId,
                     ProdNumber = rdr["prodNumber"].ToString(),
-                    Run = rdr.IsDBNull("run") ? (int?)null : rdr.GetInt32("run"),
-                    NumberOfSintergySecondaryOps = rdr.GetInt32("numberOfSintergySecondaryOps")
+                    Run = rdr.IsDBNull("singleRun") ? (int?)null : Convert.ToInt32(rdr["singleRun"]),
+                    RunsCsv = rdr["runsCsv"]?.ToString(),
+                    TotalQuantity = rdr.IsDBNull("totalQty") ? 0 : Convert.ToInt32(rdr["totalQty"]),
+
+                    // CRITICAL: recompute ops for THIS target item (parent or component)
+                    NumberOfSintergySecondaryOps = ComputeOpsFor(partId)
                 });
             }
             return list;
         }
 
 
+
+        private int ComputeOpsFor(string itemId)
+        {
+            var opsList = _sharedService.GetOrderOfOps(itemId) ?? new List<string>();
+            int count = 0;
+            foreach (var op in opsList)
+            {
+                var s = op ?? string.Empty;
+                bool hasSintergy = s.IndexOf("Sintergy", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool hasMachining = s.IndexOf("Machin", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (hasSintergy && hasMachining) { count++; continue; }
+                if (s.IndexOf("Tap", StringComparison.OrdinalIgnoreCase) >= 0) { count++; continue; }
+                if (s.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0) { count++; continue; }
+            }
+            return count;
+        }
 
 
 

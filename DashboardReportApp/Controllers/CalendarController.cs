@@ -523,6 +523,9 @@ http://192.168.1.6:5000/Calendar
         {
             try
             {
+                ModelState.Remove(nameof(CalendarEventModel.SubmittedOn));
+                ModelState.Remove(nameof(CalendarEventModel.Scheduler));
+
                 /* 1️⃣  Basic validation */
                 if (!ModelState.IsValid)
                     throw new InvalidOperationException("ModelState is invalid");

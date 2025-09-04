@@ -28,9 +28,12 @@
     {
         public string Part { get; set; }
         public string ProdNumber { get; set; }
-        public int? Run { get; set; } // Make sure this is a property, not a method
+        public int? Run { get; set; }           // auto-filled when unique
+        public string RunsCsv { get; set; }     // for multi-run picker in UI
         public int NumberOfSintergySecondaryOps { get; set; }
+        public int TotalQuantity { get; set; }
     }
+
 
 
     public class PowderMixEntry
