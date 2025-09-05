@@ -244,6 +244,7 @@ ORDER BY prodNumber DESC, itemToSetup ASC;";
                 if (hasSintergy && hasMachining) { count++; continue; }
                 if (s.IndexOf("Tap", StringComparison.OrdinalIgnoreCase) >= 0) { count++; continue; }
                 if (s.IndexOf("Honing", StringComparison.OrdinalIgnoreCase) >= 0) { count++; continue; }
+                if (s.IndexOf("Drill", StringComparison.OrdinalIgnoreCase) >= 0) { count++; continue; }
             }
             return count;
         }

@@ -175,35 +175,9 @@ SELECT LAST_INSERT_ID();";
 
         private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
-            // Define the mapping of departments to email recipients
-            var departmentEmailRecipients = new Dictionary<string, List<string>>
-    {
-        { "Finishing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "mhuff@sintergy.net" } },
-       // { "Finishing", new List<string> {"mhuff@sintergy.net" } },
-
-        { "General", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net" , "mhuff@sintergy.net"} },
-        { "Maintenance", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "rjones@sintergy.net", "mhuff@sintergy.net" } },
-        { "Molding", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "bklebacha@sintergy.net", "mhuff@sintergy.net" , "rjones@sintergy.net" } },
-        { "Packing", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "shipping@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net" } },
-        { "Quality", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "dalmendarez@sintergy.net", "mhuff@sintergy.net", "jemery@sintergy.net" } },
-        { "Secondary", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jkramer@sintergy.net", "mhuff@sintergy.net" } },
-        { "Sintering", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "ameholick@sintergy.net", "mhuff@sintergy.net" } },
-        { "Tooling", new List<string> { "ryoung@sintergy.net", "tgrieneisen@sintergy.net", "badamson@sintergy.net", "jemery@sintergy.net", "cschuckers@sintergy.net", "mhuff@sintergy.net" } }
-    };
-
-            // Validate the department and get recipients
-            if (!departmentEmailRecipients.ContainsKey(request.Department))
-            {
-                Console.WriteLine($"Invalid department: {request.Department}");
-                return;
-            }
-
-            var recipients = departmentEmailRecipients[request.Department];
-
-
-            // Send emails to all recipients
-            foreach (var recipient in recipients)
-            {
+            
+            string recipient = request.Department + "@sintergy.net";
+           
                 try
                 {
                     await SendIndividualEmailAsync(pdfPath, recipient, request);
@@ -212,7 +186,7 @@ SELECT LAST_INSERT_ID();";
                 {
                     Console.WriteLine($"Error sending email to {recipient}: {ex.Message}");
                 }
-            }
+            
         }
 
         private async Task SendIndividualEmailAsync(string pdfPath, string recipient, MaintenanceRequestModel request)
@@ -222,17 +196,33 @@ SELECT LAST_INSERT_ID();";
             email.To.Add(new MimeKit.MailboxAddress(recipient, recipient));
             email.Subject = $"New Maintenance Request: {request.Id}";
 
+            // 🔎 Pull equipment details
+            var eq = await GetEquipmentDetailsAsync(request.Equipment);
+
+            // Build readable equipment block
+            string equipmentBlock = eq is null
+                ? "Equipment Details: (no match found)"
+                : $@"Equipment Details:
+  Dept: {eq.Value.Department}
+  Name: {eq.Value.Name}
+  Brand: {eq.Value.Brand}
+  Model: {eq.Value.Model}
+  Serial: {eq.Value.Serial}
+  Description: {eq.Value.Description}";
+
             var builder = new MimeKit.BodyBuilder
             {
                 TextBody = $@"A new maintenance request has been created.
 
 Requester: {request.Requester}
 Equipment: {request.Equipment}
-Problem: {request.Problem}"
+Problem: {request.Problem}
+
+{equipmentBlock}"
             };
 
-            // Attach the PDF
-            if (File.Exists(pdfPath))
+            // Attach the generated PDF (if present)
+            if (!string.IsNullOrWhiteSpace(pdfPath) && File.Exists(pdfPath))
             {
                 builder.Attachments.Add(pdfPath);
             }
@@ -241,8 +231,8 @@ Problem: {request.Problem}"
                 Console.WriteLine($"PDF file not found at {pdfPath}");
             }
 
-            // Attach the PDF
-            if (File.Exists(request.FileAddress1))
+            // Attach user-uploaded image (if present)
+            if (!string.IsNullOrWhiteSpace(request.FileAddress1) && File.Exists(request.FileAddress1))
             {
                 builder.Attachments.Add(request.FileAddress1);
             }
@@ -250,8 +240,6 @@ Problem: {request.Problem}"
             email.Body = builder.ToMessageBody();
 
             using var smtp = new MailKit.Net.Smtp.SmtpClient();
-
-            // SSL certificate bypass (not recommended for production)
             smtp.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
 
             try
@@ -262,7 +250,6 @@ Problem: {request.Problem}"
             }
             catch (Exception ex)
             {
-                // Log the exception
                 Console.WriteLine($"Error sending email to {recipient}: {ex.Message}");
                 throw;
             }
@@ -495,6 +482,47 @@ Problem: {request.Problem}"
             }
             return requests;
         }
+
+        private async Task<(string Department, string Name, string Brand, string Description, string Model, string Serial)?> GetEquipmentDetailsAsync(string equipmentNo)
+        {
+            if (string.IsNullOrWhiteSpace(equipmentNo)) return null;
+
+            const string sql = @"
+        SELECT 
+            department, 
+            name, 
+            brand, 
+            description, 
+            model, 
+            serial
+        FROM equipment
+        WHERE equipment = @equipment
+        LIMIT 1;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@equipment", equipmentNo);
+
+            using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (await reader.ReadAsync())
+            {
+                string GetStr(string col) => reader[col] == DBNull.Value ? "" : reader[col].ToString();
+
+                return (
+                    Department: GetStr("department"),
+                    Name: GetStr("name"),
+                    Brand: GetStr("brand"),
+                    Description: GetStr("description"),
+                    Model: GetStr("model"),
+                    Serial: GetStr("serial")
+                );
+            }
+
+            return null;
+        }
+
     }
 
 }
