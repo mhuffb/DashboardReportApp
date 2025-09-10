@@ -18,4 +18,21 @@
         public int SkidNumber { get; set; }
         public int Pcs { get; set; }
     }
+
+    public class SinterRunLogViewModel
+    {
+        public List<SinterRunSkid> PageItems { get; set; } = new();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int Total { get; set; }
+
+        // Aux data
+        public List<string> Operators { get; set; } = new();
+        public List<string> Furnaces { get; set; } = new();
+        public List<PressRunLogModel> OpenGreenSkids { get; set; } = new();
+        public List<SinterRunSkid> OpenSinterRuns { get; set; } = new();
+        public string? Search { get; set; }
+        public string? Sort { get; set; } // column name
+        public string? Dir { get; set; }  // "ASC" | "DESC"
+    }
 }

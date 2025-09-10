@@ -1,17 +1,38 @@
-﻿@model List<DashboardReportApp.Models.SinterRunSkid>
+﻿@model DashboardReportApp.Models.SinterRunLogViewModel
 @using System.Text.Json;
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    var pageSizeOptions = new List<SelectListItem>
+    {
+        new("25 / page",  "25",  Model.PageSize == 25),
+        new("50 / page",  "50",  Model.PageSize == 50),
+        new("100 / page", "100", Model.PageSize == 100),
+        new("200 / page", "200", Model.PageSize == 200),
+    };
+
+    var sortOptions = new List<SelectListItem>
+    {
+        new("ID",          "id",            string.Equals(Model.Sort, "id", StringComparison.OrdinalIgnoreCase)),
+        new("Start",       "startDateTime", string.Equals(Model.Sort, "startDateTime", StringComparison.OrdinalIgnoreCase)),
+        new("End",         "endDateTime",   string.Equals(Model.Sort, "endDateTime", StringComparison.OrdinalIgnoreCase)),
+        new("Prod #",      "prodNumber",    string.Equals(Model.Sort, "prodNumber", StringComparison.OrdinalIgnoreCase)),
+        new("Part",        "part",          string.Equals(Model.Sort, "part", StringComparison.OrdinalIgnoreCase)),
+        new("Furnace",     "oven",          string.Equals(Model.Sort, "oven", StringComparison.OrdinalIgnoreCase)),
+        new("Operator",    "operator",      string.Equals(Model.Sort, "operator", StringComparison.OrdinalIgnoreCase)),
+    };
+
+    var dirOptions = new List<SelectListItem>
+    {
+        new("Desc", "DESC", string.Equals(Model.Dir, "DESC", StringComparison.OrdinalIgnoreCase)),
+        new("Asc",  "ASC",  string.Equals(Model.Dir, "ASC",  StringComparison.OrdinalIgnoreCase)),
+    };
+}
+
 
 @{
     ViewData["Title"] = "Sintering Run Log";
 
-    // 1) Operators from the DB
-    var operators = ViewData["Operators"] as List<string> ?? new List<string>();
-
-    // 2) Get open skids from the ViewBag (for green skids)
-    var openGreenSkids = ViewBag.OpenGreenSkids as List<DashboardReportApp.Models.PressRunLogModel>
-                   ?? new List<DashboardReportApp.Models.PressRunLogModel>();
-    // List of furnaces for the modal dropdown
-    var furnaces = ViewData["Furnaces"] as List<string> ?? new List<string>();
+   
 
 }
 
@@ -45,9 +66,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var skid in Model.Where(s => s.EndDateTime == null))
+                            @foreach (var skid in Model.OpenSinterRuns)
                             {
-                                var matchingPressRun = openGreenSkids.FirstOrDefault(pr =>
+                                var matchingPressRun = Model.OpenGreenSkids.FirstOrDefault(pr =>
                                 pr.ProdNumber == skid.ProdNumber &&
                                 pr.Part == skid.Part &&
                                 pr.SkidNumber == skid.SkidNumber);
@@ -63,7 +84,7 @@
                                     <td>@skid.Operator</td>
                                     <td>@skid.Machine</td>
                                     <td>@skid.Part</td>
-                                    <td>@skid.Component</td> <!-- Display Component -->
+                                    <td>@skid.Component</td>
                                     <td>@skid.SkidNumber</td>
                                     <td>@skid.Pcs</td>
                                     <td>@skid.Process</td>
@@ -131,7 +152,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var pressRun in openGreenSkids)
+                            @foreach (var pressRun in Model.OpenGreenSkids)
                             {
                                 <tr>
                                     <td>@pressRun.Id</td>
@@ -197,52 +218,104 @@
 
     <!-- Full List of Records (React Table) -->
     <h3 class="text-center mt-4">All Sinter Run Records</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div class="container-fluid px-3 mt-4">
-                <div id="myReactSinterRunTableRoot"
-                     data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
-                </div>
+<div class="card shadow mb-4">
+  <div class="card-body">
+        <form class="row g-2 mb-3" method="get" action="/SinterRunLog">
+            <div class="col-sm-4">
+                <input asp-for="Search" name="Search" class="form-control" placeholder="Search Prod/Run/Part/Oven/Operator" />
             </div>
-        </div>
+
+            <div class="col-sm-2">
+                <select asp-for="PageSize" asp-items="pageSizeOptions" class="form-select"></select>
+            </div>
+
+            <div class="col-sm-2">
+                <select asp-for="Sort" asp-items="sortOptions" class="form-select"></select>
+            </div>
+
+            <div class="col-sm-2">
+                <select asp-for="Dir" asp-items="dirOptions" class="form-select"></select>
+            </div>
+
+            <div class="col-sm-2">
+                <button class="btn btn-primary w-100">Apply</button>
+            </div>
+        </form>
+
+
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered shadow-sm wider-table">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Production Number</th>
+                <th>Run</th>
+                <th>Part</th>
+                <th>Component</th>
+                <th>Furnace</th>
+                <th>Skid #</th>
+                <th>Pcs</th>
+                <th>Process</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Operator</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in Model.PageItems)
+        {
+            <tr>
+                <td>@row.Id</td>
+                <td>@row.ProdNumber</td>
+                <td>@row.Run</td>
+                <td>@row.Part</td>
+                <td>@row.Component</td>
+                <td>@row.Machine</td>
+                <td>@row.SkidNumber</td>
+                <td>@row.Pcs</td>
+                <td>@row.Process</td>
+                <td>@row.StartDateTime</td>
+                <td>@row.EndDateTime</td>
+                <td>@row.Operator</td>
+                <td>@row.Notes</td>
+            </tr>
+        }
+        </tbody>
+      </table>
     </div>
 
-    <script src="/js/mydatatable.bundle.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const container = document.getElementById("myReactSinterRunTableRoot");
-            if (!container) return;
+    @{
+        var firstItem = (Model.Total == 0) ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
+        var lastItem  = Math.Min(Model.Page * Model.PageSize, Model.Total);
+        var totalPages = (int)Math.Ceiling((double)Model.Total / Model.PageSize);
+        string qsBase = $"?search={Model.Search}&pageSize={Model.PageSize}&sort={Model.Sort}&dir={Model.Dir}";
+    }
+    <div class="d-flex justify-content-between align-items-center">
+        <div>Showing <strong>@firstItem–@lastItem</strong> of <strong>@Model.Total</strong></div>
+        <nav>
+            <ul class="pagination mb-0">
+                <li class="page-item @(Model.Page<=1?"disabled":"")">
+                    <a class="page-link" href="@($"/SinterRunLog{qsBase}&page={Model.Page-1}")">Prev</a>
+                </li>
+                @for (int p = Math.Max(1, Model.Page-2); p <= Math.Min(totalPages, Model.Page+2); p++)
+                {
+                    <li class="page-item @(p==Model.Page?"active":"")">
+                        <a class="page-link" href="@($"/SinterRunLog{qsBase}&page={p}")">@p</a>
+                    </li>
+                }
+                <li class="page-item @(Model.Page>=totalPages?"disabled":"")">
+                    <a class="page-link" href="@($"/SinterRunLog{qsBase}&page={Model.Page+1}")">Next</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+  </div>
+</div>
 
-            // Get JSON data from the Razor model
-            const rawData = container.getAttribute("data-records");
-            const data = JSON.parse(rawData);
 
-                       const columns = [
-                { key: "Id", label: "ID" },
-                { key: "ProdNumber", label: "Production Number" },
-                { key: "Run", label: "Run" },
-                { key: "Part", label: "Part" },
-                { key: "Component", label: "Component" }, // New Column
-                { key: "Machine", label: "Furnace" },
-                { key: "SkidNumber", label: "Skid Number" },
-                { key: "Pcs", label: "Pcs" },
-                { key: "Process", label: "Process" },
-                { key: "StartDateTime", label: "Start Time" },
-                { key: "EndDateTime", label: "End Time" },
-                { key: "Operator", label: "Operator" },
-                { key: "Notes", label: "Notes" },
-                { key: "Open", label: "Open" }
-            ];
-
-
-
-            if (window.renderMyDataTable) {
-                window.renderMyDataTable("myReactSinterRunTableRoot", data, columns, true);
-            } else {
-                console.error("React table render function not found!");
-            }
-        });
-    </script>
+   
+  
 
     <!-- Modal for Logging In a Skid Run -->
     <div class="modal fade" id="loginSkidModal" tabindex="-1" aria-hidden="true">
@@ -281,24 +354,27 @@
 
                         <div class="mb-3">
                             <label for="Operator" class="form-label">Operator</label>
-                            <select id="Operator" name="Operator" class="form-select" required>
-                                <option value="">Select an Operator</option>
-                                @foreach (var op in operators)
-                                {
-                                    <option value="@op">@op</option>
-                                }
-                            </select>
+                        <select id="Operator" name="Operator" class="form-select" required>
+                            <option value="">Select an Operator</option>
+                            @foreach (var op in Model.Operators ?? Enumerable.Empty<string>())
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+
+                       
+
                         </div>
 
                         <div class="mb-3">
                             <label for="Machine" class="form-label">Furnace</label>
-                            <select id="Machine" name="Machine" class="form-select" required>
-                                <option value="">Select a Furnace</option>
-                                @foreach (var furnace in furnaces)
-                                {
-                                    <option value="@furnace">@furnace</option>
-                                }
-                            </select>
+                        <select id="Machine" name="Machine" class="form-select" required>
+                            <option value="">Select a Furnace</option>
+                            @foreach (var furnace in Model.Furnaces ?? Enumerable.Empty<string>())
+                            {
+                                <option value="@furnace">@furnace</option>
+                            }
+                        </select>
                         </div>
 
                         <div class="mb-3">

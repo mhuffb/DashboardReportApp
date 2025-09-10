@@ -1,4 +1,5 @@
-﻿@model List<DashboardReportApp.Models.AssemblyModel>
+﻿@model DashboardReportApp.Models.AssemblyRunViewModel
+
 @using System.Text.Json;
 
 @{
@@ -35,7 +36,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var pressRun in openGreenSkids)
+                            @foreach (var pressRun in Model.OpenGreenSkids)
+
                             {
                                 <tr>
                                     <td>@pressRun.Id</td>
@@ -92,17 +94,106 @@
     </script>
 
    
-    <!-- Full List of Records (React Table) -->
-    <h3 class="text-center mt-4">All Assembly Run Records</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div class="container-fluid px-3 mt-4">
-                <div id="myReactAssemblyRunTableRoot"
-                     data-records='@Html.Raw(JsonSerializer.Serialize(Model))'>
-                </div>
-            </div>
+   <h3 class="text-center mt-4">All Assembly Run Records</h3>
+<div class="card shadow mb-4">
+  <div class="card-body">
+    <form class="row g-2 mb-3" method="get" action="/AssemblyRun">
+        <div class="col-sm-4">
+            <input name="search" value="@Model.Search" class="form-control" placeholder="Search Prod/Part/Operator" />
         </div>
+        <div class="col-sm-2">
+                        <select name="pageSize" class="form-select">
+                            @foreach (var size in new[] { 25, 50, 100, 200 })
+                            {
+                                <option value="@size" selected="@(Model.PageSize == size)">
+                                    @size / page
+                                </option>
+                            }
+                        </select>
+
+        </div>
+        <div class="col-sm-2">
+                        <select name="sort" class="form-select">
+                            <option value="id" selected="@(Model.Sort == "id")">ID</option>
+                            <option value="endDateTime" selected="@(Model.Sort == "endDateTime")">End</option>
+                            <option value="prodNumber" selected="@(Model.Sort == "prodNumber")">Prod #</option>
+                            <option value="part" selected="@(Model.Sort == "part")">Part</option>
+                            <option value="operator" selected="@(Model.Sort == "operator")">Operator</option>
+                        </select>
+
+        </div>
+        <div class="col-sm-2">
+                        <select name="dir" class="form-select">
+                            <option value="DESC" selected="@(Model.Dir == "DESC")">Desc</option>
+                            <option value="ASC" selected="@(Model.Dir == "ASC")">Asc</option>
+                        </select>
+
+        </div>
+        <div class="col-sm-2">
+            <button class="btn btn-primary w-100">Apply</button>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered shadow-sm wider-table">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Prod Number</th>
+                <th>Part</th>
+                <th>Skid #</th>
+                <th>Pcs</th>
+                <th>End</th>
+                <th>Operator</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in Model.PageItems)
+        {
+            <tr>
+                <td>@row.Id</td>
+                <td>@row.ProdNumber</td>
+                <td>@row.Part</td>
+                <td>@row.SkidNumber</td>
+                <td>@row.Pcs</td>
+                <td>@row.EndDateTime</td>
+                <td>@row.Operator</td>
+                <td>@row.Notes</td>
+            </tr>
+        }
+        </tbody>
+      </table>
     </div>
+
+    @{
+        var firstItem = (Model.Total == 0) ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
+        var lastItem  = Math.Min(Model.Page * Model.PageSize, Model.Total);
+        var totalPages = (int)Math.Ceiling((double)Model.Total / Model.PageSize);
+        string qsBase = $"?search={Model.Search}&pageSize={Model.PageSize}&sort={Model.Sort}&dir={Model.Dir}";
+    }
+    <div class="d-flex justify-content-between align-items-center">
+        <div>Showing <strong>@firstItem–@lastItem</strong> of <strong>@Model.Total</strong></div>
+        <nav>
+            <ul class="pagination mb-0">
+                <li class="page-item @(Model.Page<=1?"disabled":"")">
+                    <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={Model.Page-1}")">Prev</a>
+                </li>
+                @for (int p = Math.Max(1, Model.Page-2); p <= Math.Min(totalPages, Model.Page+2); p++)
+                {
+                    <li class="page-item @(p==Model.Page?"active":"")">
+                        <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={p}")">@p</a>
+                    </li>
+                }
+                <li class="page-item @(Model.Page>=totalPages?"disabled":"")">
+                    <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={Model.Page+1}")">Next</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+  </div>
+</div>
+
 
     <script src="/js/mydatatable.bundle.js"></script>
     <script>

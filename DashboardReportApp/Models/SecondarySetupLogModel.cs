@@ -34,5 +34,17 @@ namespace DashboardReportApp.Models
         public sbyte? Open { get; set; }
 
     }
-
+    public class SecondarySetupLogViewModel
+    {
+        public List<SecondarySetupLogModel> PageItems { get; set; } = new();
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 50;
+        public int Total { get; set; } = 0;
+        public string Search { get; set; } = "";
+        public string Sort { get; set; } = "id";
+        public string Dir { get; set; } = "DESC";
+        public IEnumerable<string> Operators { get; set; } = new List<string>();
+        public IEnumerable<string> Machines { get; set; } = new List<string>();
+        public IEnumerable<ScheduleItem> ScheduleItems { get; set; } = new List<ScheduleItem>();
+    }
 }

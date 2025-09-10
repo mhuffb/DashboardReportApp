@@ -24,5 +24,17 @@
         public IEnumerable<string> Operators { get; set; }
         public IEnumerable<string> Machines { get; set; }
         public IEnumerable<SecondaryRunLogModel> OpenRuns { get; set; }
+
+       
+    }
+    public class SecondaryRunLogViewModel
+    {
+        public List<SecondaryRunLogModel> PageItems { get; set; } = new();
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 50;
+        public int Total { get; set; } = 0;
+        public string Search { get; set; } = "";
+        public string Sort { get; set; } = "id";
+        public string Dir { get; set; } = "DESC";
     }
 }

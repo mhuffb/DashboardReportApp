@@ -13,15 +13,29 @@ namespace DashboardReportApp.Controllers
             _service = service;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string search, int page = 1, int pageSize = 50, string sort = "id", string dir = "DESC")
         {
-            ViewBag.Operators = await _service.GetOperatorsAsync();
-            ViewBag.Machines = await _service.GetEquipmentAsync();
-            // Load the schedule items for the dropdown
-            ViewBag.ScheduleItems = await _service.GetAvailableScheduleItemsAsync();
+            var operators = await _service.GetOperatorsAsync();
+            var machines = await _service.GetEquipmentAsync();
+            var scheduleItems = await _service.GetAvailableScheduleItemsAsync();
 
-            var allRuns = await _service.GetAllRecords();
-            return View(allRuns);
+            var (pageItems, total) = await _service.GetPagedRecordsAsync(page, pageSize, sort, dir, search);
+
+            var vm = new SecondarySetupLogViewModel
+            {
+                PageItems = pageItems,
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                Search = search,
+                Sort = sort,
+                Dir = dir,
+                Operators = operators,
+                Machines = machines,
+                ScheduleItems = scheduleItems
+            };
+
+            return View(vm);
         }
 
 

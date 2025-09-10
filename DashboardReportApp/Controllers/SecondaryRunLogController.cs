@@ -2,6 +2,7 @@
 using DashboardReportApp.Services;
 using System.Threading.Tasks;
 using DashboardReportApp.Models;
+using static DashboardReportApp.Models.SecondaryRunLogModel;
 
 namespace DashboardReportApp.Controllers
 {
@@ -16,21 +17,31 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpGet]
-        public async Task<IActionResult> Index()
-            {
+        public async Task<IActionResult> Index(string search, int page = 1, int pageSize = 50, string sort = "id", string dir = "DESC")
+        {
+            // Keep these ViewBags for the top two tables and modal
             ViewBag.Operators = await _secondaryRunLogService.GetOperatorsAsync();
             ViewBag.Machines = await _secondaryRunLogService.GetMachinesAsync();
             ViewBag.OpenRuns = await _secondaryRunLogService.GetLoggedInRunsAsync();
             ViewBag.AvailableParts = await _secondaryRunLogService.GetAvailableParts();
 
-            // Fetch all runs 
-            var allRuns = await _secondaryRunLogService.GetAllRunsAsync();
+            var (pageItems, total) = await _secondaryRunLogService.GetPagedRunsAsync(page, pageSize, sort, dir, search);
 
-            
-            // Return all runs as the model for React table
-            return View(allRuns);
+            var vm = new SecondaryRunLogViewModel
+            {
+                PageItems = pageItems,
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                Search = search,
+                Sort = sort,
+                Dir = dir
+            };
+
+            return View(vm);
         }
-        
+
+
 
         [HttpPost]
         public async Task<IActionResult> Login(SecondaryRunLogModel model)

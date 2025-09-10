@@ -15,22 +15,30 @@ namespace DashboardReportApp.Controllers
             _sharedService = serviceShared;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string search, int page = 1, int pageSize = 50, string sort = "id", string dir = "DESC")
         {
-            // 1) Get operators and furnaces from the service
             var operators = _assemblyService.GetOperators();
-            ViewData["Operators"] = operators ?? new List<string>();
-
-
-            // 2) Fetch open skids (where open = 1 and skidNumber > 0) from the pressrun table
             var openGreenSkids = await _assemblyService.GetOpenGreenSkidsAsync();
-            ViewBag.OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>();
 
+            var (pageItems, total) = await _assemblyService.GetPagedRunsAsync(page, pageSize, sort, dir, search);
 
-            // 4) Get all sinter run records for the React table
-            var allRuns = await _assemblyService.GetAllRunsAsync();
-            return View(allRuns);
+            var vm = new AssemblyRunViewModel
+            {
+                PageItems = pageItems,
+                OpenGreenSkids = openGreenSkids,
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                Search = search,
+                Sort = sort,
+                Dir = dir
+            };
+
+            ViewData["Operators"] = operators;
+
+            return View(vm);
         }
+
 
         [HttpPost("LogSkid")]
         public async Task<IActionResult> LoginToSkidAsync(AssemblyModel model)

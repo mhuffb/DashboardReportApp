@@ -14,5 +14,17 @@ namespace DashboardReportApp.Models
         public int? SkidNumber { get; set; }
         public int? Pcs { get; set; }
     }
+
+    public class AssemblyRunViewModel
+    {
+        public List<AssemblyModel> PageItems { get; set; } = new();
+        public List<PressRunLogModel> OpenGreenSkids { get; set; } = new();
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 50;
+        public int Total { get; set; } = 0;
+        public string Search { get; set; } = "";
+        public string Sort { get; set; } = "id";
+        public string Dir { get; set; } = "DESC";
+    }
 }
 

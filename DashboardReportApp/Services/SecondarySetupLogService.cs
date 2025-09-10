@@ -250,6 +250,85 @@ ORDER BY prodNumber DESC, itemToSetup ASC;";
         }
 
 
+        public async Task<(List<SecondarySetupLogModel> Items, int TotalCount)> GetPagedRecordsAsync(
+    int page, int pageSize, string sort, string dir, string search)
+        {
+            var items = new List<SecondarySetupLogModel>();
+            int total = 0;
+
+            var validSort = sort switch
+            {
+                "date" => "date",
+                "prodNumber" => "prodNumber",
+                "part" => "part",
+                "operator" => "operator",
+                "machine" => "machine",
+                _ => "id"
+            };
+            var validDir = dir?.ToUpper() == "ASC" ? "ASC" : "DESC";
+
+            string whereClause = "";
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                whereClause = @"WHERE prodNumber LIKE @search
+                     OR part LIKE @search
+                     OR operator LIKE @search
+                     OR machine LIKE @search";
+            }
+
+            string countSql = $"SELECT COUNT(*) FROM secondarysetup {whereClause}";
+            string dataSql = $@"
+        SELECT id, date, operator, op, part, prodNumber, machine, run,
+               pcs, scrapMach, scrapNonMach, notes, setupHours, timestamp
+        FROM secondarysetup
+        {whereClause}
+        ORDER BY {validSort} {validDir}
+        LIMIT @pageSize OFFSET @offset";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // total
+            await using (var countCmd = new MySqlCommand(countSql, conn))
+            {
+                if (!string.IsNullOrWhiteSpace(search))
+                    countCmd.Parameters.AddWithValue("@search", $"%{search}%");
+                total = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+            }
+
+            // page data
+            await using (var dataCmd = new MySqlCommand(dataSql, conn))
+            {
+                dataCmd.Parameters.AddWithValue("@pageSize", pageSize);
+                dataCmd.Parameters.AddWithValue("@offset", (page - 1) * pageSize);
+                if (!string.IsNullOrWhiteSpace(search))
+                    dataCmd.Parameters.AddWithValue("@search", $"%{search}%");
+
+                await using var reader = await dataCmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    items.Add(new SecondarySetupLogModel
+                    {
+                        Id = reader.GetInt32("id"),
+                        Date = reader.IsDBNull("date") ? default : reader.GetDateTime("date"),
+                        ProdNumber = reader["prodNumber"].ToString(),
+                        Run = reader.IsDBNull("run") ? 0 : Convert.ToInt32(reader["run"]),
+                        Part = reader["part"].ToString(),
+                        Operator = reader["operator"].ToString(),
+                        Op = reader["op"].ToString(),
+                        Machine = reader["machine"].ToString(),
+                        Pcs = reader["pcs"] as int?,
+                        ScrapMach = reader["scrapMach"] as int?,
+                        ScrapNonMach = reader["scrapNonMach"] as int?,
+                        SetupHours = reader["setupHours"] == DBNull.Value ? 0 : Convert.ToDecimal(reader["setupHours"]),
+                        Notes = reader["notes"].ToString(),
+                        Timestamp = reader.IsDBNull("timestamp") ? default : reader.GetDateTime("timestamp"),
+                    });
+                }
+            }
+
+            return (items, total);
+        }
 
 
     }

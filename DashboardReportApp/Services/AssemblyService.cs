@@ -388,7 +388,80 @@ ORDER BY startDateTime DESC";
 
     }
 
-      
+    public async Task<(List<AssemblyModel> Items, int TotalCount)> GetPagedRunsAsync(
+  int page, int pageSize, string sort, string dir, string search)
+    {
+        var items = new List<AssemblyModel>();
+        int total = 0;
+
+        var validSort = sort switch
+        {
+            "endDateTime" => "endDateTime",
+            "prodNumber" => "prodNumber",
+            "part" => "part",
+            "operator" => "operator",
+            _ => "id"
+        };
+        var validDir = dir?.ToUpper() == "ASC" ? "ASC" : "DESC";
+
+        string whereClause = "";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            whereClause = @"WHERE prodNumber LIKE @search
+                     OR part LIKE @search
+                     OR operator LIKE @search";
+        }
+
+        string countSql = $"SELECT COUNT(*) FROM {datatable} {whereClause}";
+        string dataSql = $@"
+        SELECT id, timestamp, operator, prodNumber, part, endDateTime, notes, open, skidNumber, pcs
+        FROM {datatable}
+        {whereClause}
+        ORDER BY {validSort} {validDir}
+        LIMIT @pageSize OFFSET @offset";
+
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+
+        // total
+        await using (var countCmd = new MySqlCommand(countSql, conn))
+        {
+            if (!string.IsNullOrWhiteSpace(search))
+                countCmd.Parameters.AddWithValue("@search", $"%{search}%");
+            total = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+        }
+
+        // page data
+        await using (var dataCmd = new MySqlCommand(dataSql, conn))
+        {
+            dataCmd.Parameters.AddWithValue("@pageSize", pageSize);
+            dataCmd.Parameters.AddWithValue("@offset", (page - 1) * pageSize);
+            if (!string.IsNullOrWhiteSpace(search))
+                dataCmd.Parameters.AddWithValue("@search", $"%{search}%");
+
+            await using var reader = await dataCmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(new AssemblyModel
+                {
+                    Id = reader.GetInt32("id"),
+                    Operator = reader["operator"]?.ToString(),
+                    ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                    Part = reader["part"]?.ToString() ?? "N/A",
+                    EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
+                                  ? DateTime.MinValue
+                                  : reader.GetDateTime("endDateTime"),
+                    Notes = reader["notes"]?.ToString(),
+                    Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+                    SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
+                    Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0
+                });
+            }
+        }
+
+        return (items, total);
+    }
+
 
 
 }

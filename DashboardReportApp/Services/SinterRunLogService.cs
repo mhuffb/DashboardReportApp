@@ -531,5 +531,130 @@ ORDER BY part, skidNumber;
 
         return openGreenSkids;
     }
+    // Services/SinterRunLogService.cs  (additions)
+
+    public async Task<int> GetRunsCountAsync(string? search = null)
+    {
+        string sql = @"SELECT COUNT(*)
+                   FROM sintertime
+                   /**where**/";
+        var where = new List<string>();
+        var parms = new List<MySqlParameter>();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            where.Add("(prodNumber LIKE @q OR run LIKE @q OR part LIKE @q OR oven LIKE @q OR operator LIKE @q)");
+            parms.Add(new MySqlParameter("@q", $"%{search}%"));
+        }
+        if (where.Count > 0) sql = sql.Replace("/**where**/", "WHERE " + string.Join(" AND ", where));
+        else sql = sql.Replace("/**where**/", "");
+
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddRange(parms.ToArray());
+        var result = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<List<SinterRunSkid>> GetRunsPageAsync(
+        int page, int pageSize, string? sort = "id", string? dir = "DESC", string? search = null)
+    {
+        // Whitelist sort columns to avoid SQL injection
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "id","timestamp","prodNumber","run","part","oven","startDateTime","endDateTime","operator","skidNumber","pcs" };
+        if (string.IsNullOrWhiteSpace(sort) || !allowed.Contains(sort)) sort = "id";
+        dir = string.Equals(dir, "ASC", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
+
+        int offset = Math.Max(0, (page - 1)) * Math.Max(1, pageSize);
+
+        string sql = $@"
+        SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
+        FROM sintertime
+        /**where**/
+        ORDER BY {sort} {dir}
+        LIMIT @take OFFSET @skip";
+
+        var where = new List<string>();
+        var parms = new List<MySqlParameter>
+    {
+        new("@take", pageSize),
+        new("@skip", offset),
+    };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            where.Add("(prodNumber LIKE @q OR run LIKE @q OR part LIKE @q OR oven LIKE @q OR operator LIKE @q)");
+            parms.Add(new MySqlParameter("@q", $"%{search}%"));
+        }
+        if (where.Count > 0) sql = sql.Replace("/**where**/", "WHERE " + string.Join(" AND ", where));
+        else sql = sql.Replace("/**where**/", "");
+
+        var items = new List<SinterRunSkid>();
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddRange(parms.ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(new SinterRunSkid
+            {
+                Id = reader.GetInt32("id"),
+                Timestamp = !reader.IsDBNull("timestamp") ? reader.GetDateTime("timestamp") : DateTime.MinValue,
+                Operator = reader["operator"]?.ToString(),
+                ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "N/A",
+                Part = reader["part"]?.ToString() ?? "N/A",
+                Machine = reader["oven"]?.ToString(),
+                Process = reader["process"]?.ToString(),
+                StartDateTime = !reader.IsDBNull("startDateTime") ? reader.GetDateTime("startDateTime") : DateTime.MinValue,
+                EndDateTime = reader.IsDBNull("endDateTime") ? null : reader.GetDateTime("endDateTime"),
+                Notes = reader["notes"]?.ToString(),
+                Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+                SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
+                Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
+            });
+        }
+        return items;
+    }
+
+    // Explicit open sinter runs (don't rely on paged list)
+    public async Task<List<SinterRunSkid>> GetOpenSinterRunsAsync()
+    {
+        var list = new List<SinterRunSkid>();
+        string sql = @"
+        SELECT id, timestamp, operator, prodNumber, run, part, oven, process,
+               startDateTime, endDateTime, notes, open, skidNumber, pcs
+        FROM sintertime
+        WHERE endDateTime IS NULL
+        ORDER BY id DESC";
+
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+        await using var cmd = new MySqlCommand(sql, conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            list.Add(new SinterRunSkid
+            {
+                Id = reader.GetInt32("id"),
+                Timestamp = !reader.IsDBNull("timestamp") ? reader.GetDateTime("timestamp") : DateTime.MinValue,
+                Operator = reader["operator"]?.ToString(),
+                ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "N/A",
+                Part = reader["part"]?.ToString() ?? "N/A",
+                Machine = reader["oven"]?.ToString(),
+                Process = reader["process"]?.ToString(),
+                StartDateTime = !reader.IsDBNull("startDateTime") ? reader.GetDateTime("startDateTime") : DateTime.MinValue,
+                EndDateTime = null,
+                Notes = reader["notes"]?.ToString(),
+                Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
+                SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
+                Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
+            });
+        }
+        return list;
+    }
 
 }

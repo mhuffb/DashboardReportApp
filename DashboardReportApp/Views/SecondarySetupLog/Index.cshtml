@@ -1,4 +1,5 @@
-﻿@model List<DashboardReportApp.Models.SecondarySetupLogModel>
+﻿@model DashboardReportApp.Models.SecondarySetupLogViewModel
+
 @using System.Text.Json
 
 <div class="container mt-4">
@@ -24,10 +25,11 @@
                         <label for="Operator" class="form-label">Operator:</label>
                         <select id="Operator" name="Operator" class="form-control bg-black text-goldenrod border-goldenrod" required>
                             <option value="">-- Select Operator --</option>
-                            @foreach (var op in (IEnumerable<string>)ViewBag.Operators)
+                            @foreach (var op in Model.Operators)
                             {
                                 <option value="@op">@op</option>
                             }
+
                         </select>
                     </div>
 
@@ -35,10 +37,11 @@
                         <label for="Machine" class="form-label">Machine:</label>
                         <select id="Machine" name="Machine" class="form-control bg-black text-goldenrod border-goldenrod" required>
                             <option value="">-- Select Machine --</option>
-                            @foreach (var machine in (IEnumerable<string>)ViewBag.Machines)
+                            @foreach (var machine in Model.Machines)
                             {
                                 <option value="@machine">@machine</option>
                             }
+
                         </select>
                     </div>
 
@@ -51,12 +54,13 @@
                                 Note: We now assume that each ScheduleItem has a Run property.
                                 The option value is formatted as: "Part|ProdNumber|Run"
                             *@
-                            @foreach (var item in (IEnumerable<ScheduleItem>)ViewBag.ScheduleItems)
+                            @foreach (var item in Model.ScheduleItems)
                             {
                                 <option value="@($"{item.Part}|{item.ProdNumber}|{item.Run}")" data-ops="@item.NumberOfSintergySecondaryOps">
                                     @($"{item.Part} (Production Number: {item.ProdNumber} Run: {item.Run})")
                                 </option>
                             }
+
                         </select>
                     </div>
 
@@ -107,13 +111,104 @@
     </div>
 </div>
 
-<!-- All Runs Table (React Component) -->
-<div class="container mt-4">
-    <h3 class="text-center mt-4">All Runs</h3>
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <!-- The React table will use the JSON data from the entire model -->
-            <div id="myReactTableRoot" data-records='@Html.Raw(JsonSerializer.Serialize(Model))'></div>
+<h3 class="text-center mt-4">All Runs</h3>
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form class="row g-2 mb-3" method="get" action="/SecondarySetupLog/Index">
+            <div class="col-sm-4">
+                <input name="search" value="@Model.Search" class="form-control" placeholder="Search Prod/Part/Operator/Machine" />
+            </div>
+            <div class="col-sm-2">
+                <select name="pageSize" class="form-select">
+                    @foreach (var size in new[] { 25, 50, 100, 200 })
+                    {
+                        <option value="@size" selected="@(Model.PageSize == size)">
+                            @size / page
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <select name="sort" class="form-select">
+                    <option value="id" selected="@(Model.Sort=="id")">ID</option>
+                    <option value="date" selected="@(Model.Sort=="date")">Date</option>
+                    <option value="prodNumber" selected="@(Model.Sort=="prodNumber")">Prod #</option>
+                    <option value="part" selected="@(Model.Sort=="part")">Part</option>
+                    <option value="operator" selected="@(Model.Sort=="operator")">Operator</option>
+                    <option value="machine" selected="@(Model.Sort=="machine")">Machine</option>
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <select name="dir" class="form-select">
+                    <option value="DESC" selected="@(Model.Dir=="DESC")">Desc</option>
+                    <option value="ASC" selected="@(Model.Dir=="ASC")">Asc</option>
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <button class="btn btn-primary w-100">Apply</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered shadow-sm wider-table">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Date</th>
+                        <th>Prod #</th>
+                        <th>Run</th>
+                        <th>Part</th>
+                        <th>Op</th>
+                        <th>Operator</th>
+                        <th>Setup Hours</th>
+                        <th>Machine</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.PageItems)
+                    {
+                        <tr>
+                            <td>@row.Id</td>
+                            <td>@row.Date</td>
+                            <td>@row.ProdNumber</td>
+                            <td>@row.Run</td>
+                            <td>@row.Part</td>
+                            <td>@row.Op</td>
+                            <td>@row.Operator</td>
+                            <td>@row.SetupHours</td>
+                            <td>@row.Machine</td>
+                            <td>@row.Notes</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @{
+            var firstItem = (Model.Total == 0) ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
+            var lastItem = Math.Min(Model.Page * Model.PageSize, Model.Total);
+            var totalPages = (int)Math.Ceiling((double)Model.Total / Model.PageSize);
+            string qsBase = $"?search={Model.Search}&pageSize={Model.PageSize}&sort={Model.Sort}&dir={Model.Dir}";
+        }
+        <div class="d-flex justify-content-between align-items-center">
+            <div>Showing <strong>@firstItem–@lastItem</strong> of <strong>@Model.Total</strong></div>
+            <nav>
+                <ul class="pagination mb-0">
+                    <li class="page-item @(Model.Page<=1?"disabled":"")">
+                        <a class="page-link" href="@($"/SecondarySetupLog{qsBase}&page={Model.Page-1}")">Prev</a>
+                    </li>
+                    @for (int p = Math.Max(1, Model.Page - 2); p <= Math.Min(totalPages, Model.Page + 2); p++)
+                    {
+                        <li class="page-item @(p==Model.Page?"active":"")">
+                            <a class="page-link" href="@($"/SecondarySetupLog{qsBase}&page={p}")">@p</a>
+                        </li>
+                    }
+                    <li class="page-item @(Model.Page>=totalPages?"disabled":"")">
+                        <a class="page-link" href="@($"/SecondarySetupLog{qsBase}&page={Model.Page+1}")">Next</a>
+                    </li>
+                </ul>
+            </nav>
         </div>
     </div>
 </div>

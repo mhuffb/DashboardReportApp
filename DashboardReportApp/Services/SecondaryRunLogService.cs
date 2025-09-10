@@ -289,6 +289,89 @@ namespace DashboardReportApp.Services
             }
         }
 
+        public async Task<(List<SecondaryRunLogModel> Items, int TotalCount)> GetPagedRunsAsync(
+    int page, int pageSize, string sort, string dir, string search)
+        {
+            var items = new List<SecondaryRunLogModel>();
+            int total = 0;
+
+            var validSort = sort?.ToLower() switch
+            {
+                "prodnumber" => "prodNumber",
+                "run" => "run",
+                "part" => "part",
+                "machine" => "machine",
+                "operator" => "operator",
+                "op" => "op",
+                "startdatetime" => "startDateTime",
+                "enddatetime" => "endDateTime",
+                _ => "id"
+            };
+            var validDir = dir?.ToUpper() == "ASC" ? "ASC" : "DESC";
+
+            string whereClause = "";
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                whereClause = @"WHERE prodNumber LIKE @search
+                     OR part LIKE @search
+                     OR operator LIKE @search
+                     OR machine LIKE @search
+                     OR op LIKE @search";
+            }
+
+            string countSql = $"SELECT COUNT(*) FROM secondaryrun {whereClause}";
+            string dataSql = $@"
+        SELECT id, prodNumber, run, part, machine, operator, op, pcs, scrapMach, scrapNonMach,
+               startDateTime, endDateTime, notes, appearance
+        FROM secondaryrun
+        {whereClause}
+        ORDER BY {validSort} {validDir}
+        LIMIT @pageSize OFFSET @offset";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // total
+            await using (var countCmd = new MySqlCommand(countSql, conn))
+            {
+                if (!string.IsNullOrWhiteSpace(search))
+                    countCmd.Parameters.AddWithValue("@search", $"%{search}%");
+                total = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+            }
+
+            // page data
+            await using (var dataCmd = new MySqlCommand(dataSql, conn))
+            {
+                dataCmd.Parameters.AddWithValue("@pageSize", pageSize);
+                dataCmd.Parameters.AddWithValue("@offset", (page - 1) * pageSize);
+                if (!string.IsNullOrWhiteSpace(search))
+                    dataCmd.Parameters.AddWithValue("@search", $"%{search}%");
+
+                await using var reader = await dataCmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    items.Add(new SecondaryRunLogModel
+                    {
+                        Id = reader.IsDBNull("id") ? 0 : reader.GetInt32("id"),
+                        ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
+                        Run = reader.IsDBNull("run") ? 0 : Convert.ToInt32(reader["run"]),
+                        Part = reader["part"]?.ToString() ?? "N/A",
+                        Machine = reader["machine"]?.ToString(),
+                        Operator = reader["operator"]?.ToString(),
+                        Op = reader["op"]?.ToString(),
+                        Pcs = reader.IsDBNull("pcs") ? 0 : reader.GetInt32("pcs"),
+                        ScrapMach = reader.IsDBNull("scrapMach") ? 0 : reader.GetInt32("scrapMach"),
+                        ScrapNonMach = reader.IsDBNull("scrapNonMach") ? 0 : reader.GetInt32("scrapNonMach"),
+                        StartDateTime = reader.IsDBNull("startDateTime") ? default : reader.GetDateTime("startDateTime"),
+                        EndDateTime = reader.IsDBNull("endDateTime") ? (DateTime?)null : reader.GetDateTime("endDateTime"),
+                        Notes = reader["notes"]?.ToString(),
+                        Appearance = reader["appearance"]?.ToString(),
+                    });
+                }
+            }
+
+            return (items, total);
+        }
 
     }
 }

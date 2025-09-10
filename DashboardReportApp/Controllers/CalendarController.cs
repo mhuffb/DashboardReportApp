@@ -295,7 +295,7 @@ Explanation  : {explanation}
 
 Edited on    : {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
+http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
             _sharedService.SendEmailWithAttachment(
@@ -347,7 +347,7 @@ Explanation:
 
 Deleted on {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
+http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
             _sharedService.SendEmailWithAttachment(
@@ -437,7 +437,7 @@ Occurrences:
 
 Created on : {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
+http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
                 // main notification
@@ -559,7 +559,7 @@ Description: {m.Description ?? "(none)"}
 
 Edited on {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
+http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
 
@@ -614,7 +614,7 @@ End Time   : {ev.EndTime:hh\:mm}
 
 Deleted on {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.6:5000/Calendar
+http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
             TrySendMail("calendar@sintergy.net", $"Deleted Event: {ev.Title}", body);

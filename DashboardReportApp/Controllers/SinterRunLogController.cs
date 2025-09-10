@@ -13,26 +13,47 @@ namespace DashboardReportApp.Controllers
             _sinterRunLogService = sinterRunLogService;
         }
 
-        public async Task<IActionResult> Index()
+        [HttpGet("")]
+        public async Task<IActionResult> Index(int page = 1, int pageSize = 50, string? search = null, string? sort = "id", string? dir = "DESC")
         {
-            // 1) Get operators and furnaces from the service
+            // Aux data
             var operators = _sinterRunLogService.GetOperators();
-            ViewData["Operators"] = operators ?? new List<string>();
-
             var furnaces = _sinterRunLogService.GetFurnaces();
-            ViewData["Furnaces"] = furnaces ?? new List<string>();
 
-            // 2) Fetch open skids (where open = 1 and skidNumber > 0) from the pressrun table
             var openGreenSkids = await _sinterRunLogService.GetOpenGreenSkidsAsync();
-            ViewBag.OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>();
+            var openSinterRuns = await _sinterRunLogService.GetOpenSinterRunsAsync();
 
-           
-           
+            // Paged data for the big table
+            var total = await _sinterRunLogService.GetRunsCountAsync(search);
+            var items = await _sinterRunLogService.GetRunsPageAsync(page, pageSize, sort, dir, search);
 
-            // 4) Get all sinter run records for the React table
-            var allRuns = await _sinterRunLogService.GetAllRunsAsync();
-            return View(allRuns);
+            var vm = new SinterRunLogViewModel
+            {
+                Operators = operators ?? new List<string>(),
+                Furnaces = furnaces ?? new List<string>(),
+                OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>(),
+                OpenSinterRuns = openSinterRuns ?? new List<SinterRunSkid>(),
+                PageItems = items,
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                Search = search,
+                Sort = sort,
+                Dir = dir
+            };
+
+            return View(vm);
         }
+
+        // JSON data endpoint for the React table (optional, if you want client fetch)
+        [HttpGet("Data")]
+        public async Task<IActionResult> Data(int page = 1, int pageSize = 50, string? search = null, string? sort = "id", string? dir = "DESC")
+        {
+            var total = await _sinterRunLogService.GetRunsCountAsync(search);
+            var items = await _sinterRunLogService.GetRunsPageAsync(page, pageSize, sort, dir, search);
+            return Json(new { items, page, pageSize, total });
+        }
+
 
         [HttpPost("LoginToSkid")]
         public IActionResult LoginToSkid(SinterRunSkid model)
