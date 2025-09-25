@@ -77,7 +77,7 @@ SELECT LAST_INSERT_ID();";
                     // Email the PDF
                     await SendEmailWithPdfAsync(pdfPath, request);
 
-                 //   _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
+                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
 
                     
 
@@ -176,8 +176,8 @@ SELECT LAST_INSERT_ID();";
         private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
 
-            //string recipient = request.Department + "@sintergy.net";
-            string recipient = "mhuff@sintergy.net";
+            string recipient = request.Department + "@sintergy.net";
+           // string recipient = "mhuff@sintergy.net";
             try
                 {
                     await SendIndividualEmailAsync(pdfPath, recipient, request);
