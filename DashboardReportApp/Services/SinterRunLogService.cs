@@ -11,12 +11,10 @@ using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 public class SinterRunLogService
 {
     private readonly string _connectionStringMySQL;
-    private readonly string _connectionStringDataflex;
 
     public SinterRunLogService(IConfiguration configuration)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
-        _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
     }
     /// <summary>
     /// Get *all* runs in descending order by startDateTime.

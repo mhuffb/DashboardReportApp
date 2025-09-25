@@ -4,7 +4,6 @@ using System.Net.Mail;
 using System.Net;
 using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
-using System.Data.Odbc;
 using System.Data;
 using iText.StyledXmlParser.Jsoup.Select;
 using Mysqlx.Crud;
@@ -18,7 +17,7 @@ namespace DashboardReportApp.Services
     {
         private readonly string _connectionStringMySQL;
         private readonly string _connectionStringSQLExpress;
-        private readonly string _connectionStringDataflex;
+        private readonly string _connectionStringSinTSQL;
         private readonly string _uploadFolder;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -27,7 +26,7 @@ namespace DashboardReportApp.Services
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
-            _connectionStringDataflex = configuration.GetConnectionString("DataflexConnection");
+            _connectionStringSinTSQL = configuration.GetConnectionString("SqlServerConnectionsinTSQL");
             _httpContextAccessor = httpContextAccessor;
         }
 
@@ -237,48 +236,48 @@ ORDER BY
 
         public List<string> GetOrderOfOps(string part)
         {
-            List<string> result = new List<string>();
+            var result = new List<string>();
 
-            string query = "SELECT mstep.master_id, pstep.\"desc\", mastersg.qc_prior, mastersg.qc_after " +
-                           "FROM (mstep LEFT OUTER JOIN mastersg ON (mstep.master_id = mastersg.master_id AND mstep.pstep = mastersg.pstep)) " +
-                           "LEFT OUTER JOIN pstep ON mstep.pstep = pstep.pcode " +
-                           "WHERE mstep.omit = 0 AND mstep.master_id = ? " +
-                           "AND pstep.\"desc\" IS NOT NULL " +
-                           "AND (mastersg.omit = 0 OR mastersg.omit IS NULL) " +
-                           "ORDER BY mstep.master_id";
+            const string sql = @"
+SELECT  m.master_id,
+        ps.[desc]     AS step_desc,
+        ms.qc_prior,
+        ms.qc_after
+FROM    dbo.mstep      AS m
+LEFT JOIN dbo.mastersg AS ms
+       ON m.master_id = ms.master_id
+      AND m.pstep     = ms.pstep
+LEFT JOIN dbo.pstep    AS ps
+       ON m.pstep     = ps.pcode
+WHERE   m.omit = 0
+  AND   m.master_id = @part
+  AND   ps.[desc] IS NOT NULL
+  AND   (ms.omit = 0 OR ms.omit IS NULL)
+ORDER BY m.master_id;  -- change to m.seq if you have a sequence column
+";
 
-            using (OdbcConnection conn = new OdbcConnection(_connectionStringDataflex))
-            using (OdbcCommand cmd = new OdbcCommand(query, conn))
+            using var conn = new SqlConnection(_connectionStringSinTSQL);
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part ?? (object)DBNull.Value);
+
+            conn.Open();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                // Set the part number parameter
-                cmd.Parameters.AddWithValue("?", part);
-                conn.Open();
-                using (OdbcDataReader reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        string desc = reader["desc"].ToString();
+                string desc = reader["step_desc"]?.ToString() ?? string.Empty;
 
-                        // Check if qc_prior equals 1 and add "QC Check" before the description if true.
-                        bool qcPriorIsOne = reader["qc_prior"] != DBNull.Value && Convert.ToInt32(reader["qc_prior"]) == 1;
-                        // Check if qc_after equals 1 and add "QC Check" after the description if true.
-                        bool qcAfterIsOne = reader["qc_after"] != DBNull.Value && Convert.ToInt32(reader["qc_after"]) == 1;
+                bool qcPriorIsOne = reader["qc_prior"] != DBNull.Value && Convert.ToInt32(reader["qc_prior"]) == 1;
+                bool qcAfterIsOne = reader["qc_after"] != DBNull.Value && Convert.ToInt32(reader["qc_after"]) == 1;
 
-                        if (qcPriorIsOne)
-                        {
-                            result.Add("QC Check");
-                        }
-                        result.Add(desc);
-                        if (qcAfterIsOne)
-                        {
-                            result.Add("QC Check");
-                        }
-                    }
-                }
+                if (qcPriorIsOne) result.Add("QC Check");
+                if (!string.IsNullOrWhiteSpace(desc)) result.Add(desc);
+                if (qcAfterIsOne) result.Add("QC Check");
             }
-            Console.WriteLine(result.ToArray());
+
+            Console.WriteLine(string.Join(", ", result));
             return result;
         }
+
 
         public string GetDeviceIp(string machine)
         {

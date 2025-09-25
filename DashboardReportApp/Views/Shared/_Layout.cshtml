@@ -28,7 +28,6 @@
             z-index: 9999;
             background: rgba(0,0,0,.6);
             color: #fff;
-            display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
@@ -67,7 +66,6 @@
     <script src="https://cdn.jsdelivr.net/npm/vanilla-datatables@latest/dist/vanilla-dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/js/mydatatable.bundle.js?v=@DateTime.Now.Ticks"></script>
 </head>
 
 <body class="d-flex flex-column min-vh-100">
@@ -98,6 +96,10 @@
             /* expose helpers */
             window.showSpinner      = showSpinner;
             window.hideSpinner      = hideSpinner;
+            window.showLoading = showSpinner;   // ⬅ alias for React's calls
+            window.hideLoading = hideSpinner;   // ⬅ alias for React's calls
+
+
             window.fetchWithSpinner = (u,o)=>{showSpinner();return fetch(u,o).finally(hideSpinner);};
 
             /* guarantee overlay is off when HTML finished parsing */
@@ -107,6 +109,9 @@
             /* belt-and-suspenders: hide again right after window load */
             window.addEventListener('load', () => setTimeout(hideSpinner, 0), { once:true });
 
+                window.addEventListener('beforeunload', () => {
+        if (window.__submittingForm) showSpinner();
+                });
             /* --------------- press-run device counter forms --------------- */
             function wireCountAndAjax(formId,cntId,chkId,machId){
                 const f=document.getElementById(formId); if(!f) return;

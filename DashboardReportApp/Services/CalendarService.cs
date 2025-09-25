@@ -1,4 +1,5 @@
 ﻿using DashboardReportApp.Models;
+using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
@@ -9,12 +10,12 @@ namespace DashboardReportApp.Services
 {
     public class CalendarService
     {
-        private readonly string _dataflexConnection;
+        private readonly string _sqlServerConnection;  
         private readonly string _mysqlConnection;
 
         public CalendarService(IConfiguration config)
         {
-            _dataflexConnection = config.GetConnectionString("DataflexConnection");
+            _sqlServerConnection = config.GetConnectionString("SqlServerConnectionsinTSQL");
             _mysqlConnection = config.GetConnectionString("MySQLConnection");
         }
 
@@ -22,23 +23,39 @@ namespace DashboardReportApp.Services
         public List<CalendarModel> GetEmployees()
         {
             var list = new List<CalendarModel>();
-            using var conn = new OdbcConnection(_dataflexConnection);
+
+            const string sql = @"
+                SELECT fname, lname, date_employed, active_status, email, vac_balance
+                FROM dbo.employee
+                WHERE active_status = 'A'";
+
+            using var conn = new SqlConnection(_sqlServerConnection);
+            using var cmd = new SqlCommand(sql, conn);
             conn.Open();
-            var cmd = new OdbcCommand("SELECT fname,lname,date_employed,active_status,email,vac_balance FROM employee WHERE active_status='A'", conn);
+
             using var rdr = cmd.ExecuteReader();
+            int ordF = rdr.GetOrdinal("fname");
+            int ordL = rdr.GetOrdinal("lname");
+            int ordD = rdr.GetOrdinal("date_employed");
+            int ordA = rdr.GetOrdinal("active_status");
+            int ordE = rdr.GetOrdinal("email");
+            int ordV = rdr.GetOrdinal("vac_balance");
+
             while (rdr.Read())
             {
-                list.Add(new CalendarModel
+                var m = new CalendarModel
                 {
-                    FirstName = rdr["fname"].ToString(),
-                    LastName = rdr["lname"].ToString(),
-                    DateEmployed = Convert.ToDateTime(rdr["date_employed"]),
-                    ActiveStatus = rdr["active_status"].ToString(),
-                    Email = rdr["email"].ToString(),
-                    VacationBalance = Convert.ToDecimal(rdr["vac_balance"])
-                });
+                    FirstName = rdr.IsDBNull(ordF) ? "" : rdr.GetString(ordF).Trim(),
+                    LastName = rdr.IsDBNull(ordL) ? "" : rdr.GetString(ordL).Trim(),
+                    DateEmployed = rdr.IsDBNull(ordD) ? DateTime.MinValue : rdr.GetDateTime(ordD),
+                    ActiveStatus = rdr.IsDBNull(ordA) ? "" : rdr.GetString(ordA).Trim(),
+                    Email = rdr.IsDBNull(ordE) ? "" : rdr.GetString(ordE).Trim(),
+                    VacationBalance = rdr.IsDBNull(ordV) ? 0m : Convert.ToDecimal(rdr.GetValue(ordV))
+                };
+                list.Add(m);
             }
-            // ✅ Add the test employee manually
+
+            // ✅ Keep your manual test employee
             list.Add(new CalendarModel
             {
                 FirstName = "User",

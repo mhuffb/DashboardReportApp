@@ -22,14 +22,12 @@ namespace DashboardReportApp.Services
     public class PressRunLogService
     {
         private readonly string _connectionStringMySQL;
-        private readonly string _connectionStringDataflex;
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
 
         public PressRunLogService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
-            _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
             _sharedService = sharedService;
             _moldingService = moldingService;
         }

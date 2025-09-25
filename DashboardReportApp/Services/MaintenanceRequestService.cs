@@ -77,7 +77,7 @@ SELECT LAST_INSERT_ID();";
                     // Email the PDF
                     await SendEmailWithPdfAsync(pdfPath, request);
 
-                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
+                 //   _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
 
                     
 
@@ -118,7 +118,7 @@ SELECT LAST_INSERT_ID();";
 
                             // Problem
                             string problem = request.Problem;
-                            if (problem.Length < 180)
+                            if (problem.Length != null & problem.Length < 180)
                             {
                                 document.Add(new Paragraph(problem)
                                     .SetTextAlignment(TextAlignment.CENTER)
@@ -175,10 +175,10 @@ SELECT LAST_INSERT_ID();";
 
         private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
-            
-            string recipient = request.Department + "@sintergy.net";
-           
-                try
+
+            //string recipient = request.Department + "@sintergy.net";
+            string recipient = "mhuff@sintergy.net";
+            try
                 {
                     await SendIndividualEmailAsync(pdfPath, recipient, request);
                 }

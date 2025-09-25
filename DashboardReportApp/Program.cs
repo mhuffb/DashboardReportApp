@@ -18,7 +18,7 @@ try
     {
         options.ListenAnyIP(5000); // HTTP
         // HTTPS can be re-enabled if needed:
-        // options.ListenAnyIP(5001, listenOptions => listenOptions.UseHttps());
+         options.ListenAnyIP(5001, listenOptions => listenOptions.UseHttps());
     });
 
     // Add services to the container

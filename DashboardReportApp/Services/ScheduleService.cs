@@ -6,22 +6,22 @@ using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
-using System.Data.Odbc;
 using System.Text;
 using System.Text.RegularExpressions;
-
+using Microsoft.Data.SqlClient;
+using System.IO; // if not already present for File I/O
 namespace DashboardReportApp.Services
 {
     public class ScheduleService
     {
         private readonly string _connectionStringMySQL;
-        private readonly string _connectionStringDataflex;
+        private readonly string _connectionStringSqlServersintTSQL;
         private readonly SharedService _sharedService;
 
         public ScheduleService(IConfiguration config, SharedService sharedService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
-            _connectionStringDataflex = config.GetConnectionString("DataflexConnection");
+            _connectionStringSqlServersintTSQL = config.GetConnectionString("SqlServerConnectionsinTSQL");
             _sharedService = sharedService;
         }
 
@@ -29,20 +29,33 @@ namespace DashboardReportApp.Services
         public List<SintergyComponent> GetComponentsForMasterId(string masterId, int quantity)
         {
             var bom = new Dictionary<string, List<(string Child, int Qty)>>(StringComparer.OrdinalIgnoreCase);
-            using (var connection = new OdbcConnection(_connectionStringDataflex))
-            using (var command = new OdbcCommand("SELECT master_id, cmaster_id, qty FROM masteras", connection))
+
+            // Pull from SQL Server table that replaced Dataflex "masteras"
+            // Adjust the table/schema name if needed, e.g., dbo.masteras
+            const string sql = @"SELECT master_id, cmaster_id, qty FROM dbo.masteras";
+
+            using (var connection = new SqlConnection(_connectionStringSqlServersintTSQL))
+            using (var command = new SqlCommand(sql, connection))
             {
                 connection.Open();
                 using (var reader = command.ExecuteReader())
                 {
+                    int ordMaster = reader.GetOrdinal("master_id");
+                    int ordCmaster = reader.GetOrdinal("cmaster_id");
+                    int ordQty = reader.GetOrdinal("qty");
+
                     while (reader.Read())
                     {
-                        string parent = reader["master_id"].ToString().Trim();
-                        string child = reader["cmaster_id"].ToString().Trim();
-                        int qty = Convert.ToInt32(reader["qty"]);
+                        // Handle potential trailing spaces from legacy imports
+                        string parent = reader.IsDBNull(ordMaster) ? "" : reader.GetString(ordMaster).Trim();
+                        string child = reader.IsDBNull(ordCmaster) ? "" : reader.GetString(ordCmaster).Trim();
+                        int qty = reader.IsDBNull(ordQty) ? 0 : Convert.ToInt32(reader.GetValue(ordQty));
+
+                        if (string.IsNullOrWhiteSpace(parent)) continue;
                         if (!bom.ContainsKey(parent))
                             bom[parent] = new List<(string Child, int Qty)>();
-                        bom[parent].Add((child, qty));
+                        if (!string.IsNullOrWhiteSpace(child))
+                            bom[parent].Add((child, qty));
                     }
                 }
             }
@@ -60,7 +73,7 @@ namespace DashboardReportApp.Services
 
                 if (bom.ContainsKey(current))
                 {
-                    bool addedSLChild = false; // ★ ADDED
+                    bool addedSLChild = false;
 
                     foreach (var (child, qtyNeeded) in bom[current])
                     {
@@ -76,13 +89,13 @@ namespace DashboardReportApp.Services
                             ProdNumber = nextProdNumber.ToString()
                         });
 
-                        if (child.Contains("SL", StringComparison.OrdinalIgnoreCase)) // ★ ADDED
+                        if (child.Contains("SL", StringComparison.OrdinalIgnoreCase))
                             addedSLChild = true;
 
                         queue.Enqueue((child, child, newMultiplier));
                     }
 
-                    // ★ ADDITIONAL ENTRY IF parent doesn't contain 'Y' and has SL child
+                    // Additional entry if parent doesn't contain 'Y' and has SL child
                     if (!current.Contains("Y", StringComparison.OrdinalIgnoreCase) && addedSLChild)
                     {
                         results.Add(new SintergyComponent
@@ -113,6 +126,7 @@ namespace DashboardReportApp.Services
 
             return results;
         }
+
 
 
 
