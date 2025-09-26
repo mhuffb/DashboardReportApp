@@ -1,35 +1,27 @@
-﻿@{
-    var groupId = (int)ViewBag.GroupID;
-    var recvFit = ViewBag.PeopleRecvFit as List<string> ?? new List<string> { "Shuckers, C", "Klebecha, B" };
-}
+﻿@model DashboardReportApp.Models.GroupDetailsViewModel
+
 <div class="modal-header">
-    <h5 class="modal-title">Fit All — Group @groupId</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <h5 class="modal-title">Fit All (Group @Model.GroupID)</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
-<form id="fitAllForm" method="post" asp-action="SaveAllToolItemsAjax">
+
+<form id="fitAllForm" asp-action="FitAll" method="post">
     @Html.AntiForgeryToken()
+    <input type="hidden" name="groupID" value="@Model.GroupID" />
     <div class="modal-body">
-        <input type="hidden" name="GroupID" value="@groupId" />
-        <div class="row g-2">
-            <div class="col-md-6">
-                <label class="form-label">Fitted Date</label>
-                <input type="date" class="form-control" name="__bulkDateFitted" />
-            </div>
-            <div class="col-md-6">
-                <label class="form-label">Fitted By</label>
-                <select class="form-select" name="__bulkFittedBy">
-                    <option value=""></option>
-                    @foreach (var p in recvFit)
-                    {
-                        <option>@p</option>
-                    }
-                </select>
-            </div>
+        <div class="mb-3">
+            <label class="form-label">Fitted By</label>
+            <select name="fittedBy" class="form-select" required>
+                <option value="Shuckers, C">Shuckers, C</option>
+                <option value="Klebecha, B">Klebecha, B</option>
+            </select>
         </div>
-        <small class="text-muted">Note: this simple modal is a placeholder; wire bulk behavior server-side if needed.</small>
+        <div class="text-muted">
+            Sets <strong>FittedBy</strong> and <strong>DateFitted</strong> to today on all items in the group.
+        </div>
     </div>
     <div class="modal-footer">
-        <button type="submit" class="btn btn-primary">Apply</button>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Confirm</button>
     </div>
 </form>

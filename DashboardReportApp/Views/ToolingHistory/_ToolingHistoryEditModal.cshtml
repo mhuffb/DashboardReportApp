@@ -2,31 +2,49 @@
 @removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var peopleAll = ViewBag.PeopleAll as IEnumerable<string> ?? new[] { "Emery, J", "Shuckers, C", "Klebecha, B" };
-    var vendors = new[] { "Internal", "J.I.T Tool and Die", "Quala Die", "Gerg" };
+    var peopleAll = ViewBag.PeopleAll as List<string> ?? new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" };
+    var selectedInitiator = string.IsNullOrWhiteSpace(Model.InitiatedBy) ? "Emery, J" : Model.InitiatedBy;
+
+    var reasons = new List<(string Value, string Label)>
+    {
+        ("New","New (5030)"),
+        ("Repair","Repair (5045)"),
+        ("Breakage","Breakage (5040)"),
+        ("Fitting","Fitting")
+    };
+
+    var vendors = new List<string>
+    {
+        "J.I.T. Tool & Die",
+        "Gerg Tool & Die Inc.",
+        "Quala Die",
+        "Internal"
+    };
+
+    string DateOrEmpty(DateTime? dt) => dt.HasValue ? dt.Value.ToString("yyyy-MM-dd") : "";
+    string DateOrEmptyNonNull(DateTime dt) => dt.ToString("yyyy-MM-dd");
 }
 
 <div class="modal-header">
-    <h5 class="modal-title">Edit Tool History@(Model.GroupID > 0 ? $" — Group {Model.GroupID}" : "")</h5>
+    <h5 class="modal-title">Edit Tool History — Group @Model.GroupID</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
-<form id="toolHistoryForm" asp-action="Edit" asp-controller="ToolingHistory" method="post">
+<form id="toolHistoryForm"
+      asp-controller="ToolingHistory"
+      asp-action="SaveToolingHistory"
+      method="post">
     @Html.AntiForgeryToken()
     <input type="hidden" name="Id" value="@Model.Id" />
-    <!-- GroupID is not shown; the service will set GroupID = Id on create -->
+    <input type="hidden" name="GroupID" value="@Model.GroupID" />
 
     <div class="modal-body">
-        <!-- 🔽 Add this alert box at the very top of .modal-body -->
-        <div id="thValidation" class="alert alert-danger d-none"></div>
-        <!-- 🔼 -->
-
         <div class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">Assembly # (Part)</label>
                 <input class="form-control" name="Part" value="@Model.Part" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Tool Number</label>
                 <input class="form-control" name="ToolNumber" value="@Model.ToolNumber" />
             </div>
@@ -34,7 +52,7 @@
                 <label class="form-label">Revision</label>
                 <input class="form-control" name="Revision" value="@Model.Revision" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label">PO</label>
                 <input class="form-control" name="PO" value="@Model.PO" />
             </div>
@@ -42,21 +60,23 @@
             <div class="col-md-4">
                 <label class="form-label">Reason</label>
                 <select name="Reason" class="form-select">
-                    <option value="New" @(Model.Reason == "New" ? "selected" : "")>New (5030)</option>
-                    <option value="Repair" @(Model.Reason == "Repair" ? "selected" : "")>Repair (5045)</option>
-                    <option value="Breakage" @(Model.Reason == "Breakage" ? "selected" : "")>Breakage (5040)</option>
-                    <option value="Fitting" @(Model.Reason == "Fitting" ? "selected" : "")>Fitting</option>
+                    @foreach (var r in reasons)
+                    {
+                        <option value="@r.Value" @(string.Equals(Model.Reason ?? "", r.Value, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>
+                            @r.Label
+                        </option>
+                    }
                 </select>
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Tool Vendor</label>
                 <select name="ToolVendor" class="form-select">
-                    <option value=""></option>
                     @foreach (var v in vendors)
                     {
-                        var sel = string.Equals(Model.ToolVendor, v, StringComparison.OrdinalIgnoreCase) ? "selected" : null;
-                        <option value="@v" selected="@sel">@v</option>
+                        <option value="@v" @(string.Equals(Model.ToolVendor ?? "", v, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>
+                            @v
+                        </option>
                     }
                 </select>
             </div>
@@ -66,20 +86,29 @@
                 <select name="InitiatedBy" class="form-select">
                     @foreach (var p in peopleAll)
                     {
-                        var isSelected = string.Equals(Model.InitiatedBy ?? "Emery, J", p, StringComparison.OrdinalIgnoreCase);
-                        <option value="@p" @(isSelected ? "selected" : "")>@p</option>
+                        <option value="@p" @(string.Equals(selectedInitiator, p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>
+                            @p
+                        </option>
                     }
                 </select>
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Date Initiated</label>
-                <input class="form-control" type="date" name="DateInitiated" value="@Model.DateInitiated?.ToString("yyyy-MM-dd")" />
+                <input class="form-control" type="date" name="DateInitiated"
+                       value="@(DateOrEmptyNonNull(Model.DateInitiated))" />
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Date Due</label>
-                <input class="form-control" type="date" name="DateDue" value="@Model.DateDue?.ToString("yyyy-MM-dd")" />
+                <input class="form-control" type="date" name="DateDue"
+                       value="@(DateOrEmpty(Model.DateDue))" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Received Date</label>
+                <input class="form-control" type="date" name="DateReceived"
+                       value="@(DateOrEmpty(Model.DateReceived))" />
             </div>
 
             <div class="col-md-12">
@@ -94,78 +123,3 @@
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
     </div>
 </form>
-
-
-<script>
-    (() => {
-      const form = document.getElementById('toolHistoryForm');
-      const alertBox = document.getElementById('thValidation');
-
-      function esc(s){ return (s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        alertBox.classList.add('d-none');
-        alertBox.innerHTML = '';
-
-        let res;
-        try {
-          res = await fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: { 'X-Requested-With': 'fetch' }
-          });
-        } catch (err) {
-          alertBox.innerHTML = `<strong>Network error:</strong> ${esc(err?.message)}`;
-          alertBox.classList.remove('d-none');
-          return;
-        }
-
-        const ct = res.headers.get('content-type') || '';
-
-        if (ct.includes('application/json')) {
-          let data;
-          try { data = await res.json(); } catch { data = {}; }
-
-          if (data.ok) {
-            const modalEl = form.closest('.modal');
-            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modal.hide();
-            Swal.fire('Saved', 'Tooling history saved.', 'success').then(()=>location.reload());
-            return;
-          }
-
-          // Build a readable error block
-          let html = '';
-          if (data.message) html += `<div><strong>${esc(data.message)}</strong></div>`;
-
-          // Prefer flatErrors if present
-          if (Array.isArray(data.flatErrors) && data.flatErrors.length) {
-            html += '<ul class="mb-0">';
-            for (const m of data.flatErrors) html += `<li>${esc(m)}</li>`;
-            html += '</ul>';
-          } else if (data.errors && typeof data.errors === 'object') {
-            html += '<ul class="mb-0">';
-            for (const [field, msgs] of Object.entries(data.errors)) {
-              (msgs || []).forEach(m => html += `<li>${esc(field)}: ${esc(m)}</li>`);
-            }
-            html += '</ul>';
-          } else if (data.error) {
-            html += `<div>${esc(data.error)}</div>`;
-          } else {
-            html += `<div>Save failed (no details).</div>`;
-          }
-
-          alertBox.innerHTML = html;
-          alertBox.classList.remove('d-none');
-          return;
-        }
-
-        // Non-JSON fallback: show server HTML/text
-        const text = await res.text();
-        alertBox.innerHTML =
-          `<div><strong>Save failed.</strong></div><pre class="small mb-0">${esc(text)}</pre>`;
-        alertBox.classList.remove('d-none');
-      });
-    })();
-</script>

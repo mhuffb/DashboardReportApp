@@ -5,10 +5,12 @@
     <h2 class="text-center mb-4">Tooling History</h2>
     <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
 
+    <!-- Global hidden anti-forgery token so JS can read it even if no visible form -->
     <form id="__afForm" class="d-none">@Html.AntiForgeryToken()</form>
 
+    <!-- Centered Add button -->
     <div class="d-flex justify-content-center mb-3">
-        <button id="btnAddToolHistory" class="btn btn-success" type="button">
+        <button id="btnAddToolHistory" class="btn btn-success">
             <i class="bi bi-plus"></i> Add New Tool History
         </button>
     </div>
@@ -50,19 +52,19 @@
                             <td>@item.Revision</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
-                            <td>@item.DateInitiated?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
                             <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td>@item.ToolWorkHours</td>
                             <td class="text-truncate" style="max-width:220px;">@item.ToolDesc</td>
                             <td class="d-flex flex-wrap gap-2">
-                                <button type="button"
-                                        class="btn btn-secondary btn-sm w-100 js-open-history-modal"
-                                        data-url="@Url.Action("EditToolingHistoryModal", "ToolingHistory", new { id = item.Id })">
+                                <button class="btn btn-primary btn-sm"
+                                        data-action="edit-history"
+                                        data-id="@item.Id">
                                     Edit Tool History
                                 </button>
 
-                                <button type="button" class="btn btn-secondary btn-sm"
+                                <button class="btn btn-secondary btn-sm"
                                         data-action="tool-items"
                                         data-group="@item.GroupID">
                                     Add/Edit Tool Items
@@ -84,6 +86,7 @@
     </div>
 </div>
 
+<!-- EXTRA-WIDE modal -->
 <style>
     #appModal .modal-dialog {
         max-width: 95vw;
@@ -95,25 +98,11 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         function getPageAntiforgeryToken() {
             const input = document.querySelector('#__afForm input[name="__RequestVerificationToken"]');
             return input ? input.value : '';
-        }
-
-        function showFetchError(res, fallbackText) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Failed to load modal',
-                html: `
-                    <div class="text-start small">
-                        <div><strong>Status:</strong> ${res.status} ${res.statusText}</div>
-                    </div>
-                `
-            });
         }
 
         const modalEl = document.getElementById('appModal');
@@ -121,42 +110,33 @@
 
         async function loadModal(url) {
             const res = await fetch(url, { credentials: 'same-origin' });
-            if (!res.ok) { showFetchError(res); return; }
+            if (!res.ok) { alert('Failed to load modal'); return; }
             modalEl.querySelector('.modal-content').innerHTML = await res.text();
             modal.show();
         }
 
+        // Center button
         document.getElementById('btnAddToolHistory').addEventListener('click', () => {
             loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")');
         });
 
+        // Row buttons
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
 
-            if (btn.classList.contains('js-open-history-modal')) {
-                loadModal(btn.dataset.url);
+            if (btn.dataset.action === 'edit-history') {
+                const id = btn.dataset.id;
+                loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")' + '?id=' + id);
             }
+
             if (btn.dataset.action === 'tool-items') {
-                const gid = btn.dataset.group;
-                if (!gid) { Swal.fire('Error', 'Missing GroupID on row.', 'error'); return; }
-                loadModal('@Url.Action("ToolItemsModal", "ToolingHistory")' + '?groupID=' + encodeURIComponent(gid));
+                const groupId = btn.dataset.group;
+                loadModal('@Url.Action("ToolItemsModal", "ToolingHistory")' + '?groupID=' + groupId);
             }
         });
 
-        modalEl.addEventListener('click', (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            const group = btn.dataset.group;
-
-            if (btn.dataset.modalAction === 'open-receive-all') {
-                loadModal('@Url.Action("ReceiveAllModal", "ToolingHistory")' + '?groupID=' + group);
-            }
-            if (btn.dataset.modalAction === 'open-fit-all') {
-                loadModal('@Url.Action("FitAllModal", "ToolingHistory")' + '?groupID=' + group);
-            }
-        });
-
+        // Intercept ALL modal form submits (Save, AddItem, SaveAll, ReceiveAll, FitAll)
         modalEl.addEventListener('submit', async (e) => {
             const form = e.target;
             const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm','receiveAllForm','fitAllForm']);
@@ -176,54 +156,23 @@
 
             const ct = res.headers.get('content-type') || '';
 
-            // Tooling history modal: expect JSON on success/validation error
             if (form.id === 'toolHistoryForm') {
                 if (ct.includes('application/json')) {
                     const data = await res.json();
-                    if (data.ok) {
-                        modal.hide();
-                        Swal.fire('Saved', 'Tooling history saved.', 'success').then(()=>location.reload());
-                        return;
-                    }
-                    Swal.fire('Error', data.error || 'Save failed.', 'error');
-                    return;
+                    if (data.ok) { modal.hide(); location.reload(); return; }
+                    alert('Save failed.'); return;
                 }
-                // If server re-rendered the partial with validation errors
                 const html = await res.text();
                 modalEl.querySelector('.modal-content').innerHTML = html;
                 return;
             }
 
-            // All other modal forms return HTML (partial) to refresh modal body
-            if (!res.ok) {
-                showFetchError(res);
-                return;
-            }
+            // For the rest we expect updated modal HTML
             const html = await res.text();
             modalEl.querySelector('.modal-content').innerHTML = html;
-
-            if (form.id === 'addItemForm') {
-                Swal.fire({ icon:'success', title:'Added', text:'New tool item added.', timer:1500, showConfirmButton:false });
-            }
-            if (form.id === 'saveAllForm') {
-                Swal.fire({ icon:'success', title:'Saved', text:'All tool items saved.', timer:1500, showConfirmButton:false });
-            }
-            if (form.id === 'receiveAllForm') {
-                const alsoFit = form.querySelector('input[name="__alsoFit"]')?.checked;
-                Swal.fire({
-                    icon:'success',
-                    title:'Received',
-                    text:'All items marked received' + (alsoFit ? ' and fitted.' : '.'),
-                    timer:1700,
-                    showConfirmButton:false
-                });
-            }
-            if (form.id === 'fitAllForm') {
-                Swal.fire({ icon:'success', title:'Fitted', text:'All items marked fitted.', timer:1500, showConfirmButton:false });
-            }
         });
 
-        // Request PO button -> JSON
+        // Request PO (no email textbox)
         document.addEventListener('submit', async (e) => {
             const form = e.target;
             if (!form.classList.contains('request-po-form')) return;
@@ -236,16 +185,26 @@
                 credentials: 'same-origin'
             });
 
-            let payload;
-            try { payload = await res.json(); } catch { payload = null; }
-
-            if (!res.ok || !payload || payload.ok !== true) {
-                const msg = (payload && payload.error) ? payload.error : (res.status + ' ' + res.statusText);
-                Swal.fire('Error', 'Failed to send PO request: ' + msg, 'error');
+            if (!res.ok) {
+                try { const err = await res.json(); alert('Failed to send PO request: ' + (err.error || res.statusText)); }
+                catch { alert('Failed to send PO request.'); }
                 return;
             }
+            const payload = await res.json();
+            alert(payload.ok ? 'PO request sent.' : ('Failed to send PO request: ' + (payload.error || 'unknown error')));
+        });
 
-            Swal.fire({ icon:'success', title:'Sent', text:'PO request email sent.' });
+        // Open Receive/Fit selector modals from inside Tool Items modal
+        modalEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const group = btn.dataset.group;
+            if (btn.dataset.modalAction === 'open-receive-all') {
+                loadModal('@Url.Action("ReceiveAllModal", "ToolingHistory")' + '?groupID=' + group);
+            }
+            if (btn.dataset.modalAction === 'open-fit-all') {
+                loadModal('@Url.Action("FitAllModal", "ToolingHistory")' + '?groupID=' + group);
+            }
         });
     </script>
 }

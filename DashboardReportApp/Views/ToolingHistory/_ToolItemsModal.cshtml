@@ -1,8 +1,9 @@
 ﻿@model DashboardReportApp.Models.GroupDetailsViewModel
+@removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
+
 @{
     var recvFit = ViewBag.PeopleRecvFit as List<string> ?? new List<string> { "Shuckers, C", "Klebecha, B" };
 }
-
 <style>
     #toolItemsHeaderBar { position: sticky; top: 0; z-index: 2; background: #fff; padding-top: .25rem; }
 </style>
@@ -25,21 +26,21 @@
                 <label class="form-label">Action</label>
                 <select name="Action" class="form-select">
                     <option value="">-- Select Action --</option>
-                    <option>Make New</option>
-                    <option>Metalife Coat</option>
-                    <option>Tinalox Coat</option>
-                    <option>Reface</option>
-                    <option>Fitting</option>
+                    <option value="Make New">Make New</option>
+                    <option value="Metalife Coat">Metalife Coat</option>
+                    <option value="Tinalox Coat">Tinalox Coat</option>
+                    <option value="Reface">Reface</option>
+                    <option value="Fitting">Fitting</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">Item</label>
+                <label class="form-label">Tool Item</label>
                 <select name="ToolItem" class="form-select">
                     <option value="">-- Select Tool Item --</option>
-                    <option>Top Punch</option>
-                    <option>Bottom Punch</option>
-                    <option>Molding Die</option>
-                    <option>Complete Set</option>
+                    <option value="Top Punch">Top Punch</option>
+                    <option value="Bottom Punch">Bottom Punch</option>
+                    <option value="Molding Die">Molding Die</option>
+                    <option value="Complete Set">Complete Set</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -76,36 +77,28 @@
                 <input name="DateFitted" type="date" class="form-control" />
             </div>
 
-            <!-- NEW: Recv Date -->
-            <div class="col-md-2">
-                <label class="form-label">Recv Date</label>
-                <input name="DateReceived" type="date" class="form-control" />
-            </div>
-
             <div class="col-md-3">
                 <label class="form-label">Received By</label>
                 <select name="ReceivedBy" class="form-select">
                     <option value=""></option>
-                    @foreach (var p in recvFit) { <option>@p</option> }
+                    @foreach (var p in recvFit) { <option value="@p">@p</option> }
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Fitted By</label>
                 <select name="FittedBy" class="form-select">
                     <option value=""></option>
-                    @foreach (var p in recvFit) { <option>@p</option> }
+                    @foreach (var p in recvFit) { <option value="@p">@p</option> }
                 </select>
             </div>
         </div>
 
         <div class="d-flex flex-wrap gap-2 mt-3">
             <button type="submit" class="btn btn-success">Add New Tool Item</button>
-
             <button type="button" class="btn btn-outline-success"
                     data-modal-action="open-receive-all" data-group="@Model.GroupID">
                 Receive All
             </button>
-
             <button type="button" class="btn btn-outline-primary"
                     data-modal-action="open-fit-all" data-group="@Model.GroupID">
                 Fit All
@@ -113,12 +106,13 @@
         </div>
     </form>
 
-    <!-- Save All -->
+    <!-- Save All Tool Items -->
     <form id="saveAllForm" asp-action="SaveAllToolItemsAjax" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" name="GroupID" value="@Model.GroupID" />
+
         <div class="table-responsive mt-3">
-            <table class="table table-striped table-bordered shadow-sm" style="min-width: 1750px;">
+            <table class="table table-striped table-bordered shadow-sm" style="min-width: 1600px;">
                 <thead class="table-dark">
                     <tr>
                         <th>Action</th>
@@ -131,8 +125,7 @@
                         <th>Hours</th>
                         <th>Due</th>
                         <th>Fitted</th>
-                        <th>Recv Date</th>
-                        <th>Recv By</th>
+                        <th>Recv</th>
                         <th>Fitted By</th>
                     </tr>
                 </thead>
@@ -141,139 +134,59 @@
                 {
                     for (var i = 0; i < Model.ToolItems.Count; i++)
                     {
-                        var t = Model.ToolItems[i];
+                        var tool = Model.ToolItems[i];
                         <tr>
-                            <input type="hidden" name="ToolItems[@i].Id" value="@t.Id" />
-                            <input type="hidden" name="ToolItems[@i].GroupID" value="@t.GroupID" />
+                            <input type="hidden" name="ToolItems[@i].Id" value="@tool.Id" />
+                            <input type="hidden" name="ToolItems[@i].GroupID" value="@tool.GroupID" />
 
-                                <td>
-                                    <select name="ToolItems[@i].Action" class="form-select">
-                                        <option value=""></option>
-                                        @if (t.Action == "Make New")
-                                        {
-                                            <option value="Make New" selected>Make New</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Make New">Make New</option>
-                                        }
-                                        @if (t.Action == "Metalife Coat")
-                                        {
-                                            <option value="Metalife Coat" selected>Metalife Coat</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Metalife Coat">Metalife Coat</option>
-                                        }
-                                        @if (t.Action == "Tinalox Coat")
-                                        {
-                                            <option value="Tinalox Coat" selected>Tinalox Coat</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Tinalox Coat">Tinalox Coat</option>
-                                        }
-                                        @if (t.Action == "Reface")
-                                        {
-                                            <option value="Reface" selected>Reface</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Reface">Reface</option>
-                                        }
-                                        @if (t.Action == "Fitting")
-                                        {
-                                            <option value="Fitting" selected>Fitting</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Fitting">Fitting</option>
-                                        }
-                                    </select>
-                                </td>
+                            <td>
+                                <select name="ToolItems[@i].Action" class="form-select">
+                                    <option value=""></option>
+                                    <option value="Make New" @(tool.Action=="Make New" ? "selected":"")>Make New</option>
+                                    <option value="Metalife Coat" @(tool.Action=="Metalife Coat" ? "selected":"")>Metalife Coat</option>
+                                    <option value="Tinalox Coat" @(tool.Action=="Tinalox Coat" ? "selected":"")>Tinalox Coat</option>
+                                    <option value="Reface" @(tool.Action=="Reface" ? "selected":"")>Reface</option>
+                                    <option value="Fitting" @(tool.Action=="Fitting" ? "selected":"")>Fitting</option>
+                                </select>
+                            </td>
 
-                                <td>
-                                    <select name="ToolItems[@i].ToolItem" class="form-select">
-                                        <option value=""></option>
-                                        @if (t.ToolItem == "Top Punch")
-                                        {
-                                            <option value="Top Punch" selected>Top Punch</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Top Punch">Top Punch</option>
-                                        }
-                                        @if (t.ToolItem == "Bottom Punch")
-                                        {
-                                            <option value="Bottom Punch" selected>Bottom Punch</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Bottom Punch">Bottom Punch</option>
-                                        }
-                                        @if (t.ToolItem == "Molding Die")
-                                        {
-                                            <option value="Molding Die" selected>Molding Die</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Molding Die">Molding Die</option>
-                                        }
-                                        @if (t.ToolItem == "Complete Set")
-                                        {
-                                            <option value="Complete Set" selected>Complete Set</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="Complete Set">Complete Set</option>
-                                        }
-                                    </select>
-                                </td>
+                            <td>
+                                <select name="ToolItems[@i].ToolItem" class="form-select">
+                                    <option value=""></option>
+                                    <option value="Top Punch" @(tool.ToolItem=="Top Punch" ? "selected":"")>Top Punch</option>
+                                    <option value="Bottom Punch" @(tool.ToolItem=="Bottom Punch" ? "selected":"")>Bottom Punch</option>
+                                    <option value="Molding Die" @(tool.ToolItem=="Molding Die" ? "selected":"")>Molding Die</option>
+                                    <option value="Complete Set" @(tool.ToolItem=="Complete Set" ? "selected":"")>Complete Set</option>
+                                </select>
+                            </td>
 
-                                <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@t.ToolNumber" /></td>
-                                <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@t.ToolDesc" /></td>
-                                <td><input name="ToolItems[@i].Revision" class="form-control" value="@t.Revision" /></td>
-                                <td><input name="ToolItems[@i].Quantity" type="number" class="form-control" value="@(t.Quantity ?? 0)" /></td>
-                                <td><input name="ToolItems[@i].Cost" type="number" step="0.01" class="form-control" value="@(t.Cost ?? 0)" /></td>
-                                <td><input name="ToolItems[@i].ToolWorkHours" type="number" class="form-control" value="@(t.ToolWorkHours ?? 0)" /></td>
-                                <td><input name="ToolItems[@i].DateDue" type="date" class="form-control" value="@(t.DateDue?.ToString("yyyy-MM-dd"))" /></td>
-                                <td><input name="ToolItems[@i].DateFitted" type="date" class="form-control" value="@(t.DateFitted?.ToString("yyyy-MM-dd"))" /></td>
-                                <td><input name="ToolItems[@i].DateReceived" type="date" class="form-control" value="@(t.DateReceived?.ToString("yyyy-MM-dd"))" /></td>
+                            <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@tool.ToolNumber" /></td>
+                            <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@tool.ToolDesc" /></td>
+                            <td><input name="ToolItems[@i].Revision" class="form-control" value="@tool.Revision" /></td>
+                            <td><input name="ToolItems[@i].Quantity" type="number" class="form-control" value="@(tool.Quantity ?? 0)" /></td>
+                            <td><input name="ToolItems[@i].Cost" type="number" step="0.01" class="form-control" value="@(tool.Cost ?? 0)" /></td>
+                            <td><input name="ToolItems[@i].ToolWorkHours" type="number" class="form-control" value="@(tool.ToolWorkHours ?? 0)" /></td>
+                            <td><input name="ToolItems[@i].DateDue" type="date" class="form-control" value="@tool.DateDue?.ToString("yyyy-MM-dd")" /></td>
+                            <td><input name="ToolItems[@i].DateFitted" type="date" class="form-control" value="@tool.DateFitted?.ToString("yyyy-MM-dd")" /></td>
 
-                                <td>
-                                    <select name="ToolItems[@i].ReceivedBy" class="form-select">
-                                        <option value=""></option>
-                                        @foreach (var p in recvFit)
-                                        {
-                                            if (string.Equals(t.ReceivedBy, p, StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                <option value="@p" selected>@p</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="@p">@p</option>
-                                            }
-                                        }
-                                    </select>
-                                </td>
-
-                                <td>
-                                    <select name="ToolItems[@i].FittedBy" class="form-select">
-                                        <option value=""></option>
-                                        @foreach (var p in recvFit)
-                                        {
-                                            if (string.Equals(t.FittedBy, p, StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                <option value="@p" selected>@p</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="@p">@p</option>
-                                            }
-                                        }
-                                    </select>
-                                </td>
-
+                            <td>
+                                <select name="ToolItems[@i].ReceivedBy" class="form-select">
+                                    <option value=""></option>
+                                    @foreach (var p in recvFit)
+                                    {
+                                        <option value="@p" @(string.Equals(tool.ReceivedBy ?? "", p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>@p</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <select name="ToolItems[@i].FittedBy" class="form-select">
+                                    <option value=""></option>
+                                    @foreach (var p in recvFit)
+                                    {
+                                        <option value="@p" @(string.Equals(tool.FittedBy ?? "", p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>@p</option>
+                                    }
+                                </select>
+                            </td>
                         </tr>
                     }
                 }
