@@ -1,216 +1,257 @@
-﻿using DashboardReportApp.Controllers.Attributes;
+﻿using System;
+using System.Linq;
+using System.Net;
+using System.Net.Mail;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
+using DashboardReportApp.Controllers.Attributes;
+using Microsoft.Extensions.Configuration;
 
 namespace DashboardReportApp.Controllers
 {
-    [PasswordProtected(Password = "5intergy")] // Set your password here
+    [PasswordProtected]
     public class ToolingHistoryController : Controller
     {
-        private readonly ToolingHistoryService _service;
+        private readonly ToolingHistoryService _toolingHistoryService;
+        private readonly IConfiguration _config;
+        private readonly SharedService _shared; // <-- use your SMTP helper
+        
+    private readonly IWebHostEnvironment _env;
 
-        public ToolingHistoryController(ToolingHistoryService service)
+        private readonly ILogger<ToolingHistoryController> _logger;
+        public ToolingHistoryController(
+            ToolingHistoryService toolingHistoryService,
+            IConfiguration config,
+        ILogger<ToolingHistoryController> logger,
+        IWebHostEnvironment env,
+            SharedService shared)
         {
-            _service = service;
+            _toolingHistoryService = toolingHistoryService;
+            _config = config;
+            _shared = shared;
+            _env = env;
+            _logger = logger;
         }
 
         public IActionResult Index()
         {
-            // 1. The next group ID from your service
-            var nextGroupId = _service.GetNextGroupID();
-
-            // 2. Put it in ViewBag so the Razor can read it
-            ViewBag.NextGroupID = nextGroupId;
-
-            // Provide default values for the form
-            var toolingHistory = new ToolingHistoryModel
-            {
-                DateInitiated = DateTime.Today,
-                DateDue = DateTime.Today
-            };
-            var toolingHistories = _service.GetToolingHistories(); // Fetch all records
-            ViewBag.ToolingHistories = toolingHistories;          // Pass the list to the view
-            return View(toolingHistory);               // Pass an empty model for the form
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult Index(ToolingHistoryModel toolingHistory)
-        {
-            if (ModelState.IsValid)
-            {
-                _service.AddToolingHistory(toolingHistory); // Add a new record
-                return RedirectToAction(nameof(Index));
-            }
-
-            // If form submission fails, reload the list and show validation errors
-            var toolingHistories = _service.GetToolingHistories();
-            ViewBag.ToolingHistories = toolingHistories;
-            return View(toolingHistory);
-        }
-
-        [HttpGet]
-        public IActionResult Create()
-        {
+            ViewBag.ToolingHistories = _toolingHistoryService.GetAll();
             return View();
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult Create(ToolingHistoryModel toolingHistory)
+        // ---------- Tooling History modal ----------
+        public IActionResult EditToolingHistoryModal(int? id)
         {
-            if (ModelState.IsValid)
+            var peopleAll = new[] { "Emery, J", "Shuckers, C", "Klebecha, B" };
+            ViewBag.PeopleAll = peopleAll;
+
+            ToolingHistoryModel model;
+            if (id.HasValue && id.Value > 0)
             {
-                _service.AddToolingHistory(toolingHistory); // Add a new record
-                return RedirectToAction(nameof(Index));
+                model = _toolingHistoryService.GetById(id.Value) ?? new ToolingHistoryModel();
             }
-
-            return View(toolingHistory);
-        }
-
-        [HttpGet]
-        public IActionResult Edit(int id)
-        {
-            var toolingHistory = _service.GetToolingHistories().Find(x => x.Id == id); // Fetch record by Id
-            if (toolingHistory == null)
+            else
             {
-                return NotFound();
-            }
-
-            return View(toolingHistory);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult Edit(ToolingHistoryModel toolingHistory)
-        {
-            if (ModelState.IsValid)
-            {
-                _service.UpdateToolingHistory(toolingHistory); // Update the record
-                return RedirectToAction(nameof(Index));
-            }
-
-            return View(toolingHistory);
-        }
-        [HttpGet]
-        public IActionResult GroupDetails(int groupID)
-        {
-            Console.WriteLine("groupID: " + groupID);
-            var groupRecords = _service.GetToolItemsByGroupID(groupID);
-
-            // Initialize NewToolItem with GroupID
-            var newToolItem = new ToolItemViewModel
-            {
-                GroupID = groupID, // Ensure this is set
-
-               // DateDue = DateTime.Today,
-               // DateFitted = DateTime.Today
-
-            };
-
-            var model = new GroupDetailsViewModel
-            {
-                GroupID = groupID,
-                ToolItems = groupRecords,
-                NewToolItem = newToolItem
-            };
-
-            return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult UpdateToolingHistory(ToolingHistoryModel model)
-        {
-            // If your model is valid, update the existing record
-            if (ModelState.IsValid)
-            {
-                _service.UpdateToolingHistory(model);
-            }
-            return RedirectToAction(nameof(Index));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult AddToolingHistory(ToolingHistoryModel model)
-        {
-            // If your model is valid, insert a new record
-            if (ModelState.IsValid)
-            {
-                _service.AddToolingHistory(model);
-            }
-            return RedirectToAction(nameof(Index));
-        }
-
-        // AFTER (Fixed):
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult AddOrEditToolItem(GroupDetailsViewModel model)
-        {
-            // 'model.NewToolItem' now contains the values posted from the form
-            var toolItem = model.NewToolItem;
-
-            Console.WriteLine($"GroupID: {toolItem.GroupID}");
-            Console.WriteLine($"ToolNumber: {toolItem.ToolNumber}");
-            Console.WriteLine($"ToolDesc: {toolItem.ToolDesc}");
-            Console.WriteLine($"Action: {toolItem.Action}");
-            Console.WriteLine($"ToolItem: {toolItem.ToolItem}");
-
-
-            // Otherwise, call your service to add/update the item
-            _service.AddToolItem(toolItem);
-
-            // Redirect back to the same group details page
-            return RedirectToAction(nameof(GroupDetails), new { groupID = toolItem.GroupID });
-        }
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult AddToolItem(ToolItemViewModel model)
-        {
-            // model.Id should be 0
-            // model.GroupID is the group
-            // The rest of the fields (ToolNumber, etc.) are from the new row
-
-            // Insert a new row in the DB:
-            if (ModelState.IsValid)
-            {
-                _service.AddToolItem(model); // a new Insert method
-            }
-
-            return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult UpdateToolItem(ToolItemViewModel model)
-        {
-            // Log the data you actually got from the form
-            Console.WriteLine($"UPDATE (Action) => ID: {model.Id}, ToolNumber: {model.ToolNumber}, Action={model.Action}");
-
-            if (ModelState.IsValid)
-            {
-                // In your service:
-                _service.UpdateToolItem(model);
-                return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
-            }
-            if (!ModelState.IsValid)
-            {
-                foreach (var key in ModelState.Keys)
+                model = new ToolingHistoryModel
                 {
-                    var errors = ModelState[key].Errors;
-                    foreach (var error in errors)
+                    InitiatedBy = "Emery, J",
+                    DateInitiated = DateTime.Today
+                };
+            }
+            return PartialView("_ToolingHistoryEditModal", model);
+        }
+        // Controllers/ToolingHistoryController.cs (POST)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Edit(DashboardReportApp.Models.ToolingHistoryModel model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    var keyed = ModelState
+                        .Where(kvp => kvp.Value.Errors.Count > 0)
+                        .ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => kvp.Value.Errors.Select(e =>
+                                string.IsNullOrWhiteSpace(e.ErrorMessage) ? "Invalid value." : e.ErrorMessage
+                            ).ToArray()
+                        );
+
+                    var flat = ModelState
+                        .Where(kvp => kvp.Value.Errors.Count > 0)
+                        .SelectMany(kvp => kvp.Value.Errors.Select(e =>
+                            string.IsNullOrWhiteSpace(e.ErrorMessage)
+                                ? $"{kvp.Key}: Invalid value."
+                                : $"{kvp.Key}: {e.ErrorMessage}"
+                        ))
+                        .ToList();
+
+                    _logger.LogWarning("ToolingHistory/Edit validation failed: {Errors}", string.Join(" | ", flat));
+                    Response.StatusCode = 400;
+                    return new JsonResult(new
                     {
-                        Console.WriteLine($"Model error for {key}: {error.ErrorMessage}");
+                        ok = false,
+                        message = "Validation failed.",
+                        errors = keyed,
+                        flatErrors = flat
+                    });
+                }
+
+                var groupId = _toolingHistoryService.SaveToolingHistory(model);
+                return Json(new { ok = true, groupId });
+            }
+            catch (Exception ex)
+            {
+                // Log everything
+                _logger.LogError(ex, "ToolingHistory/Edit save failed for Id={Id}", model.Id);
+
+                // Return rich details in Development, safer summary in other envs
+                Response.StatusCode = 500;
+                return new JsonResult(new
+                {
+                    ok = false,
+                    message = "Save failed.",
+                    error = ex.GetBaseException().Message,
+                    errorDetails = _env.IsDevelopment() ? ex.ToString() : null
+                });
+            }
+        }
+        // ---------- Tool Items ----------
+        public IActionResult ToolItemsModal(int groupID)
+        {
+            var vm = _toolingHistoryService.GetGroupDetails(groupID);
+            ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+            ViewBag.GroupID = groupID;
+            return PartialView("_ToolItemsModal", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult AddToolItemAjax(GroupToolItem model)
+        {
+            if (model.GroupID <= 0)
+                return BadRequest("GroupID required.");
+
+            _toolingHistoryService.AddToolItem(model);
+
+            var vm = _toolingHistoryService.GetGroupDetails(model.GroupID);
+            ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+            ViewBag.GroupID = model.GroupID;
+            return PartialView("_ToolItemsModal", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult SaveAllToolItemsAjax(GroupDetailsViewModel vm)
+        {
+            if (vm?.GroupID <= 0) return BadRequest("GroupID required.");
+
+            // Bulk fields from Receive All modal
+            var bulkDateStr = Request.Form["__bulkDateReceived"].FirstOrDefault();
+            var bulkRecvBy = Request.Form["__bulkReceivedBy"].FirstOrDefault();
+            var alsoFitRaw = Request.Form["__alsoFit"].FirstOrDefault(); // "on" if checked
+            var alsoFit = string.Equals(alsoFitRaw, "on", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(alsoFitRaw, "true", StringComparison.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(bulkDateStr) || !string.IsNullOrWhiteSpace(bulkRecvBy) || alsoFit)
+            {
+                DateTime? bulkDate = null;
+                if (DateTime.TryParse(bulkDateStr, out var d)) bulkDate = d;
+
+                var current = _toolingHistoryService.GetGroupDetails(vm.GroupID);
+                foreach (var t in current.ToolItems)
+                {
+                    if (bulkDate.HasValue) t.DateReceived = bulkDate;
+                    if (!string.IsNullOrWhiteSpace(bulkRecvBy)) t.ReceivedBy = bulkRecvBy;
+
+                    if (alsoFit)
+                    {
+                        if (bulkDate.HasValue) t.DateFitted = bulkDate;
+                        if (!string.IsNullOrWhiteSpace(bulkRecvBy)) t.FittedBy = bulkRecvBy;
                     }
                 }
-                return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+
+                _toolingHistoryService.SaveAllToolItems(current);
+
+                var refreshed = _toolingHistoryService.GetGroupDetails(vm.GroupID);
+                ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+                ViewBag.GroupID = vm.GroupID;
+                return PartialView("_ToolItemsModal", refreshed);
             }
 
-            return RedirectToAction(nameof(GroupDetails), new { groupID = model.GroupID });
+            // Normal per-row save-all path
+            _toolingHistoryService.SaveAllToolItems(vm);
+
+            var fresh = _toolingHistoryService.GetGroupDetails(vm.GroupID);
+            ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+            ViewBag.GroupID = vm.GroupID;
+            return PartialView("_ToolItemsModal", fresh);
         }
 
+        // ---------- Receive All / Fit All modals ----------
+        public IActionResult ReceiveAllModal(int groupID)
+        {
+            ViewBag.GroupID = groupID;
+            ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+            return PartialView("_ReceiveAllModal");
+        }
 
+        public IActionResult FitAllModal(int groupID)
+        {
+            ViewBag.GroupID = groupID;
+            ViewBag.PeopleRecvFit = new[] { "Shuckers, C", "Klebecha, B" };
+            return PartialView("_FitAllModal");
+        }
+
+        // ---------- Request PO Email (uses SharedService SMTP) ----------
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult RequestPoNumber(int id)
+        {
+            var rec = _toolingHistoryService.GetById(id);
+            if (rec == null)
+            {
+                Response.StatusCode = 404;
+                return Json(new { ok = false, error = "Record not found." });
+            }
+
+            try
+            {
+                var to = _config["Tooling:PoRequestTo"] ?? "purchasing@sintergy.net";
+
+                var subject = $"PO Request — Group {rec.GroupID} — Tool {rec.ToolNumber ?? "(n/a)"}";
+                var body =
+$@"Please issue a PO.
+
+Group: {rec.GroupID}
+Part: {rec.Part ?? "(n/a)"}
+Tool #: {rec.ToolNumber ?? "(n/a)"}
+Revision: {rec.Revision ?? "(n/a)"}
+Reason: {rec.Reason ?? "(n/a)"}
+Vendor: {rec.ToolVendor ?? "(n/a)"}
+Initiated By: {rec.InitiatedBy ?? "(n/a)"}
+Date Initiated: {(rec.DateInitiated?.ToString("yyyy-MM-dd") ?? "(n/a)")}
+Date Due: {(rec.DateDue?.ToString("yyyy-MM-dd") ?? "(n/a)")}
+Desc: {rec.ToolDesc ?? "(n/a)"}";
+
+                // Use your helper (no attachments here)
+                _shared.SendEmailWithAttachment(
+                    receiverEmail: to,
+                    attachmentPath: null,
+                    attachmentPath2: null,
+                    subject: subject,
+                    body: body
+                );
+
+                return Json(new { ok = true });
+            }
+            catch (Exception ex)
+            {
+                Response.StatusCode = 500;
+                return Json(new { ok = false, error = ex.Message });
+            }
+        }
     }
 }

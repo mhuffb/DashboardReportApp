@@ -1,0 +1,35 @@
+﻿@{
+    var groupId = (int)ViewBag.GroupID;
+    var recvFit = ViewBag.PeopleRecvFit as List<string> ?? new List<string> { "Shuckers, C", "Klebecha, B" };
+}
+<div class="modal-header">
+    <h5 class="modal-title">Fit All — Group @groupId</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form id="fitAllForm" method="post" asp-action="SaveAllToolItemsAjax">
+    @Html.AntiForgeryToken()
+    <div class="modal-body">
+        <input type="hidden" name="GroupID" value="@groupId" />
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label">Fitted Date</label>
+                <input type="date" class="form-control" name="__bulkDateFitted" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Fitted By</label>
+                <select class="form-select" name="__bulkFittedBy">
+                    <option value=""></option>
+                    @foreach (var p in recvFit)
+                    {
+                        <option>@p</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <small class="text-muted">Note: this simple modal is a placeholder; wire bulk behavior server-side if needed.</small>
+    </div>
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+    </div>
+</form>
