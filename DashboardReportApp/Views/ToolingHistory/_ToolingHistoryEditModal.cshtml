@@ -37,12 +37,33 @@
     @Html.AntiForgeryToken()
     <input type="hidden" name="Id" value="@Model.Id" />
     <input type="hidden" name="GroupID" value="@Model.GroupID" />
-
+    
+    @{
+        var allErrors = ViewData.ModelState
+        .Where(kvp => kvp.Value?.Errors?.Count > 0)
+        .SelectMany(kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage))
+        .Where(m => !string.IsNullOrWhiteSpace(m))
+        .ToList();
+    }
+    @if (allErrors.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Please fix the following:</strong>
+            <ul class="mb-0">
+                @foreach (var err in allErrors)
+                {
+                    <li>@err</li>
+                }
+            </ul>
+        </div>
+    }
     <div class="modal-body">
+        <p class="text-muted mb-2"><span class="text-danger">*</span> Required</p>
+
         <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label">Assembly # (Part)</label>
-                <input class="form-control" name="Part" value="@Model.Part" />
+                <label class="form-label">Assembly # (Part) <span class="text-danger req">*</span></label>
+                <input class="form-control" name="Part" value="@Model.Part" required />
             </div>
             <div class="col-md-4">
                 <label class="form-label">Tool Number</label>
@@ -58,7 +79,7 @@
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Reason</label>
+                <label class="form-label">Reason <span class="text-danger req">*</span></label>
                 <select name="Reason" class="form-select">
                     @foreach (var r in reasons)
                     {
@@ -70,7 +91,7 @@
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Tool Vendor</label>
+                <label class="form-label">Tool Vendor <span class="text-danger req">*</span></label>
                 <select name="ToolVendor" class="form-select">
                     @foreach (var v in vendors)
                     {
@@ -82,7 +103,7 @@
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Initiated By</label>
+                <label class="form-label">Initiated By <span class="text-danger req">*</span></label>
                 <select name="InitiatedBy" class="form-select">
                     @foreach (var p in peopleAll)
                     {

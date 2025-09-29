@@ -1,17 +1,18 @@
-﻿@model DashboardReportApp.Models.GroupDetailsViewModel
-
+﻿@model int
+@* model = groupID *@
 <div class="modal-header">
-    <h5 class="modal-title">Fit All (Group @Model.GroupID)</h5>
+    <h5 class="modal-title">Fit All — Group @Model</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
-<form id="fitAllForm" asp-action="FitAll" method="post">
+<form id="fitAllForm" asp-action="FitAll" asp-controller="ToolingHistory" method="post">
     @Html.AntiForgeryToken()
-    <input type="hidden" name="groupID" value="@Model.GroupID" />
+    <input type="hidden" name="groupID" value="@Model" />
+
     <div class="modal-body">
         <div class="mb-3">
             <label class="form-label">Fitted By</label>
-            <select name="fittedBy" class="form-select" required>
+            <select class="form-select" name="fittedBy" required>
                 <option value="Shuckers, C">Shuckers, C</option>
                 <option value="Klebecha, B">Klebecha, B</option>
             </select>
@@ -20,8 +21,9 @@
             Sets <strong>FittedBy</strong> and <strong>DateFitted</strong> to today on all items in the group.
         </div>
     </div>
+
     <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="submit" class="btn btn-primary">Confirm</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
     </div>
 </form>

@@ -1,10 +1,11 @@
-﻿using System;
-using System.Linq; // for string.Join / Select in RequestPoNumber
-using System.Collections.Generic;
-using DashboardReportApp.Controllers.Attributes;
+﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using MySql.Data.MySqlClient;
+using System;
+using System.Collections.Generic;
+using System.Linq; // for string.Join / Select in RequestPoNumber
 
 namespace DashboardReportApp.Controllers
 {
@@ -94,31 +95,48 @@ namespace DashboardReportApp.Controllers
                 return PartialView("_ToolingHistoryEditModal", model);
             }
 
-            if (model.Id == 0)
+            try
             {
-                _service.AddToolingHistory(model);
-                return Json(new { ok = true, created = true });
+                if (model.Id == 0)
+                    _service.AddToolingHistory(model);
+                else
+                    _service.UpdateToolingHistory(model);
+
+                return Json(new { ok = true });
             }
-            else
+            catch (MySqlException ex) when (ex.Number == 1062) // duplicate key
             {
-                _service.UpdateToolingHistory(model);
-                return Json(new { ok = true, updated = true });
+                ModelState.AddModelError("", "That Group ID already exists. A new Group ID will be assigned — please try saving again.");
+                Response.StatusCode = 400;
+                return PartialView("_ToolingHistoryEditModal", model);
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", ex.Message);
+                Response.StatusCode = 400;
+                return PartialView("_ToolingHistoryEditModal", model);
             }
         }
 
-        // --------- Tool Items (modal) ----------
+
         [HttpGet]
         public IActionResult ToolItemsModal(int groupID)
         {
-            var groupRecords = _service.GetToolItemsByGroupID(groupID); // List<GroupToolItem>
+            var groupRecords = _service.GetToolItemsByGroupID(groupID); // List<ToolItemViewModel>
+
+            // get header to read the Part (assembly #)
+            var header = _service.GetHeaderByGroupID(groupID); // returns ToolingHistoryModel
+
             var model = new GroupDetailsViewModel
             {
                 GroupID = groupID,
+                GroupName = header?.Part,                 // <-- put Part here
                 ToolItems = groupRecords,
                 NewToolItem = new ToolItemViewModel { GroupID = groupID }
             };
             return PartialView("_ToolItemsModal", model);
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -258,7 +276,9 @@ namespace DashboardReportApp.Controllers
                 var record = _service.GetToolingHistoryById(id);
                 if (record == null) return NotFound();
 
-                var items = _service.GetToolItemsByGroupID(record.GroupID);
+                // ⬇️ Put it here
+                var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_history_item
+
                 var subject = $"PO Request: Group {record.GroupID} / {record.Part} / {record.ToolNumber}";
                 var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
                 var body = $@"
@@ -276,10 +296,11 @@ Hours: {(record.ToolWorkHours?.ToString() ?? "n/a")}
 Desc: {record.ToolDesc}
 
 Items:
-{string.Join("\n", items.Select(it => $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={(it.Quantity ?? 0)} | Cost={(it.Cost?.ToString("C") ?? "n/a")}"))}
+{string.Join("\n", items.Select(it => $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={(it.Quantity)} | Cost={(it.Cost?.ToString("C") ?? "n/a")}"))}
 
 Open in Dashboard: {link}
 ";
+
                 var to = string.IsNullOrWhiteSpace(_cfg["Tooling:PoRequestTo"])
                     ? "tooling@sintergy.local"
                     : _cfg["Tooling:PoRequestTo"];
@@ -300,5 +321,12 @@ Open in Dashboard: {link}
                 return Json(new { ok = false, error = ex.Message });
             }
         }
+        [HttpGet]
+        public IActionResult FitAllModal(int groupID)
+        {
+            // Reuse the same simple modal pattern as ReceiveAll
+            return PartialView("_FitAllModal", groupID);
+        }
+
     }
 }

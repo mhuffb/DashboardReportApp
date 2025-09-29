@@ -9,91 +9,131 @@
 </style>
 
 <div class="modal-header">
-    <h5 class="modal-title">Tool Items for Group @Model.GroupID</h5>
-    <div id="toolItemsHeaderBar" class="ms-auto d-flex gap-2">
-        <button type="button" class="btn btn-primary btn-sm" id="btnSaveAllTop">Save All</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-    </div>
+    <h5 class="modal-title">
+        Tool Items for Group @Model.GroupID@(!string.IsNullOrWhiteSpace(Model.GroupName) ? $" — {Model.GroupName}" : "")
+    </h5>
+    <div id="toolItemsHeaderBar" class="ms-auto d-flex gap-2"></div>
 </div>
+
 
 <div class="modal-body">
     <!-- Add New Tool Item -->
     <form id="addItemForm" asp-action="AddToolItemAjax" method="post" class="mb-2">
         @Html.AntiForgeryToken()
         <input type="hidden" name="GroupID" value="@Model.GroupID" />
+
+        @{
+            // choices for dropdowns
+            var actions = new[]
+            {
+                "Make New","Metalife Coat","Tinalox Coat","Reface","Fitting"
+                };
+            var items = new[]
+            {
+                "Top Punch","Bottom Punch","Molding Die","Complete Set"
+                };
+        }
+
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label">Action</label>
-                <select name="Action" class="form-select">
-                    <option value="">-- Select Action --</option>
-                    <option value="Make New">Make New</option>
-                    <option value="Metalife Coat">Metalife Coat</option>
-                    <option value="Tinalox Coat">Tinalox Coat</option>
-                    <option value="Reface">Reface</option>
-                    <option value="Fitting">Fitting</option>
-                </select>
+                @Html.DropDownList(
+                "Action",
+                                new SelectList(actions, Model.NewToolItem?.Action),
+                                "-- Select Action --",
+                                new { @class = "form-select" }
+                                )
+                @Html.ValidationMessage("Action", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-3">
                 <label class="form-label">Tool Item</label>
-                <select name="ToolItem" class="form-select">
-                    <option value="">-- Select Tool Item --</option>
-                    <option value="Top Punch">Top Punch</option>
-                    <option value="Bottom Punch">Bottom Punch</option>
-                    <option value="Molding Die">Molding Die</option>
-                    <option value="Complete Set">Complete Set</option>
-                </select>
+                @Html.DropDownList(
+                                "ToolItem",
+                                new SelectList(items, Model.NewToolItem?.ToolItem),
+                                "-- Select Tool Item --",
+                                new { @class = "form-select" }
+                                )
+                @Html.ValidationMessage("ToolItem", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-3">
                 <label class="form-label">Tool #</label>
-                <input name="ToolNumber" class="form-control" />
+                @Html.TextBox("ToolNumber", Model.NewToolItem?.ToolNumber, new { @class = "form-control" })
+                @Html.ValidationMessage("ToolNumber", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-3">
                 <label class="form-label">Cost</label>
-                <input name="Cost" type="number" step="0.01" class="form-control" />
+                @Html.TextBox("Cost", Model.NewToolItem?.Cost, new { @class = "form-control", type = "number", step = "0.01" })
+                @Html.ValidationMessage("Cost", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Desc</label>
-                <input name="ToolDesc" class="form-control" />
+                @Html.TextBox("ToolDesc", Model.NewToolItem?.ToolDesc, new { @class = "form-control" })
+                @Html.ValidationMessage("ToolDesc", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Rev</label>
-                <input name="Revision" class="form-control" />
+                @Html.TextBox("Revision", Model.NewToolItem?.Revision, new { @class = "form-control" })
+                @Html.ValidationMessage("Revision", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Qty</label>
-                <input name="Quantity" type="number" class="form-control" />
+                @Html.TextBox("Quantity", Model.NewToolItem?.Quantity, new { @class = "form-control", type = "number" })
+                @Html.ValidationMessage("Quantity", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Hours</label>
-                <input name="ToolWorkHours" type="number" class="form-control" />
+                @Html.TextBox("ToolWorkHours", Model.NewToolItem?.ToolWorkHours, new { @class = "form-control", type = "number" })
+                @Html.ValidationMessage("ToolWorkHours", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Due</label>
-                <input name="DateDue" type="date" class="form-control" />
+                @Html.TextBox("DateDue",
+                                Model.NewToolItem?.DateDue?.ToString("yyyy-MM-dd"),
+                                new { @class = "form-control", type = "date" })
+                @Html.ValidationMessage("DateDue", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Fitted</label>
-                <input name="DateFitted" type="date" class="form-control" />
+                @Html.TextBox("DateFitted",
+                                Model.NewToolItem?.DateFitted?.ToString("yyyy-MM-dd"),
+                                new { @class = "form-control", type = "date" })
+                @Html.ValidationMessage("DateFitted", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Received By</label>
-                <select name="ReceivedBy" class="form-select">
-                    <option value=""></option>
-                    @foreach (var p in recvFit) { <option value="@p">@p</option> }
-                </select>
+                @Html.DropDownList(
+                                "ReceivedBy",
+                                new SelectList(recvFit, Model.NewToolItem?.ReceivedBy),
+                                "",
+                                new { @class = "form-select" }
+                                )
+                @Html.ValidationMessage("ReceivedBy", null, new { @class = "text-danger small d-block mt-1" })
             </div>
+
             <div class="col-md-3">
                 <label class="form-label">Fitted By</label>
-                <select name="FittedBy" class="form-select">
-                    <option value=""></option>
-                    @foreach (var p in recvFit) { <option value="@p">@p</option> }
-                </select>
+                @Html.DropDownList(
+                                "FittedBy",
+                                new SelectList(recvFit, Model.NewToolItem?.FittedBy),
+                                "",
+                                new { @class = "form-select" }
+                                )
+                @Html.ValidationMessage("FittedBy", null, new { @class = "text-danger small d-block mt-1" })
             </div>
         </div>
 
-        <div class="d-flex flex-wrap gap-2 mt-3">
+
+        <div class="d-flex justify-content-center flex-wrap gap-2 mt-3">
             <button type="submit" class="btn btn-success">Add New Tool Item</button>
             <button type="button" class="btn btn-outline-success"
                     data-modal-action="open-receive-all" data-group="@Model.GroupID">
@@ -105,6 +145,7 @@
             </button>
         </div>
     </form>
+
 
     <!-- Save All Tool Items -->
     <form id="saveAllForm" asp-action="SaveAllToolItemsAjax" method="post">
@@ -163,7 +204,7 @@
                             <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@tool.ToolNumber" /></td>
                             <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@tool.ToolDesc" /></td>
                             <td><input name="ToolItems[@i].Revision" class="form-control" value="@tool.Revision" /></td>
-                            <td><input name="ToolItems[@i].Quantity" type="number" class="form-control" value="@(tool.Quantity ?? 0)" /></td>
+                            <td><input name="ToolItems[@i].Quantity" type="number" class="form-control" value="@(tool.Quantity)" /></td>
                             <td><input name="ToolItems[@i].Cost" type="number" step="0.01" class="form-control" value="@(tool.Cost ?? 0)" /></td>
                             <td><input name="ToolItems[@i].ToolWorkHours" type="number" class="form-control" value="@(tool.ToolWorkHours ?? 0)" /></td>
                             <td><input name="ToolItems[@i].DateDue" type="date" class="form-control" value="@tool.DateDue?.ToString("yyyy-MM-dd")" /></td>
@@ -193,17 +234,12 @@
                 </tbody>
             </table>
         </div>
-
-        <div class="d-flex justify-content-end mt-2">
+        <div class="d-flex justify-content-center mt-2">
             <button type="submit" class="btn btn-primary">Save All</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
         </div>
     </form>
 </div>
-
-<div class="modal-footer">
-    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-</div>
-
 <script>
     document.getElementById('btnSaveAllTop')?.addEventListener('click', function () {
         document.getElementById('saveAllForm')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));

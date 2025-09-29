@@ -99,112 +99,200 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // --- SweetAlert helpers (no auto-dismiss) ---
+        async function alertOK(title, text, icon) {
+          return Swal.fire({
+            title, text, icon,
+            allowOutsideClick: false,
+            allowEscapeKey: true,
+            showConfirmButton: true,
+            confirmButtonText: 'OK'
+          });
+        }
+        async function alertErr(title, text) { return alertOK(title, text, 'error'); }
+        async function alertWarn(title, text) { return alertOK(title, text, 'warning'); }
+        async function alertSuc(title, text) { return alertOK(title, text, 'success'); }
+
+        // --- antiforgery token helper ---
         function getPageAntiforgeryToken() {
-            const input = document.querySelector('#__afForm input[name="__RequestVerificationToken"]');
-            return input ? input.value : '';
+          const input = document.querySelector('#__afForm input[name="__RequestVerificationToken"]');
+          return input ? input.value : '';
         }
 
+        // --- modal plumbing ---
         const modalEl = document.getElementById('appModal');
         const modal   = new bootstrap.Modal(modalEl);
 
         async function loadModal(url) {
+          try {
             const res = await fetch(url, { credentials: 'same-origin' });
-            if (!res.ok) { alert('Failed to load modal'); return; }
+            if (!res.ok) {
+              const t = await res.text().catch(()=>res.statusText);
+              await alertErr('Failed to load', t?.slice(0,600) || res.statusText);
+              return;
+            }
             modalEl.querySelector('.modal-content').innerHTML = await res.text();
             modal.show();
+          } catch (err) {
+            await alertErr('Network error', err?.message || 'Unexpected error');
+          }
         }
 
-        // Center button
-        document.getElementById('btnAddToolHistory').addEventListener('click', () => {
-            loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")');
+        // --- open modals ---
+        document.getElementById('btnAddToolHistory')?.addEventListener('click', () => {
+          loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")');
         });
 
-        // Row buttons
         document.addEventListener('click', (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
+          const btn = e.target.closest('button');
+          if (!btn) return;
 
-            if (btn.dataset.action === 'edit-history') {
-                const id = btn.dataset.id;
-                loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")' + '?id=' + id);
-            }
+          if (btn.dataset.action === 'edit-history') {
+            const id = btn.dataset.id;
+            loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")' + '?id=' + id);
+          }
 
-            if (btn.dataset.action === 'tool-items') {
-                const groupId = btn.dataset.group;
-                loadModal('@Url.Action("ToolItemsModal", "ToolingHistory")' + '?groupID=' + groupId);
-            }
+          if (btn.dataset.action === 'tool-items') {
+            const groupId = btn.dataset.group;
+            loadModal('@Url.Action("ToolItemsModal", "ToolingHistory")' + '?groupID=' + groupId);
+          }
         });
 
-        // Intercept ALL modal form submits (Save, AddItem, SaveAll, ReceiveAll, FitAll)
-        modalEl.addEventListener('submit', async (e) => {
-            const form = e.target;
-            const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm','receiveAllForm','fitAllForm']);
-            if (!ids.has(form.id)) return;
+        // --- open Receive/Fit selector modals from within Tool Items modal ---
+        modalEl.addEventListener('click', (e) => {
+          const btn = e.target.closest('button');
+          if (!btn) return;
+          const group = btn.dataset.group;
+          if (btn.dataset.modalAction === 'open-receive-all') {
+            loadModal('@Url.Action("ReceiveAllModal", "ToolingHistory")' + '?groupID=' + group);
+          }
+          if (btn.dataset.modalAction === 'open-fit-all') {
+            loadModal('@Url.Action("FitAllModal", "ToolingHistory")' + '?groupID=' + group);
+          }
+        });
 
-            e.preventDefault();
+        // --- SINGLE handler for all modal form posts ---
+              modalEl.addEventListener('submit', async (e) => {
+          const form = e.target;
+          const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm','receiveAllForm','fitAllForm']);
+          if (!ids.has(form.id)) return;
 
-            const tokenInForm = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
-            const token = tokenInForm || getPageAntiforgeryToken();
+          e.preventDefault();
 
+          
+
+          const btn = form.querySelector('[type="submit"]');
+          const prevDisabled = btn?.disabled;
+          if (btn) btn.disabled = true;
+
+          const tokenInForm = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
+          const token = tokenInForm || getPageAntiforgeryToken();
+
+          try {
             const res = await fetch(form.action, {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': token },
-                body: new FormData(form),
-                credentials: 'same-origin'
+              method: 'POST',
+              headers: { 'RequestVerificationToken': token },
+              body: new FormData(form),
+              credentials: 'same-origin'
             });
 
             const ct = res.headers.get('content-type') || '';
 
+            // TOOL HISTORY FORM: JSON on success; HTML (partial) on validation fail
             if (form.id === 'toolHistoryForm') {
-                if (ct.includes('application/json')) {
-                    const data = await res.json();
-                    if (data.ok) { modal.hide(); location.reload(); return; }
-                    alert('Save failed.'); return;
+              if (ct.includes('application/json')) {
+                const data = await res.json();
+                if (data.ok) {
+                  await alertSuc('Saved','Tooling history saved.');
+                  modal.hide(); location.reload(); return;
                 }
-                const html = await res.text();
-                modalEl.querySelector('.modal-content').innerHTML = html;
+                await alertErr('Save failed', data.error || 'Could not save tooling history.');
                 return;
+              }
+              // HTML -> re-render modal with validation summary (even if 400)
+              const html = await res.text();
+              modalEl.querySelector('.modal-content').innerHTML = html;
+              await alertWarn('Validation','Please fix the errors shown at the top.');
+              return;
             }
 
-            // For the rest we expect updated modal HTML
+                   // OTHER FORMS (Add Item / Save All / Receive All / Fit All):
+        if (ct.includes('text/html')) {
+          const html = await res.text();
+          modalEl.querySelector('.modal-content').innerHTML = html;
+
+          if (!res.ok) {
+            // Validation fail -> for addItemForm, NO SweetAlert, just show inline summary.
+            if (form.id === 'addItemForm') return;
+
+            // For other forms you can keep a warning if you want:
+            await alertWarn('Validation','Please review the highlighted errors above.');
+            return;
+          }
+
+          // Success popups still OK:
+          if (form.id === 'addItemForm')    await alertSuc('Added','Tool item added.');
+          if (form.id === 'saveAllForm')    await alertSuc('Saved','All tool items saved.');
+          if (form.id === 'receiveAllForm') await alertSuc('Received','All items marked received.');
+          if (form.id === 'fitAllForm')     await alertSuc('Fitted','All items marked fitted.');
+          return;
+        }
+
+
+            // Non-HTML error fallback
+            if (!res.ok) {
+              const t = await res.text().catch(()=>res.statusText);
+              await alertErr('Action failed', t?.slice(0,600) || res.statusText);
+              return;
+            }
+
+            // Success fallback (rarely hit here): inject whatever it is
             const html = await res.text();
             modalEl.querySelector('.modal-content').innerHTML = html;
+
+          } catch (err) {
+            await alertErr('Error', err?.message || 'Unexpected error.');
+          } finally {
+            if (btn) btn.disabled = prevDisabled ?? false;
+          }
         });
 
-        // Request PO (no email textbox)
-        document.addEventListener('submit', async (e) => {
-            const form = e.target;
-            if (!form.classList.contains('request-po-form')) return;
-            e.preventDefault();
 
+        // --- PO request handler (SweetAlert only; exactly one handler) ---
+        document.addEventListener('submit', async (e) => {
+          const form = e.target;
+          if (!form.classList.contains('request-po-form')) return;
+          e.preventDefault();
+
+          const btn = form.querySelector('button[type="submit"]');
+          const prevDisabled = btn?.disabled;
+          if (btn) btn.disabled = true;
+
+          try {
             const res = await fetch(form.action, {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
-                body: new FormData(form),
-                credentials: 'same-origin'
+              method: 'POST',
+              headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
+              body: new FormData(form),
+              credentials: 'same-origin'
             });
 
             if (!res.ok) {
-                try { const err = await res.json(); alert('Failed to send PO request: ' + (err.error || res.statusText)); }
-                catch { alert('Failed to send PO request.'); }
-                return;
+              let msg = res.statusText;
+              try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+              await alertErr('PO request failed', msg || 'Unknown error');
+              return;
             }
             const payload = await res.json();
-            alert(payload.ok ? 'PO request sent.' : ('Failed to send PO request: ' + (payload.error || 'unknown error')));
-        });
-
-        // Open Receive/Fit selector modals from inside Tool Items modal
-        modalEl.addEventListener('click', (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            const group = btn.dataset.group;
-            if (btn.dataset.modalAction === 'open-receive-all') {
-                loadModal('@Url.Action("ReceiveAllModal", "ToolingHistory")' + '?groupID=' + group);
-            }
-            if (btn.dataset.modalAction === 'open-fit-all') {
-                loadModal('@Url.Action("FitAllModal", "ToolingHistory")' + '?groupID=' + group);
-            }
+            if (payload.ok) await alertSuc('Sent', 'PO request email sent.');
+            else await alertErr('PO request failed', payload.error || 'Unknown error');
+          } catch (err) {
+            await alertErr('PO request failed', err?.message || 'Unexpected error');
+          } finally {
+            if (btn) btn.disabled = prevDisabled ?? false;
+          }
         });
     </script>
 }
+
