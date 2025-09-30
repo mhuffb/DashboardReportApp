@@ -11,7 +11,9 @@
         public decimal vacBalance { get; set; }
         public int reqDays { get; set; }
 
-        public string explanation { get; set; } 
+        public string explanation { get; set; }
+        public string seriesId { get; set; }
+        public string occurDate { get; set; }  // "YYYY-MM-DD"
     }
 
 }

@@ -527,22 +527,41 @@
         ev.id.startsWith('EV') ? showBlueOptions(ev) : showServiceOptions(ev);
     }
 
-    function showBlueOptions(ev){
-        const start=ev.start?fmt(ev.start):'', end=ev.end?fmt(ev.end):'';
-        Swal.fire({
-            title:ev.title,
-            html:`${start?`<b>${start} – ${end}</b><hr>`:''}
+            function showBlueOptions(ev){
+          const start = ev.start ? fmt(ev.start) : '', end = ev.end ? fmt(ev.end) : '';
+          const sid = ev.extendedProps?.seriesId || null;
+          const pivotDate = ev.extendedProps?.occurDate || (ev.start ? ev.start.toISOString().slice(0,10) : '');
+
+          const seriesBtns = sid ? `
+            <hr>
+            <div class='small text-muted text-center mb-1'>Series actions</div>
+            <button id='evEditSeries'   class='btn btn-outline-primary btn-swal'>Edit Series</button>
+            <button id='evDelSeriesAll' class='btn btn-outline-danger  btn-swal'>Delete Series</button>
+            <button id='evDelSeriesFut' class='btn btn-outline-danger  btn-swal'>Delete Future</button>
+          ` : '';
+
+          Swal.fire({
+            title: ev.title,
+            html: `${start?`<b>${start} – ${end}</b><hr>`:''}
                   <div class='text-center'>
-                     <button id='evEdit' class='btn btn-primary btn-swal'>Edit</button>
-                     <button id='evDelete' class='btn btn-danger btn-swal'>Delete</button>
+                    <button id='evEdit'   class='btn btn-primary btn-swal'>Edit This</button>
+                    <button id='evDelete' class='btn btn-danger  btn-swal'>Delete This</button>
+                    ${seriesBtns}
                   </div>`,
             showConfirmButton:false,
             willOpen:p=>{
-                p.querySelector('#evEdit').addEventListener('click',()=>showEditEventModal(ev.id));
-                p.querySelector('#evDelete').addEventListener('click',()=>confirmDeleteEvent(ev.id));
+              p.querySelector('#evEdit')?.addEventListener('click',()=>showEditEventModal(ev.id));
+              p.querySelector('#evDelete')?.addEventListener('click',()=>confirmDeleteEvent(ev.id));
+
+              if (sid){
+                p.querySelector('#evEditSeries')?.addEventListener('click',()=>showEditEventSeriesModal(sid, ev));
+                p.querySelector('#evDelSeriesAll')?.addEventListener('click',()=>confirmDeleteSeriesAll(sid));
+                p.querySelector('#evDelSeriesFut')?.addEventListener('click',()=>confirmDeleteSeriesFuture(sid, pivotDate));
+              }
             }
-        });
-    }
+          });
+        }
+
 
     function showServiceOptions(ev){
         const approved=ev.backgroundColor==='#28a745';
@@ -1004,6 +1023,75 @@
             .catch(err => Swal.fire('Error', String(err), 'error'));
         }
 
+
+                function showEditEventSeriesModal(seriesId, exampleEv){
+          // Load one event to prefill (use the clicked event’s details)
+          fetch(`/Calendar/GetCalendarEvent?id=${exampleEv.id.replace('EV','')}`)
+            .then(r=>r.json())
+            .then(d=>{
+              Swal.fire({
+                title:'Edit Series',
+                html:`<label>Title</label><input id='sevTitle' class='form-control mb-2' value='${d.title||''}'>
+                      <label>Location</label>
+                      <select id='sevLoc' class='form-select mb-2'>
+                        ${['Conference Room','Lunch Room','Other']
+                           .map(l=>`<option ${l===d.location?'selected':''}>${l}</option>`).join('')}
+                      </select>
+                      <label>Description</label>
+                      <textarea id='sevDesc' class='form-control mb-2'>${d.description||''}</textarea>
+                      <div class='row g-2'>
+                        <div class='col'><label>Start</label><input id='sevStart' class='form-control timepick' value='${(d.startTime||'00:00').substring(0,5)}'></div>
+                        <div class='col'><label>End</label><input id='sevEnd' class='form-control timepick' value='${(d.endTime||'00:00').substring(0,5)}'></div>
+                      </div>`,
+                didOpen:p=>{
+                  flatpickr([p.querySelector('#sevStart'), p.querySelector('#sevEnd')], { enableTime:true, noCalendar:true, dateFormat:'H:i' });
+                },
+                showCancelButton:true, confirmButtonText:'Apply to Series'
+              }).then(res=>{
+                if(!res.isConfirmed) return;
+                const payload = antiF({
+                  seriesId,
+                  Title: document.getElementById('sevTitle').value,
+                  Location: document.getElementById('sevLoc').value,
+                  Description: document.getElementById('sevDesc').value,
+                  StartTime: document.getElementById('sevStart').value,
+                  EndTime: document.getElementById('sevEnd').value
+                });
+                fetchWithSpinner('/Calendar/EditCalendarSeries', { method:'POST', body:new URLSearchParams(payload) })
+                  .then(r=>r.ok ? Swal.fire('Saved','Series updated','success').then(()=>location.reload())
+                                : Swal.fire('Error','Save failed','error'));
+              });
+            });
+        }
+
+                function confirmDeleteSeriesAll(seriesId){
+          Swal.fire({title:'Delete ENTIRE series?', icon:'warning', showCancelButton:true, confirmButtonText:'Delete'})
+            .then(r=>{
+              if(!r.isConfirmed) return;
+              fetchWithSpinner('/Calendar/DeleteCalendarSeries_All', {
+                method:'POST',
+                body:new URLSearchParams(antiF({ seriesId }))
+              }).then(resp=>resp.ok ? Swal.fire('Deleted','Series removed','success').then(()=>location.reload())
+                                    : Swal.fire('Error','Delete failed','error'));
+            });
+        }
+
+        function confirmDeleteSeriesFuture(seriesId, pivotDate){
+          Swal.fire({
+            title:'Delete future occurrences?',
+            text:`Everything on/after ${pivotDate}`,
+            icon:'warning',
+            showCancelButton:true,
+            confirmButtonText:'Delete'
+          }).then(r=>{
+            if(!r.isConfirmed) return;
+            fetchWithSpinner('/Calendar/DeleteCalendarSeries_Future', {
+              method:'POST',
+              body:new URLSearchParams(antiF({ seriesId, pivotDate }))
+            }).then(resp=>resp.ok ? Swal.fire('Deleted','Future occurrences removed','success').then(()=>location.reload())
+                                  : Swal.fire('Error','Delete failed','error'));
+          });
+        }
 
 
 

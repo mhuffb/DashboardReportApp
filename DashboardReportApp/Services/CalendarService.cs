@@ -207,14 +207,19 @@ FROM servicerecords WHERE id=@id", conn);
 
         /* ─────────────────────────── BLUE CALENDAR EVENTS ─────────────────────────── */
 
-        /* ─────────────── SAVE CALENDAR EVENT ─────────────── */
+        // Services/CalendarService.cs
+
         public void SaveCalendarEvent(CalendarEventModel m)
         {
             using var conn = new MySqlConnection(_mysqlConnection);
             conn.Open();
-            var cmd = new MySqlCommand(@"INSERT INTO cal_events
-(title,location,description,event_date,start_time,end_time,scheduler,submitted_on)
-VALUES(@t,@l,@d,@dt,@st,@et,@sch,@sub)", conn);
+            var cmd = new MySqlCommand(@"
+INSERT INTO cal_events
+(title,location,description,event_date,start_time,end_time,scheduler,submitted_on,
+ series_id,is_seed,recur_rule,recur_until)
+VALUES(@t,@l,@d,@dt,@st,@et,@sch,@sub,
+       @sid,@seed,@rule,@until)", conn);
+
             cmd.Parameters.AddWithValue("@t", m.Title);
             cmd.Parameters.AddWithValue("@l", m.Location);
             cmd.Parameters.AddWithValue("@d", m.Description);
@@ -223,11 +228,15 @@ VALUES(@t,@l,@d,@dt,@st,@et,@sch,@sub)", conn);
             cmd.Parameters.AddWithValue("@et", m.EndTime);
             cmd.Parameters.AddWithValue("@sch", m.Scheduler);
             cmd.Parameters.AddWithValue("@sub", DateTime.Now);
+
+            cmd.Parameters.AddWithValue("@sid", (object?)m.SeriesId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@seed", m.IsSeed ? 1 : 0);
+            cmd.Parameters.AddWithValue("@rule", m.RecurRule ?? "None");
+            cmd.Parameters.AddWithValue("@until", (object?)m.RecurUntil?.Date ?? DBNull.Value);
+
             cmd.ExecuteNonQuery();
         }
 
-
-        /* GET all events for calendar */
         public IEnumerable<CalendarEventModel> GetCalendarEvents()
         {
             var list = new List<CalendarEventModel>();
@@ -235,7 +244,8 @@ VALUES(@t,@l,@d,@dt,@st,@et,@sch,@sub)", conn);
             conn.Open();
 
             var cmd = new MySqlCommand(@"
-SELECT id,title,location,description,event_date,start_time,end_time
+SELECT id,title,location,description,event_date,start_time,end_time,
+       series_id,is_seed,recur_rule,recur_until
 FROM cal_events", conn);
 
             using var rdr = cmd.ExecuteReader();
@@ -249,20 +259,24 @@ FROM cal_events", conn);
                     Description = rdr["description"].ToString(),
                     Date = Convert.ToDateTime(rdr["event_date"]),
                     StartTime = rdr.GetTimeSpan("start_time"),
-                    EndTime = rdr.GetTimeSpan("end_time")
+                    EndTime = rdr.GetTimeSpan("end_time"),
+                    SeriesId = rdr["series_id"] as string,
+                    IsSeed = Convert.ToInt32(rdr["is_seed"]) == 1,
+                    RecurRule = rdr["recur_rule"]?.ToString() ?? "None",
+                    RecurUntil = rdr["recur_until"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["recur_until"])
                 });
             }
             return list;
         }
 
-        /* GET one event (for editing) */
         public CalendarEventModel GetCalendarEventById(int id)
         {
             using var conn = new MySqlConnection(_mysqlConnection);
             conn.Open();
 
             var cmd = new MySqlCommand(@"
-SELECT id,title,location,description,event_date,start_time,end_time
+SELECT id,title,location,description,event_date,start_time,end_time,
+       series_id,is_seed,recur_rule,recur_until
 FROM cal_events WHERE id=@id", conn);
             cmd.Parameters.AddWithValue("@id", id);
 
@@ -277,9 +291,59 @@ FROM cal_events WHERE id=@id", conn);
                 Description = rdr["description"].ToString(),
                 Date = Convert.ToDateTime(rdr["event_date"]),
                 StartTime = rdr.GetTimeSpan("start_time"),
-                EndTime = rdr.GetTimeSpan("end_time")
+                EndTime = rdr.GetTimeSpan("end_time"),
+                SeriesId = rdr["series_id"] as string,
+                IsSeed = Convert.ToInt32(rdr["is_seed"]) == 1,
+                RecurRule = rdr["recur_rule"]?.ToString() ?? "None",
+                RecurUntil = rdr["recur_until"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["recur_until"])
             };
         }
+
+
+        // Update ALL in series (title/location/desc/date delta/time ranges)
+        public void UpdateCalendarSeries_All(string seriesId, string title, string location, string description,
+                                             TimeSpan start, TimeSpan end)
+        {
+            using var conn = new MySqlConnection(_mysqlConnection);
+            conn.Open();
+            var cmd = new MySqlCommand(@"
+UPDATE cal_events
+   SET title=@t, location=@l, description=@d,
+       start_time=@st, end_time=@et
+ WHERE series_id=@sid", conn);
+
+            cmd.Parameters.AddWithValue("@t", title);
+            cmd.Parameters.AddWithValue("@l", location);
+            cmd.Parameters.AddWithValue("@d", (object?)description ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@st", start);
+            cmd.Parameters.AddWithValue("@et", end);
+            cmd.Parameters.AddWithValue("@sid", seriesId);
+            cmd.ExecuteNonQuery();
+        }
+
+        // Delete ENTIRE series
+        public void DeleteCalendarSeries_All(string seriesId)
+        {
+            using var conn = new MySqlConnection(_mysqlConnection);
+            conn.Open();
+            var cmd = new MySqlCommand("DELETE FROM cal_events WHERE series_id=@sid", conn);
+            cmd.Parameters.AddWithValue("@sid", seriesId);
+            cmd.ExecuteNonQuery();
+        }
+
+        // Delete FUTURE in series (from a pivot date inclusive)
+        public void DeleteCalendarSeries_Future(string seriesId, DateTime pivotInclusive)
+        {
+            using var conn = new MySqlConnection(_mysqlConnection);
+            conn.Open();
+            var cmd = new MySqlCommand(@"
+DELETE FROM cal_events
+ WHERE series_id=@sid AND event_date >= @pivot", conn);
+            cmd.Parameters.AddWithValue("@sid", seriesId);
+            cmd.Parameters.AddWithValue("@pivot", pivotInclusive.Date);
+            cmd.ExecuteNonQuery();
+        }
+
 
         /* UPDATE event */
         public void UpdateCalendarEvent(CalendarEventModel m)

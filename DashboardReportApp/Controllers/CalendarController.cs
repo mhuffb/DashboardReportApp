@@ -367,7 +367,6 @@ http://192.168.1.9:5000/Calendar
                                     string Scheduler,
                                     string Recur, string RecurUntil)
         {
-            // Seed (don’t mutate this object’s Date later so we can reuse times in the email)
             var seed = new CalendarEventModel
             {
                 Title = Title?.Trim(),
@@ -376,35 +375,49 @@ http://192.168.1.9:5000/Calendar
                 Date = DateTime.Parse(Date),
                 StartTime = TimeSpan.Parse(StartTime),
                 EndTime = TimeSpan.Parse(EndTime),
-                Scheduler = Scheduler
+                Scheduler = Scheduler,
+                RecurRule = string.IsNullOrWhiteSpace(Recur) || Recur == "\\" ? "None" : Recur,
+                RecurUntil = DateTime.TryParse(RecurUntil, out var u) ? u.Date : (DateTime?)null
             };
 
-            // Save first occurrence
-            _calendarService.SaveCalendarEvent(seed);
+            // NEW: SeriesId for any recurrence (or null for None)
+            var seriesId = (seed.RecurRule == "None") ? null : Guid.NewGuid().ToString();
 
-            // Track all occurrences for the email summary
+            // Save first
+            _calendarService.SaveCalendarEvent(new CalendarEventModel
+            {
+                Title = seed.Title,
+                Location = seed.Location,
+                Description = seed.Description,
+                Date = seed.Date,
+                StartTime = seed.StartTime,
+                EndTime = seed.EndTime,
+                Scheduler = seed.Scheduler,
+                SeriesId = seriesId,
+                IsSeed = true,
+                RecurRule = seed.RecurRule,
+                RecurUntil = seed.RecurUntil
+            });
+
             var occurrences = new List<DateTime> { seed.Date };
 
-            // Simple recurrence (same as before, but we DO NOT mutate 'seed')
-            if (!string.IsNullOrWhiteSpace(Recur))
+            if (seed.RecurRule != "None" && seed.RecurUntil.HasValue)
             {
-                DateTime until = DateTime.TryParse(RecurUntil, out var u) ? u.Date : seed.Date;
-                DateTime next = seed.Date;
+                var until = seed.RecurUntil.Value.Date;
+                var next = seed.Date.Date;
 
                 while (true)
                 {
-                    next = Recur switch
+                    next = seed.RecurRule switch
                     {
                         "Daily" => next.AddDays(1),
                         "Weekly" => next.AddDays(7),
                         "Monthly" => next.AddMonths(1),
-                        _ => until.AddDays(1) // ensures immediate break
+                        _ => until.AddDays(1)
                     };
                     if (next > until) break;
 
                     occurrences.Add(next);
-
-                    // create a copy per occurrence
                     _calendarService.SaveCalendarEvent(new CalendarEventModel
                     {
                         Title = seed.Title,
@@ -413,7 +426,11 @@ http://192.168.1.9:5000/Calendar
                         Date = next,
                         StartTime = seed.StartTime,
                         EndTime = seed.EndTime,
-                        Scheduler = seed.Scheduler
+                        Scheduler = seed.Scheduler,
+                        SeriesId = seriesId,
+                        IsSeed = false,
+                        RecurRule = seed.RecurRule,
+                        RecurUntil = seed.RecurUntil
                     });
                 }
             }
@@ -490,6 +507,7 @@ http://192.168.1.9:5000/Calendar
             }
 
             // ─── blue scheduled events ───
+            // CalendarController.GetEvents()
             foreach (var e in _calendarService.GetCalendarEvents())
             {
                 var st = e.Date + e.StartTime;
@@ -504,9 +522,14 @@ http://192.168.1.9:5000/Calendar
                     color = "#0d6efd",
                     allDay = false,
                     vacBalance = 0,
-                    reqDays = 0
+                    reqDays = 0,
+
+                    // NEW: carry series metadata to the client
+                    seriesId = e.SeriesId,
+                    occurDate = e.Date.ToString("yyyy-MM-dd")
                 });
             }
+
 
             return Json(list);           // one flat, well-typed array
         }
@@ -724,6 +747,32 @@ ORDER BY count DESC", conn);
                 countPerPerson = countPerPerson,
                 details = detailList
             });
+        }
+       
+
+        // Delete ENTIRE series
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeleteCalendarSeries_All(string seriesId)
+        {
+            if (string.IsNullOrWhiteSpace(seriesId)) return BadRequest("Missing seriesId");
+            _calendarService.DeleteCalendarSeries_All(seriesId);
+            TrySendMail("calendar@sintergy.net", "Deleted Event Series",
+        $@"Series {seriesId} deleted (all occurrences).");
+            return Ok();
+        }
+
+        // Delete FUTURE (and today) from a pivot occurrence
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeleteCalendarSeries_Future(string seriesId, string pivotDate)
+        {
+            if (string.IsNullOrWhiteSpace(seriesId)) return BadRequest("Missing seriesId");
+            if (!DateTime.TryParse(pivotDate, out var pivot)) return BadRequest("Bad pivot date");
+            _calendarService.DeleteCalendarSeries_Future(seriesId, pivot.Date);
+            TrySendMail("calendar@sintergy.net", "Deleted Future Series",
+        $@"Series {seriesId} deleted from {pivot:MM/dd/yyyy} onward.");
+            return Ok();
         }
 
 
