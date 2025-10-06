@@ -3,12 +3,13 @@
 <div class="container-fluid px-3">
     <h2 class="text-center mb-4">Admin Deviation Management</h2>
 
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success fade show" role="alert">
-            @TempData["Success"]
-        </div>
-    }
+  @{
+    var errsJson = TempData["ModelErrorsJson"] as string; // already JSON from controller
+}
+
+
+
+
 
     <!-- Filter Section: Shrunk and Centered with Date Range and Clear Filters Button -->
     <div class="row mb-3 justify-content-center">
@@ -63,7 +64,9 @@
                         <td>
                             @if (!string.IsNullOrEmpty(deviation.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@deviation.FileAddress1">
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
+                                        data-file-name="@deviation.FileAddress1">
                                     Preview 1
                                 </button>
                             }
@@ -71,26 +74,32 @@
                         <td>
                             @if (!string.IsNullOrEmpty(deviation.FileAddress2))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@deviation.FileAddress2">
+                                <button type="button"
+                                        class="btn btn-info btn-sm fetch-image-btn"
+                                        data-file-name="@deviation.FileAddress2">
                                     Preview 2
                                 </button>
                             }
                         </td>
+
                         <td>
                             <button type="button" class="btn btn-primary btn-sm edit-btn"
-                                    data-id="@deviation.Id"
-                                    data-part="@deviation.Part"
-                                    data-sentdate="@(deviation.SentDateTime?.ToString("yyyy-MM-dd") ?? "")"
-                                    data-discrepancy="@deviation.Discrepancy"
-                                    data-operator="@deviation.Operator"
-                                    data-commmethod="@deviation.CommMethod"
-                                    data-disposition="@deviation.Disposition"
-                                    data-approvedby="@deviation.ApprovedBy"
-                                    data-castreview="@(deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "")"
-                                    data-fileaddress1="@deviation.FileAddress1"
-                                    data-fileaddress2="@deviation.FileAddress2">
-                                Edit
-                            </button>
+        data-payload='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new {
+            id = deviation.Id,
+            part = deviation.Part ?? "",
+            sentDate = deviation.SentDateTime?.ToString("yyyy-MM-dd") ?? "",
+            discrepancy = deviation.Discrepancy ?? "",
+            oper = deviation.Operator ?? "",
+            comm = deviation.CommMethod ?? "",
+            disposition = deviation.Disposition ?? "",
+            approvedBy = deviation.ApprovedBy ?? "",
+            castReview = deviation.DateTimeCASTReview?.ToString("yyyy-MM-dd") ?? "",
+            file1 = deviation.FileAddress1 ?? "",
+            file2 = deviation.FileAddress2 ?? ""
+        }))'>
+  Edit
+</button>
+
                         </td>
                     </tr>
                 }
@@ -220,93 +229,101 @@
     <script>
         // ----------------------------
         // Edit Modal Logic: Populate fields when an Edit button is clicked
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.edit-btn').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    const id = this.getAttribute('data-id');
-                    const part = this.getAttribute('data-part');
-                    const sentDate = this.getAttribute('data-sentdate');
-                    const discrepancy = this.getAttribute('data-discrepancy');
-                    const operator = this.getAttribute('data-operator');
-                    const commMethod = this.getAttribute('data-commmethod');
-                    const disposition = this.getAttribute('data-disposition');
-                    const approvedBy = this.getAttribute('data-approvedby');
-                    const castReview = this.getAttribute('data-castreview');
-                    const fileAddress1 = this.getAttribute('data-fileaddress1');
-                    const fileAddress2 = this.getAttribute('data-fileaddress2');
+     document.addEventListener('DOMContentLoaded', function () {
+  // Grab elements once
+  const $ = (id) => document.getElementById(id);
+  const editId           = $('edit-id');
+  const editPart         = $('edit-part');
+  const editSentdate     = $('edit-sentdate');    // id="edit-sentdate"
+  const editDiscrepancy  = $('edit-discrepancy');
+  const editOperator     = $('edit-operator');
+  const editCommmethod   = $('edit-commmethod');  // id="edit-commmethod"
+  const editDisposition  = $('edit-disposition');
+  const editApprovedby   = $('edit-approvedby');  // id="edit-approvedby"
+  const editCastreview   = $('edit-castreview');  // id="edit-castreview"
+  const editFileaddress1 = $('edit-fileaddress1');
+  const editFileaddress2 = $('edit-fileaddress2');
+  const currentFile1     = $('current-file1');
+  const currentFile2     = $('current-file2');
 
-                    document.getElementById('edit-id').value = id;
-                    document.getElementById('edit-part').value = part;
-                    document.getElementById('edit-sentdate').value = sentDate;
-                    document.getElementById('edit-discrepancy').value = discrepancy;
-                    document.getElementById('edit-operator').value = operator;
-                    document.getElementById('edit-commmethod').value = commMethod;
-                    document.getElementById('edit-disposition').value = disposition;
-                    document.getElementById('edit-approvedby').value = approvedBy;
-                    document.getElementById('edit-castreview').value = castReview;
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      let p = {};
+      try { p = JSON.parse(this.getAttribute('data-payload') || '{}'); } catch {}
 
-                    // Set current file links for FileAddress1 and FileAddress2
-                    document.getElementById('edit-fileaddress1').value = fileAddress1 || "";
-                    document.getElementById('current-file1').innerHTML = fileAddress1
-                        ? `<a href="${fileAddress1}" target="_blank">Current File 1</a>`
-                        : "No file uploaded for File 1";
+      editId.value          = p.id ?? "";
+      editPart.value        = p.part ?? "";
+      editSentdate.value    = p.sentDate ?? "";
+      editDiscrepancy.value = p.discrepancy ?? "";
+      editOperator.value    = p.oper ?? "";
+      editCommmethod.value  = p.comm ?? "";
+      editDisposition.value = p.disposition ?? "";
+      editApprovedby.value  = p.approvedBy ?? "";
+      editCastreview.value  = p.castReview ?? "";
 
-                    document.getElementById('edit-fileaddress2').value = fileAddress2 || "";
-                    document.getElementById('current-file2').innerHTML = fileAddress2
-                        ? `<a href="${fileAddress2}" target="_blank">Current File 2</a>`
-                        : "No file uploaded for File 2";
+      // If dropdown value isn't found in options, clear it
+      if (![...editOperator.options].some(o => o.value === editOperator.value)) editOperator.value = "";
+      if (![...editApprovedby.options].some(o => o.value === editApprovedby.value)) editApprovedby.value = "";
 
-                    new bootstrap.Modal(document.getElementById('editDeviationModal')).show();
-                });
-            });
-        });
+      editFileaddress1.value = p.file1 || "";
+      currentFile1.innerHTML = p.file1
+        ? `<a href="/AdminDeviation/StreamFile?name=${encodeURIComponent(p.file1)}" target="_blank">Current File 1</a>`
+        : "No file uploaded for File 1";
+
+      editFileaddress2.value = p.file2 || "";
+      currentFile2.innerHTML = p.file2
+        ? `<a href="/AdminDeviation/StreamFile?name=${encodeURIComponent(p.file2)}" target="_blank">Current File 2</a>`
+        : "No file uploaded for File 2";
+
+      new bootstrap.Modal(document.getElementById('editDeviationModal')).show();
+    });
+  });
+});
 
         // ----------------------------
         // File Preview Logic for table preview buttons
-        document.addEventListener('DOMContentLoaded', function () {
-            const imageModalElement = document.getElementById('imageModal');
-            document.querySelectorAll('.fetch-image-btn').forEach(button => {
-                button.addEventListener('click', function () {
-                    const filePath = this.dataset.filePath;
-                    if (!filePath) {
-                        alert("No file path provided.");
-                        return;
-                    }
-                    fetch(`/MaintenanceRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                        .then(response => {
-                            if (!response.ok) throw new Error("Failed to fetch the file.");
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (data.success) {
-                                const modalImage = document.getElementById('modalImage');
-                                const modalFile = document.getElementById('modalFile');
-                                if (data.url.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                                    modalImage.src = data.url;
-                                    modalImage.style.display = "block";
-                                    modalFile.style.display = "none";
-                                } else {
-                                    modalFile.src = data.url;
-                                    modalFile.style.display = "block";
-                                    modalImage.style.display = "none";
-                                }
-                                new bootstrap.Modal(imageModalElement).show();
-                            } else {
-                                alert(`Error: ${data.message}`);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error fetching file:', error);
-                            alert('An error occurred while fetching the file.');
-                        });
+               document.addEventListener('DOMContentLoaded', function () {
+          const imageModalElement = document.getElementById('imageModal');
+
+          document.querySelectorAll('.fetch-image-btn').forEach(button => {
+            button.addEventListener('click', function () {
+              const fileName = this.dataset.fileName;
+              if (!fileName) { alert("No file name provided."); return; }
+
+              fetch(`/AdminDeviation/FetchFile?name=${encodeURIComponent(fileName)}`)
+                .then(response => { if (!response.ok) throw new Error("Failed to fetch file URL."); return response.json(); })
+                .then(data => {
+                  if (!data.success) { alert(`Error: ${data.message}`); return; }
+
+                  const url = data.url;
+                  const modalImage = document.getElementById('modalImage');
+                  const modalFile  = document.getElementById('modalFile');
+
+                  if (url.match(/\.(jpg|jpeg|png|gif)(\?|$)/i)) {
+                    modalImage.src = url;
+                    modalImage.style.display = "block";
+                    modalFile.style.display  = "none";
+                  } else {
+                    modalFile.src = url; // pdf or other -> iframe
+                    modalFile.style.display  = "block";
+                    modalImage.style.display = "none";
+                  }
+
+                  new bootstrap.Modal(imageModalElement).show();
+                })
+                .catch(error => {
+                  console.error('Error fetching file:', error);
+                  alert('An error occurred while fetching the file.');
                 });
             });
+          });
 
-            imageModalElement.addEventListener('hidden.bs.modal', function () {
-                document.getElementById('modalImage').src = '';
-                document.getElementById('modalFile').src = '';
-            });
+          imageModalElement.addEventListener('hidden.bs.modal', function () {
+            document.getElementById('modalImage').src = '';
+            document.getElementById('modalFile').src = '';
+          });
         });
+
 
         // Filtering & Sorting Logic for the Table with Date Range Filtering
                 document.addEventListener('DOMContentLoaded', function () {

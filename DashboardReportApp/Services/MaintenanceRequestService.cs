@@ -1,205 +1,171 @@
-﻿namespace DashboardReportApp.Services
-{
-    using MySql.Data.MySqlClient;
-    using Microsoft.Extensions.Configuration;
-    using System;
-    using System.Collections.Generic;
-    using System.Threading.Tasks;
-    using DashboardReportApp.Models;
-    using System.Data;
-    using System.Drawing.Imaging;
-    using System.Drawing.Printing;
-    using System.Reflection.Metadata;
-    using iText.Kernel.Pdf;
-    using iText.Layout;
-    using iText.Layout.Element;
-    using iText.Layout.Properties;
-    using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
-    using Microsoft.AspNetCore.Hosting;
-    using DashboardReportApp.Services;
-    using Microsoft.Data.SqlClient;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.IO;
+using System.Threading.Tasks;
 
+using DashboardReportApp.Models;
+
+using MailKit.Net.Smtp;
+using MailKit.Security;
+
+using Microsoft.Extensions.Options;
+
+using MimeKit;
+
+using MySql.Data.MySqlClient;
+
+// iText 7
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+
+namespace DashboardReportApp.Services
+{
     public class MaintenanceRequestService
     {
         private readonly string _connectionString;
-        private readonly string _uploadFolder;
+        private readonly PathOptions _paths;
+        private readonly EmailOptions _email;
+        private readonly PrinterOptions _printers;
         private readonly SharedService _sharedService;
-        public MaintenanceRequestService(IConfiguration configuration, SharedService sharedService)
+        public PathOptions Paths => _paths;
+
+        public MaintenanceRequestService(
+            IConfiguration configuration,
+            IOptions<PathOptions> paths,
+            IOptions<EmailOptions> email,
+            IOptions<PrinterOptions> printers,
+            SharedService sharedService)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+            _paths = paths.Value;
+            _email = email.Value;
+            _printers = printers.Value;
             _sharedService = sharedService;
         }
 
-      
         public async Task<int> AddRequestAsync(MaintenanceRequestModel request)
         {
-            string query = @"INSERT INTO maintenance (
+            const string query = @"
+INSERT INTO maintenance (
     equipment, requester, reqDate, problem, downStatus, hourMeter, 
     FileAddress1, department, downStartDateTime, status, SafetyConcern
-) 
-VALUES (
+) VALUES (
     @equipment, @requester, @reqDate, @problem, @downStatus, @hourMeter, 
     @FileAddress1, @department, @downStartDateTime, @status, @SafetyConcern
 );
 SELECT LAST_INSERT_ID();";
 
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@equipment", request.Equipment);
-                    command.Parameters.AddWithValue("@requester", request.Requester);
-                    command.Parameters.AddWithValue("@reqDate", request.RequestedDate ?? DateTime.Now);
-                    command.Parameters.AddWithValue("@problem", request.Problem);
-                    command.Parameters.AddWithValue("@downStatus", (bool)request.DownStatus ? 1 : 0);
-                    command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@FileAddress1", request.FileAddress1 ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@status", request.Status);
-                    command.Parameters.AddWithValue("@SafetyConcern", request.SafetyConcern);
-                    // Execute the query and retrieve the last inserted ID
-                    object result = await command.ExecuteScalarAsync();
-                    if (result != null && int.TryParse(result.ToString(), out int insertedId))
-                    {
-                        request.Id = insertedId; // Assign the generated ID to the request
-                        Console.WriteLine("Request ID: " + insertedId);
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("Failed to retrieve the inserted ID.");
-                    }
-                    // Generate PDF for the request
-                    string pdfPath = GeneratePdf(request);
-                    // Email the PDF
-                    await SendEmailWithPdfAsync(pdfPath, request);
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@equipment", request.Equipment);
+            command.Parameters.AddWithValue("@requester", request.Requester);
+            command.Parameters.AddWithValue("@reqDate", request.RequestedDate ?? DateTime.Now);
+            command.Parameters.AddWithValue("@problem", request.Problem);
+            command.Parameters.AddWithValue("@downStatus", (bool)request.DownStatus ? 1 : 0);
+            command.Parameters.AddWithValue("@hourMeter", request.HourMeter ?? (object)DBNull.Value);
+            // store filename only
+            command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrWhiteSpace(request.FileAddress1) ? (object)DBNull.Value : request.FileAddress1);
+            command.Parameters.AddWithValue("@department", request.Department ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@downStartDateTime", request.DownStartDateTime ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@status", request.Status);
+            command.Parameters.AddWithValue("@SafetyConcern", request.SafetyConcern);
 
-                    _sharedService.PrintFileToSpecificPrinter("Maintenance", pdfPath, 1);
+            var result = await command.ExecuteScalarAsync();
+            if (result == null || !int.TryParse(result.ToString(), out var insertedId))
+                throw new InvalidOperationException("Failed to retrieve the inserted ID.");
 
-                    
+            request.Id = insertedId;
 
-                    return request.Id;
-                }
-            }
+            // Generate + email + print PDF
+            var pdfPath = GeneratePdf(request);
+            await SendEmailWithPdfAsync(pdfPath, request);
+
+            // Use configured printer name
+            _sharedService.PrintFileToSpecificPrinter(_printers.Maintenance, pdfPath, 1);
+
+            return request.Id;
         }
-
 
         public string GeneratePdf(MaintenanceRequestModel request)
         {
-           
-            // Path to the input PDF template in wwwroot
-            string inputFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "workorderinput.pdf");
+            var inputFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "workorderinput.pdf");
+            if (!File.Exists(inputFilePath))
+                throw new FileNotFoundException("The PDF template file was not found.", inputFilePath);
 
+            Directory.CreateDirectory(_paths.MaintenanceExports);
+            var outputFilePath = Path.Combine(_paths.MaintenanceExports, $"MaintenanceRequest_{request.Id}.pdf");
 
-            string outputFilePath = @$"\\SINTERGYDC2024\Vol1\VSP\Exports\MaintenanceRequest_{request.Id}.pdf";
+            using var writer = new PdfWriter(outputFilePath);
+            using var pdfDoc = new PdfDocument(new PdfReader(inputFilePath), writer);
+            using var document = new Document(pdfDoc);
 
-            try
+            document.Add(new Paragraph(DateTime.Now.ToString()).SetFixedPosition(75, 615, 200));
+            document.Add(new Paragraph(request.Equipment).SetFixedPosition(135, 575, 900));
+
+            var problem = request.Problem ?? "";
+            if (problem.Length < 180)
             {
-                // Ensure the input template exists
-                if (!File.Exists(inputFilePath))
-                {
-                    throw new FileNotFoundException("The PDF template file was not found.", inputFilePath);
-                }
-
-                using (PdfWriter writer = new PdfWriter(outputFilePath))
-                {
-                    using (PdfDocument pdfDoc = new PdfDocument(new PdfReader(inputFilePath), writer))
-                    {
-                        using (iText.Layout.Document document = new iText.Layout.Document(pdfDoc))
-                        {
-                            // Timestamp
-                            document.Add(new Paragraph(DateTime.Now.ToString()).SetFixedPosition(75, 615, 200));
-
-                            // Equipment
-                            document.Add(new Paragraph(request.Equipment).SetFixedPosition(135, 575, 900));
-
-                            // Problem
-                            string problem = request.Problem;
-                            if (problem.Length != null & problem.Length < 180)
-                            {
-                                document.Add(new Paragraph(problem)
-                                    .SetTextAlignment(TextAlignment.CENTER)
-                                    .SetVerticalAlignment(VerticalAlignment.MIDDLE)
-                                    .SetFixedPosition(35, 425, 560));
-                            }
-                            else
-                            {
-                                document.Add(new Paragraph(problem)
-                                    .SetTextAlignment(TextAlignment.CENTER)
-                                    .SetVerticalAlignment(VerticalAlignment.MIDDLE)
-                                    .SetFixedPosition(35, 390, 560));
-                            }
-
-                            // Request ID
-                            document.Add(new Paragraph($"ID {request.Id}").SetFixedPosition(275, 660, 200));
-
-                            // Request Date
-                            document.Add(new Paragraph(request.RequestedDate?.ToShortDateString() ?? DateTime.Now.ToShortDateString())
-                                .SetFixedPosition(400, 500, 200));
-
-                            // Requester
-                            document.Add(new Paragraph(request.Requester).SetFixedPosition(400, 560, 200));
-
-                            // Department (if available)
-                            if (!string.IsNullOrEmpty(request.Department))
-                            {
-                                document.Add(new Paragraph(request.Department).SetFixedPosition(250, 500, 200));
-                            }
-
-                            // Image Attached Note
-                            if (!string.IsNullOrEmpty(request.FileAddress1))
-                            {
-                                document.Add(new Paragraph("Image Attached").SetFixedPosition(450, 460, 200));
-                            }
-                            else
-                            {
-                                document.Add(new Paragraph("No Image Attached").SetFixedPosition(450, 460, 200));
-                            }
-                        }
-                    }
-                }
-
-                return outputFilePath;
+                document.Add(new Paragraph(problem)
+                    .SetTextAlignment(TextAlignment.CENTER)
+                    .SetVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .SetFixedPosition(35, 425, 560));
             }
-            catch (Exception ex)
+            else
             {
-                // Log the exception
-                Console.WriteLine($"Error generating PDF: {ex.Message}");
-                throw new ApplicationException("PDF generation failed.", ex);
+                document.Add(new Paragraph(problem)
+                    .SetTextAlignment(TextAlignment.CENTER)
+                    .SetVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .SetFixedPosition(35, 390, 560));
             }
+
+            document.Add(new Paragraph($"ID {request.Id}").SetFixedPosition(275, 660, 200));
+            document.Add(new Paragraph(request.RequestedDate?.ToShortDateString() ?? DateTime.Now.ToShortDateString())
+                .SetFixedPosition(400, 500, 200));
+            document.Add(new Paragraph(request.Requester).SetFixedPosition(400, 560, 200));
+
+            if (!string.IsNullOrEmpty(request.Department))
+                document.Add(new Paragraph(request.Department).SetFixedPosition(250, 500, 200));
+
+            if (!string.IsNullOrEmpty(request.FileAddress1))
+                document.Add(new Paragraph("Image Attached").SetFixedPosition(450, 460, 200));
+            else
+                document.Add(new Paragraph("No Image Attached").SetFixedPosition(450, 460, 200));
+
+            return outputFilePath;
         }
-
 
         private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
-
-            string recipient = request.Department + "@sintergy.net";
-           // string recipient = "mhuff@sintergy.net";
+            var recipients = ResolveRecipientAddresses(request);
             try
-                {
-                    await SendIndividualEmailAsync(pdfPath, recipient, request);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error sending email to {recipient}: {ex.Message}");
-                }
-            
+            {
+                await SendIndividualEmailAsync(pdfPath, recipients, request);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending email: {ex.Message}");
+            }
         }
 
-        private async Task SendIndividualEmailAsync(string pdfPath, string recipient, MaintenanceRequestModel request)
+        private async Task SendIndividualEmailAsync(
+            string pdfPath,
+            IEnumerable<string> recipients,
+            MaintenanceRequestModel request)
         {
-            var email = new MimeKit.MimeMessage();
-            email.From.Add(new MimeKit.MailboxAddress("Dashboard Report", "notifications@sintergy.net"));
-            email.To.Add(new MimeKit.MailboxAddress(recipient, recipient));
+            var email = new MimeMessage();
+            email.From.Add(new MailboxAddress(_email.FromName, _email.FromAddress));
+
+            foreach (var r in recipients)
+                email.To.Add(new MailboxAddress(r, r));
+
             email.Subject = $"New Maintenance Request: {request.Id}";
 
-            // 🔎 Pull equipment details
             var eq = await GetEquipmentDetailsAsync(request.Equipment);
-
-            // Build readable equipment block
             string equipmentBlock = eq is null
                 ? "Equipment Details: (no match found)"
                 : $@"Equipment Details:
@@ -210,7 +176,7 @@ SELECT LAST_INSERT_ID();";
   Serial: {eq.Value.Serial}
   Description: {eq.Value.Description}";
 
-            var builder = new MimeKit.BodyBuilder
+            var builder = new BodyBuilder
             {
                 TextBody = $@"A new maintenance request has been created.
 
@@ -221,20 +187,15 @@ Problem: {request.Problem}
 {equipmentBlock}"
             };
 
-            // Attach the generated PDF (if present)
             if (!string.IsNullOrWhiteSpace(pdfPath) && File.Exists(pdfPath))
-            {
                 builder.Attachments.Add(pdfPath);
-            }
-            else
-            {
-                Console.WriteLine($"PDF file not found at {pdfPath}");
-            }
 
-            // Attach user-uploaded image (if present)
-            if (!string.IsNullOrWhiteSpace(request.FileAddress1) && File.Exists(request.FileAddress1))
+            // Attach uploaded image if filename exists (we reconstruct full path)
+            if (!string.IsNullOrWhiteSpace(request.FileAddress1))
             {
-                builder.Attachments.Add(request.FileAddress1);
+                var fullUpload = Path.Combine(_paths.MaintenanceUploads, request.FileAddress1);
+                if (File.Exists(fullUpload))
+                    builder.Attachments.Add(fullUpload);
             }
 
             email.Body = builder.ToMessageBody();
@@ -244,14 +205,17 @@ Problem: {request.Problem}
 
             try
             {
-                await smtp.ConnectAsync("smtp.sintergy.net", 587, MailKit.Security.SecureSocketOptions.StartTls);
-                await smtp.AuthenticateAsync("notifications@sintergy.net", "$inT15851");
+                if (_email.UseStartTls)
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.StartTls);
+                else if (_email.UseSsl)
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.SslOnConnect);
+                else
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.None);
+
+                if (!string.IsNullOrWhiteSpace(_email.Username))
+                    await smtp.AuthenticateAsync(_email.Username, _email.Password);
+
                 await smtp.SendAsync(email);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending email to {recipient}: {ex.Message}");
-                throw;
             }
             finally
             {
@@ -259,54 +223,46 @@ Problem: {request.Problem}
             }
         }
 
-
-
         public async Task<List<string>> GetRequestersAsync()
         {
             var requesters = new List<string>();
-            string query = "SELECT DISTINCT name FROM operators ORDER BY name";
+            const string query = "SELECT DISTINCT name FROM operators ORDER BY name";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    while (await reader.ReadAsync())
-                    {
-                        requesters.Add(reader.GetString("name"));
-                    }
-                }
+                requesters.Add(reader.GetString("name"));
             }
 
             return requesters;
         }
+
         public async Task<List<string>> GetEquipmentListAsync()
         {
             var equipmentList = new List<string>();
-            string query = @"SELECT equipment, name, brand, description 
-                     FROM equipment 
-                     WHERE status IS NULL OR status != 'obsolete' 
-                     ORDER BY equipment";
+            const string query = @"
+SELECT equipment, name, brand, description 
+FROM equipment 
+WHERE status IS NULL OR status != 'obsolete' 
+ORDER BY equipment";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    while (await reader.ReadAsync())
-                    {
-                        // Combine equipment details into a single string
-                        string equipment = reader["equipment"].ToString();
-                        string name = reader["name"] != DBNull.Value ? reader["name"].ToString() : "N/A";
-                        string brand = reader["brand"] != DBNull.Value ? reader["brand"].ToString() : "N/A";
-                        string description = reader["description"] != DBNull.Value ? reader["description"].ToString() : "N/A";
+                var equipment = reader["equipment"].ToString();
+                var name = reader["name"] == DBNull.Value ? "N/A" : reader["name"].ToString();
+                var brand = reader["brand"] == DBNull.Value ? "N/A" : reader["brand"].ToString();
+                var description = reader["description"] == DBNull.Value ? "N/A" : reader["description"].ToString();
 
-                        // Format: "EquipmentNumber - Name (Brand: Description)"
-                        equipmentList.Add($"{equipment} - {name} (Brand: {brand}, Description: {description})");
-                    }
-                }
+                equipmentList.Add($"{equipment} - {name} (Brand: {brand}, Description: {description})");
             }
 
             return equipmentList;
@@ -315,171 +271,131 @@ Problem: {request.Problem}
         public List<MaintenanceRequestModel> GetAllRequests()
         {
             var requests = new List<MaintenanceRequestModel>();
-            string query = "SELECT * FROM maintenance ORDER BY id DESC";
+            const string query = "SELECT * FROM maintenance ORDER BY id DESC";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using var connection = new MySqlConnection(_connectionString);
+            connection.Open();
+
+            using var command = new MySqlCommand(query, connection);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
             {
-                connection.Open();
-                using (var command = new MySqlCommand(query, connection))
-                using (var reader = command.ExecuteReader())
+                requests.Add(new MaintenanceRequestModel
                 {
-                    while (reader.Read())
-                    {
-                        requests.Add(new MaintenanceRequestModel
-                        {
-                            Id = Convert.ToInt32(reader["Id"]),
-                            Timestamp = reader["Timestamp"] == DBNull.Value ? null : Convert.ToDateTime(reader["Timestamp"]),
-                            Equipment = reader["Equipment"]?.ToString(),
-                            Requester = reader["Requester"]?.ToString(),
-                            RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
-                            Problem = reader["Problem"]?.ToString(),
-                            DownStartDateTime = reader["DownStartDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["DownStartDateTime"]),
-                            ClosedDateTime = reader["ClosedDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["ClosedDateTime"]),
-                            CloseBy = reader["CloseBy"]?.ToString(),
-                            CloseResult = reader["CloseResult"]?.ToString(),
-                            DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) ? reader.GetBoolean("downStatus") : false,
-                            HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
-                            HoldStatus = reader["HoldStatus"] == DBNull.Value ? null : Convert.ToBoolean(reader["HoldStatus"]),
-                            HoldReason = reader["HoldReason"]?.ToString(),
-                            HoldResult = reader["HoldResult"]?.ToString(),
-                            HoldBy = reader["HoldBy"]?.ToString(),
-                            FileAddress = reader["FileAddress"]?.ToString(),
-                            FileAddress1 = reader["FileAddress1"] == DBNull.Value ? null : reader["FileAddress1"].ToString(),
-                            FileAddress2 = reader["FileAddress2"] == DBNull.Value ? null : reader["FileAddress2"].ToString(),
-                            StatusHistory = reader["StatusHistory"]?.ToString(),
-                            CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
-                            Department = reader["Department"]?.ToString(),
-                            Status = reader["Status"]?.ToString(),
-                            StatusDesc = reader["StatusDesc"]?.ToString(),
-                            SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
-
-
-                        });
-                    }
-                }
+                    Id = Convert.ToInt32(reader["Id"]),
+                    Timestamp = reader["Timestamp"] == DBNull.Value ? null : Convert.ToDateTime(reader["Timestamp"]),
+                    Equipment = reader["Equipment"]?.ToString(),
+                    Requester = reader["Requester"]?.ToString(),
+                    RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
+                    Problem = reader["Problem"]?.ToString(),
+                    DownStartDateTime = reader["DownStartDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["DownStartDateTime"]),
+                    ClosedDateTime = reader["ClosedDateTime"] == DBNull.Value ? null : Convert.ToDateTime(reader["ClosedDateTime"]),
+                    CloseBy = reader["CloseBy"]?.ToString(),
+                    CloseResult = reader["CloseResult"]?.ToString(),
+                    DownStatus = !reader.IsDBNull(reader.GetOrdinal("downStatus")) && reader.GetBoolean("downStatus"),
+                    HourMeter = !reader.IsDBNull(reader.GetOrdinal("hourMeter")) ? reader.GetDecimal("hourMeter") : (decimal?)null,
+                    HoldStatus = reader["HoldStatus"] == DBNull.Value ? null : Convert.ToBoolean(reader["HoldStatus"]),
+                    HoldReason = reader["HoldReason"]?.ToString(),
+                    HoldResult = reader["HoldResult"]?.ToString(),
+                    HoldBy = reader["HoldBy"]?.ToString(),
+                    FileAddress = reader["FileAddress"]?.ToString(),
+                    FileAddress1 = reader["FileAddress1"] == DBNull.Value ? null : reader["FileAddress1"].ToString(), // filename
+                    FileAddress2 = reader["FileAddress2"] == DBNull.Value ? null : reader["FileAddress2"].ToString(),
+                    StatusHistory = reader["StatusHistory"]?.ToString(),
+                    CurrentStatusBy = reader["CurrentStatusBy"]?.ToString(),
+                    Department = reader["Department"]?.ToString(),
+                    Status = reader["Status"]?.ToString(),
+                    StatusDesc = reader["StatusDesc"]?.ToString(),
+                    SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
+                });
             }
+
             return requests;
         }
 
-
-        public async Task<string> UpdateFile1Link(int id, string imagePath)
+        public async Task<string> UpdateFile1Link(int id, string fileName)
         {
-            try
-            {
-                using (var connection = new MySqlConnection(_connectionString))
-                {
-                    string query = "UPDATE maintenance SET FileAddress1 = @FileAddress1 WHERE Id = @id";
+            using var connection = new MySqlConnection(_connectionString);
+            const string sql = "UPDATE maintenance SET FileAddress1 = @FileAddress1 WHERE Id = @id";
 
-                    await connection.OpenAsync();
-                    using (var command = new MySqlCommand(query, connection))
-                    {
+            await connection.OpenAsync();
 
-                        // Ensure NULL safety
-                        command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrEmpty(imagePath) ? DBNull.Value : (object)imagePath);
-                        command.Parameters.AddWithValue("@id", id);
+            using var command = new MySqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrEmpty(fileName) ? DBNull.Value : (object)fileName);
+            command.Parameters.AddWithValue("@id", id);
 
-                        int rowsAffected = await command.ExecuteNonQueryAsync();
-
-                        return imagePath;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] UpdateFileAddress1 failed: {ex.Message}");
-                return null;
-            }
+            await command.ExecuteNonQueryAsync();
+            return fileName;
         }
 
-
-
-        public bool UpdateRequest(MaintenanceRequestModel model, IFormFile? file)
+        public bool UpdateRequest(MaintenanceRequestModel model, Microsoft.AspNetCore.Http.IFormFile? file)
         {
-            string query = @"
-        UPDATE maintenance 
-        SET 
-            Timestamp = @Timestamp, 
-            Equipment = @Equipment, 
-            Requester = @Requester, 
-            Problem = @Problem, 
-            DownStatus = @DownStatus, 
-            HourMeter = @HourMeter, 
-            Department = @Department
-        WHERE Id = @Id";
+            const string query = @"
+UPDATE maintenance 
+SET 
+    Timestamp = @Timestamp, 
+    Equipment = @Equipment, 
+    Requester = @Requester, 
+    Problem = @Problem, 
+    DownStatus = @DownStatus, 
+    HourMeter = @HourMeter, 
+    Department = @Department
+WHERE Id = @Id";
 
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                connection.Open();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@Id", model.Id);
-                    command.Parameters.AddWithValue("@Timestamp", model.Timestamp ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Equipment", model.Equipment ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Requester", model.Requester ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Problem", model.Problem ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@DownStatus", model.DownStatus ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
+            using var connection = new MySqlConnection(_connectionString);
+            connection.Open();
 
-                    int rowsAffected = command.ExecuteNonQuery();
-                    return rowsAffected > 0;
-                }
-            }
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Id", model.Id);
+            command.Parameters.AddWithValue("@Timestamp", model.Timestamp ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Equipment", model.Equipment ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Requester", model.Requester ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Problem", model.Problem ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@DownStatus", model.DownStatus ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
+
+            var rowsAffected = command.ExecuteNonQuery();
+            return rowsAffected > 0;
         }
-
 
         public async Task<int> GetOpenMaintenanceCount(string equipment)
         {
-            int count = 0;
-            // Adjust the query as needed. Here we assume an open request is defined by the status being "Open".
-            string query = "SELECT COUNT(*) FROM maintenance WHERE equipment = @equipment AND LOWER(status) = 'open'";
+            const string query = "SELECT COUNT(*) FROM maintenance WHERE equipment = @equipment AND LOWER(status) = 'open'";
 
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@equipment", equipment);
-                    count = Convert.ToInt32(await command.ExecuteScalarAsync());
-                }
-            }
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@equipment", equipment);
+
+            var count = Convert.ToInt32(await command.ExecuteScalarAsync());
             return count;
         }
 
         public async Task<List<MaintenanceRequestModel>> GetAllOpenRequestsAsync()
         {
             var requests = new List<MaintenanceRequestModel>();
-            // Query for open requests (assuming status is set to "Open")
-            string query = "SELECT * FROM maintenance WHERE LOWER(status) = 'open'";
+            const string query = "SELECT * FROM maintenance WHERE LOWER(status) = 'open'";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new MySqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
+                requests.Add(new MaintenanceRequestModel
                 {
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            // Create and populate your MaintenanceRequestModel.
-                            // Adjust property names as needed.
-                            var request = new MaintenanceRequestModel
-                            {
-                                Id = Convert.ToInt32(reader["id"]),
-                                Equipment = reader["Equipment"]?.ToString(),
-                                Requester = reader["Requester"]?.ToString(),
-                                RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
-                                Problem = reader["Problem"]?.ToString(),
-                                SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
-
-
-                                // Populate additional fields as needed.
-                            };
-                            requests.Add(request);
-                        }
-                    }
-                }
+                    Id = Convert.ToInt32(reader["id"]),
+                    Equipment = reader["Equipment"]?.ToString(),
+                    Requester = reader["Requester"]?.ToString(),
+                    RequestedDate = reader["ReqDate"] == DBNull.Value ? null : Convert.ToDateTime(reader["ReqDate"]),
+                    Problem = reader["Problem"]?.ToString(),
+                    SafetyConcern = !reader.IsDBNull(reader.GetOrdinal("SafetyConcern")) && Convert.ToBoolean(reader["SafetyConcern"])
+                });
             }
+
             return requests;
         }
 
@@ -488,16 +404,10 @@ Problem: {request.Problem}
             if (string.IsNullOrWhiteSpace(equipmentNo)) return null;
 
             const string sql = @"
-        SELECT 
-            department, 
-            name, 
-            brand, 
-            description, 
-            model, 
-            serial
-        FROM equipment
-        WHERE equipment = @equipment
-        LIMIT 1;";
+SELECT department, name, brand, description, model, serial
+FROM equipment
+WHERE equipment = @equipment
+LIMIT 1;";
 
             using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
@@ -523,6 +433,19 @@ Problem: {request.Problem}
             return null;
         }
 
-    }
+        private IEnumerable<string> ResolveRecipientAddresses(MaintenanceRequestModel request)
+        {
+            // If OverrideAllTo is configured, always use it (dev mode)
+            if (!string.IsNullOrWhiteSpace(_email.OverrideAllTo))
+            {
+                return _email.OverrideAllTo
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
 
+            // Otherwise, route to department@DefaultRecipientDomain (prod mode)
+            var dept = string.IsNullOrWhiteSpace(request.Department) ? "maintenance" : request.Department;
+            return new[] { $"{dept}@{_email.DefaultRecipientDomain}" };
+        }
+
+    }
 }

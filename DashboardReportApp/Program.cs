@@ -1,6 +1,8 @@
 using DashboardReportApp.Services;
 using Serilog;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using DashboardReportApp.Models;
+
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug() // Capture detailed logs
@@ -20,6 +22,35 @@ try
         // HTTPS can be re-enabled if needed:
         // options.ListenAnyIP(5001, listenOptions => listenOptions.UseHttps());
     });
+
+    // --- Bind & validate strongly-typed path options ---
+    builder.Services.AddOptions<PathOptions>()
+      .Bind(builder.Configuration.GetSection("Paths"))
+      .Validate(o => !string.IsNullOrWhiteSpace(o.DeviationUploads), "Paths:DeviationUploads is required")
+      .Validate(o => !string.IsNullOrWhiteSpace(o.MaintenanceUploads), "Paths:MaintenanceUploads is required")
+      .Validate(o => !string.IsNullOrWhiteSpace(o.MaintenanceExports), "Paths:MaintenanceExports is required")
+      .ValidateOnStart();
+
+    builder.Services.AddOptions<EmailOptions>()
+    .Bind(builder.Configuration.GetSection("Email"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.FromAddress), "Email:FromAddress is required")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.SmtpHost), "Email:SmtpHost is required")
+    .ValidateOnStart();
+
+    // NEW: PrinterOptions
+    builder.Services.AddOptions<PrinterOptions>()
+        .Bind(builder.Configuration.GetSection("Printers"))
+        .Validate(o => !string.IsNullOrWhiteSpace(o.Maintenance), "Printers:Maintenance is required")
+        .ValidateOnStart();
+
+    // --- Bind & validate printing (SumatraPDF) options ---
+    builder.Services.AddOptions<PrinterOptions>()
+        .Bind(builder.Configuration.GetSection("Printing"))
+        .Validate(o => !string.IsNullOrWhiteSpace(o.SumatraExePath),
+            "Printing:SumatraExePath is required (e.g., C:\\Program Files\\SumatraPDF\\SumatraPDF.exe)")
+        .Validate(o => !o.ValidateOnStart || File.Exists(o.SumatraExePath),
+            "SumatraPDF.exe not found at Printing:SumatraExePath. Install SumatraPDF or update the path.")
+        .ValidateOnStart();
 
     // Add services to the container
     builder.Services.AddControllersWithViews();

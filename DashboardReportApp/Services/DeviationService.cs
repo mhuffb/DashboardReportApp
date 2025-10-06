@@ -1,7 +1,4 @@
 ﻿using DashboardReportApp.Models;
-using MySql.Data.MySqlClient;
-using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.Http;
 using iText.IO.Font.Constants;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
@@ -9,31 +6,72 @@ using iText.Layout;
 using iText.Layout.Borders;
 using iText.Layout.Element;
 using iText.Layout.Properties;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using MySql.Data.MySqlClient;
+using Mysqlx.Crud;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using System.Data;
 
 namespace DashboardReportApp.Services
 {
     public class DeviationService
     {
-        private readonly string _connectionString;
-        private readonly string _uploadFolder;
+        private readonly string _conn;
+        private readonly string _baseFolder;
         private readonly SharedService _sharedService;
-        public DeviationService(IConfiguration configuration, SharedService sharedService)
+
+        public DeviationService(
+            IConfiguration configuration,
+            SharedService sharedService,
+            IOptionsMonitor<PathOptions> pathOptions,
+            IWebHostEnvironment env)
         {
-            _connectionString = configuration.GetConnectionString("MySQLConnection");
+            _conn = configuration.GetConnectionString("MySQLConnection");
             _sharedService = sharedService;
-            // For example, save deviation files in wwwroot\DeviationUploads
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-            }
+
+            var configured = pathOptions.CurrentValue.DeviationUploads;
+            _baseFolder = Path.IsPathFullyQualified(configured)
+                ? configured
+                : Path.GetFullPath(Path.Combine(env.ContentRootPath, configured));
+            Directory.CreateDirectory(_baseFolder);
         }
+
+        // Turn stored filename into absolute path
+        public string GetAbsolutePath(string? stored)
+        {
+            if (string.IsNullOrWhiteSpace(stored)) return "";
+
+            // If DB still has a full path and it exists, use it as-is.
+            if (Path.IsPathRooted(stored) && System.IO.File.Exists(stored))
+                return stored;
+
+            // Otherwise treat it as a filename and try the new base folder first.
+            var name = Path.GetFileName(stored);
+            var primary = Path.Combine(_baseFolder, name);
+            if (System.IO.File.Exists(primary)) return primary;
+
+            // Fallbacks for legacy locations (add any others you used before)
+            var fallbacks = new[]
+            {
+        @"\\SINTERGYDC2024\Vol1\VSP\Uploads",
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads")
+    };
+
+            foreach (var root in fallbacks)
+            {
+                var candidate = Path.Combine(root, name);
+                if (System.IO.File.Exists(candidate)) return candidate;
+            }
+
+            return ""; // not found anywhere
+        }
+
 
         // Retrieves a list of operators for the dropdown.
         public List<string> GetOperators()
@@ -41,7 +79,7 @@ namespace DashboardReportApp.Services
             var operators = new List<string>();
             string query = "SELECT DISTINCT name FROM operators ORDER BY name";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_conn))
             {
                 connection.Open();
                 using (var command = new MySqlCommand(query, connection))
@@ -73,7 +111,7 @@ namespace DashboardReportApp.Services
                 (part, sentDateTime, discrepancy, operator, commMethod, disposition, approvedBy, dateTimeCASTReview, FileAddress1, FileAddress2)
                 VALUES (@part, @sentDateTime, @discrepancy, @operator, @commMethod, @disposition, @approvedBy, @dateTimeCASTReview, @FileAddress1, @FileAddress2)";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_conn))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -98,30 +136,21 @@ namespace DashboardReportApp.Services
         public string SaveDeviationFile(IFormFile file)
         {
             if (file == null || file.Length == 0)
-            {
                 throw new ArgumentException("File is null or empty.", nameof(file));
-            }
 
-            // Ensure the upload folder exists
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-            }
+            Directory.CreateDirectory(_baseFolder);
 
-            // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
-            var extension = Path.GetExtension(file.FileName);
-            var uniqueName = "DeviationFile1_" + DateTime.Now.Ticks + extension;
-            var finalPath = Path.Combine(_uploadFolder, uniqueName);
+            var ext = Path.GetExtension(file.FileName);
+            var fileName = $"DeviationFile1_{DateTime.UtcNow.Ticks}{ext}";
+            var finalPath = Path.Combine(_baseFolder, fileName);
 
-            // Copy the file to disk
-            using (var stream = new FileStream(finalPath, FileMode.Create))
-            {
-                file.CopyTo(stream);
-            }
+            using var stream = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            file.CopyTo(stream);
 
-            // Return the path so we can save it in record.FileAddress1
-            return finalPath;
+            // store just the filename
+            return fileName;
         }
+
 
 
 
@@ -131,7 +160,7 @@ namespace DashboardReportApp.Services
             var records = new List<DeviationModel>();
             string query = "SELECT * FROM deviation ORDER BY id DESC";
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(_conn))
             {
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(query, connection))
@@ -150,8 +179,12 @@ namespace DashboardReportApp.Services
                             Disposition = reader.IsDBNull(reader.GetOrdinal("disposition")) ? null : reader.GetString("disposition"),
                             ApprovedBy = reader.IsDBNull(reader.GetOrdinal("approvedBy")) ? null : reader.GetString("approvedBy"),
                             DateTimeCASTReview = reader.IsDBNull(reader.GetOrdinal("dateTimeCASTReview")) ? (DateTime?)null : reader.GetDateTime("dateTimeCASTReview"),
-                            FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1")) ? null : reader.GetString("FileAddress1"),
-                            FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2")) ? null : reader.GetString("FileAddress2")
+                            FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1"))
+        ? null
+        : Path.GetFileName(reader.GetString(reader.GetOrdinal("FileAddress1"))),
+                            FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2"))
+        ? null
+        : Path.GetFileName(reader.GetString(reader.GetOrdinal("FileAddress2")))
                         };
                         records.Add(record);
                     }
@@ -206,26 +239,20 @@ namespace DashboardReportApp.Services
             return filePath;
         }
 
-       
+
         // Updates FileAddress1 for an existing deviation record.
         // Uses the same file-saving logic as in Create.
         public async Task<bool> UpdateFileAddress1Async(int id, IFormFile file)
         {
-            // Save the new file (same as with Hold Tag)
-            string filePath = SaveDeviationFile(file);
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                string query = "UPDATE deviation SET FileAddress1 = @FileAddress1 WHERE id = @id";
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@FileAddress1", filePath);
-                    command.Parameters.AddWithValue("@id", id);
-                    int rowsAffected = await command.ExecuteNonQueryAsync();
-                    return rowsAffected > 0;
-                }
-            }
+            var fileName = SaveDeviationFile(file); // filename only
+            using var connection = new MySqlConnection(_conn);
+            await connection.OpenAsync();
+            const string sql = "UPDATE deviation SET FileAddress1 = @f WHERE id = @id";
+            using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@f", fileName);
+            cmd.Parameters.AddWithValue("@id", id);
+            return await cmd.ExecuteNonQueryAsync() > 0;
         }
+
     }
 }

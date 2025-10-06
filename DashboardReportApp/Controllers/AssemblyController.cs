@@ -1,7 +1,7 @@
 ﻿using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
-
+using System.IO;
 namespace DashboardReportApp.Controllers
 {
     [Route("AssemblyRun")]
@@ -65,15 +65,17 @@ namespace DashboardReportApp.Controllers
                     Operator = model.Operator,
                     Pcs = model.Pcs,
                     Notes = model.Notes  // In case you want to capture notes as well.
-                };
+                }; 
 
                 // Log the skid and retrieve the new ID.
                 await _assemblyService.LogSkidAsync(assemblyModel);
 
                 // Now generate the PDF report using the updated model.
-                string pdfFilePath = await _assemblyService.GenerateAssemblyReportAsync(assemblyModel);
+                string reportFileName = await _assemblyService.GenerateAssemblyReportAsync(assemblyModel);
 
-                _sharedService.PrintFileToClosestPrinter(pdfFilePath, 1);
+                // Print still uses absolute:
+                var abs = _assemblyService.GetExportAbsolutePath(reportFileName);
+                _sharedService.PrintFileToClosestPrinter(abs, 1);
 
             }
             catch (Exception ex)
@@ -101,5 +103,34 @@ namespace DashboardReportApp.Controllers
             }
             return RedirectToAction("Index");
         }
+
+        
+
+[HttpGet("FetchReport")]
+    public IActionResult FetchReport(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return Json(new { success = false, message = "No file name provided." });
+
+        var abs = _assemblyService.GetExportAbsolutePath(name);
+        if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
+            return Json(new { success = false, message = $"File not found: {name}" });
+
+        var url = Url.Action(nameof(StreamReport), "Assembly", new { name }, Request.Scheme);
+        return Json(new { success = true, url });
     }
+
+    [HttpGet("StreamReport")]
+    public IActionResult StreamReport(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return NotFound();
+
+        var abs = _assemblyService.GetExportAbsolutePath(name);
+        if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs)) return NotFound();
+
+        // these are always PDFs here
+        return PhysicalFile(abs, "application/pdf", enableRangeProcessing: true);
+    }
+
+}
 }

@@ -47,7 +47,6 @@ namespace DashboardReportApp.Controllers
         {
             if (!ModelState.IsValid)
             {
-                // Handle validation errors, reload needed data, etc.
                 TempData["ErrorMessage"] = "Please correct the errors and try again.";
                 ViewData["Operators"] = await _sharedService.GetAllOperators();
                 return View("Index", record);
@@ -55,41 +54,24 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                
-
-                // 2) Set default date
                 record.Date = DateTime.Now;
 
-                // 3) Insert the DB record and update the model with its new ID.
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
-
                 record.Id = newId;
-                // 1) If a file was uploaded, save it and set FileAddress1
+
                 if (file != null && file.Length > 0)
                 {
-                    // We'll call a new service method to do the file saving
-                    string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1", record.Id);
+                    var savedPath = _holdTagService.SaveHoldFile(file, record.Id, "HoldTagFile1");
                     record.FileAddress1 = savedPath;
                     await _holdTagService.UpdateFileAddress1Async(record.Id, savedPath);
                 }
 
-                
-                // 4) Generate PDF using the record that now contains the ID.
-                string pdfPath = _holdTagService.GenerateHoldTagPdf(record);
-
-
+                var pdfPath = _holdTagService.GenerateHoldTagPdf(record);
                 _sharedService.PrintFileToSpecificPrinter("QaholdTags", pdfPath, record.Quantity.GetValueOrDefault(1));
 
-
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
-                string body = $"Discrepancy: {record.Discrepancy}\n" +
-                              $"Quantity: {record.Quantity} {record.Unit}\n" +
-                              $"Issued By: {record.IssuedBy}\n" +
-                              $"Issued Date: {record.Date:MM/dd/yyyy}";
-
-                //5) Send email 
-                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1 ,subject, body);
-
+                string body = $"Discrepancy: {record.Discrepancy}\nQuantity: {record.Quantity} {record.Unit}\nIssued By: {record.IssuedBy}\nIssued Date: {record.Date:MM/dd/yyyy}";
+                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1, subject, body);
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
@@ -99,6 +81,30 @@ namespace DashboardReportApp.Controllers
                 TempData["ErrorMessage"] = $"Error: {ex.Message}";
                 return RedirectToAction("Index");
             }
+        }
+
+        [HttpPost("UpdateFile")]
+        public async Task<IActionResult> UpdateFile(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Please select a valid file.";
+                return RedirectToAction("Index");
+            }
+
+            try
+            {
+                var savedPath = _holdTagService.SaveHoldFile(file, id, "HoldTagFile1");
+                await _holdTagService.UpdateFileAddress1Async(id, savedPath);
+
+                TempData["SuccessMessage"] = "File uploaded and updated successfully.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error updating file: {ex.Message}";
+            }
+
+            return RedirectToAction("Index");
         }
 
 
@@ -152,33 +158,7 @@ namespace DashboardReportApp.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
-        [HttpPost("UpdateFile")]
-        public async Task<IActionResult> UpdateFile(int id, IFormFile file)
-        {
-            if (file == null || file.Length == 0)
-            {
-                TempData["ErrorMessage"] = "Please select a valid file.";
-                return RedirectToAction("Index");
-            }
-
-            try
-            {
-
-                // 1) Save the file on disk
-                string savedPath = _sharedService.SaveFileToUploads(file, "HoldTagFile1", id);
-                Console.WriteLine("TEst " + savedPath);
-                // 2) Update the DB record with this path
-                await _holdTagService.UpdateFileAddress1Async(id, savedPath);
-
-                TempData["SuccessMessage"] = "File uploaded and updated successfully.";
-            }
-            catch (Exception ex)
-            {
-                TempData["ErrorMessage"] = $"Error updating file: {ex.Message}";
-            }
-
-            return RedirectToAction("Index");
-        }
+       
 
     }
 

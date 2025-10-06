@@ -1,57 +1,71 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.IO;
-using System.Threading.Tasks;
-using DashboardReportApp.Models;
+﻿using DashboardReportApp.Models;
+using FastReport;
+using iText.IO.Font.Constants;
+using iText.Kernel.Font;
 using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
-using MySql.Data.MySqlClient;
-using iText.Kernel.Font;
 using iText.Layout.Properties;
-using iText.IO.Font.Constants;
-using System.Net.Mail;
-using System.Net;
-using System.Diagnostics;
-using System.Drawing.Printing;
-using FastReport;
 using Microsoft.AspNetCore.Http; // for IFormFile
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using MySql.Data.MySqlClient;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics;
+using System.Drawing.Printing;
+using System.IO;
+using System.Net;
+using System.Net.Mail;
+using System.Threading.Tasks;
 
 namespace DashboardReportApp.Services
 {
     public class AdminHoldTagService
     {
-        private readonly string _connectionString;
-        private readonly string _connectionStringSQLExpress;
-        private readonly string _uploadFolder;
+        private readonly string _mysqlConn;
+        private readonly string _sqlExpressConn;
+        private readonly string _baseFolder;
 
-        public AdminHoldTagService(IConfiguration configuration)
+        public AdminHoldTagService(IConfiguration configuration, IOptionsMonitor<PathOptions> pathOptions, IWebHostEnvironment env)
         {
-            _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+            _mysqlConn = configuration.GetConnectionString("MySQLConnection")
+                ?? throw new InvalidOperationException("MySQLConnection missing");
+            _sqlExpressConn = configuration.GetConnectionString("SQLExpressConnection")
+                ?? throw new InvalidOperationException("SQLExpressConnection missing");
+
+            // prefer HoldTagUploads if present; otherwise use DeviationUploads
+            var p = pathOptions.CurrentValue;
+            var configured = !string.IsNullOrWhiteSpace(p.HoldTagUploads) ? p.HoldTagUploads! : p.DeviationUploads;
+
+            _baseFolder = Path.IsPathFullyQualified(configured)
+                ? configured
+                : Path.GetFullPath(Path.Combine(env.ContentRootPath, configured));
+
+            Directory.CreateDirectory(_baseFolder); // idempotent
         }
 
         // 1. Get all HoldRecord rows
         public async Task<List<AdminHoldTagModel>> GetAllHoldRecordsAsync()
         {
             var records = new List<AdminHoldTagModel>();
-
-            using var connection = new MySqlConnection(_connectionString);
+            using var connection = new MySqlConnection(_mysqlConn);
             await connection.OpenAsync();
 
-            string query = "SELECT * FROM HoldRecords ORDER BY id DESC";
-
+            const string query = "SELECT * FROM HoldRecords ORDER BY id DESC";
             using var command = new MySqlCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
-                var record = new AdminHoldTagModel
+                // Strip any legacy full paths to just the filename
+                string fn1 = reader.IsDBNull("FileAddress1") ? "" : Path.GetFileName(reader.GetString("FileAddress1"));
+                string fn2 = reader.IsDBNull("FileAddress2") ? "" : Path.GetFileName(reader.GetString("FileAddress2"));
+
+                records.Add(new AdminHoldTagModel
                 {
                     Id = reader.GetInt32("Id"),
                     Timestamp = reader.IsDBNull("Timestamp") ? null : reader.GetDateTime("Timestamp"),
@@ -67,40 +81,30 @@ namespace DashboardReportApp.Services
                     Unit = reader.IsDBNull("Unit") ? null : reader.GetString("Unit"),
                     PcsScrapped = reader.IsDBNull("PcsScrapped") ? (int?)null : reader.GetInt32("PcsScrapped"),
                     DateCompleted = reader.IsDBNull("DateCompleted") ? null : reader.GetDateTime("DateCompleted"),
-                    FileAddress1 = reader.IsDBNull("FileAddress1") ? null : reader.GetString("FileAddress1"),
-                    FileAddress2 = reader.IsDBNull("FileAddress2") ? null : reader.GetString("FileAddress2")
-                };
-
-                records.Add(record);
+                    FileAddress1 = string.IsNullOrEmpty(fn1) ? null : fn1,
+                    FileAddress2 = string.IsNullOrEmpty(fn2) ? null : fn2
+                });
             }
 
             return records;
         }
 
-        // 2. Update an existing HoldRecord row, handling up to 2 file uploads
         public async Task<bool> UpdateRequest(AdminHoldTagModel model, IFormFile? file1, IFormFile? file2)
         {
-            // Preserve existing file paths, unless we upload a new file
-            string filePath1 = model.FileAddress1;
-            string filePath2 = model.FileAddress2;
+            // Preserve existing filenames if no new upload
+            string fileName1 = Path.GetFileName(model.FileAddress1 ?? "");
+            string fileName2 = Path.GetFileName(model.FileAddress2 ?? "");
 
-            // 1) If FileUpload1 was provided, save/replace FileAddress1
-            if (file1 != null && file1.Length > 0)
-            {
-                filePath1 = await SaveFileForHoldTagAsync(model.Id, file1, "File1");
-            }
+            if (file1 is { Length: > 0 })
+                fileName1 = await SaveFileForHoldTagAsync(model.Id, file1, suffix: "1");
 
-            // 2) If FileUpload2 was provided, save/replace FileAddress2
-            if (file2 != null && file2.Length > 0)
-            {
-                filePath2 = await SaveFileForHoldTagAsync(model.Id, file2, "File2");
-            }
+            if (file2 is { Length: > 0 })
+                fileName2 = await SaveFileForHoldTagAsync(model.Id, file2, suffix: "2");
 
-            // Now update DB record
-            using var connection = new MySqlConnection(_connectionString);
+            using var connection = new MySqlConnection(_mysqlConn);
             await connection.OpenAsync();
 
-            string query = @"
+            const string query = @"
                 UPDATE HoldRecords
                 SET 
                     Part = @Part,
@@ -120,64 +124,55 @@ namespace DashboardReportApp.Services
                 WHERE Id = @Id";
 
             using var command = new MySqlCommand(query, connection);
-
             command.Parameters.AddWithValue("@Id", model.Id);
-            command.Parameters.AddWithValue("@Part", model.Part ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Discrepancy", model.Discrepancy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Date", model.Date ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@IssuedBy", model.IssuedBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Disposition", model.Disposition ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@DispositionBy", model.DispositionBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@ReworkInstr", model.ReworkInstr ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@ReworkInstrBy", model.ReworkInstrBy ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Quantity", model.Quantity ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Unit", model.Unit ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@PcsScrapped", model.PcsScrapped ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@DateCompleted", model.DateCompleted ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@FileAddress1", filePath1 ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@FileAddress2", filePath2 ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Part", (object?)model.Part ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Discrepancy", (object?)model.Discrepancy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Date", (object?)model.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@IssuedBy", (object?)model.IssuedBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Disposition", (object?)model.Disposition ?? DBNull.Value);
+            command.Parameters.AddWithValue("@DispositionBy", (object?)model.DispositionBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ReworkInstr", (object?)model.ReworkInstr ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ReworkInstrBy", (object?)model.ReworkInstrBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Quantity", (object?)model.Quantity ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Unit", (object?)model.Unit ?? DBNull.Value);
+            command.Parameters.AddWithValue("@PcsScrapped", (object?)model.PcsScrapped ?? DBNull.Value);
+            command.Parameters.AddWithValue("@DateCompleted", (object?)model.DateCompleted ?? DBNull.Value);
+            command.Parameters.AddWithValue("@FileAddress1", string.IsNullOrWhiteSpace(fileName1) ? (object)DBNull.Value : fileName1);
+            command.Parameters.AddWithValue("@FileAddress2", string.IsNullOrWhiteSpace(fileName2) ? (object)DBNull.Value : fileName2);
 
-            int rowsAffected = await command.ExecuteNonQueryAsync();
-            return (rowsAffected > 0);
+            var rows = await command.ExecuteNonQueryAsync();
+            return rows > 0;
         }
 
-        /// <summary>
-        /// Saves a file to disk for the given HoldTag (by ID).
-        /// We append a suffix for clarity (e.g. "File1" or "File2").
-        /// </summary>
         private async Task<string> SaveFileForHoldTagAsync(int holdTagId, IFormFile file, string suffix)
         {
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-            }
+            Directory.CreateDirectory(_baseFolder);
 
-            // Example: "HoldTag_123_File1.pdf"
-            var extension = Path.GetExtension(file.FileName);
-            var fileName = "";
-            if(suffix == "File1")
-            {
-                fileName = $"HoldTag1_{holdTagId}_{extension}";
-            }
-            else if (suffix == "File2")
-            {
-                fileName = $"HoldTag2_{holdTagId}_{extension}";
-            }
-            var finalPath = Path.Combine(_uploadFolder, fileName);
+            // Good, predictable names: HoldTag{suffix}_{id}{.ext}
+            var ext = Path.GetExtension(file.FileName); // includes leading dot
+            var fileName = $"HoldTag{suffix}_{holdTagId}{ext}";
 
-            using (var stream = new FileStream(finalPath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
+            var finalPath = Path.Combine(_baseFolder, fileName);
+            using var fs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            await file.CopyToAsync(fs);
 
-            return finalPath;
+            // Return just the filename (what we store in DB)
+            return fileName;
         }
+
+        // Rebuild absolute path from stored filename
+        public string GetAbsolutePath(string? stored)
+        {
+            var name = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
+            return string.IsNullOrWhiteSpace(name) ? "" : Path.Combine(_baseFolder, name);
+        }
+    
        
         // -- Additional queries for operator dropdowns
         public async Task<List<string>> GetIssuedByOperatorsAsync()
         {
             var operators = new List<string>();
-            using var connection = new MySqlConnection(_connectionString);
+            using var connection = new MySqlConnection(_mysqlConn);
             await connection.OpenAsync();
             string query = "SELECT name FROM operators"; // all
             using var command = new MySqlCommand(query, connection);
@@ -192,7 +187,7 @@ namespace DashboardReportApp.Services
         public async Task<List<string>> GetDispositionOperatorsAsync()
         {
             var operators = new List<string>();
-            using var connection = new MySqlConnection(_connectionString);
+            using var connection = new MySqlConnection(_mysqlConn);
             await connection.OpenAsync();
             string query = "SELECT name FROM operators WHERE allowHoldDisp = 1";
             using var command = new MySqlCommand(query, connection);
@@ -207,7 +202,7 @@ namespace DashboardReportApp.Services
         public async Task<List<string>> GetReworkOperatorsAsync()
         {
             var operators = new List<string>();
-            using var connection = new MySqlConnection(_connectionString);
+            using var connection = new MySqlConnection(_mysqlConn);
             await connection.OpenAsync();
             string query = "SELECT name FROM operators WHERE allowHoldRework = 1";
             using var command = new MySqlCommand(query, connection);

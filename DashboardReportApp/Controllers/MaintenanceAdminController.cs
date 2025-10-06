@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Threading.Tasks;
-using DashboardReportApp.Controllers.Attributes;
 
 namespace DashboardReportApp.Controllers
 {
@@ -11,12 +12,14 @@ namespace DashboardReportApp.Controllers
     public class MaintenanceAdminController : Controller
     {
         private readonly MaintenanceAdminService _adminService;
-
-        public MaintenanceAdminController(MaintenanceAdminService adminService)
+        private readonly PathOptions _paths;
+        public MaintenanceAdminController(
+        MaintenanceAdminService adminService,
+        IOptions<PathOptions> pathOptions)
         {
             _adminService = adminService;
+            _paths = pathOptions.Value;
         }
-
         [HttpGet("AdminView")]
         public async Task<IActionResult> AdminView()
         {
@@ -46,131 +49,100 @@ namespace DashboardReportApp.Controllers
         [Route("UpdateRequest")]
         [HttpPost]
         public async Task<IActionResult> UpdateRequest(
-           MaintenanceRequestModel model,
-           IFormFile? FileAddress1,
-           IFormFile? FileAddress2
-       )
+          MaintenanceRequestModel model,
+          IFormFile? FileAddress1,
+          IFormFile? FileAddress2)
         {
             try
             {
-                // We will store both files in the same folder:
-                var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-                if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(_paths.MaintenanceUploads);
+
+                // FILE 1
+                if (FileAddress1 is { Length: > 0 })
                 {
-                    Directory.CreateDirectory(uploadsFolder);
+                    var ext = Path.GetExtension(FileAddress1.FileName);
+                    var fileName = $"MaintenanceRequestFile1_{model.Id}{ext}";
+                    var full = Path.Combine(_paths.MaintenanceUploads, fileName);
+
+                    if (System.IO.File.Exists(full)) System.IO.File.Delete(full);
+                    using var s = new FileStream(full, FileMode.Create);
+                    await FileAddress1.CopyToAsync(s);
+
+                    model.FileAddress1 = fileName; // filename only
                 }
 
-                // == FILE 1 ==
-                if (FileAddress1 != null && FileAddress1.Length > 0)
+                // FILE 2
+                if (FileAddress2 is { Length: > 0 })
                 {
-                    var fileExtension = Path.GetExtension(FileAddress1.FileName);
-                    var fileName = $"MaintenanceRequestFile1_{model.Id}{fileExtension}";
-                    var filePath = Path.Combine(uploadsFolder, fileName);
+                    var ext2 = Path.GetExtension(FileAddress2.FileName);
+                    var fileName2 = $"MaintenanceRequestFile2_{model.Id}{ext2}";
+                    var full2 = Path.Combine(_paths.MaintenanceUploads, fileName2);
 
-                    // If a file with that name already exists, delete it
-                    if (System.IO.File.Exists(filePath))
-                    {
-                        System.IO.File.Delete(filePath);
-                    }
+                    if (System.IO.File.Exists(full2)) System.IO.File.Delete(full2);
+                    using var s2 = new FileStream(full2, FileMode.Create);
+                    await FileAddress2.CopyToAsync(s2);
 
-                    // Save the uploaded file to the server
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await FileAddress1.CopyToAsync(stream);
-                    }
-
-                    // Store in model so it can be updated in DB
-                    model.FileAddress1 = filePath;
+                    model.FileAddress2 = fileName2; // filename only
                 }
 
-                // == FILE 2 ==
-                if (FileAddress2 != null && FileAddress2.Length > 0)
-                {
-                    var fileExtension2 = Path.GetExtension(FileAddress2.FileName);
-                    var fileName2 = $"MaintenanceRequestFile2_{model.Id}{fileExtension2}";
-                    var filePath2 = Path.Combine(uploadsFolder, fileName2);
-
-                    if (System.IO.File.Exists(filePath2))
-                    {
-                        System.IO.File.Delete(filePath2);
-                    }
-
-                    using (var stream = new FileStream(filePath2, FileMode.Create))
-                    {
-                        await FileAddress2.CopyToAsync(stream);
-                    }
-
-                    model.FileAddress2 = filePath2;
-                }
-
-                // Merge new status text with old
+                // Append new status line
                 string oldDesc = model.StatusDesc ?? "";
                 string nowString = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 string newLine = $"{model.Status} {nowString} {model.StatusUpdatedBy} {model.NewStatusDesc}".Trim();
+                model.StatusDesc = string.IsNullOrEmpty(oldDesc) ? newLine : (oldDesc + "\n" + newLine);
 
-                model.StatusDesc = string.IsNullOrEmpty(oldDesc)
-                    ? newLine
-                    : (oldDesc + "\n" + newLine);
-
-                // If status is "Closed," set ClosedDateTime
                 if (model.Status == "Closed")
-                {
                     model.ClosedDateTime = DateTime.Now;
-                }
 
-                // Update in DB (adjust your method signature if needed)
                 _adminService.UpdateRequest(model);
 
                 TempData["Success"] = "Request updated successfully.";
                 return RedirectToAction("AdminView");
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Error: {ex.Message}");
                 TempData["Error"] = "Failed to update the request.";
-
-                // Re-fetch requests...
                 var requests = _adminService.GetAllRequests();
-                ViewBag.OperatorNames = _adminService.GetAllOperatorNames();
-
                 return View("AdminView", requests);
             }
         }
+
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {
-            if (string.IsNullOrEmpty(filePath))
-            {
-                return Json(new { success = false, message = "No file path provided." });
-            }
+            var fileName = Path.GetFileName(filePath ?? "");
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Json(new { success = false, message = "No file provided." });
 
-            if (!System.IO.File.Exists(filePath))
-            {
-                return Json(new { success = false, message = $"File not found: {filePath}" });
-            }
+            var url = Url.Action("Preview", "MaintenanceAdmin", new { file = fileName }, Request.Scheme);
+            return Json(new { success = true, url });
+        }
 
-            // Ensure the directory exists
-            var fileName = Path.GetFileName(filePath);
-            var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
-            var destinationPath = Path.Combine(destinationDir, fileName);
+        [HttpGet("Preview")]
+        public IActionResult Preview(string file)
+        {
+            var fileName = Path.GetFileName(file ?? "");
+            if (string.IsNullOrWhiteSpace(fileName))
+                return NotFound();
 
-            if (!Directory.Exists(destinationDir)) 
-            {
-                Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
-            }
-             if (System.IO.File.Exists(destinationPath))
-                    {
-                        System.IO.File.Delete(destinationPath);
-                    }
-            // Copy the file to the destination path if it doesn't already exist
-            if (!System.IO.File.Exists(destinationPath))
-            {
-                System.IO.File.Copy(filePath, destinationPath, overwrite: true);
-            }
+            var full = Path.Combine(_paths.MaintenanceUploads, fileName);
+            if (!System.IO.File.Exists(full))
+                return NotFound();
 
-            // Return the relative path to the image
-            var relativePath = $"/Uploads/{fileName}";
-            return Json(new { success = true, url = relativePath });
+            var ext = Path.GetExtension(full).ToLowerInvariant();
+            var mime = ext switch
+            {
+                ".pdf" => "application/pdf",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+
+            var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return File(stream, mime);
         }
     }
 }

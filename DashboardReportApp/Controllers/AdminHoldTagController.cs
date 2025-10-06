@@ -6,6 +6,7 @@ using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.IO;
 
 namespace DashboardReportApp.Controllers
 {
@@ -88,5 +89,52 @@ namespace DashboardReportApp.Controllers
                 return View("Index", allRecords);
             }
         }
+
+        // AdminHoldTagController
+        [HttpGet("FetchFile")]
+        public IActionResult FetchFile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, message = "No file name provided." });
+
+            var abs = _holdtagservice.GetAbsolutePath(name);
+            if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
+                return Json(new { success = false, message = $"File not found: {name}" });
+
+            var url = Url.Action(nameof(StreamFile), "AdminHoldTag", new { name }, Request.Scheme);
+            return Json(new { success = true, url });
+        }
+
+        [HttpGet("StreamFile")]
+        public IActionResult StreamFile(string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name)) return NotFound();
+
+                var abs = _holdtagservice.GetAbsolutePath(name);
+                if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs)) return NotFound();
+
+                var ext = Path.GetExtension(abs).ToLowerInvariant();
+                var mime = ext switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".bmp" => "image/bmp",
+                    ".webp" => "image/webp",
+                    ".pdf" => "application/pdf",
+                    _ => "application/octet-stream"
+                };
+
+                Response.Headers.CacheControl = "public,max-age=86400";
+                return PhysicalFile(abs, mime, enableRangeProcessing: true);
+            }
+            catch (OperationCanceledException)
+            {
+                return new EmptyResult();
+            }
+        }
+
     }
 }

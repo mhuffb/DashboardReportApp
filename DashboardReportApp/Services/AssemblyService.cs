@@ -1,41 +1,56 @@
-﻿using MySql.Data.MySqlClient;
-using System;
-using System.Collections.Generic;
-using System.Data.Odbc;
-using Microsoft.Extensions.Configuration;
-using DashboardReportApp.Models;
-using System.Data;
-using Mysqlx.Crud;
-using iText.Kernel.Geom;
-using iText.Kernel.Pdf;
-using iText.StyledXmlParser.Jsoup.Nodes;
-using System.IO;
+﻿using DashboardReportApp.Models;
+using DashboardReportApp.Services;
 using iText.IO.Font.Constants;
 using iText.Kernel.Font;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Canvas.Draw;
+using iText.Layout;
+using iText.Layout.Borders;
 using iText.Layout.Element;
 using iText.Layout.Properties;
-using iText.Layout;
-using iText.Kernel.Pdf.Canvas.Draw;
-using DashboardReportApp.Services;
+using iText.StyledXmlParser.Jsoup.Nodes;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using MySql.Data.MySqlClient;
+using Mysqlx.Crud;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Odbc;
+using System.IO;
 using static iText.StyledXmlParser.Jsoup.Select.Evaluator;
-using iText.Layout.Borders;
 
 public class AssemblyService
 {
     private readonly string _connectionStringMySQL;
-    private readonly string _connectionStringDataflex;
-    private string datatable = "assembly";
     private readonly SharedService _sharedService;
-    public AssemblyService(IConfiguration configuration, SharedService sharedService)
+    private readonly string _exportsFolder;   // <- from config
+    private readonly string datatable = "assembly";
+
+    public AssemblyService(IConfiguration configuration, SharedService sharedService, IOptionsMonitor<PathOptions> opts, IWebHostEnvironment env)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
         _sharedService = sharedService;
+
+        var p = opts.CurrentValue;
+        var configured = string.IsNullOrWhiteSpace(p.AssemblyExports) ? "App_Data/Exports" : p.AssemblyExports;
+
+        _exportsFolder = System.IO.Path.IsPathFullyQualified(configured)
+            ? configured
+            : System.IO.Path.GetFullPath(System.IO.Path.Combine(env.ContentRootPath, configured));
+
+        Directory.CreateDirectory(_exportsFolder);
+
     }
-    /// <summary>
-    /// Get *all* runs in descending order by startDateTime.
-    /// </summary>
-   public async Task<List<AssemblyModel>> GetAllRunsAsync()
+        // Rebuild absolute path when we only have filename
+    public string GetExportAbsolutePath(string? name)
+    {
+        var fn = string.IsNullOrWhiteSpace(name) ? "" : System.IO.Path.GetFileName(name);
+        return string.IsNullOrWhiteSpace(fn) ? "" : System.IO.Path.Combine(_exportsFolder, fn);
+    }
+    public async Task<List<AssemblyModel>> GetAllRunsAsync()
 {
     var allRuns = new List<AssemblyModel>();
 
@@ -231,7 +246,8 @@ ORDER BY startDateTime DESC";
     public async Task<string> GenerateAssemblyReportAsync(AssemblyModel model)
     {
         // Generate the PDF file path.
-        string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\AssemblyTag_" + model.Id + ".pdf";
+        var fileName = $"AssemblyTag_{model.Id}.pdf";
+        var filePath = System.IO.Path.Combine(_exportsFolder, fileName);
         // Get the order of operations (unchanged).
         List<string> result = _sharedService.GetOrderOfOps(model.Part);
 

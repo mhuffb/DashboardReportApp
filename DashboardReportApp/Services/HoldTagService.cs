@@ -6,6 +6,7 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
 using MySql.Data.MySqlClient;
 
 namespace DashboardReportApp.Services
@@ -13,119 +14,155 @@ namespace DashboardReportApp.Services
     public class HoldTagService
     {
         private readonly string _connectionString;
-        private readonly string _connectionStringSQLExpress;
-        private readonly string _uploadFolder;
-        public HoldTagService(IConfiguration configuration)
+        private readonly string _uploadsBase;
+        private readonly string _exportsBase;
+
+        public HoldTagService(IConfiguration configuration,
+                              IOptionsMonitor<PathOptions> pathOptions,
+                              IWebHostEnvironment env)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+
+            // pull from config
+            var po = pathOptions.CurrentValue;
+
+            _uploadsBase = ResolveBase(po.HoldTagUploads, env.ContentRootPath);
+            _exportsBase = ResolveBase(po.HoldTagExports, env.ContentRootPath);
+
+            Directory.CreateDirectory(_uploadsBase);
+            Directory.CreateDirectory(_exportsBase);
         }
 
-       
+        private static string ResolveBase(string? configured, string contentRoot)
+        {
+            if (string.IsNullOrWhiteSpace(configured))
+                throw new InvalidOperationException("Missing path in PathOptions for HoldTag.");
+
+            // If absolute (including UNC), use as-is; else make it relative to content root
+            return Path.IsPathFullyQualified(configured)
+                ? configured
+                : Path.GetFullPath(Path.Combine(contentRoot, configured));
+        }
+
+        /// <summary>
+        /// Save an uploaded file into the configured HoldTag uploads folder.
+        /// Returns the absolute path on disk (you can store this in DB).
+        /// </summary>
+        public string SaveHoldFile(IFormFile file, int recordId, string prefix = "HoldTagFile1")
+        {
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("File is null or empty.", nameof(file));
+
+            var ext = Path.GetExtension(file.FileName);
+            var name = $"{prefix}_{recordId}_{DateTime.UtcNow.Ticks}{ext}";
+            var fullPath = Path.Combine(_uploadsBase, name);
+
+            using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            file.CopyTo(fs);
+
+            return fullPath; // store absolute path or just the file name if you prefer
+        }
+
+        /// <summary>
+        /// If you store only the file name, this turns it into an absolute path.
+        /// </summary>
+        public string GetUploadsAbsolutePath(string? stored)
+        {
+            var leaf = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
+            return string.IsNullOrWhiteSpace(leaf) ? "" : Path.Combine(_uploadsBase, leaf);
+        }
 
         public async Task<int> AddHoldRecordAsync(HoldTagModel record)
         {
-            string query = @"INSERT INTO holdrecords 
-                (part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
-                VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
-                SELECT LAST_INSERT_ID();";
-                
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@part", record.Part);
-                    command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
-                    command.Parameters.AddWithValue("@date", record.Date);
-                    command.Parameters.AddWithValue("@issuedBy", record.IssuedBy);
-                    command.Parameters.AddWithValue("@disposition", (object)record.Disposition ?? DBNull.Value);
+            const string query = @"
+INSERT INTO holdrecords 
+(part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
+VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
+SELECT LAST_INSERT_ID();";
 
-                    command.Parameters.AddWithValue("@dispositionBy", record.DispositionBy ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@reworkInstr", record.ReworkInstr ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@reworkInstrBy", record.ReworkInstrBy ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@quantity", record.Quantity);
-                    command.Parameters.AddWithValue("@unit", record.Unit);
-                    command.Parameters.AddWithValue("@pcsScrapped", record.PcsScrapped ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@dateCompleted", record.DateCompleted ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@fileAddress1", record.FileAddress1 ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@fileAddress2", record.FileAddress2 ?? (object)DBNull.Value);
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            using var command = new MySqlCommand(query, connection);
 
-                    // Execute and get the new ID
-                    int newId = Convert.ToInt32(await command.ExecuteScalarAsync());
-                    record.Id = newId; // update your model
-                    return newId;
-                }
-            }
+            command.Parameters.AddWithValue("@part", record.Part);
+            command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
+            command.Parameters.AddWithValue("@date", record.Date);
+            command.Parameters.AddWithValue("@issuedBy", record.IssuedBy);
+            command.Parameters.AddWithValue("@disposition", (object?)record.Disposition ?? DBNull.Value);
+            command.Parameters.AddWithValue("@dispositionBy", (object?)record.DispositionBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@reworkInstr", (object?)record.ReworkInstr ?? DBNull.Value);
+            command.Parameters.AddWithValue("@reworkInstrBy", (object?)record.ReworkInstrBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@quantity", record.Quantity);
+            command.Parameters.AddWithValue("@unit", record.Unit);
+            command.Parameters.AddWithValue("@pcsScrapped", (object?)record.PcsScrapped ?? DBNull.Value);
+            command.Parameters.AddWithValue("@dateCompleted", (object?)record.DateCompleted ?? DBNull.Value);
+            command.Parameters.AddWithValue("@fileAddress1", (object?)record.FileAddress1 ?? DBNull.Value);
+            command.Parameters.AddWithValue("@fileAddress2", (object?)record.FileAddress2 ?? DBNull.Value);
+
+            var newId = Convert.ToInt32(await command.ExecuteScalarAsync());
+            record.Id = newId;
+            return newId;
         }
 
         public string GenerateHoldTagPdf(HoldTagModel record)
         {
-            string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\HoldTag_" + record.Id + ".pdf";
+            var filePath = Path.Combine(_exportsBase, $"HoldTag_{record.Id}.pdf");
 
-            // Use predefined fonts
-            PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
-            PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+            var boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+            var normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
-            using (var writer = new PdfWriter(filePath))
-            using (var pdf = new PdfDocument(writer))
-            using (var document = new Document(pdf))
-            {
-                // Title
-                document.Add(new Paragraph("Hold").SetFont(boldFont).SetFontSize(18).SetTextAlignment(TextAlignment.CENTER));
-                document.Add(new Paragraph("\n")); // Spacing
+            using var writer = new PdfWriter(filePath);
+            using var pdf = new PdfDocument(writer);
+            using var document = new Document(pdf);
 
-                // Part Number
-                string id = string.IsNullOrWhiteSpace(record.Id.ToString()) ? "N/A" : record.Id.ToString();
-                document.Add(new Paragraph("ID:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph(id).SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("Hold").SetFont(boldFont).SetFontSize(18).SetTextAlignment(TextAlignment.CENTER));
+            document.Add(new Paragraph("\n"));
 
-                // Part Number
-                string partNumber = string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part;
-                document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph(partNumber).SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("ID:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph((record.Id == 0 ? "N/A" : record.Id.ToString())).SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-                // Discrepancy
-                document.Add(new Paragraph("Discrepancy:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph(record.Discrepancy ?? "N/A").SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part).SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-                // Issued By and Issued Date
-                string issuedBy = string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy;
-                document.Add(new Paragraph("Issued By:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph(issuedBy).SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("Issued Date:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph($"{record.Date:MM/dd/yyyy}").SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("Discrepancy:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph(record.Discrepancy ?? "N/A").SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-                // Corrective Action Needed
-                document.Add(new Paragraph("Corrective Action Needed: Yes ☐  No ☐").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("Issued By:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy).SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("Issued Date:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph($"{record.Date:MM/dd/yyyy}").SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-                // Quantity and Unit
-                string quantityAndUnit = $"{record.Quantity} {record.Unit}".Trim();
-                document.Add(new Paragraph("Amount:").SetFont(boldFont).SetFontSize(12));
-                document.Add(new Paragraph(string.IsNullOrWhiteSpace(quantityAndUnit) ? "N/A" : quantityAndUnit).SetFont(normalFont).SetFontSize(12));
-                document.Add(new Paragraph("\n")); // Spacing
+            document.Add(new Paragraph("Corrective Action Needed: Yes ☐  No ☐").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-                // Footer Instructions
-                document.Add(new Paragraph("Return Form To QA Manager Once Completed")
-                    .SetFont(boldFont)
-                    .SetFontSize(12)
-                    .SetTextAlignment(TextAlignment.CENTER));
-            }
+            var qtyUnit = $"{record.Quantity} {record.Unit}".Trim();
+            document.Add(new Paragraph("Amount:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph(string.IsNullOrWhiteSpace(qtyUnit) ? "N/A" : qtyUnit).SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
 
-            return filePath; // Return the generated PDF file path
+            document.Add(new Paragraph("Return Form To QA Manager Once Completed")
+                .SetFont(boldFont).SetFontSize(12).SetTextAlignment(TextAlignment.CENTER));
+
+            return filePath;
+        }
+
+        public async Task UpdateFileAddress1Async(int id, string pathOnDisk)
+        {
+            const string sql = @"UPDATE holdrecords SET FileAddress1 = @FileAddress1 WHERE Id = @Id";
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.Parameters.AddWithValue("@FileAddress1", pathOnDisk);
+            await cmd.ExecuteNonQueryAsync();
         }
 
 
-       
-       
-       
-       
+
 
         // 1. Get all HoldRecord rows
         public async Task<List<HoldTagModel>> GetAllHoldRecordsAsync()
@@ -207,23 +244,7 @@ namespace DashboardReportApp.Services
         }
 
       
-        public async Task UpdateFileAddress1Async(int id, string filePath)
-        {
-            string query = @"UPDATE holdrecords
-                     SET FileAddress1 = @FileAddress1
-                     WHERE Id = @Id";
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@Id", id);
-                    command.Parameters.AddWithValue("@FileAddress1", filePath);
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
-        }
+        
 
     }
 }

@@ -5,19 +5,23 @@ namespace DashboardReportApp.Controllers
     using DashboardReportApp.Models;
     using DashboardReportApp.Services;
     using Microsoft.AspNetCore.Mvc;
+    using Microsoft.Extensions.Options;
     using System.Threading.Tasks;
     [Route("MaintenanceRequest")]
     public class MaintenanceRequestController : Controller
     {
         private readonly MaintenanceRequestService _maintenanceService;
+        private readonly PathOptions _paths;
 
-        public MaintenanceRequestController( MaintenanceRequestService service)
+        public MaintenanceRequestController(
+            MaintenanceRequestService service,
+            IOptions<PathOptions> pathOptions)
         {
             _maintenanceService = service;
+            _paths = pathOptions.Value;
         }
 
 
-      
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
@@ -33,167 +37,155 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost("AddRequest")]
         public async Task<IActionResult> AddRequest(
-            [FromForm] MaintenanceRequestModel request,
-            [FromForm] IFormFile? file
-        )
+       [FromForm] MaintenanceRequestModel request,
+       [FromForm] IFormFile? file)
         {
-
-            // Validate the model state
+            // 1) Basic validation
             if (!ModelState.IsValid)
             {
-                Console.WriteLine("[DEBUG] ModelState is invalid. Errors:");
-                foreach (var error in ModelState)
-                {
-                    Console.WriteLine($"Key: {error.Key}");
-                    foreach (var subError in error.Value.Errors)
-                    {
-                        Console.WriteLine($"  Error: {subError.ErrorMessage}");
-                    }
-                }
-                TempData["Error"] = "Invalid input. Please correct the errors.";
                 return BadRequest(new { success = false, message = "Validation failed." });
             }
 
             try
             {
-
-                // Set default values
+                // 2) Defaults
                 if (request.DownStatus == true)
-                {
                     request.DownStartDateTime = DateTime.Now;
-                }
                 request.Status = "Open";
 
-
-
-                /* 2️⃣  If there’s a picture, save it **first** and store its path   */
+                // 3) If a file was uploaded, save it to the configured folder and store only the FILENAME
                 if (file is { Length: > 0 })
                 {
-                    var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-                    Directory.CreateDirectory(uploadsFolder);                // makes folder if missing
+                    // Use your configured maintenance uploads folder
+                    var uploadsFolder = _maintenanceService.Paths.MaintenanceUploads; // expose via a property or pass PathOptions into the controller
+                    Directory.CreateDirectory(uploadsFolder);
 
-                    // Use a GUID so the name is unique even before we know the ID
                     var ext = Path.GetExtension(file.FileName);
+                    // Use a temporary unique name right now; we'll rename after we get the DB Id if you prefer
                     var tempName = $"MaintenanceRequestFile1_{Guid.NewGuid()}{ext}";
-                    var tempPath = Path.Combine(uploadsFolder, tempName);
+                    var tempFullPath = Path.Combine(uploadsFolder, tempName);
 
-                    await using var fs = new FileStream(tempPath, FileMode.Create);
-                    await file.CopyToAsync(fs);
+                    await using (var fs = new FileStream(tempFullPath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(fs);
+                    }
 
-                    request.FileAddress1 = tempPath;                         // ⬅ key line
+                    // Store only the filename in the model (per your new rule)
+                    request.FileAddress1 = tempName;
                 }
 
-                int id = await _maintenanceService.AddRequestAsync(request);
+                // 4) Insert into DB (service should generate PDF, email, print — and internally swallow non-critical errors)
+                var id = await _maintenanceService.AddRequestAsync(request);
 
-
-                // If a file was uploaded, handle the file upload.
-                if (file != null && file.Length > 0)
+                // 5) Optional: if you want the uploaded file to be renamed to the final "{id}" pattern, do it here
+                if (file is { Length: > 0 } && !string.IsNullOrWhiteSpace(request.FileAddress1))
                 {
-                    UpdateFileAddress1(id, file);
+                    try
+                    {
+                        var uploadsFolder = _maintenanceService.Paths.MaintenanceUploads;
+                        var oldName = request.FileAddress1!;
+                        var oldFull = Path.Combine(uploadsFolder, oldName);
+                        var ext = Path.GetExtension(oldName);
 
-                   
+                        var finalName = $"MaintenanceRequestFile1_{id}{ext}";
+                        var finalFull = Path.Combine(uploadsFolder, finalName);
+
+                        if (System.IO.File.Exists(finalFull))
+                            System.IO.File.Delete(finalFull);
+
+                        System.IO.File.Move(oldFull, finalFull);
+
+                        // persist the new filename (not full path)
+                        await _maintenanceService.UpdateFile1Link(id, finalName);
+                    }
+                    catch (Exception exRename)
+                    {
+                        // Non-critical: keep request successful, just note it
+                        Console.WriteLine($"[WARN] Rename after insert failed: {exRename.Message}");
+                    }
                 }
 
+                // 6) All good
+                return Ok(new { success = true, message = "Request added successfully!", id });
             }
             catch (Exception ex)
             {
-                TempData["Error"] = "An error occurred while adding the request.";
-            }
-
-            return Ok(new { success = true, message = "Request added successfully!" });
-        }
-
-
-
-        [HttpGet("FetchImage")]
-        public IActionResult FetchImage(string filePath)
-        {
-            try
-            {
-
-
-                if (string.IsNullOrEmpty(filePath))
-                {
-                    return Json(new { success = false, message = "No file path provided." });
-                }
-
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return Json(new { success = false, message = $"File not found: {filePath}" });
-                }
-
-
-                // Ensure the directory exists
-                var fileName = System.IO.Path.GetFileName(filePath);
-                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/Uploads");
-                var destinationPath = Path.Combine(destinationDir, fileName);
-
-                if (!Directory.Exists(destinationDir))
-                {
-                    Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
-                }
-                if (System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Delete(destinationPath);
-                }
-                Console.WriteLine($"[DEBUG] Copying from '{filePath}' to '{destinationPath}'...");
-                // Copy the file to the destination path
-                if (!System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Copy(filePath, destinationPath, overwrite: true);
-                }
-
-                // Return the relative path to the image
-                var relativePath = $"/Uploads/{fileName}";
-                return Json(new { success = true, url = relativePath });
-            }
-            catch (Exception ex)
-            {
-                // Log exception so you see EXACT error cause
-                // Return an appropriate error response
-                return StatusCode(500, new { success = false, message = ex.Message });
+                // Only DB/insert errors should reach here
+                Console.WriteLine($"[ERROR] AddRequest failed: {ex}");
+                return StatusCode(500, new { success = false, message = "Server error while adding request." });
             }
         }
 
-       
+
+        // keep this ONLY for direct posts from the UI, don’t call it from AddRequest
         [HttpPost("UpdateFileAddress1")]
         public async Task<IActionResult> UpdateFileAddress1(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
-            {
-                TempData["Error"] = "Please select a valid file.";
-                return RedirectToAction(nameof(Index));
-            }
+                return BadRequest(new { success = false, message = "No file received." });
 
             try
             {
-                var uploadsFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
+                var uploadsFolder = _maintenanceService.Paths.MaintenanceUploads;
+                Directory.CreateDirectory(uploadsFolder);
 
-                var fileExtension = Path.GetExtension(file.FileName);
-                var fileName = $"MaintenanceRequestFile1_{id}{fileExtension}";
-                var filePath = Path.Combine(uploadsFolder, fileName);
+                var ext = Path.GetExtension(file.FileName);
+                var fileName = $"MaintenanceRequestFile1_{id}{ext}";
+                var fullPath = Path.Combine(uploadsFolder, fileName);
 
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
+                using (var stream = new FileStream(fullPath, FileMode.Create))
                     await file.CopyToAsync(stream);
-                }
 
-
-                // Ensure NULL safety when updating the database
-                string filePathImage = await _maintenanceService.UpdateFile1Link(id, filePath ?? "");
-
+                await _maintenanceService.UpdateFile1Link(id, fileName); // store filename only
+                return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
-                TempData["Error"] = "An error occurred while uploading the file.";
+                Console.WriteLine($"[ERROR] UpdateFileAddress1: {ex}");
+                return StatusCode(500, new { success = false, message = "Failed to upload file." });
             }
+        }
 
-            return RedirectToAction(nameof(Index));
+
+        // returns a JSON with a URL to stream the file (no copies to wwwroot)
+        [HttpGet("FetchImage")]
+        public IActionResult FetchImage(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath ?? "");
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Json(new { success = false, message = "No file provided." });
+
+            var url = Url.Action("Preview", "MaintenanceRequest", new { file = fileName }, Request.Scheme);
+            return Json(new { success = true, url });
+        }
+
+        // streams the content directly from MaintenanceUploads
+        // streams the content directly from MaintenanceUploads
+        [HttpGet("Preview")]
+        public IActionResult Preview(string file)
+        {
+            var fileName = Path.GetFileName(file ?? "");
+            if (string.IsNullOrWhiteSpace(fileName))
+                return NotFound();
+
+            var full = Path.Combine(_paths.MaintenanceUploads, fileName);
+            if (!System.IO.File.Exists(full))
+                return NotFound();
+
+            var ext = Path.GetExtension(full).ToLowerInvariant();
+            var mime = ext switch
+            {
+                ".pdf" => "application/pdf",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+
+            var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return File(stream, mime);
         }
 
         // New endpoint to return all open maintenance requests for  molding dashboard

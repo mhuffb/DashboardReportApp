@@ -1,15 +1,17 @@
-﻿using System.Diagnostics;
-using System.Drawing.Printing;
-using System.Net.Mail;
-using System.Net;
-using Microsoft.Data.SqlClient;
-using MySql.Data.MySqlClient;
-using System.Data;
-using iText.StyledXmlParser.Jsoup.Select;
-using Mysqlx.Crud;
-using iText.Layout;
+﻿using DashboardReportApp.Models;
 using iText.Kernel.Pdf;
+using iText.Layout;
 using iText.Layout.Element;
+using iText.StyledXmlParser.Jsoup.Select;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
+using MySql.Data.MySqlClient;
+using Mysqlx.Crud;
+using System.Data;
+using System.Diagnostics;
+using System.Drawing.Printing;
+using System.Net;
+using System.Net.Mail;
 
 namespace DashboardReportApp.Services
 {
@@ -20,14 +22,16 @@ namespace DashboardReportApp.Services
         private readonly string _connectionStringSinTSQL;
         private readonly string _uploadFolder;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly PrinterOptions _printing;
 
-        public SharedService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
+        public SharedService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor, IOptions<PrinterOptions> printingOptions)
         {
             _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
             _connectionStringSinTSQL = configuration.GetConnectionString("SqlServerConnectionsinTSQL");
             _httpContextAccessor = httpContextAccessor;
+            _printing = printingOptions.Value;
         }
 
         public SharedService()
@@ -559,67 +563,42 @@ ORDER BY p.measure_date DESC
             // Fallback option if not found
             return "None";
         }
-        public void PrintFileToSpecificPrinter(string printerName, string pdfPath, int copies)
+        public void PrintFileToSpecificPrinter(string printerName, string filePath, int copies = 1)
         {
-            if (string.IsNullOrWhiteSpace(pdfPath) || !File.Exists(pdfPath))
+            if (string.IsNullOrWhiteSpace(_printing.SumatraExePath) || !File.Exists(_printing.SumatraExePath))
+                throw new FileNotFoundException(
+                    "SumatraPDF.exe not found. Install SumatraPDF or set Printing:SumatraExePath in appsettings.json.",
+                    _printing.SumatraExePath ?? "<unset>");
+
+            if (string.IsNullOrWhiteSpace(printerName))
+                throw new ArgumentException("Printer name is required.", nameof(printerName));
+
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new FileNotFoundException("File to print not found.", filePath);
+
+            if (copies < 1) copies = 1;
+
+            // Sumatra accepts -print-to, and will respect copies via -print-settings "copies=N"
+            // (If your driver ignores that, we can loop N times instead.)
+            string args = $"-silent -exit-on-print -print-to \"{printerName}\" -print-settings \"copies={copies}\" \"{filePath}\"";
+
+            var psi = new ProcessStartInfo
             {
-                throw new FileNotFoundException("PDF file not found for printing.", pdfPath);
-            }
+                FileName = _printing.SumatraExePath,
+                Arguments = args,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
 
-            if (copies < 1)
-            {
-                throw new ArgumentException("Number of copies must be at least 1.", nameof(copies));
-            }
-            if (printerName != "None")
-            {
+            using var proc = Process.Start(psi);
+            if (proc == null)
+                throw new InvalidOperationException("Failed to start SumatraPDF printing process.");
 
-                try
-                {
-                    string sumatraPath = @"C:\Tools\SumatraPDF\SumatraPDF.exe"; // Path to SumatraPDF executable
-
-                    // Validate printer existence
-                    if (!PrinterSettings.InstalledPrinters.Cast<string>()
-                        .Any(p => p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        throw new Exception($"Printer '{printerName}' is not installed.");
-                    }
-
-                    // Validate SumatraPDF existence
-                    if (!File.Exists(sumatraPath))
-                    {
-                        throw new FileNotFoundException("SumatraPDF executable not found.", sumatraPath);
-                    }
-
-                    // Build command arguments
-                    // Only add the copies setting if more than one copy is requested.
-                    string copyArgs = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
-                    string arguments = $"-print-to \"{printerName}\"{copyArgs} \"{pdfPath}\"";
-
-                    // Start the process
-                    var process = new Process
-                    {
-                        StartInfo = new ProcessStartInfo
-                        {
-                            FileName = sumatraPath,
-                            Arguments = arguments,
-                            CreateNoWindow = true,
-                            WindowStyle = ProcessWindowStyle.Hidden,
-                        }
-                    };
-
-                    process.Start();
-                    process.WaitForExit();
-
-                    if (process.ExitCode != 0)
-                    {
-                        throw new Exception($"Printing process exited with code {process.ExitCode}.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"Failed to print PDF: {ex.Message}");
-                }
-            }
+            // Optional: wait for completion & error check
+            proc.WaitForExit(15_000); // 15s timeout; adjust if needed
+            if (proc.ExitCode != 0)
+                throw new InvalidOperationException($"SumatraPDF exited with code {proc.ExitCode} while printing.");
         }
         public void PrintPlainText(string printerName, string text, int copies = 1)
         {
