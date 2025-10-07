@@ -214,26 +214,62 @@
         }
         public async Task<(string op, string mach)> GetLatestRunInfoAsync(string part, string prod, string run)
         {
+            static string S(object? o) => o?.ToString() ?? "";
+
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            const string query = @"
-        SELECT operator, machine FROM pressrun 
-        WHERE part = @p AND prodNumber = @prod AND run = @run 
-        ORDER BY id DESC LIMIT 1";
+            // 1) Try the latest pressrun row for this part/prod/run
+            const string qRun = @"
+        SELECT operator, machine
+        FROM pressrun
+        WHERE part = @p AND prodNumber = @prod AND run = @run
+        ORDER BY id DESC
+        LIMIT 1;";
 
-            await using var cmd = new MySqlCommand(query, conn);
-            cmd.Parameters.AddWithValue("@p", part);
-            cmd.Parameters.AddWithValue("@prod", prod);
-            cmd.Parameters.AddWithValue("@run", run);
-
-            await using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            await using (var cmd = new MySqlCommand(qRun, conn))
             {
-                return (reader["operator"]?.ToString() ?? "", reader["machine"]?.ToString() ?? "");
+                cmd.Parameters.AddWithValue("@p", part ?? "");
+                cmd.Parameters.AddWithValue("@prod", prod ?? "");
+                cmd.Parameters.AddWithValue("@run", run ?? "");
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (await rd.ReadAsync())
+                {
+                    var op = S(rd["operator"]);
+                    var mach = S(rd["machine"]);
+                    if (!string.IsNullOrWhiteSpace(op) || !string.IsNullOrWhiteSpace(mach))
+                        return (op, mach);
+                }
             }
+
+            // 2) Fallback: use presssetup for the same part/prod/run
+            // If your presssetup has an identity/timestamp you prefer, add ORDER BY <that> DESC
+            const string qSetup = @"
+        SELECT operator, machine
+        FROM presssetup
+        WHERE part = @p AND prodNumber = @prod AND run = @run
+        LIMIT 1;";
+
+            await using (var cmd2 = new MySqlCommand(qSetup, conn))
+            {
+                cmd2.Parameters.AddWithValue("@p", part ?? "");
+                cmd2.Parameters.AddWithValue("@prod", prod ?? "");
+                cmd2.Parameters.AddWithValue("@run", run ?? "");
+
+                await using var rd2 = await cmd2.ExecuteReaderAsync();
+                if (await rd2.ReadAsync())
+                {
+                    var op = S(rd2["operator"]);
+                    var mach = S(rd2["machine"]);
+                    return (op, mach);
+                }
+            }
+
+            // Nothing found in either table
             return ("", "");
         }
+
         // PressMixBagChangeService.cs
         public async Task<string?> GetScheduledMaterialCodeAsync(string part, string prodNumber, string run)
         {
