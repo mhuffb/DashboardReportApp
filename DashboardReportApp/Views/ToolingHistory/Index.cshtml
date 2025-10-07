@@ -35,7 +35,6 @@
                     <th>Initiated</th>
                     <th>Due</th>
                     <th>Cost</th>
-                    <th>Hours</th>
                     <th>Desc</th>
                     <th style="min-width:340px;">Actions</th>
                 </tr>
@@ -55,7 +54,6 @@
                             <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
                             <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
-                            <td>@item.ToolWorkHours</td>
                             <td class="text-truncate" style="max-width:220px;">@item.ToolDesc</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm"
@@ -77,6 +75,18 @@
                                         Request PO #
                                     </button>
                                 </form>
+                                @* Only show when Reason = Fitting/Setting (case-insensitive, ignores whitespace) *@
+                                @if (string.Equals(item.Reason?.Trim(), "Fitting/Setting", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       target="_blank" rel="noopener">
+                                        Packing Slip
+                                    </a>
+                                }
+
+
+
                             </td>
                         </tr>
                     }

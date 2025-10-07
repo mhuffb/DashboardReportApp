@@ -7,10 +7,10 @@
 
     var reasons = new List<(string Value, string Label)>
     {
-        ("New","New (5030)"),
-        ("Repair","Repair (5045)"),
-        ("Breakage","Breakage (5040)"),
-        ("Fitting","Fitting")
+        ("New","New Customer Purchase (5030)"),
+        ("Repair","Repair at Sintergy Cost (5045)"),
+        ("Breakage","Breakage Due to Negligence (5040)"),
+        ("Fitting/Setting","Fitting/Setting")
     };
 
     var vendors = new List<string>
@@ -18,6 +18,7 @@
         "J.I.T. Tool & Die",
         "Gerg Tool & Die Inc.",
         "Quala Die",
+        "Elk County Tool & Die",
         "Internal"
     };
 
@@ -76,6 +77,17 @@
             <div class="col-md-2">
                 <label class="form-label">PO</label>
                 <input class="form-control" name="PO" value="@Model.PO" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Estimated Cost</label>
+                <input class="form-control"
+                       type="number"
+                       step="0.01"
+                       min="0"
+                       inputmode="decimal"
+                       name="Cost"
+                       value="@(Model.Cost?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                <div class="form-text">Leave blank if unknown.</div>
             </div>
 
             <div class="col-md-4">
