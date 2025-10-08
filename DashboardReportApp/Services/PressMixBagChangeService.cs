@@ -54,28 +54,45 @@
         {
             var partsWithRuns = new List<PressSetupModel>();
 
-            const string query = @"
-        SELECT part, component, prodNumber, run, operator, machine 
-        FROM presssetup 
-        WHERE open = 1 
-        ORDER BY part, run";
+            // Grab the most-recent open setup per (part, prodNumber, run).
+            // "Open" = endDateTime IS NULL, but we also tolerate an `open` flag if present.
+            // If both exist, either condition qualifies it as open.
+            const string sql = @"
+        SELECT ps.part,
+               ps.component,
+               ps.prodNumber,
+               ps.run,
+               ps.operator,
+               ps.machine
+        FROM presssetup ps
+        INNER JOIN (
+            SELECT part, prodNumber, run, MAX(id) AS maxId
+            FROM presssetup
+            WHERE (COALESCE(open, 0) = 1 OR endDateTime IS NULL)
+            GROUP BY part, prodNumber, run
+        ) last
+            ON ps.id = last.maxId
+        ORDER BY ps.part, ps.run;";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
 
-            await using var command = new MySqlCommand(query, connection);
+            await using var command = new MySqlCommand(sql, connection);
             await using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
-                var part = reader["part"].ToString();
-                var component = reader["component"].ToString();
-                var prodNumber = reader["prodNumber"].ToString();
-                var run = reader["run"].ToString();
-                var operatorName = reader["operator"]?.ToString() ?? "N/A";
-                var machine = reader["machine"]?.ToString() ?? "N/A";
+                // null-safe field extraction
+                string S(object? o) => o?.ToString() ?? "";
 
-                if (!string.IsNullOrEmpty(part) && !string.IsNullOrEmpty(run))
+                var part = S(reader["part"]);
+                var component = S(reader["component"]);
+                var prodNumber = S(reader["prodNumber"]);
+                var run = S(reader["run"]);
+                var operatorName = S(reader["operator"]);
+                var machine = S(reader["machine"]);
+
+                if (!string.IsNullOrWhiteSpace(part) && !string.IsNullOrWhiteSpace(run))
                 {
                     partsWithRuns.Add(new PressSetupModel
                     {
@@ -83,8 +100,8 @@
                         Component = component,
                         ProdNumber = prodNumber,
                         Run = run,
-                        Operator = operatorName,
-                        Machine = machine
+                        Operator = string.IsNullOrWhiteSpace(operatorName) ? "N/A" : operatorName,
+                        Machine = string.IsNullOrWhiteSpace(machine) ? "N/A" : machine
                     });
                 }
             }
