@@ -142,13 +142,88 @@ SELECT LAST_INSERT_ID();";
         private async Task SendEmailWithPdfAsync(string pdfPath, MaintenanceRequestModel request)
         {
             var recipients = ResolveRecipientAddresses(request);
+
             try
             {
+                // send to mhuff with FYI recipients list in the body
+                var recipientsList = string.Join(", ", recipients ?? Array.Empty<string>());
+                await SendMhuffEmailAsync(pdfPath, request, recipientsList);
+                // send to normal recipients (uses your existing method, unchanged)
                 await SendIndividualEmailAsync(pdfPath, recipients, request);
+
+               
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error sending email: {ex.Message}");
+            }
+        }
+
+        private async Task SendMhuffEmailAsync(string pdfPath, MaintenanceRequestModel request, string recipientsList)
+        {
+            var email = new MimeMessage();
+            email.From.Add(new MailboxAddress(_email.FromName, _email.FromAddress));
+            email.To.Add(new MailboxAddress("Matt Huff", "mhuff@sintergy.net"));
+            email.Subject = $"New Maintenance Request: {request.Id}";
+
+            // Build body (copied style from your existing sender)
+            var eq = await GetEquipmentDetailsAsync(request.Equipment);
+            string equipmentBlock = eq is null
+                ? "Equipment Details: (no match found)"
+                : $@"Equipment Details:
+  Dept: {eq.Value.Department}
+  Name: {eq.Value.Name}
+  Brand: {eq.Value.Brand}
+  Model: {eq.Value.Model}
+  Serial: {eq.Value.Serial}
+  Description: {eq.Value.Description}";
+
+            var builder = new BodyBuilder
+            {
+                TextBody = $@"A new maintenance request has been created.
+
+Requester: {request.Requester}
+Equipment: {request.Equipment}
+Problem: {request.Problem}
+
+{equipmentBlock}
+
+[FYI] Original recipients: {recipientsList}"
+            };
+
+            // Same attachments as the standard email
+            if (!string.IsNullOrWhiteSpace(pdfPath) && File.Exists(pdfPath))
+                builder.Attachments.Add(pdfPath);
+
+            if (!string.IsNullOrWhiteSpace(request.FileAddress1))
+            {
+                var fullUpload = Path.Combine(_paths.MaintenanceUploads, request.FileAddress1);
+                if (File.Exists(fullUpload))
+                    builder.Attachments.Add(fullUpload);
+            }
+
+            email.Body = builder.ToMessageBody();
+
+            using var smtp = new MailKit.Net.Smtp.SmtpClient();
+            smtp.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+
+            try
+            {
+                if (_email.UseStartTls)
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.StartTls);
+                else if (_email.UseSsl)
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.SslOnConnect);
+                else
+                    await smtp.ConnectAsync(_email.SmtpHost, _email.SmtpPort, SecureSocketOptions.None);
+
+                if (!string.IsNullOrWhiteSpace(_email.Username))
+                    await smtp.AuthenticateAsync(_email.Username, _email.Password);
+
+                await smtp.SendAsync(email);
+            }
+            finally
+            {
+                await smtp.DisconnectAsync(true);
             }
         }
 
