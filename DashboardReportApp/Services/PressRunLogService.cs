@@ -605,7 +605,7 @@ LIMIT 1";
                     header.ShowTextAligned(
                         part + "  Skid # " + model.SkidNumber,
                         pageSize.GetWidth() / 2,
-                        pageSize.GetTop() - 20,
+                        pageSize.GetTop() - 40,
                         TextAlignment.CENTER,
                         (float)Math.PI);      // 180° rotation
                     header.Close();
