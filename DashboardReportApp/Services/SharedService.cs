@@ -547,10 +547,11 @@ ORDER BY p.measure_date DESC
             // Example mapping of users (or locations) to printers
             var userPrinterMappings = new Dictionary<string, string>
     {
-        { @"Office01.sintergyinc.local", "None" },
+        { @"Office01.sintergyinc.local", "Microsoft Print to PDF" },
         { @"mold02", "Mold02" },
         { @"MOLD03", "Mold03" },
         { @"MOLD04-PC", "Mold004" },
+        { @"DESKTOP-R8A5IFJ", "Microsoft Print to PDF" },
         // Add additional mappings as needed
     };
 
@@ -561,7 +562,7 @@ ORDER BY p.measure_date DESC
             }
 
             // Fallback option if not found
-            return "None";
+            return "Microsoft Print to PDF";
         }
         public void PrintFileToSpecificPrinter(string printerName, string filePath, int copies = 1)
         {
