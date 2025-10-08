@@ -1,6 +1,7 @@
 ﻿using DashboardReportApp.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
@@ -11,12 +12,26 @@ namespace DashboardReportApp.Services
     public class ProcessChangeRequestService
     {
         private readonly string _connectionString;
-        private readonly string _uploadFolder;
+        private readonly string _baseFolder;
 
-        public ProcessChangeRequestService(IConfiguration configuration)
+        public ProcessChangeRequestService(
+        IConfiguration configuration,
+        IOptionsMonitor<PathOptions> opts,
+        IWebHostEnvironment env)
         {
-            _connectionString = configuration.GetConnectionString("MySQLConnection");
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
+            _connectionString = configuration.GetConnectionString("MySQLConnection")
+             ?? throw new InvalidOperationException("MySQLConnection missing");
+
+            var p = opts.CurrentValue;
+            var configured = !string.IsNullOrWhiteSpace(p.ProcessChangeUploads)
+                ? p.ProcessChangeUploads!
+                : p.DeviationUploads;
+
+            _baseFolder = Path.IsPathFullyQualified(configured)
+                ? configured
+                : Path.GetFullPath(Path.Combine(env.ContentRootPath, configured));
+
+            Directory.CreateDirectory(_baseFolder);
         }
 
         // Gets all ProcessChangeRequest rows
@@ -119,51 +134,35 @@ namespace DashboardReportApp.Services
         //     If you want to reuse this for "AddRequest",
         //     just call it once you have the new Id.
         // -------------------------------------------------
+        // Resolve filename -> absolute path
+        public string GetAbsolutePath(string? stored)
+        {
+            var name = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
+            return string.IsNullOrWhiteSpace(name) ? "" : Path.Combine(_baseFolder, name);
+        }
+
         public string UpdateFileAddress1(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
-            {
                 throw new ArgumentException("File is missing or empty.", nameof(file));
-            }
 
-            // Ensure the upload folder exists
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-                Console.WriteLine($"Created folder: {_uploadFolder}");
-            }
+            Directory.CreateDirectory(_baseFolder);
+            var ext = Path.GetExtension(file.FileName);
+            var fileName = $"ProcessChangeRequestFile1_{id}{ext}";
+            var path = Path.Combine(_baseFolder, fileName);
 
-            // Construct unique file path: e.g. "ProcessChangeRequestFile1_12.png"
-            var fileExtension = Path.GetExtension(file.FileName);
-            var fileName = $"ProcessChangeRequestFile1_{id}{fileExtension}";
-            var filePath = Path.Combine(_uploadFolder, fileName);
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+                file.CopyTo(fs);
 
-            // Save the file on disk
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                file.CopyTo(stream);
-            }
-            Console.WriteLine($"[UpdateFileAddress1] File saved to: {filePath}");
+            const string sql = "UPDATE ProcessChangeRequest SET FileAddress1=@f WHERE Id=@id;";
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@f", fileName); // store filename only
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
 
-            // Update the DB record's FileAddress1
-            const string updateQuery = @"
-                UPDATE ProcessChangeRequest 
-                SET FileAddress1 = @FileAddress1
-                WHERE Id = @Id";
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                connection.Open();
-                using (var command = new MySqlCommand(updateQuery, connection))
-                {
-                    command.Parameters.AddWithValue("@FileAddress1", filePath);
-                    command.Parameters.AddWithValue("@Id", id);
-
-                    int rowsAffected = command.ExecuteNonQuery();
-                    Console.WriteLine($"[UpdateFileAddress1] Rows affected: {rowsAffected}");
-                }
-            }
-            return filePath;
+            return fileName;
         }
     }
 }

@@ -87,27 +87,30 @@
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress1))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress1">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-name="@item.FileAddress1">
                                     Preview 1
                                 </button>
                             }
                             else
                             {
+
                                 <span>No file</span>
                             }
                         </td>
                         <td>
                             @if (!string.IsNullOrEmpty(item.FileAddress2))
                             {
-                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-path="@item.FileAddress2">
+                                <button type="button" class="btn btn-info btn-sm fetch-image-btn" data-file-name="@item.FileAddress2">
                                     Preview 2
                                 </button>
                             }
                             else
                             {
+
                                 <span>No file</span>
                             }
                         </td>
+
                         <td>
                             <!-- "Add File" for FileAddress1 only -->
                             <button type="button" class="btn btn-secondary btn-sm add-file-btn" data-id="@item.Id">
@@ -358,43 +361,34 @@
             const modalImage = document.getElementById('modalImage');
             const modalPDF = document.getElementById('modalPDF');
 
-            document.querySelectorAll('.fetch-image-btn').forEach(button => {
-                button.addEventListener('click', function () {
-                    const filePath = this.dataset.filePath;
-                    if (!filePath) {
-                        alert("No file path provided.");
-                        return;
-                    }
-                    fetch(`/ProcessChangeRequest/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                        .then(resp => {
-                            if (!resp.ok) throw new Error("Failed to fetch file.");
-                            return resp.json();
-                        })
-                        .then(data => {
-                            if (data.success) {
-                                // Check file extension
-                                if (data.url.toLowerCase().endsWith(".pdf")) {
-                                    modalImage.style.display = 'none';
-                                    modalImage.src = '';
-                                    modalPDF.style.display = 'block';
-                                    modalPDF.src = data.url;
-                                } else {
-                                    modalPDF.style.display = 'none';
-                                    modalPDF.src = '';
-                                    modalImage.style.display = 'block';
-                                    modalImage.src = data.url;
-                                }
-                                new bootstrap.Modal(modalElement).show();
-                            } else {
-                                alert(`Error: ${data.message}`);
-                            }
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            alert("An error occurred while fetching the file.");
-                        });
-                });
-            });
+                  document.querySelectorAll('.fetch-image-btn').forEach(button => {
+          button.addEventListener('click', function () {
+            const fileName = this.dataset.fileName;
+            if (!fileName) { alert("No file name provided."); return; }
+
+            fetch(`/ProcessChangeRequest/FetchFile?name=${encodeURIComponent(fileName)}`)
+              .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+              .then(data => {
+                if (!data.success) { alert(`Error: ${data.message}`); return; }
+                const url = data.url;
+
+                // decide viewer
+                const modalElement = document.getElementById('imageModal');
+                const modalImage = document.getElementById('modalImage');
+                const modalPDF = document.getElementById('modalPDF');
+                modalImage.style.display = 'none';
+                modalPDF.style.display = 'none';
+
+                if (url.match(/\.pdf(\?|$)/i)) {
+                  modalPDF.src = url;  modalPDF.style.display = 'block';
+                } else {
+                  modalImage.src = url; modalImage.style.display = 'block';
+                }
+                new bootstrap.Modal(modalElement).show();
+              })
+              .catch(() => alert('An error occurred while fetching the file.'));
+          });
+        });
 
             modalElement.addEventListener('hidden.bs.modal', function () {
                 modalImage.src = '';

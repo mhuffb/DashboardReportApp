@@ -104,55 +104,42 @@ namespace DashboardReportApp.Controllers
 
             return RedirectToAction(nameof(Index));
         }
-        [HttpGet("FetchImage")]
-        public IActionResult FetchImage(string filePath)
+        [HttpGet("FetchFile")]
+        public IActionResult FetchFile(string name)
         {
-            try
-            {
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, message = "No file name provided." });
 
+            // resolve to absolute path using the service
+            var abs = _serviceProcessChangeRequest.GetAbsolutePath(name);
+            if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
+                return Json(new { success = false, message = $"File not found: {name}" });
 
-                if (string.IsNullOrEmpty(filePath))
-                {
-                    return Json(new { success = false, message = "No file path provided." });
-                }
-
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return Json(new { success = false, message = $"File not found: {filePath}" });
-                }
-
-
-                // Ensure the directory exists
-                var fileName = System.IO.Path.GetFileName(filePath);
-                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/Uploads");
-                var destinationPath = Path.Combine(destinationDir, fileName);
-
-                if (!Directory.Exists(destinationDir))
-                {
-                    Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
-                }
-                if (System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Delete(destinationPath);
-                }
-                Console.WriteLine($"[DEBUG] Copying from '{filePath}' to '{destinationPath}'...");
-                // Copy the file to the destination path
-                if (!System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Copy(filePath, destinationPath, overwrite: true);
-                }
-
-                // Return the relative path to the image
-                var relativePath = $"/Uploads/{fileName}";
-                return Json(new { success = true, url = relativePath });
-            }
-            catch (Exception ex)
-            {
-                // Log exception so you see EXACT error cause
-                Console.WriteLine($"[ERROR] FetchImage exception: {ex}");
-                // Return an appropriate error response
-                return StatusCode(500, new { success = false, message = ex.Message });
-            }
+            var url = Url.Action(nameof(StreamFile), "ProcessChangeRequest", new { name }, Request.Scheme);
+            return Json(new { success = true, url });
         }
+
+        [HttpGet("StreamFile")]
+        public IActionResult StreamFile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return NotFound();
+
+            var abs = _serviceProcessChangeRequest.GetAbsolutePath(name);
+            if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs)) return NotFound();
+
+            var ext = Path.GetExtension(abs).ToLowerInvariant();
+            var mime = ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
+            return PhysicalFile(abs, mime, enableRangeProcessing: true);
+        }
+
     }
 }
