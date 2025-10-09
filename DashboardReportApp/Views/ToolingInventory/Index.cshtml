@@ -1,0 +1,174 @@
+﻿@model List<DashboardReportApp.Models.ToolItemModel>
+@using DashboardReportApp.Models
+@{
+    ViewData["Title"] = "Tooling Inventory";
+}
+
+<div class="container-fluid px-3">
+    <h2 class="text-center mb-3">Tooling Inventory</h2>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <!-- ONLY: Add for Assembly -->
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <div class="input-group" style="max-width:420px">
+            <span class="input-group-text">Assembly #</span>
+            <input id="quickAssembly" type="text" class="form-control" placeholder="e.g., ASM-1001" />
+            <button id="btnAddForAssembly" class="btn btn-primary" type="button">
+                Add for Assembly
+            </button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Id</th>
+                    <th>Assembly #</th>
+                    <th>Tool #</th>
+                    <th>Category</th>
+                    <th>Condition</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Unavailable Info</th>
+                    <th style="width:90px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model)
+                {
+                    <tr>
+                        <td>@t.Id</td>
+                        <td>@t.AssemblyNumber</td>
+                        <td>@t.ToolNumber</td>
+                        <td>@t.CategoryLabel</td>
+                        <td>@t.Condition</td>
+                        <td>@t.Status</td>
+                        <td>@t.Location</td>
+                        <td>
+                            @if (t.Status == ToolStatus.Unavailable)
+                            {
+                                <div>
+                                    <div><strong>Reason:</strong> @t.UnavailableReason</div>
+                                    <div><strong>Since:</strong> @(t.DateUnavailable?.ToString("yyyy-MM-dd") ?? "-")</div>
+                                    <div><strong>ETA:</strong> @(t.EstimatedAvailableDate?.ToString("yyyy-MM-dd") ?? "-")</div>
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary js-edit" data-id="@t.Id">Edit</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Reusable modal -->
+<div class="modal fade" id="toolModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="toolModalTitle">Tool Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="toolModalBody"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function(){
+            const modalEl = document.getElementById('toolModal');
+            const modal = new bootstrap.Modal(modalEl);
+            const body = document.getElementById('toolModalBody');
+            const title = document.getElementById('toolModalTitle');
+
+            // Open CREATE with assembly prefilled (or blank if none)
+            document.getElementById('btnAddForAssembly').addEventListener('click', async ()=>{
+                const asm = (document.getElementById('quickAssembly')?.value || '').trim();
+                title.textContent = asm ? ('Add Tool — ' + asm) : 'Add Tool';
+                const url = asm ? '@Url.Action("Create")?assembly=' + encodeURIComponent(asm) : '@Url.Action("Create")';
+                await loadPartial(url);
+                modal.show();
+            });
+
+            // Open EDIT
+            document.querySelectorAll('.js-edit').forEach(btn=>{
+                btn.addEventListener('click', async ()=>{
+                    const id = btn.dataset.id;
+                    title.textContent = 'Edit Tool';
+                    await loadPartial('@Url.Action("Edit")?id=' + id);
+                    modal.show();
+                });
+            });
+
+            async function loadPartial(url){
+                const r = await fetch(url, { headers:{'X-Requested-With':'XMLHttpRequest'}});
+                const html = await r.text();
+                body.innerHTML = html;
+                wireForm(body.querySelector('#toolItemForm'));
+            }
+
+            function wireForm(form){
+                if(!form) return;
+
+                // 1) Toggle Unavailable block (since scripts in partial won't auto-run)
+                const status = form.querySelector('[name="Status"]');
+                const unavailBox = form.querySelector('[data-box="unavail"]');
+                function updateUnavail(){
+                    if (!status || !unavailBox) return;
+                    const v = parseInt(status.value || '1', 10);
+                    unavailBox.style.display = (v === 2) ? '' : 'none';
+                }
+                if (status) {
+                    status.addEventListener('change', updateUnavail);
+                    updateUnavail();
+                }
+
+                // 2) AJAX submit for Create/Edit
+                form.addEventListener('submit', async (e)=>{
+                    e.preventDefault();
+                    try {
+                        const formData = new FormData(form);
+                        const r = await fetch(form.action, {
+                            method: 'POST',
+                            headers: { 'X-Requested-With':'XMLHttpRequest' },
+                            body: formData
+                        });
+
+                        const contentType = (r.headers.get('Content-Type') || '').toLowerCase();
+
+                        // EDIT success => JSON { ok:true }
+                        if (contentType.includes('application/json')) {
+                            const data = await r.json();
+                            if (data.ok) {
+                                modal.hide();
+                                location.reload();
+                                return;
+                            }
+                        }
+
+                        // CREATE path returns HTML (either validation errors OR fresh form after save)
+                        const html = await r.text();
+                        body.innerHTML = html;
+                        // re-wire the fresh form each time
+                        wireForm(body.querySelector('#toolItemForm'));
+                    } catch (err) {
+                        console.error('Submit failed:', err);
+                    }
+                });
+            }
+        })();
+    </script>
+}

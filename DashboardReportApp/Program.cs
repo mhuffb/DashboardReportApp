@@ -81,6 +81,8 @@ try
     builder.Services.AddScoped<AssemblyService>();
     builder.Services.AddScoped<ProlinkService>();
     builder.Services.AddScoped<CalendarService>();
+    builder.Services.AddScoped<ToolingInventoryService>();
+
     builder.Services.AddHttpContextAccessor();
 
     // Add session services
