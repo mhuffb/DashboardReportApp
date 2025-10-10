@@ -2,7 +2,8 @@
 @using DashboardReportApp.Models
 @{
     var isCreate = Model.Id == 0;
-    var action = isCreate ? Url.Action("Create") : Url.Action("Edit");
+    // IMPORTANT: include controller name to avoid routing issues
+    var action = isCreate ? Url.Action("Create", "ToolingInventory") : Url.Action("Edit", "ToolingInventory");
 }
 <form id="toolItemForm" method="post" action="@action">
     @Html.AntiForgeryToken()

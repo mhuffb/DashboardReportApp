@@ -103,14 +103,19 @@ WHERE Id=@Id;";
             await cmd.ExecuteNonQueryAsync();
         }
 
+        // Services/ToolingInventoryService.cs
+
         private static void Bind(MySqlCommand cmd, ToolItemModel m)
         {
             cmd.Parameters.AddWithValue("@AssemblyNumber", m.AssemblyNumber);
             cmd.Parameters.AddWithValue("@ToolNumber", m.ToolNumber);
             cmd.Parameters.AddWithValue("@Location", (object?)m.Location ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Category", (int)m.Category);
-            cmd.Parameters.AddWithValue("@Condition", (int)m.Condition);
-            cmd.Parameters.AddWithValue("@Status", (int)m.Status);
+
+            // store enum names as strings
+            cmd.Parameters.AddWithValue("@Category", m.Category.ToString());
+            cmd.Parameters.AddWithValue("@Condition", m.Condition.ToString());
+            cmd.Parameters.AddWithValue("@Status", m.Status.ToString());
+
             cmd.Parameters.AddWithValue("@UnavailableReason", (object?)m.UnavailableReason ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DateUnavailable", (object?)m.DateUnavailable ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@EstimatedAvailableDate", (object?)m.EstimatedAvailableDate ?? DBNull.Value);
@@ -122,12 +127,16 @@ WHERE Id=@Id;";
             AssemblyNumber = r.GetString("AssemblyNumber"),
             ToolNumber = r.GetString("ToolNumber"),
             Location = r["Location"] as string,
-            Category = (ToolCategory)r.GetInt32("Category"),
-            Condition = (ToolCondition)r.GetInt32("Condition"),
-            Status = (ToolStatus)r.GetInt32("Status"),
+
+            // read strings and parse to enums (ignore case)
+            Category = Enum.Parse<ToolCategory>(r.GetString("Category"), true),
+            Condition = Enum.Parse<ToolCondition>(r.GetString("Condition"), true),
+            Status = Enum.Parse<ToolStatus>(r.GetString("Status"), true),
+
             UnavailableReason = r["UnavailableReason"] as string,
             DateUnavailable = r["DateUnavailable"] == DBNull.Value ? null : r.GetDateTime("DateUnavailable"),
             EstimatedAvailableDate = r["EstimatedAvailableDate"] == DBNull.Value ? null : r.GetDateTime("EstimatedAvailableDate")
         };
+
     }
 }

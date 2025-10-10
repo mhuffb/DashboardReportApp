@@ -40,26 +40,24 @@ namespace DashboardReportApp.Controllers
         {
             if (!ModelState.IsValid)
             {
-                // Return the form back with validation messages
+                // Validation: return the form HTML back into the modal
                 return PartialView("_ToolItemForm", model);
             }
 
-            await _svc.CreateAsync(model);
+            var newId = await _svc.CreateAsync(model);
+            var which = string.Equals(mode, "add_more", StringComparison.OrdinalIgnoreCase) ? "add_more" : "add_clear";
 
-            // Fresh form after save:
-            var fresh = new ToolItemModel
+            return Json(new
             {
-                // RETAIN assembly when "Save & Add Another", otherwise clear it
-                AssemblyNumber = string.Equals(mode, "add_more", StringComparison.OrdinalIgnoreCase)
-                                 ? model.AssemblyNumber
-                                 : string.Empty,
-                Category = ToolCategory.TopPunch,
-                Condition = ToolCondition.ReadyForProduction,
-                Status = ToolStatus.Available
-            };
-
-            return PartialView("_ToolItemForm", fresh);
+                ok = true,
+                id = newId,
+                mode = which,
+                assembly = model.AssemblyNumber,
+                message = $"Added tool {model.ToolNumber} to assembly {model.AssemblyNumber}."
+            });
         }
+
+
 
         // EDIT keeps returning JSON so the client closes the modal & refreshes
         [HttpPost]
