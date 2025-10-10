@@ -1,10 +1,12 @@
-﻿using DashboardReportApp.Models;
+﻿using DashboardReportApp.Controllers.Attributes;
+using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
+    [PasswordProtected(Password = "5intergy")]
     public class ToolingInventoryController : Controller
     {
         private readonly ToolingInventoryService _svc;
@@ -77,6 +79,18 @@ namespace DashboardReportApp.Controllers
             if (Request?.Headers is null) return false;
             if (!Request.Headers.TryGetValue("X-Requested-With", out var header)) return false;
             return string.Equals(header.ToString(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+        }
+        // Controllers/ToolingInventoryController.cs
+
+        [HttpGet]
+        public async Task<IActionResult> Edit(int id)
+        {
+            var model = await _svc.GetByIdAsync(id);
+            if (model is null)
+                return NotFound("Tooling item not found.");
+
+            // return the same partial used by Create, but with an Id so it posts to Edit
+            return PartialView("_ToolItemForm", model);
         }
 
     }
