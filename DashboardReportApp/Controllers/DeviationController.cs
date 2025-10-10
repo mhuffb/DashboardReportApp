@@ -10,74 +10,58 @@ namespace DashboardReportApp.Controllers
     public class DeviationController : Controller
     {
         private readonly DeviationService _service;
+        public DeviationController(DeviationService service) => _service = service;
 
-        public DeviationController(DeviationService service)
-        {
-            _service = service;
-        }
-
-        [HttpGet]
+        // GET /Deviation
+        [HttpGet("")]
         public async Task<IActionResult> Index()
         {
             ViewData["Operators"] = _service.GetOperators();
             var records = await _service.GetAllDeviationsAsync();
-
-            var model = new DeviationIndexViewModel
-            {
-                FormModel = new DeviationModel(), // New instance for the create form
-                Records = records
-            };
-
+            var model = new DeviationIndexViewModel { FormModel = new DeviationModel(), Records = records };
             return View(model);
         }
 
-        [HttpPost]
+        // POST /Deviation/Create
+        [HttpPost("Create")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(DeviationModel model, IFormFile? file)
         {
             if (ModelState.IsValid)
             {
                 await _service.SaveDeviationAsync(model, file);
-                string pdfPath = _service.GenerateAndPrintDeviationPdf(model);
+                var pdfPath = _service.GenerateAndPrintDeviationPdf(model); // keep your side effect
                 TempData["SuccessMessage"] = "Deviation successfully created!";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
 
             foreach (var key in ModelState.Keys)
-            {
                 foreach (var error in ModelState[key].Errors)
-                {
                     System.Console.WriteLine($"Key: {key}, Error: {error.ErrorMessage}");
-                }
-            }
 
             TempData["ErrorMessage"] = "Please correct the errors and try again.";
             ViewData["Operators"] = _service.GetOperators();
             var records = await _service.GetAllDeviationsAsync();
-            var viewModel = new DeviationIndexViewModel
-            {
-                FormModel = model,
-                Records = records
-            };
-            return View("Index", viewModel);
+            return View("Index", new DeviationIndexViewModel { FormModel = model, Records = records });
         }
 
-        // New action to update FileAddress1
-        [HttpPost]
+        // POST /Deviation/UpdateFile
+        [HttpPost("UpdateFile")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateFile(int id, IFormFile? file)
         {
             if (file == null || file.Length == 0)
             {
                 TempData["ErrorMessage"] = "Please select a valid file.";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
 
             bool success = await _service.UpdateFileAddress1Async(id, file);
             TempData["SuccessMessage"] = success ? "File updated successfully!" : "Update failed.";
-            return RedirectToAction("Index");
+            return RedirectToAction(nameof(Index));
         }
 
+        // GET /Deviation/FetchFile?name=...
         [HttpGet("FetchFile")]
         public IActionResult FetchFile(string name)
         {
@@ -92,6 +76,7 @@ namespace DashboardReportApp.Controllers
             return Json(new { success = true, url });
         }
 
+        // GET /Deviation/StreamFile?name=...
         [HttpGet("StreamFile")]
         public IActionResult StreamFile(string name)
         {
@@ -118,9 +103,9 @@ namespace DashboardReportApp.Controllers
             }
             catch (OperationCanceledException)
             {
-                return new EmptyResult(); // user closed the tab
+                return new EmptyResult();
             }
         }
-
     }
 }
+
