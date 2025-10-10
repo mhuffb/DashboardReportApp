@@ -1,0 +1,221 @@
+﻿@model List<DashboardReportApp.Models.ToolItemModel>
+@using DashboardReportApp.Models
+@{
+    ViewData["Title"] = "Tooling Inventory";
+}
+
+<div class="container-fluid px-3">
+    <h2 class="text-center mb-3">Tooling Inventory</h2>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <!-- ONLY: Add for Assembly -->
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <div class="input-group" style="max-width:420px">
+            <span class="input-group-text">Assembly #</span>
+            <input id="quickAssembly" type="text" class="form-control" placeholder="e.g., ASM-1001" />
+            <button id="btnAddForAssembly" class="btn btn-primary" type="button">
+                Add for Assembly
+            </button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered shadow-sm align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Id</th>
+                    <th>Assembly #</th>
+                    <th>Tool #</th>
+                    <th>Category</th>
+                    <th>Condition</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Unavailable Info</th>
+                    <th style="width:90px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model)
+                {
+                    <tr>
+                        <td>@t.Id</td>
+                        <td>@t.AssemblyNumber</td>
+                        <td>@t.ToolNumber</td>
+                        <td>@t.CategoryLabel</td>
+                        <td>@t.Condition</td>
+                        <td>@t.Status</td>
+                        <td>@t.Location</td>
+                        <td>
+                            @if (t.Status == ToolStatus.Unavailable)
+                            {
+                                <div>
+                                    <div><strong>Reason:</strong> @t.UnavailableReason</div>
+                                    <div><strong>Since:</strong> @(t.DateUnavailable?.ToString("yyyy-MM-dd") ?? "-")</div>
+                                    <div><strong>ETA:</strong> @(t.EstimatedAvailableDate?.ToString("yyyy-MM-dd") ?? "-")</div>
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary js-edit" data-id="@t.Id">Edit</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Reusable modal -->
+<div class="modal fade" id="toolModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="toolModalTitle">Tool Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="toolModalBody"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+          const modalEl = document.getElementById('toolModal');
+          const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+          const body = document.getElementById('toolModalBody');
+          const title = document.getElementById('toolModalTitle');
+          const mainAsmInput = document.getElementById('quickAssembly');
+
+          // Open CREATE (prefilled if main input has value)
+          document.getElementById('btnAddForAssembly').addEventListener('click', async () => {
+            const asm = (mainAsmInput?.value || '').trim();
+            title.textContent = asm ? ('Add Tool — ' + asm) : 'Add Tool';
+            const url = asm
+              ? '@Url.Action("Create", "ToolingInventory")?assembly=' + encodeURIComponent(asm)
+              : '@Url.Action("Create", "ToolingInventory")';
+            await loadPartial(url);
+            modal.show();
+            body.querySelector('input[name="ToolNumber"]')?.focus();
+          });
+
+          // Open EDIT
+          document.querySelectorAll('.js-edit').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.dataset.id;
+              title.textContent = 'Edit Tool';
+              await loadPartial('@Url.Action("Edit", "ToolingInventory")?id=' + encodeURIComponent(id));
+              modal.show();
+            });
+          });
+
+          async function loadPartial(url) {
+            const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!r.ok) { console.error('loadPartial failed', r.status); return; }
+            body.innerHTML = await r.text();
+            initDynamicBits();
+          }
+
+          // Delegated submit for Create + Edit
+          body.addEventListener('submit', async (e) => {
+            const form = e.target.closest('#toolItemForm');
+            if (!form) return;
+            e.preventDefault();
+
+            // capture which button was clicked (mode)
+            const submitter = e.submitter || document.activeElement;
+
+            const fd = new FormData(form);
+            if (submitter && submitter.name) {
+              fd.append(submitter.name, submitter.value); // mode=add_more | add_clear
+            }
+
+            const r = await fetch(form.action, {
+              method: 'POST',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' },
+              body: fd
+            });
+
+            let data = null, isJson = false;
+            try { data = await r.clone().json(); isJson = true; } catch {}
+
+            if (isJson && data && data.ok) {
+              // clear main page Assembly only when not add_more
+              if (data.mode !== 'add_more' && mainAsmInput) mainAsmInput.value = '';
+
+              if (data.mode === 'add_clear') {
+                return swalOK(data.message, () => {
+                  modal.hide();
+                  location.reload();
+                });
+              }
+
+              if (data.mode === 'add_more') {
+                swalOK(data.message);
+                const asm = (data.assembly || '').toString();
+                const url = '@Url.Action("Create", "ToolingInventory")' + (asm ? ('?assembly=' + encodeURIComponent(asm)) : '');
+                await loadPartial(url);
+                title.textContent = asm ? ('Add Tool — ' + asm) : 'Add Tool';
+                modal.show();
+                const toolInput = body.querySelector('input[name="ToolNumber"]');
+                toolInput?.focus(); toolInput?.select?.();
+                return;
+              }
+
+              // EDIT path (no mode)
+              return swalOK('Saved changes.', () => {
+                modal.hide();
+                location.reload();
+              });
+            }
+
+            // Not JSON -> validation HTML
+            const html = await r.text();
+            body.innerHTML = html;
+            initDynamicBits();
+          });
+
+          // Unavailable toggle
+          body.addEventListener('change', (e) => {
+            const select = e.target.closest('select[name="Status"]');
+            if (!select) return;
+            const form = select.closest('#toolItemForm');
+            const box = form?.querySelector('[data-box="unavail"]');
+            if (!box) return;
+            const v = parseInt(select.value || '1', 10);
+            box.style.display = (v === 2) ? '' : 'none'; // assumes Unavailable === 2
+          });
+
+          function initDynamicBits() {
+            const form = body.querySelector('#toolItemForm');
+            if (!form) return;
+            const status = form.querySelector('[name="Status"]');
+            const box = form.querySelector('[data-box="unavail"]');
+            if (status && box) {
+              const v = parseInt(status.value || '1', 10);
+              box.style.display = (v === 2) ? '' : 'none';
+            }
+            // prevent submit buttons from dismissing the modal
+            form.querySelectorAll('button[type="submit"]').forEach(b => b.removeAttribute('data-bs-dismiss'));
+          }
+
+          function swalOK(message, onClose) {
+            if (window.Swal) {
+              Swal.fire({ icon: 'success', title: 'Success', text: message, confirmButtonText: 'OK' })
+                .then(() => { if (typeof onClose === 'function') onClose(); });
+            } else {
+              alert(message);
+              if (typeof onClose === 'function') onClose();
+            }
+          }
+        })();
+    </script>
+}

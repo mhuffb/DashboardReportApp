@@ -1,0 +1,85 @@
+﻿@model DashboardReportApp.Models.ToolItemModel
+@using DashboardReportApp.Models
+@{
+    var isCreate = Model.Id == 0;
+    // IMPORTANT: include controller name to avoid routing issues
+    var action = isCreate ? Url.Action("Create", "ToolingInventory") : Url.Action("Edit", "ToolingInventory");
+}
+<form id="toolItemForm" method="post" action="@action">
+    @Html.AntiForgeryToken()
+    @if (!isCreate)
+    {
+        @Html.HiddenFor(m => m.Id)
+    }
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Assembly #</label>
+            @Html.TextBoxFor(m => m.AssemblyNumber, new { @class = "form-control", required = "required", placeholder = "ASM-1001" })
+            @Html.ValidationMessageFor(m => m.AssemblyNumber, null, new { @class = "text-danger" })
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Tool #</label>
+            @Html.TextBoxFor(m => m.ToolNumber, new { @class = "form-control", required = "required", placeholder = "e.g., TP-200" })
+            @Html.ValidationMessageFor(m => m.ToolNumber, null, new { @class = "text-danger" })
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Location</label>
+            @Html.TextBoxFor(m => m.Location, new { @class = "form-control", placeholder = "Cabinet / Drawer" })
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Category</label>
+            <select asp-for="Category" class="form-select"
+                    asp-items="Html.GetEnumSelectList<ToolCategory>()"></select>
+            @Html.ValidationMessageFor(m => m.Category, null, new { @class = "text-danger" })
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Condition</label>
+            <select asp-for="Condition" class="form-select"
+                    asp-items="Html.GetEnumSelectList<ToolCondition>()"></select>
+            @Html.ValidationMessageFor(m => m.Condition, null, new { @class = "text-danger" })
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Status</label>
+            <select asp-for="Status" class="form-select"
+                    asp-items="Html.GetEnumSelectList<ToolStatus>()"></select>
+            @Html.ValidationMessageFor(m => m.Status, null, new { @class = "text-danger" })
+        </div>
+
+        <div class="col-12 border rounded p-3" data-box="unavail" style="display:none">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Reason Unavailable</label>
+                    @Html.TextBoxFor(m => m.UnavailableReason, new { @class = "form-control", placeholder = "e.g., out for coating, regrind, chipped" })
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date Unavailable</label>
+                    @Html.TextBoxFor(m => m.DateUnavailable, "{0:MM-dd-yyy}", new { @type = "date", @class = "form-control" })
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Estimated Availability</label>
+                    @Html.TextBoxFor(m => m.EstimatedAvailableDate, "{0:MM-dd-yyy}", new { @type = "date", @class = "form-control" })
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+        @if (isCreate)
+        {
+            <!-- Save, clear Assembly #, keep modal open -->
+            <button type="submit" class="btn btn-primary" name="mode" value="add_clear">Add Tool</button>
+
+            <!-- Save, retain Assembly #, keep modal open -->
+            <button type="submit" class="btn btn-outline-primary" name="mode" value="add_more">Save & Add Another</button>
+        }
+        else
+        {
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        }
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    </div>
+</form>

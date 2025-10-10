@@ -1,5 +1,8 @@
 ﻿using DashboardReportApp.Models;
 using MySql.Data.MySqlClient;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 
 namespace DashboardReportApp.Services
 {
@@ -409,5 +412,156 @@ WHERE GroupID=@GroupID;";
                 DateReceived = r["DateReceived"] != DBNull.Value ? (DateTime?)Convert.ToDateTime(r["DateReceived"]) : null
             };
         }
+
+        // === Packing Slip (QuestPDF) helpers ===
+
+        public string SavePackingSlipPdf(int groupID, string saveFolder)
+        {
+            if (string.IsNullOrWhiteSpace(saveFolder))
+                throw new Exception("Save folder not provided.");
+
+            var header = GetHeaderByGroupID(groupID)
+                         ?? throw new Exception($"No header found for GroupID {groupID}.");
+            var items = GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+
+            Directory.CreateDirectory(saveFolder);
+            var fileName = $"PackingSlip_G{header.GroupID}_{DateTime.Now:yyyyMMddHHmmss}.pdf";
+            var fullPath = Path.Combine(saveFolder, SanitizeFileName(fileName));
+
+            var bytes = BuildPackingSlipPdfBytes(header, items);
+            File.WriteAllBytes(fullPath, bytes);
+            return fullPath;
+        }
+
+        public byte[] BuildPackingSlipPdfBytes(ToolingHistoryModel header, List<ToolItemViewModel> items)
+        {
+            QuestPDF.Settings.License = LicenseType.Community;
+
+            var docBytes = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Margin(36);
+                    page.Size(PageSizes.A4);
+                    page.DefaultTextStyle(x => x.FontSize(11));
+
+                    page.Header().Row(r =>
+                    {
+                        r.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text("SINTERGY, INC.").SemiBold().FontSize(16);
+                            c.Item().Text("Tooling Packing Slip").FontSize(13);
+                        });
+                        r.ConstantItem(200).AlignRight().Column(c =>
+                        {
+                            c.Item().Text($"Date: {DateTime.Now:yyyy-MM-dd}");
+                            c.Item().Text($"Group: {header.GroupID}");
+                        });
+                    });
+
+                    page.Content().Column(col =>
+                    {
+                        col.Item().PaddingBottom(10).Table(t =>
+                        {
+                            // 3 equal columns, each showing a label on top and value underneath
+                            t.ColumnsDefinition(c =>
+                            {
+                                c.RelativeColumn();
+                                c.RelativeColumn();
+                                c.RelativeColumn();
+                            });
+
+                            void AddCell(string label, string value)
+                            {
+                                t.Cell().Column(c =>
+                                {
+                                    c.Item().Text(label).SemiBold();
+                                    c.Item().Text(value);
+                                });
+                            }
+
+                            AddCell("Part (Assembly #)", header.Part ?? "-");
+                            AddCell("Reason", header.Reason ?? "-");
+                            AddCell("Vendor", header.ToolVendor ?? "-");
+
+                            AddCell("Tool #", header.ToolNumber ?? "-");
+                            AddCell("Revision", header.Revision ?? "-");
+                            AddCell("PO", header.PO ?? "-");
+
+                            AddCell("Initiated By", header.InitiatedBy ?? "-");
+                            AddCell("Date Initiated", header.DateInitiated.ToString("MM-dd-yyyy"));
+                            AddCell("Due", header.DateDue?.ToString("MM-dd-yyyy") ?? "-");
+                        });
+
+
+                        col.Item().PaddingVertical(6).Text("Items").SemiBold().FontSize(12);
+
+                        col.Item().Table(t =>
+                        {
+                            t.ColumnsDefinition(c =>
+                            {
+                                c.ConstantColumn(28);
+                                c.RelativeColumn(1.3f);
+                                c.RelativeColumn(1.8f);
+                                c.RelativeColumn(1.2f);
+                                c.RelativeColumn(3);
+                                c.RelativeColumn(0.8f);
+                                c.ConstantColumn(42);
+                            });
+
+                            t.Header(h =>
+                            {
+                                h.Cell().Text("#").SemiBold();
+                                h.Cell().Text("Action").SemiBold();
+                                h.Cell().Text("Tool Item").SemiBold();
+                                h.Cell().Text("Tool #").SemiBold();
+                                h.Cell().Text("Description").SemiBold();
+                                h.Cell().Text("Rev").SemiBold();
+                                h.Cell().Text("Qty").SemiBold();
+                                h.Cell().BorderBottom(1).BorderColor(Colors.Grey.Medium);
+                            });
+
+                            var i = 1;
+                            foreach (var it in items)
+                            {
+                                t.Cell().Text((i++).ToString());
+                                t.Cell().Text(it.Action ?? "");
+                                t.Cell().Text(it.ToolItem ?? "");
+                                t.Cell().Text(it.ToolNumber ?? "");
+                                t.Cell().Text(it.ToolDesc ?? "");
+                                t.Cell().Text(it.Revision ?? "");
+                                t.Cell().Text(it.Quantity == 0 ? "" : it.Quantity.ToString());
+                            }
+                        });
+
+                        col.Item().PaddingTop(16).Row(r =>
+                        {
+                            r.RelativeItem().Column(c =>
+                            {
+                                c.Item().Text("Packed By: _________________________");
+                                c.Item().Text("Date: _____________________________");
+                            });
+                            r.RelativeItem().Column(c =>
+                            {
+                                c.Item().Text("Received By: _______________________");
+                                c.Item().Text("Date: _____________________________");
+                            });
+                        });
+                    });
+
+                    page.Footer().AlignCenter().Text($"Packing Slip • Group {header.GroupID} • {header.Part ?? "-"}");
+                });
+            }).GeneratePdf();
+
+            return docBytes;
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            foreach (var bad in Path.GetInvalidFileNameChars())
+                name = name.Replace(bad, '_');
+            return name;
+        }
+
     }
 }

@@ -327,6 +327,36 @@ Open in Dashboard: {link}
             // Reuse the same simple modal pattern as ReceiveAll
             return PartialView("_FitAllModal", groupID);
         }
+      
+        // GET /ToolingHistory/GeneratePackingSlip?groupID=123
+        [HttpGet]
+        public IActionResult GeneratePackingSlip(int groupID, bool email = true)
+        {
+            var saveFolder = _cfg["Tooling:SaveFolder"];
+            if (string.IsNullOrWhiteSpace(saveFolder))
+                return Problem("Tooling:SaveFolder not configured.");
+
+            var path = _service.SavePackingSlipPdf(groupID, saveFolder);
+
+            if (email)
+            {
+                var to = _cfg["Tooling:PackingSlipEmailTo"];
+                if (!string.IsNullOrWhiteSpace(to))
+                {
+                    var header = _service.GetHeaderByGroupID(groupID);
+                    _shared.SendEmailWithAttachment(
+                        receiverEmail: to,
+                        attachmentPath: path,
+                        attachmentPath2: null,
+                        subject: $"Packing Slip – Group {header?.GroupID} – {header?.Part}",
+                        body: $"Attached is the packing slip for Group {header?.GroupID} ({header?.Part})."
+                    );
+                }
+            }
+
+            var fileName = System.IO.Path.GetFileName(path);
+            return PhysicalFile(path, "application/pdf", fileName, enableRangeProcessing: true);
+        }
 
     }
 }
