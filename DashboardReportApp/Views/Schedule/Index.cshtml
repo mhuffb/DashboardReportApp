@@ -31,6 +31,9 @@
         <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#powderMixModal">
             Show Received Powder
         </button>
+        <button type="button" class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#createMixQrModal">
+            Create Mix QR Code
+        </button>
 
     </div>
 
@@ -260,6 +263,61 @@
         </div>
     </div>
 </div>
+<!-- Modal: Create Mix QR Code -->
+<div class="modal fade" id="createMixQrModal" tabindex="-1" aria-labelledby="createMixQrModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="mixQrForm" onsubmit="return false;">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createMixQrModalLabel">Create Mix QR Code</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label">Sintergy Mix Code</label>
+                            <input type="text" class="form-control" id="mixCode" placeholder="e.g., STY-211" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Lot Number</label>
+                            <input type="number" class="form-control" id="lotNumber" placeholder="e.g., 123456" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Weight per Bag/Drum (lbs)</label>
+                            <input type="number" step="0.01" class="form-control" id="weightPerBag" placeholder="e.g., 50" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Total Quantity of Bags/Drums</label>
+                            <input type="number" class="form-control" id="totalQty" placeholder="e.g., 20" required>
+                        </div>
+
+                        <div class="col-12">
+                            <small class="text-muted">
+                                Payload format: <code>MixCode;LotNumber;WeightPerBag;TotalQty</code> + newline (to simulate “Enter” on scan)
+                            </small>
+                            <div class="mt-2">
+                                <label class="form-label">Payload Preview</label>
+                                <input type="text" readonly class="form-control" id="qrTextPreview">
+                            </div>
+                        </div>
+
+                        <div class="col-12 mt-3 d-flex flex-column align-items-center">
+                            <div id="qrContainer" class="border rounded p-3"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="btnGenerateQr" class="btn btn-primary">Generate</button>
+                    <button type="button" id="btnDownloadQr" class="btn btn-outline-secondary" disabled>Download PNG</button>
+                    <button type="button" id="btnPrintQr" class="btn btn-outline-dark" disabled>Print</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <style>
     .ui-autocomplete {
@@ -268,6 +326,7 @@
 </style>
 
 @section Scripts {
+
     <script>
                function initMaterialAutocomplete() {
             $(".material-input").each(function () {
@@ -641,7 +700,255 @@
         });
     </script>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+    <script>
 
+
+        (function () {
+          let qr; // will hold QRCode instance
+
+          function buildPayload() {
+            const mix = (document.getElementById('mixCode').value || '').trim();
+            const lot = (document.getElementById('lotNumber').value || '').trim();
+            const wt  = (document.getElementById('weightPerBag').value || '').trim();
+            const qty = (document.getElementById('totalQty').value || '').trim();
+
+            if (!mix || !lot || !wt || !qty) return null;
+
+            // Order: MixCode;LotNumber;WeightPerBag;TotalQty
+            // Add newline at the end so scanners that paste into inputs will "submit/enter"
+            return `${mix};${lot};${wt};${qty}\n`;
+          }
+
+          function clearQr() {
+            const container = document.getElementById('qrContainer');
+            container.innerHTML = '';
+            qr = null;
+            document.getElementById('btnDownloadQr').disabled = true;
+            document.getElementById('btnPrintQr').disabled = true;
+            document.getElementById('qrTextPreview').value = '';
+          }
+
+          // Reset form whenever modal opens
+          document.getElementById('createMixQrModal')
+            .addEventListener('shown.bs.modal', function () {
+              document.getElementById('mixQrForm').reset();
+              clearQr();
+              document.getElementById('mixCode').focus();
+            });
+
+          // Generate QR
+          document.getElementById('btnGenerateQr').addEventListener('click', function () {
+            const payload = buildPayload();
+            if (!payload) {
+              Swal && Swal.fire ? Swal.fire({icon:'warning', title:'Missing fields', text:'Please fill all fields.'})
+                                : alert('Please fill all fields.');
+              return;
+            }
+
+            document.getElementById('qrTextPreview').value = payload.replace(/\n$/, ''); // show without the trailing newline in the preview
+
+            const container = document.getElementById('qrContainer');
+            container.innerHTML = '';
+
+            // Create QR at ~256px (tweak as needed)
+            qr = new QRCode(container, {
+              text: payload,
+              width: 256,
+              height: 256,
+              correctLevel: QRCode.CorrectLevel.M
+            });
+
+            // Enable actions after first render
+            setTimeout(() => {
+              document.getElementById('btnDownloadQr').disabled = false;
+              document.getElementById('btnPrintQr').disabled = false;
+            }, 200);
+          });
+
+          // Download PNG
+          document.getElementById('btnDownloadQr').addEventListener('click', function () {
+            if (!qr) return;
+
+            // qrcode.js renders a <img> by default; if it renders <canvas> you can handle both:
+            const container = document.getElementById('qrContainer');
+            const img = container.querySelector('img');
+            const canvas = container.querySelector('canvas');
+
+            let dataUrl = null;
+            if (canvas) {
+              dataUrl = canvas.toDataURL('image/png');
+            } else if (img) {
+              dataUrl = img.src;
+            }
+
+            if (!dataUrl) return;
+
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'mix-qr.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          });
+
+          // Print QR (opens a minimal window with the QR image)
+          document.getElementById('btnPrintQr').addEventListener('click', function () {
+            if (!qr) return;
+
+            const container = document.getElementById('qrContainer');
+            const img = container.querySelector('img');
+            const canvas = container.querySelector('canvas');
+
+            let dataUrl = null;
+            if (canvas) {
+              dataUrl = canvas.toDataURL('image/png');
+            } else if (img) {
+              dataUrl = img.src;
+            }
+            if (!dataUrl) return;
+
+            const w = window.open('', '_blank');
+            w.document.write(`
+              <html>
+                <head><title>Print Mix QR</title></head>
+                <body style="margin:0; display:flex; align-items:center; justify-content:center; height:100vh;">
+                  <img src="${dataUrl}" style="width:256px; height:256px;" />
+                </body>
+              </html>
+            `);
+            w.document.close();
+            w.focus();
+            w.print();
+          });
+        })();
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          // ---- quick sanity logs
+          console.log('[MixQR] DOM ready');
+          const modalEl = document.getElementById('createMixQrModal');
+          const btnGen  = document.getElementById('btnGenerateQr');
+          const btnDl   = document.getElementById('btnDownloadQr');
+          const btnPr   = document.getElementById('btnPrintQr');
+
+          if (!modalEl)  console.warn('[MixQR] #createMixQrModal not found');
+          if (!btnGen)   console.warn('[MixQR] #btnGenerateQr not found');
+          if (!btnDl)    console.warn('[MixQR] #btnDownloadQr not found');
+          if (!btnPr)    console.warn('[MixQR] #btnPrintQr not found');
+          if (!window.QRCode) console.error('[MixQR] QRCode library missing. Make sure qrcode.min.js is loaded above this script.');
+
+          let qrInstance = null;
+
+          function clearQr() {
+            const container = document.getElementById('qrContainer');
+            if (container) container.innerHTML = '';
+            qrInstance = null;
+            if (btnDl) btnDl.disabled = true;
+            if (btnPr) btnPr.disabled = true;
+            const prev = document.getElementById('qrTextPreview');
+            if (prev) prev.value = '';
+          }
+
+          function buildPayload() {
+            const mix = (document.getElementById('mixCode')?.value || '').trim();
+            const lot = (document.getElementById('lotNumber')?.value || '').trim();
+            const wt  = (document.getElementById('weightPerBag')?.value || '').trim();
+            const qty = (document.getElementById('totalQty')?.value || '').trim();
+            if (!mix || !lot || !wt || !qty) return null;
+            // order: MixCode;LotNumber;WeightPerBag;TotalQty + newline to "press enter"
+            return `${mix};${lot};${wt};${qty}\n`;
+          }
+
+          // Reset fields every time modal opens
+          modalEl?.addEventListener('shown.bs.modal', function () {
+            console.log('[MixQR] Modal shown');
+            document.getElementById('mixQrForm')?.reset();
+            clearQr();
+            document.getElementById('mixCode')?.focus();
+          });
+
+          // Generate
+          btnGen?.addEventListener('click', function () {
+            console.log('[MixQR] Generate clicked');
+            if (!window.QRCode) {
+              alert('QR library not loaded. Check the qrcode.min.js script tag.');
+              return;
+            }
+
+            const payload = buildPayload();
+            if (!payload) {
+              if (window.Swal?.fire) Swal.fire({icon:'warning', title:'Missing fields', text:'Please fill all fields.'});
+              else alert('Please fill all fields.');
+              return;
+            }
+
+            const container = document.getElementById('qrContainer');
+            if (!container) {
+              console.error('[MixQR] #qrContainer not found');
+              return;
+            }
+
+            container.innerHTML = '';
+            qrInstance = new QRCode(container, {
+              text: payload,
+              width: 256,
+              height: 256,
+              correctLevel: QRCode.CorrectLevel.M
+            });
+
+            const prev = document.getElementById('qrTextPreview');
+            if (prev) prev.value = payload.replace(/\n$/, ''); // hide newline in preview
+
+            // Enable actions shortly after render
+            setTimeout(() => {
+              if (btnDl) btnDl.disabled = false;
+              if (btnPr) btnPr.disabled = false;
+            }, 150);
+          });
+
+          // Download PNG
+          btnDl?.addEventListener('click', function () {
+            if (!qrInstance) return;
+            const container = document.getElementById('qrContainer');
+            const img = container?.querySelector('img');
+            const canvas = container?.querySelector('canvas');
+            let dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            if (!dataUrl) return;
+
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'mix-qr.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          });
+
+          // Print
+          btnPr?.addEventListener('click', function () {
+            if (!qrInstance) return;
+            const container = document.getElementById('qrContainer');
+            const img = container?.querySelector('img');
+            const canvas = container?.querySelector('canvas');
+            let dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            if (!dataUrl) return;
+
+            const w = window.open('', '_blank');
+            w.document.write(`
+              <html>
+                <head><title>Print Mix QR</title></head>
+                <body style="margin:0; display:flex; align-items:center; justify-content:center; height:100vh;">
+                  <img src="${dataUrl}" style="width:256px; height:256px;" />
+                </body>
+              </html>
+            `);
+            w.document.close();
+            w.focus();
+            w.print();
+          });
+        });
+    </script>
 
 }
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

@@ -292,8 +292,8 @@
                 const parts = val.split(";");
                 mat.value = parts[1] || "";
                 lot.value = parts[2] || "";
-                wgt.value = "";
-                bag.value = "";
+                wgt.value = parts[3] || "";
+                bag.value = parts[4] || "";
                 gotoForm();
                 return;
             }
