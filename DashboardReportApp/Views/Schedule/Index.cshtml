@@ -858,7 +858,7 @@
             const qty = (document.getElementById('totalQty')?.value || '').trim();
             if (!mix || !lot || !wt || !qty) return null;
             // order: MixCode;LotNumber;WeightPerBag;TotalQty + newline to "press enter"
-            return `${mix};${lot};${wt};${qty}\n`;
+            return `${mix};${lot};${wt};${qty};\n`;
           }
 
           // Reset fields every time modal opens
