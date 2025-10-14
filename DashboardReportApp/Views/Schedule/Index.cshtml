@@ -291,20 +291,30 @@
                             <label class="form-label">Total Quantity of Bags/Drums</label>
                             <input type="number" class="form-control" id="totalQty" placeholder="e.g., 20" required>
                         </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Starting Bag #</label>
+                            <input type="number" class="form-control" id="startBagNo" placeholder="e.g., 1" value="1" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Number of Bags/Drums/Containers</label>
+                            <input type="number" class="form-control" id="labelQty" placeholder="e.g., 20" required>
+                        </div>
+
+                       
 
                         <div class="col-12">
-                            <small class="text-muted">
-                                Payload format: <code>MixCode;LotNumber;WeightPerBag;TotalQty</code> + newline (to simulate “Enter” on scan)
-                            </small>
+                           
                             <div class="mt-2">
-                                <label class="form-label">Payload Preview</label>
+                                <label class="form-label">Payload Preview (first label)</label>
                                 <input type="text" readonly class="form-control" id="qrTextPreview">
                             </div>
+
                         </div>
 
-                        <div class="col-12 mt-3 d-flex flex-column align-items-center">
-                            <div id="qrContainer" class="border rounded p-3"></div>
+                        <div class="col-12 mt-3">
+                            <div id="qrGrid" class="row g-3"></div>
                         </div>
+
                     </div>
                 </div>
 
@@ -326,307 +336,192 @@
 </style>
 
 @section Scripts {
-
-    <script>
-               function initMaterialAutocomplete() {
-            $(".material-input").each(function () {
-                var $input = $(this);
-                $input.autocomplete({
-                    source: function (request, response) {
-                        console.log("AJAX:", {
-                            part: $input.data('partcode'),
-                            comp: $input.data('component'),
-                            term: request.term
-                        });
-
-                        $.getJSON('/Schedule/GetMaterialSuggestions', {
-                            part: $input.data('partcode'),
-                            comp: $input.data('component'),
-                            term: request.term
-                        }, function (data) {
-                            console.log("Response data:", data);
-                            response(data);
-                        });
-                    },
-                    minLength: 1
-                });
-            });
-        }
-
-    </script>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            // When the Query button in Modal 1 is clicked...
-            document.getElementById("queryButtonModal").addEventListener("click", function () {
-                var part = document.getElementById("queryPart").value;
-                var quantity = document.getElementById("queryQuantity").value;
-                if (!part || !quantity) {
-                    alert("Please enter both part number and quantity.");
-                    return;
-                }
-
-                // Force uppercase on the part value
-                part = part.toUpperCase();
-                document.getElementById("queryPart").value = part;
-
-                // Hide the first modal (Start Scheduling)
-                var startModalEl = document.getElementById('startSchedulingModal');
-                var startModal = bootstrap.Modal.getInstance(startModalEl);
-                startModal.hide();
-
-                // Make an AJAX call to fetch the components partial view.
-                fetch('/Schedule/GetComponents?part=' + encodeURIComponent(part) + '&quantity=' + encodeURIComponent(quantity))
-                    .then(response => response.text())
-                    .then(html => {
-                        // Inject returned HTML into the query results modal body.
-                        document.getElementById("queryResultsContent").innerHTML = html;
-                        initMaterialAutocomplete();   
-
-                        // Open the Query Results modal.
-                        var queryResultsModal = new bootstrap.Modal(document.getElementById('queryResultsModal'));
-                        queryResultsModal.show();
-                    })
-                            .catch(error => {
-            console.error("Error fetching HTML:", error);
-            console.log("HTML =", error.responseText);
-            alert("An error occurred while fetching components.");
-        });
-
-            });
-        });
-    </script>
-
-    <!-- Script to handle Edit Modal population -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var editButtons = document.querySelectorAll('.edit-btn');
-            editButtons.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    var row = btn.closest('tr');
-                    var date = row.getAttribute('data-date');
-                    var masterId = row.getAttribute('data-masterid');
-                    var component = row.getAttribute('data-component');
-                    var qty = row.getAttribute('data-qty');
-                    var prodnumber = row.getAttribute('data-prodnumber');
-                    var run = row.getAttribute('data-run');
-                    var open = row.getAttribute('data-open');
-                    var id = row.getAttribute('data-id');
-                    var material = row.getAttribute('data-material'); // NEW
-
-                    document.getElementById('editId').value = id;
-                    document.getElementById('editDate').value = date;
-                    document.getElementById('editMasterId').value = masterId;
-                    document.getElementById('editComponent').value = component;
-                    document.getElementById('editQtyToSchedule').value = qty;
-                    document.getElementById('editProdNumber').value = prodnumber;
-                    document.getElementById('editRun').value = run;
-                    document.getElementById('editOpen').value = open;
-                    document.getElementById('editMaterialCode').value = material || ""; // NEW
-
-                    var myModal = new bootstrap.Modal(document.getElementById('editModal'));
-                    myModal.show();
-                });
-            });
-        });
-    </script>
-
-    <script>
-        document.getElementById("receivePowderForm").addEventListener("submit", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            var formData = new FormData(this);
-
-            // First call to parse only
-            fetch('/Schedule/ReceivePowder', {
-                method: 'POST',
-                body: formData
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) {
-                    Swal.fire({ icon: 'error', title: 'Error', text: data.message });
-                    return;
-                }
-
-                // Preview confirmation
-                Swal.fire({
-                    title: 'Confirm Powder Info',
-                    html:
-                        `<b>Lot Number:</b> ${data.lotNumber}<br>` +
-                        `<b>Weight (lbs):</b> ${data.weight}<br>` +
-                        `<b>Material Code:</b> ${data.material}<br><br>` +
-                        `Is this correct?`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Yes, Save',
-                    cancelButtonText: 'No'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        // Go straight to insert with parsed values
-                        confirmInsert(data.lotNumber, data.weight, data.material);
-                    } else {
-                                // Show editable form – close modal so SweetAlert can take keyboard focus
-        bootstrap.Modal.getInstance(document.getElementById('receivePowderModal')).hide();
-
-        Swal.fire({
-            title: 'Correct Info',
-            html:
-
-                '<input id="lotInput" type="text" class="swal2-input" placeholder="Lot Number" value="' + data.lotNumber + '">' +
-                '<input id="weightInput" type="text" class="swal2-input" placeholder="Weight (lbs)" value="' + data.weight + '">' +
-                '<input id="materialInput" type="text" class="swal2-input" placeholder="Material Code" value="' + data.material + '">',
-            showCancelButton: true,
-            confirmButtonText: 'Save',
-            cancelButtonText: 'Cancel',
-            focusConfirm: false,
-            preConfirm: () => {
-                return {
-                    lotNumber: document.getElementById('lotInput').value,
-                    weight: document.getElementById('weightInput').value,
-                    material: document.getElementById('materialInput').value
-                }
-            }
-        }).then((editResult) => {
-            if (editResult.isConfirmed) {
-                confirmInsert(editResult.value.lotNumber, editResult.value.weight, editResult.value.material);
-            }
-        });
-
-                    }
-                });
-            });
-
-            // second call to confirm=true with values passed in querystring
-            function confirmInsert(lotNumber, weight, material) {
-                var url = `/Schedule/ReceivePowder?confirm=true&lot=${lotNumber}&weight=${weight}&material=${encodeURIComponent(material)}`;
-                fetch(url, {
-                    method: 'POST',
-                    body: formData // same file
-                })
-                .then(r => r.json())
-                .then(final => {
-                    if (final.success) {
-                        Swal.fire({ icon: 'success', title: 'Saved!', text: final.message }).then(() => location.reload());
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: final.message });
-                    }
-                });
-            }
-        });
-    </script>
-
-
-      <!-- jQuery UI for autocomplete -->
-
+    <!-- Vendor libraries (keep these above all custom scripts) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
     <script>
-               $(function () {
-            $(".material-input").each(function () {
-                var $input = $(this);
-                $input.autocomplete({
-                    source: function (request, response) {
-                        console.log("AJAX:", {
-                            part: $input.data('partcode'),
-                            comp: $input.data('component'),
-                            term: request.term
-                        });
+        // ---------- Utilities ----------
+        const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+        const $  = (id) => document.getElementById(id);
 
-                        $.getJSON('/Schedule/GetMaterialSuggestions', {
-                            part: $input.data('partcode'),
-                            comp: $input.data('component'),
-                            term: request.term
-                        }, function (data) {
-                            console.log("Response data:", data);
-                            response(data);
-                        });
-                    },
-                    minLength: 1
+        const swalOK  = (title, html) => Swal.fire({icon:'success', title, html, confirmButtonText:'OK'});
+        const swalW   = (title, html) => Swal.fire({icon:'warning', title, html, confirmButtonText:'OK'});
+        const swalErr = (title, html) => Swal.fire({icon:'error',   title, html, confirmButtonText:'OK'});
+
+        // ---------- 1) Material autocomplete used in components partial ----------
+        function initMaterialAutocomplete() {
+          $(".material-input").each(function () {
+            const $input = $(this);
+            $input.autocomplete({
+              source: function (request, response) {
+                $.getJSON('/Schedule/GetMaterialSuggestions', {
+                  part: $input.data('partcode'),
+                  comp: $input.data('component'),
+                  term: request.term
+                }, function (data) { response(data); });
+              },
+              minLength: 1
+            });
+          });
+        }
+
+        // ---------- 2) Start Scheduling -> Query components ----------
+        document.addEventListener("DOMContentLoaded", function () {
+          const btnQuery = document.getElementById("queryButtonModal");
+          if (btnQuery) {
+            btnQuery.addEventListener("click", function () {
+              let part = $("#queryPart").val();
+              const quantity = $("#queryQuantity").val();
+              if (!part || !quantity) { Swal.fire({icon:'warning', title:'Missing', text:'Enter part and quantity.'}); return; }
+
+              part = part.toUpperCase();
+              $("#queryPart").val(part);
+
+              const startModalEl = document.getElementById('startSchedulingModal');
+              const startModal   = bootstrap.Modal.getInstance(startModalEl);
+              startModal && startModal.hide();
+
+              fetch('/Schedule/GetComponents?part=' + encodeURIComponent(part) + '&quantity=' + encodeURIComponent(quantity))
+                .then(r => r.text())
+                .then(html => {
+                  $("#queryResultsContent").html(html);
+                  initMaterialAutocomplete(); // new rows get autocomplete
+                  new bootstrap.Modal(document.getElementById('queryResultsModal')).show();
+                })
+                .catch(err => {
+                  console.error(err);
+                  Swal.fire({icon:'error', title:'Error', text:'Could not load components.'});
                 });
             });
+          }
         });
 
-    </script>
-
-    <script>
-        $(document).ready(function () {
-            // --- 1) Autocomplete for Parts using existing schedule history
-            $("#queryPart").autocomplete({
-                source: function (request, response) {
-                    $.getJSON('/Schedule/GetPartSuggestions', {
-                        term: request.term
-                    }, function (data) {
-                        response(data);
-                    });
-                },
-                minLength: 1,
-                select: function (event, ui) {
-                    // when user picks a part, set quantity to 1 automatically
-                    $("#queryQuantity").val(1);
-                }
-            });
-
-            // --- 2) Force quantity default to 1 whenever modal opens
-            $('#startSchedulingModal').on('shown.bs.modal', function () {
-                $("#queryQuantity").val(1);
-            });
-        });
-    </script>
-
-   
-    <script>
-        $(function () {
-            console.log("powder script ready");
-
-            let activeIndex = null;
-
-            $(document).on('click', '.select-powder-btn', function () {
-                activeIndex = $(this).data('index');
-                console.log("Powder button clicked. Index:", activeIndex);
-
-                $.getJSON('/Schedule/GetPowderList', function (data) {
-                    const tbody = $('#powderTable tbody');
-                    tbody.empty();
-
-                    data.forEach(function (p) {
-                        tbody.append(`
-                            <tr>
-                                <td>${p.lotNumber}</td>
-                                <td>${p.weightLbs}</td>
-                                <td>${p.materialCode}</td>
-                                <td>
-                                    <button type="button"
-                                            class="btn btn-sm btn-primary choose-powder"
-                                            data-mat="${p.materialCode}">
-                                        Use
-                                    </button>
-                                </td>
-                            </tr>
-                        `);
-                    });
-
-                    new bootstrap.Modal(document.getElementById('powderSelectModal')).show();
-                });
-            });
-
-            $(document).on('click', '.choose-powder', function () {
-                const mat = $(this).data('mat');
-                $(`input[name='AllComponents[${activeIndex}].MaterialCode']`).val(mat);
-                bootstrap.Modal.getInstance(document.getElementById('powderSelectModal')).hide();
-            });
-        });
-    </script>
-    <script>
+        // ---------- 3) Edit modal population for scheduled parts ----------
         document.addEventListener('DOMContentLoaded', function () {
-          // Load data every time the modal is shown
-          document.getElementById('powderMixModal').addEventListener('shown.bs.modal', function () {
+          $$('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+              const row = btn.closest('tr');
+              if (!row) return;
+              $('#editId').val(row.getAttribute('data-id'));
+              $('#editDate').val(row.getAttribute('data-date'));
+              $('#editMasterId').val(row.getAttribute('data-masterid'));
+              $('#editComponent').val(row.getAttribute('data-component'));
+              $('#editQtyToSchedule').val(row.getAttribute('data-qty'));
+              $('#editProdNumber').val(row.getAttribute('data-prodnumber'));
+              $('#editRun').val(row.getAttribute('data-run'));
+              $('#editOpen').val(row.getAttribute('data-open'));
+              $('#editMaterialCode').val(row.getAttribute('data-material') || '');
+              new bootstrap.Modal(document.getElementById('editModal')).show();
+            });
+          });
+        });
+
+        // ---------- 4) Receive Powder: upload, confirm, insert ----------
+        document.addEventListener('DOMContentLoaded', function () {
+          const form = document.getElementById("receivePowderForm");
+          if (!form) return;
+
+          form.addEventListener("submit", function (e) {
+            e.preventDefault(); e.stopPropagation();
+            const formData = new FormData(form);
+
+            fetch('/Schedule/ReceivePowder', { method: 'POST', body: formData })
+              .then(r => r.json())
+              .then(data => {
+                if (!data.success) { Swal.fire({icon:'error', title:'Error', text:data.message}); return; }
+
+                Swal.fire({
+                  title: 'Confirm Powder Info',
+                  html: `<b>Lot Number:</b> ${data.lotNumber}<br><b>Weight (lbs):</b> ${data.weight}<br><b>Material Code:</b> ${data.material}<br><br>Is this correct?`,
+                  icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, Save', cancelButtonText: 'No'
+                }).then((res) => {
+                  if (res.isConfirmed) {
+                    confirmInsert(data.lotNumber, data.weight, data.material);
+                  } else {
+                    bootstrap.Modal.getInstance(document.getElementById('receivePowderModal'))?.hide();
+                    Swal.fire({
+                      title: 'Correct Info',
+                      html:
+                        '<input id="lotInput" type="text" class="swal2-input" placeholder="Lot Number" value="' + data.lotNumber + '">' +
+                        '<input id="weightInput" type="text" class="swal2-input" placeholder="Weight (lbs)" value="' + data.weight + '">' +
+                        '<input id="materialInput" type="text" class="swal2-input" placeholder="Material Code" value="' + data.material + '">',
+                      showCancelButton: true, confirmButtonText: 'Save', cancelButtonText: 'Cancel',
+                      focusConfirm: false, preConfirm: () => ({
+                        lotNumber: document.getElementById('lotInput').value,
+                        weight: document.getElementById('weightInput').value,
+                        material: document.getElementById('materialInput').value
+                      })
+                    }).then((editRes) => {
+                      if (editRes.isConfirmed) {
+                        confirmInsert(editRes.value.lotNumber, editRes.value.weight, editRes.value.material);
+                      }
+                    });
+                  }
+                });
+
+                function confirmInsert(lot, weight, material) {
+                  const url = `/Schedule/ReceivePowder?confirm=true&lot=${lot}&weight=${weight}&material=${encodeURIComponent(material)}`;
+                  fetch(url, { method: 'POST', body: formData })
+                    .then(r => r.json())
+                    .then(final => {
+                      if (final.success) {
+                        Swal.fire({icon:'success', title:'Saved!', text:final.message}).then(()=>location.reload());
+                      } else {
+                        Swal.fire({icon:'error', title:'Error', text:final.message});
+                      }
+                    });
+                }
+              });
+          });
+        });
+
+        // ---------- 5) “Select Powder” button inside components list ----------
+        $(function () {
+          let activeIndex = null;
+
+          $(document).on('click', '.select-powder-btn', function () {
+            activeIndex = $(this).data('index');
+            $.getJSON('/Schedule/GetPowderList', function (data) {
+              const tbody = $('#powderTable tbody');
+              tbody.empty();
+              data.forEach(p => {
+                tbody.append(`
+                  <tr>
+                    <td>${p.lotNumber}</td>
+                    <td>${p.weightLbs}</td>
+                    <td>${p.materialCode}</td>
+                    <td>
+                      <button type="button" class="btn btn-sm btn-primary choose-powder" data-mat="${p.materialCode}">Use</button>
+                    </td>
+                  </tr>
+                `);
+              });
+              new bootstrap.Modal(document.getElementById('powderSelectModal')).show();
+            });
+          });
+
+          $(document).on('click', '.choose-powder', function () {
+            const mat = $(this).data('mat');
+            if (activeIndex === null) return;
+            $(`input[name='AllComponents[${activeIndex}].MaterialCode']`).val(mat);
+            bootstrap.Modal.getInstance(document.getElementById('powderSelectModal'))?.hide();
+          });
+        });
+
+        // ---------- 6) Powder Mix History modal (load + inline edit/delete) ----------
+        document.addEventListener('DOMContentLoaded', function () {
+          const modal = document.getElementById('powderMixModal');
+          if (!modal) return;
+
+          modal.addEventListener('shown.bs.modal', function () {
             fetch('/Schedule/GetPowderList')
               .then(r => r.json())
               .then(data => {
-                const tbody = document.querySelector('#powderMixTable tbody');
+                const tbody = modal.querySelector('#powderMixTable tbody');
                 tbody.innerHTML = '';
                 data.forEach(r => {
                   const tr = document.createElement('tr');
@@ -639,316 +534,422 @@
                     <td class="d-flex gap-2">
                       <button class="btn btn-sm btn-primary pm-save">Save</button>
                       <button class="btn btn-sm btn-outline-danger pm-del">Delete</button>
-                    </td>
-                  `;
+                    </td>`;
                   tbody.appendChild(tr);
                 });
               });
           });
 
-          // Save handler
-          document.querySelector('#powderMixTable').addEventListener('click', function (e) {
+          modal.querySelector('#powderMixTable').addEventListener('click', function (e) {
             if (e.target.classList.contains('pm-save')) {
               const tr = e.target.closest('tr');
               const id = parseInt(tr.children[0].textContent.trim(), 10);
               const lot = parseInt(tr.querySelector('.pm-lot').value, 10);
-              const wt = parseFloat(tr.querySelector('.pm-wt').value);
+              const wt  = parseFloat(tr.querySelector('.pm-wt').value);
               const mat = tr.querySelector('.pm-mat').value;
 
               fetch('/Schedule/UpdatePowderMix', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, lotNumber: lot, weightLbs: wt, materialCode: mat })
-              })
-              .then(r => r.json())
-              .then(res => {
-                if (res.success) {
-                  Swal.fire({ icon: 'success', title: 'Saved', timer: 1500, showConfirmButton: false });
-                } else {
-                  Swal.fire({ icon: 'error', title: 'Error', text: res.message || 'Failed to save' });
-                }
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({id, lotNumber:lot, weightLbs:wt, materialCode:mat})
+              }).then(r=>r.json()).then(res=>{
+                if (res.success) Swal.fire({icon:'success', title:'Saved', timer:1200, showConfirmButton:false});
+                else Swal.fire({icon:'error', title:'Error', text:res.message||'Failed to save'});
               });
             }
 
             if (e.target.classList.contains('pm-del')) {
               const tr = e.target.closest('tr');
               const id = parseInt(tr.children[0].textContent.trim(), 10);
-              Swal.fire({
-                title: 'Delete this entry?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Delete'
-              }).then(res => {
-                if (!res.isConfirmed) return;
-                fetch('/Schedule/DeletePowderMix', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(id)
-                })
-                .then(r => r.json())
-                .then(out => {
-                  if (out.success) {
-                    tr.remove();
-                    Swal.fire({ icon: 'success', title: 'Deleted', timer: 1200, showConfirmButton: false });
-                  } else {
-                    Swal.fire({ icon: 'error', title: 'Error', text: out.message || 'Failed to delete' });
-                  }
+              Swal.fire({title:'Delete this entry?', icon:'warning', showCancelButton:true, confirmButtonText:'Delete'})
+                .then(res=>{
+                  if (!res.isConfirmed) return;
+                  fetch('/Schedule/DeletePowderMix', {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(id)
+                  }).then(r=>r.json()).then(out=>{
+                    if (out.success) { tr.remove(); Swal.fire({icon:'success', title:'Deleted', timer:1000, showConfirmButton:false}); }
+                    else Swal.fire({icon:'error', title:'Error', text: out.message || 'Failed to delete'});
+                  });
                 });
-              });
             }
           });
         });
-    </script>
 
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-    <script>
+        // ---------- 7) Part autocomplete on Start Scheduling modal ----------
+        $(document).ready(function () {
+          $("#queryPart").autocomplete({
+            source: function (request, response) {
+              $.getJSON('/Schedule/GetPartSuggestions', { term: request.term }, function (data) { response(data); });
+            },
+            minLength: 1,
+            select: function () { $("#queryQuantity").val(1); }
+          });
+          $('#startSchedulingModal').on('shown.bs.modal', function () { $("#queryQuantity").val(1); });
+        });
 
-
+        // ---------- 8) MIX QR: multi-label generation with SweetAlert ----------
         (function () {
-          let qr; // will hold QRCode instance
-
-          function buildPayload() {
-            const mix = (document.getElementById('mixCode').value || '').trim();
-            const lot = (document.getElementById('lotNumber').value || '').trim();
-            const wt  = (document.getElementById('weightPerBag').value || '').trim();
-            const qty = (document.getElementById('totalQty').value || '').trim();
-
-            if (!mix || !lot || !wt || !qty) return null;
-
-            // Order: MixCode;LotNumber;WeightPerBag;TotalQty
-            // Add newline at the end so scanners that paste into inputs will "submit/enter"
-            return `${mix};${lot};${wt};${qty}\n`;
-          }
+          // Supports: #mixCode, #lotNumber, #weightPerBag, #startBagNo, #labelQty (or legacy #totalQty), #qrGrid (or legacy #qrContainer)
+          const getQtyEl = () => $('labelQty') || $('totalQty');
+          const getCont  = () => $('qrGrid') || $('qrContainer');
+          const isMulti  = () => !!$('qrGrid');
+          const payload  = (mat,lot,wt,bag) => `ADV;${mat};${lot};${wt};${bag}\n`;
 
           function clearQr() {
-            const container = document.getElementById('qrContainer');
-            container.innerHTML = '';
-            qr = null;
-            document.getElementById('btnDownloadQr').disabled = true;
-            document.getElementById('btnPrintQr').disabled = true;
-            document.getElementById('qrTextPreview').value = '';
+            const c = getCont();
+            if (c) c.innerHTML = '';
+            if ($('qrTextPreview')) $('qrTextPreview').value = '';
+            if ($('btnDownloadQr')) $('btnDownloadQr').disabled = true;
+            if ($('btnPrintQr'))    $('btnPrintQr').disabled = true;
+          }
+          function collectImages() {
+            const c = getCont();
+            if (!c) return [];
+            return Array.from(c.querySelectorAll('canvas,img'))
+              .map(el => el.tagName === 'CANVAS' ? el.toDataURL('image/png') : (el.src || null))
+              .filter(Boolean);
+          }
+          function renderOne(holder, text) {
+            if (!window.QRCode) throw new Error('QRCode library not found (qrcode.min.js).');
+            new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
           }
 
-          // Reset form whenever modal opens
-          document.getElementById('createMixQrModal')
-            .addEventListener('shown.bs.modal', function () {
-              document.getElementById('mixQrForm').reset();
+          // Reset when modal opens
+          document.getElementById('createMixQrModal')?.addEventListener('shown.bs.modal', () => {
+            clearQr();
+            if ($('startBagNo') && !$('startBagNo').value) $('startBagNo').value = 1;
+            $('mixCode')?.focus();
+            Swal.fire({icon:'info', title:'Ready', text:'Fill the fields then click Generate.', timer:900, showConfirmButton:false});
+          });
+
+          // Event delegation for Generate / Download / Print
+          document.addEventListener('click', (e) => {
+            // Generate
+            if (e.target?.id === 'btnGenerateQr') {
+              Swal.fire({ title:'Generating…', didOpen:()=>Swal.showLoading(), allowOutsideClick:false, allowEscapeKey:false });
+
+              const missing = [];
+              ['mixCode','lotNumber','weightPerBag','btnGenerateQr'].forEach(id => !$(id) && missing.push(id));
+              if (!getQtyEl())  missing.push('labelQty or totalQty');
+              if (!getCont())   missing.push('qrGrid or qrContainer');
+
+              if (missing.length) { Swal.close(); return swalErr('Missing elements', `<div class="text-start"><code>${missing.join('</code><br><code>')}</code></div>`); }
+              if (!window.QRCode) { Swal.close(); return swalErr('QR library not found', 'Include <code>https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js</code> above this block.'); }
+
+              const mat = $('mixCode').value.trim();
+              const lot = $('lotNumber').value.trim();
+              const wt  = $('weightPerBag').value.trim();
+              const start = $('startBagNo') ? parseInt(($('startBagNo').value || '1'), 10) : 1;
+              const qty = parseInt((getQtyEl().value || '1'), 10);
+
+              const problems = [];
+              if (!mat) problems.push('Sintergy Mix Code / Material Code');
+              if (!lot) problems.push('Lot Number');
+              if (!wt)  problems.push('Weight');
+              if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # must be ≥ 1');
+              if (!Number.isFinite(qty)   || qty < 1)   problems.push('Label Quantity must be ≥ 1');
+
+              if (problems.length) { Swal.close(); return swalW('Missing or invalid fields', `<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`); }
+
               clearQr();
-              document.getElementById('mixCode').focus();
-            });
+              const container = getCont();
+              const firstPayload = payload(mat, lot, wt, start).replace(/\n$/, '');
+              let rendered = 0;
 
-          // Generate QR
-          document.getElementById('btnGenerateQr').addEventListener('click', function () {
-            const payload = buildPayload();
-            if (!payload) {
-              Swal && Swal.fire ? Swal.fire({icon:'warning', title:'Missing fields', text:'Please fill all fields.'})
-                                : alert('Please fill all fields.');
-              return;
+              if (!isMulti() && qty > 1) {
+                const holder = document.createElement('div');
+                holder.style.width='256px'; holder.style.height='256px';
+                holder.className='d-flex align-items-center justify-content-center';
+                container.appendChild(holder);
+                renderOne(holder, firstPayload + '\n');
+                rendered = 1;
+                if ($('qrTextPreview')) $('qrTextPreview').value = firstPayload;
+
+                const imgs = collectImages();
+                if (imgs.length) { if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false; if ($('btnPrintQr')) $('btnPrintQr').disabled=false; }
+                Swal.close();
+                return swalW('Generated 1 label (single container)',
+                  `Add a grid container <code>#qrGrid</code> to render all ${qty} labels.<br><br>First payload:<br><code>${firstPayload}</code>`);
+              }
+
+              if (isMulti()) {
+                for (let i=0;i<qty;i++){
+                  const bag = start + i;
+                  const p   = payload(mat, lot, wt, bag);
+
+                  const col  = document.createElement('div'); col.className='col-12 col-sm-6 col-md-4 col-lg-3';
+                  const card = document.createElement('div'); card.className='border rounded p-3 h-100 d-flex flex-column align-items-center justify-content-between';
+                  const holder = document.createElement('div'); holder.style.width='256px'; holder.style.height='256px'; holder.className='d-flex align-items-center justify-content-center';
+                  const cap = document.createElement('div'); cap.className='mt-2 small text-center'; cap.textContent = `Material ${mat} • Lot ${lot} • Wt ${wt} • Bag ${bag}`;
+
+                  card.appendChild(holder); card.appendChild(cap); col.appendChild(card); container.appendChild(col);
+                  renderOne(holder, p);
+                  if (i===0 && $('qrTextPreview')) $('qrTextPreview').value = p.replace(/\n$/,'');
+                  rendered++;
+                }
+                const imgs = collectImages();
+                if (imgs.length) { if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false; if ($('btnPrintQr')) $('btnPrintQr').disabled=false; }
+                Swal.close();
+                return swalOK(`Generated ${rendered} label${rendered>1?'s':''}`,
+                  `<div class="text-start">
+                     <div><b>Material:</b> ${mat}</div>
+                     <div><b>Lot:</b> ${lot}</div>
+                     <div><b>Weight:</b> ${wt}</div>
+                     <div><b>Bags:</b> ${start} → ${start + rendered - 1}</div>
+                     <hr class="my-2">
+                     <div><b>First payload:</b><br><code>${firstPayload}</code></div>
+                   </div>`);
+              }
+
+              Swal.close();
+              swalErr('No container found', 'Add <code>#qrGrid</code> (preferred) or <code>#qrContainer</code>.');
             }
 
-            document.getElementById('qrTextPreview').value = payload.replace(/\n$/, ''); // show without the trailing newline in the preview
-
-            const container = document.getElementById('qrContainer');
-            container.innerHTML = '';
-
-            // Create QR at ~256px (tweak as needed)
-            qr = new QRCode(container, {
-              text: payload,
-              width: 256,
-              height: 256,
-              correctLevel: QRCode.CorrectLevel.M
-            });
-
-            // Enable actions after first render
-            setTimeout(() => {
-              document.getElementById('btnDownloadQr').disabled = false;
-              document.getElementById('btnPrintQr').disabled = false;
-            }, 200);
-          });
-
-          // Download PNG
-          document.getElementById('btnDownloadQr').addEventListener('click', function () {
-            if (!qr) return;
-
-            // qrcode.js renders a <img> by default; if it renders <canvas> you can handle both:
-            const container = document.getElementById('qrContainer');
-            const img = container.querySelector('img');
-            const canvas = container.querySelector('canvas');
-
-            let dataUrl = null;
-            if (canvas) {
-              dataUrl = canvas.toDataURL('image/png');
-            } else if (img) {
-              dataUrl = img.src;
+            // Download first
+            if (e.target?.id === 'btnDownloadQr') {
+              const imgs = collectImages();
+              if (!imgs.length) return swalW('Nothing to download', 'Generate a QR first.');
+              const a = document.createElement('a'); a.href = imgs[0]; a.download = 'mix-qr.png';
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
             }
 
-            if (!dataUrl) return;
-
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = 'mix-qr.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          });
-
-          // Print QR (opens a minimal window with the QR image)
-          document.getElementById('btnPrintQr').addEventListener('click', function () {
-            if (!qr) return;
-
-            const container = document.getElementById('qrContainer');
-            const img = container.querySelector('img');
-            const canvas = container.querySelector('canvas');
-
-            let dataUrl = null;
-            if (canvas) {
-              dataUrl = canvas.toDataURL('image/png');
-            } else if (img) {
-              dataUrl = img.src;
+            // Print all
+            if (e.target?.id === 'btnPrintQr') {
+              const imgs = collectImages();
+              if (!imgs.length) return swalW('Nothing to print', 'Generate at least one QR first.');
+              const w = window.open('', '_blank');
+              const html = imgs.map(src => `<div style="display:inline-block;margin:8px;text-align:center;"><img src="${src}" style="width:256px;height:256px;" /></div>`).join('');
+              w.document.write(`<html><head><title>Print Mix QR Sheet</title></head><body style="margin:16px;">${html}</body></html>`);
+              w.document.close(); w.focus(); w.print();
             }
-            if (!dataUrl) return;
-
-            const w = window.open('', '_blank');
-            w.document.write(`
-              <html>
-                <head><title>Print Mix QR</title></head>
-                <body style="margin:0; display:flex; align-items:center; justify-content:center; height:100vh;">
-                  <img src="${dataUrl}" style="width:256px; height:256px;" />
-                </body>
-              </html>
-            `);
-            w.document.close();
-            w.focus();
-            w.print();
           });
         })();
     </script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-          // ---- quick sanity logs
-          console.log('[MixQR] DOM ready');
-          const modalEl = document.getElementById('createMixQrModal');
-          const btnGen  = document.getElementById('btnGenerateQr');
-          const btnDl   = document.getElementById('btnDownloadQr');
-          const btnPr   = document.getElementById('btnPrintQr');
+        (() => {
+          // ---- minimal notifier (only for errors/warnings) ----
+          function say(opts) {
+            if (window.Swal && Swal.fire) Swal.fire(opts);
+            else alert(`${opts.title || ''}\n\n${(opts.text || opts.html || '').replace(/<[^>]*>/g,'')}`);
+          }
+          const warn=(t,h)=>say({icon:'warning',title:t,html:h});
+          const err =(t,h)=>say({icon:'error',  title:t,html:h});
 
-          if (!modalEl)  console.warn('[MixQR] #createMixQrModal not found');
-          if (!btnGen)   console.warn('[MixQR] #btnGenerateQr not found');
-          if (!btnDl)    console.warn('[MixQR] #btnDownloadQr not found');
-          if (!btnPr)    console.warn('[MixQR] #btnPrintQr not found');
-          if (!window.QRCode) console.error('[MixQR] QRCode library missing. Make sure qrcode.min.js is loaded above this script.');
+          const $      = (id) => document.getElementById(id);
+          const qtyEl  = () => $('labelQty') || $('totalQty');           // support either id
+          const cont   = () => $('qrGrid')   || $('qrContainer');         // support either container
+          const payload= (mix,lot,wt,bag) => `ADV;${mix};${lot};${wt};${bag}\n`;
 
-          let qrInstance = null;
+          // store labeled images for print/download
+          let labeledImages = [];
 
-          function clearQr() {
-            const container = document.getElementById('qrContainer');
-            if (container) container.innerHTML = '';
-            qrInstance = null;
-            if (btnDl) btnDl.disabled = true;
-            if (btnPr) btnPr.disabled = true;
-            const prev = document.getElementById('qrTextPreview');
-            if (prev) prev.value = '';
+          function clearPreview() {
+            const c = cont();
+            if (c) c.innerHTML='';
+            if ($('qrTextPreview')) $('qrTextPreview').value='';
+            if ($('btnDownloadQr')) $('btnDownloadQr').disabled=true;
+            if ($('btnPrintQr'))    $('btnPrintQr').disabled=true;
+            labeledImages = [];
           }
 
-          function buildPayload() {
-            const mix = (document.getElementById('mixCode')?.value || '').trim();
-            const lot = (document.getElementById('lotNumber')?.value || '').trim();
-            const wt  = (document.getElementById('weightPerBag')?.value || '').trim();
-            const qty = (document.getElementById('totalQty')?.value || '').trim();
-            if (!mix || !lot || !wt || !qty) return null;
-            // order: MixCode;LotNumber;WeightPerBag;TotalQty + newline to "press enter"
-            return `${mix};${lot};${wt};${qty};\n`;
+          // ---- make raw QR as a CANVAS (off-DOM) ----
+          async function makeQrCanvas(text) {
+            const holder = document.createElement('div');
+            holder.style.position='absolute';
+            holder.style.left='-10000px';
+            document.body.appendChild(holder);
+
+            new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
+            await new Promise(r=>setTimeout(r,60)); // allow rendering
+
+            const canvas = holder.querySelector('canvas');
+            const img    = holder.querySelector('img');
+
+            const out = document.createElement('canvas');
+            out.width = 256; out.height = 256;
+            const ctx = out.getContext('2d');
+
+            if (canvas) {
+              ctx.drawImage(canvas, 0, 0);
+            } else if (img) {
+              await new Promise((res, rej) => {
+                if (img.complete) { ctx.drawImage(img, 0, 0, 256, 256); res(); }
+                else { img.onload = () => { ctx.drawImage(img, 0, 0, 256, 256); res(); };
+                       img.onerror= () => rej(new Error('QR image failed to load')); }
+              });
+            } else {
+              document.body.removeChild(holder);
+              throw new Error('QRCode library did not produce canvas or img.');
+            }
+
+            document.body.removeChild(holder);
+            return out;
           }
 
-          // Reset fields every time modal opens
-          modalEl?.addEventListener('shown.bs.modal', function () {
-            console.log('[MixQR] Modal shown');
-            document.getElementById('mixQrForm')?.reset();
-            clearQr();
-            document.getElementById('mixCode')?.focus();
-          });
+          // ---- make labeled image (centered text, proper QR border) ----
+          async function makeLabeledImage({mix, lot, wt, bag}) {
+            const QR_SIZE = 256;
+            const W = 360;                 // total image width
+            const headerH = 44;            // header band height
+            const padTop = 12;
+            const padBetween = 14;         // gap between QR and text
+            const padBottom = 18;
+            const lineH = 22;
 
-          // Generate
-          btnGen?.addEventListener('click', function () {
-            console.log('[MixQR] Generate clicked');
-            if (!window.QRCode) {
-              alert('QR library not loaded. Check the qrcode.min.js script tag.');
-              return;
+            const qr = await makeQrCanvas(payload(mix, lot, wt, bag));
+
+            const lines = [
+              `Mix Code: ${mix}`,
+              `Lot #: ${lot}`,
+              `Weight: ${wt}`,
+              `Bag: ${bag}`
+            ];
+            const textBlockH = lines.length * lineH;
+            const H = headerH + padTop + QR_SIZE + padBetween + textBlockH + padBottom;
+
+            const cx = document.createElement('canvas');
+            cx.width = W; cx.height = H;
+            const ctx = cx.getContext('2d');
+
+            // background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0,0,W,H);
+
+            // header text
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Sintergy', W/2, headerH/2);
+
+            // QR centered
+            const qrX = Math.round((W - QR_SIZE)/2);
+            const qrY = headerH + padTop;
+            ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
+
+            // crisp border around the QR area (not through the middle)
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#000000';
+            ctx.strokeRect(qrX - 1, qrY - 1, QR_SIZE + 2, QR_SIZE + 2);
+
+            // info text under QR (centered)
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            let y = qrY + QR_SIZE + padBetween;
+            for (const line of lines) {
+              ctx.fillText(line, W/2, y);
+              y += lineH;
             }
 
-            const payload = buildPayload();
-            if (!payload) {
-              if (window.Swal?.fire) Swal.fire({icon:'warning', title:'Missing fields', text:'Please fill all fields.'});
-              else alert('Please fill all fields.');
-              return;
+            return cx.toDataURL('image/png');
+          }
+
+          // ---- PREVIEW: only the first image, centered; no duplicate caption, no borders/cards ----
+          function showFirstPreview(dataUrl) {
+            const c = cont();
+            if (!c) return;
+            c.innerHTML = '';
+
+            const wrap = document.createElement('div');
+            wrap.style.display = 'flex';
+            wrap.style.justifyContent = 'center';
+            wrap.style.alignItems = 'center';
+            wrap.style.padding = '8px';
+
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.style.width  = '360px';
+            img.style.height = 'auto';
+            img.style.display= 'block';
+
+            wrap.appendChild(img);
+            c.appendChild(wrap);
+          }
+
+          // ---- modal open: reset & focus ----
+          document.getElementById('createMixQrModal')?.addEventListener('shown.bs.modal', () => {
+            clearPreview();
+            if ($('startBagNo') && !$('startBagNo').value) $('startBagNo').value = 1;
+            $('mixCode')?.focus();
+          });
+
+          // ---- master click handler ----
+          document.addEventListener('click', async (e) => {
+            const id = e.target?.id;
+
+            // Generate
+            if (id === 'btnGenerateQr') {
+              if (!window.QRCode) return err('QR library not loaded',
+                `Include <code>https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js</code> above this script.`);
+              if (!($('mixCode') && $('lotNumber') && $('weightPerBag') && qtyEl() && cont())) {
+                return err('Missing elements',
+                  'Need #mixCode, #lotNumber, #weightPerBag, #labelQty (or #totalQty), and #qrGrid (or #qrContainer).');
+              }
+
+              const mix = $('mixCode').value.trim();
+              const lot = $('lotNumber').value.trim();
+              const wt  = $('weightPerBag').value.trim();
+              const start = $('startBagNo') ? parseInt(($('startBagNo').value || '1'), 10) : 1;
+              const qty   = parseInt((qtyEl().value || '1'), 10);
+
+              const problems=[];
+              if (!mix) problems.push('Mix Code');
+              if (!lot) problems.push('Lot Number');
+              if (!wt)  problems.push('Weight');
+              if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # must be ≥ 1');
+              if (!Number.isFinite(qty)   || qty < 1)   problems.push('Label Quantity must be ≥ 1');
+              if (problems.length) return warn('Missing or invalid fields', `<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`);
+
+              clearPreview();
+
+              try {
+                for (let i=0;i<qty;i++){
+                  const bag = start + i;
+                  const dataUrl = await makeLabeledImage({mix, lot, wt, bag});
+                  labeledImages.push({bag, dataUrl});
+                  if (i===0) {
+                    // preview just the first one
+                    if ($('qrTextPreview')) $('qrTextPreview').value = payload(mix, lot, wt, bag).replace(/\n$/,'');
+                    showFirstPreview(dataUrl);
+                  }
+                }
+
+                if (labeledImages.length) {
+                  if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false;
+                  if ($('btnPrintQr'))    $('btnPrintQr').disabled=false;
+                }
+                // NOTE: No success SweetAlert here (per your request).
+
+              } catch (ex) {
+                err('Error generating labels', `<pre style="white-space:pre-wrap">${ex?.message || ex}</pre>`);
+              }
             }
 
-            const container = document.getElementById('qrContainer');
-            if (!container) {
-              console.error('[MixQR] #qrContainer not found');
-              return;
+            // Download (first labeled image)
+            if (id === 'btnDownloadQr') {
+              if (!labeledImages.length) return warn('Nothing to download', 'Generate a label first.');
+              const a = document.createElement('a');
+              a.href = labeledImages[0].dataUrl;
+              a.download = `sintergy-label-bag-${labeledImages[0].bag}.png`;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
             }
 
-            container.innerHTML = '';
-            qrInstance = new QRCode(container, {
-              text: payload,
-              width: 256,
-              height: 256,
-              correctLevel: QRCode.CorrectLevel.M
-            });
-
-            const prev = document.getElementById('qrTextPreview');
-            if (prev) prev.value = payload.replace(/\n$/, ''); // hide newline in preview
-
-            // Enable actions shortly after render
-            setTimeout(() => {
-              if (btnDl) btnDl.disabled = false;
-              if (btnPr) btnPr.disabled = false;
-            }, 150);
+            // Print (all labeled images)
+            if (id === 'btnPrintQr') {
+              if (!labeledImages.length) return warn('Nothing to print', 'Generate at least one label first.');
+              const w = window.open('', '_blank');
+              const html = labeledImages.map(({bag, dataUrl}) =>
+                `<div style="display:inline-block;margin:8px;text-align:center;">
+                   <img src="${dataUrl}" style="width:360px;height:auto;" alt="label ${bag}">
+                 </div>`).join('');
+              w.document.write(`<html><head><title>Print Sintergy Labels</title></head><body style="margin:16px;">${html}</body></html>`);
+              w.document.close(); w.focus(); w.print();
+            }
           });
-
-          // Download PNG
-          btnDl?.addEventListener('click', function () {
-            if (!qrInstance) return;
-            const container = document.getElementById('qrContainer');
-            const img = container?.querySelector('img');
-            const canvas = container?.querySelector('canvas');
-            let dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-            if (!dataUrl) return;
-
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = 'mix-qr.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          });
-
-          // Print
-          btnPr?.addEventListener('click', function () {
-            if (!qrInstance) return;
-            const container = document.getElementById('qrContainer');
-            const img = container?.querySelector('img');
-            const canvas = container?.querySelector('canvas');
-            let dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-            if (!dataUrl) return;
-
-            const w = window.open('', '_blank');
-            w.document.write(`
-              <html>
-                <head><title>Print Mix QR</title></head>
-                <body style="margin:0; display:flex; align-items:center; justify-content:center; height:100vh;">
-                  <img src="${dataUrl}" style="width:256px; height:256px;" />
-                </body>
-              </html>
-            `);
-            w.document.close();
-            w.focus();
-            w.print();
-          });
-        });
+        })();
     </script>
 
+
+
 }
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
