@@ -332,7 +332,9 @@
     }
 </style>
 
-@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+
     <!-- Vendor libraries (keep these above all custom scripts) -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -342,8 +344,8 @@
 
     <script>
         // ---------- Utilities ----------
-        const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-        const $  = (id) => document.getElementById(id);
+        const $$   = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+        const byId = (id) => document.getElementById(id);
 
         const swalOK  = (title, html) => Swal.fire({icon:'success', title, html, confirmButtonText:'OK'});
         const swalW   = (title, html) => Swal.fire({icon:'warning', title, html, confirmButtonText:'OK'});
@@ -368,7 +370,7 @@
 
         // ---------- 2) Start Scheduling -> Query components ----------
         document.addEventListener("DOMContentLoaded", function () {
-          const btnQuery = document.getElementById("queryButtonModal");
+      const btnQuery = byId("queryButtonModal");
           if (btnQuery) {
             btnQuery.addEventListener("click", function () {
               let part = $("#queryPart").val();
@@ -583,370 +585,526 @@
           $('#startSchedulingModal').on('shown.bs.modal', function () { $("#queryQuantity").val(1); });
         });
 
-        // ---------- 8) MIX QR: multi-label generation with SweetAlert ----------
-        (function () {
-          // Supports: #mixCode, #lotNumber, #weightPerBag, #startBagNo, #labelQty (or legacy #totalQty), #qrGrid (or legacy #qrContainer)
-          const getQtyEl = () => $('labelQty') || $('totalQty');
-          const getCont  = () => $('qrGrid') || $('qrContainer');
-          const isMulti  = () => !!$('qrGrid');
-          const payload  = (mat,lot,wt,bag) => `ADV;${mat};${lot};${wt};${bag}\n`;
+       </script>
 
-          function clearQr() {
-            const c = getCont();
-            if (c) c.innerHTML = '';
-            if ($('qrTextPreview')) $('qrTextPreview').value = '';
-            if ($('btnDownloadQr')) $('btnDownloadQr').disabled = true;
-            if ($('btnPrintQr'))    $('btnPrintQr').disabled = true;
+<script>
+    /* ===== MIX QR (DOM-ready, resilient, scoped to #createMixQrModal) ===== */
+    (function () {
+      document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('createMixQrModal');
+        if (!modal) { console.warn('[MixQR] #createMixQrModal not in DOM at ready'); return; }
+        console.log('[MixQR] init OK');
+
+        const $  = (sel, root = modal) => root.querySelector(sel);
+        const say = (opts) => (window.Swal && Swal.fire) ? Swal.fire(opts)
+                     : alert((opts.title||'') + '\n\n' + (opts.text || (opts.html||'').replace(/<[^>]*>/g,'')));
+        const payload = (mix, lot, wt, bag) => `ADV;${mix};${lot};${wt};${bag}\n`;
+        let labeledImages = []; // [{bag, dataUrl}]
+
+        function setBtnState(enabled) {
+          const dl = $('#btnDownloadQr'); if (dl) dl.disabled = !enabled;
+          const pr = $('#btnPrintQr');    if (pr) pr.disabled = !enabled;
+        }
+        function clearPreview() {
+          const grid = $('#qrGrid') || $('#qrContainer');
+          if (grid) grid.innerHTML = '';
+          const prev = $('#qrTextPreview');
+          if (prev) prev.value = '';
+          setBtnState(false);
+          labeledImages = [];
+        }
+        function downloadDataUrl(filename, dataUrl) {
+          const a = document.createElement('a');
+          a.href = dataUrl; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+        }
+        function printImagesViaIframe(dataUrls) {
+          const iframe = document.createElement('iframe');
+          iframe.style.position='fixed'; iframe.style.right='0'; iframe.style.bottom='0';
+          iframe.style.width='0'; iframe.style.height='0'; iframe.style.border='0';
+          document.body.appendChild(iframe);
+          const doc = iframe.contentDocument || iframe.contentWindow.document;
+          const html = `
+            <!doctype html><html><head><meta charset="utf-8"><title>Print Sintergy Labels</title></head>
+            <body style="margin:16px;">
+              ${dataUrls.map(src => `
+                <div style="display:inline-block;margin:8px;text-align:center;">
+                  <img src="${src}" style="width:360px;height:auto;" />
+                </div>`).join('')}
+              <script>
+                window.onload = function () {
+                  setTimeout(function(){
+                    window.focus(); window.print();
+                    setTimeout(function(){ window.close && window.close(); }, 250);
+                  }, 50);
+                };
+              <\/script>
+            </body></html>`;
+          doc.open(); doc.write(html); doc.close();
+        }
+        async function makeQrCanvas(text) {
+          if (!window.QRCode) throw new Error('QRCode library not found (qrcode.min.js).');
+          const holder = document.createElement('div');
+          holder.style.position='absolute'; holder.style.left='-10000px';
+          document.body.appendChild(holder);
+          new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
+          await new Promise(r=>setTimeout(r,60));
+          const srcCanvas = holder.querySelector('canvas');
+          const srcImg = holder.querySelector('img');
+
+          const out = document.createElement('canvas'); out.width=256; out.height=256;
+          const ctx = out.getContext('2d');
+
+          if (srcCanvas) ctx.drawImage(srcCanvas,0,0);
+          else if (srcImg) {
+            await new Promise((res, rej)=>{
+              if (srcImg.complete) { ctx.drawImage(srcImg,0,0,256,256); res(); }
+              else { srcImg.onload=()=>{ ctx.drawImage(srcImg,0,0,256,256); res(); };
+                     srcImg.onerror=()=>rej(new Error('QR image failed to load')); }
+            });
+          } else { document.body.removeChild(holder); throw new Error('QR code did not render'); }
+          document.body.removeChild(holder);
+          return out;
+        }
+        async function makeLabeledImage({ mix, lot, wt, bag }) {
+          const QR_SIZE=256, W=360, headerH=44, padTop=12, padBetween=14, padBottom=18, lineH=22;
+          const qr = await makeQrCanvas(payload(mix, lot, wt, bag));
+          const lines = [`Mix Code: ${mix}`, `Lot #: ${lot}`, `Weight: ${wt}`, `Bag: ${bag}`];
+          const textH = lines.length * lineH;
+          const H = headerH + padTop + QR_SIZE + padBetween + textH + padBottom;
+
+          const cx = document.createElement('canvas'); cx.width=W; cx.height=H;
+          const ctx = cx.getContext('2d');
+
+          ctx.fillStyle='#FFF'; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#000'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText('Sintergy', W/2, headerH/2);
+
+          const qrX = Math.round((W - QR_SIZE)/2), qrY = headerH + padTop;
+          ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
+          ctx.lineWidth=2; ctx.strokeStyle='#000'; ctx.strokeRect(qrX-1, qrY-1, QR_SIZE+2, QR_SIZE+2);
+
+          ctx.font='16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+          let y = qrY + QR_SIZE + padBetween;
+          for (const line of lines) { ctx.fillText(line, W/2, y); y += lineH; }
+
+          return cx.toDataURL('image/png');
+        }
+        function showFirstPreview({ mix, lot, wt, bag, dataUrl }) {
+          const grid = $('#qrGrid') || $('#qrContainer'); if (!grid) return;
+          grid.innerHTML = '';
+          const head = document.createElement('div'); head.className='text-center fw-bold mb-2'; head.textContent='Sintergy';
+          const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.justifyContent='center'; wrap.style.alignItems='center'; wrap.style.padding='8px';
+          const img = document.createElement('img'); img.src=dataUrl; img.style.width='360px'; img.style.height='auto'; img.alt='Mix QR label'; wrap.appendChild(img);
+          const info = document.createElement('div'); info.className='text-center mt-2';
+          info.innerHTML = `<div>Mix Code: <b>${mix}</b></div><div>Lot #: <b>${lot}</b></div><div>Weight: <b>${wt}</b></div><div>Bag: <b>${bag}</b></div>`;
+          grid.appendChild(head); grid.appendChild(wrap); grid.appendChild(info);
+        }
+
+        // Reset each time the modal is opened
+        modal.addEventListener('shown.bs.modal', () => {
+          clearPreview();
+          const startBag = $('#startBagNo'); if (startBag && !startBag.value) startBag.value = 1;
+          $('#mixCode')?.focus();
+          console.log('[MixQR] modal shown');
+        });
+
+        // Delegated clicks inside modal (works even if buttons are re-rendered)
+        modal.addEventListener('click', async (e) => {
+          const id = e.target?.id;
+          if (!id) return;
+
+          
+
+          if (id === 'btnDownloadQr') {
+            console.log('[MixQR] download clicked; images=', labeledImages.length);
+            if (!labeledImages.length) { say({icon:'warning', title:'Nothing to download'}); return; }
+            downloadDataUrl(`sintergy-label-bag-${labeledImages[0].bag}.png`, labeledImages[0].dataUrl);
           }
-          function collectImages() {
-            const c = getCont();
-            if (!c) return [];
-            return Array.from(c.querySelectorAll('canvas,img'))
-              .map(el => el.tagName === 'CANVAS' ? el.toDataURL('image/png') : (el.src || null))
-              .filter(Boolean);
+
+          if (id === 'btnPrintQr') {
+            console.log('[MixQR] print clicked; images=', labeledImages.length);
+            if (!labeledImages.length) { say({icon:'warning', title:'Nothing to print'}); return; }
+            printImagesViaIframe(labeledImages.map(x => x.dataUrl));
           }
-          function renderOne(holder, text) {
-            if (!window.QRCode) throw new Error('QRCode library not found (qrcode.min.js).');
-            new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
-          }
+        });
 
-          // Reset when modal opens
-          document.getElementById('createMixQrModal')?.addEventListener('shown.bs.modal', () => {
-            clearQr();
-            if ($('startBagNo') && !$('startBagNo').value) $('startBagNo').value = 1;
-            $('mixCode')?.focus();
-            Swal.fire({icon:'info', title:'Ready', text:'Fill the fields then click Generate.', timer:900, showConfirmButton:false});
-          });
+        // EXTRA: direct listeners (in case something stops event bubbling)
+        const btnDl = $('#btnDownloadQr');
+        const btnPr = $('#btnPrintQr');
+        if (btnDl) btnDl.addEventListener('click', (e) => {
+          if (e.currentTarget.disabled) return;
+          if (!labeledImages.length) return;
+          downloadDataUrl(`sintergy-label-bag-${labeledImages[0].bag}.png`, labeledImages[0].dataUrl);
+        });
+        if (btnPr) btnPr.addEventListener('click', (e) => {
+          if (e.currentTarget.disabled) return;
+          if (!labeledImages.length) return;
+          printImagesViaIframe(labeledImages.map(x => x.dataUrl));
+        });
+      });
+    })();
+</script>
 
-          // Event delegation for Generate / Download / Print
-          document.addEventListener('click', (e) => {
-            // Generate
-            if (e.target?.id === 'btnGenerateQr') {
-              Swal.fire({ title:'Generating…', didOpen:()=>Swal.showLoading(), allowOutsideClick:false, allowEscapeKey:false });
+@section Scripts {
+    <script>
+        /* ========= Helpers (one place) ========= */
+        (function(){
+          // Avoid double-wiring across hot reloads
+          if (window.__SINTERGY_SCRIPTS_WIRED__) return;
+          window.__SINTERGY_SCRIPTS_WIRED__ = true;
 
-              const missing = [];
-              ['mixCode','lotNumber','weightPerBag','btnGenerateQr'].forEach(id => !$(id) && missing.push(id));
-              if (!getQtyEl())  missing.push('labelQty or totalQty');
-              if (!getCont())   missing.push('qrGrid or qrContainer');
+          // Clean any stray modal backdrops (the “transparent black screen”)
+          window.__cleanBackdrops = function () {
+            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('padding-right');
+            document.body.style.removeProperty('overflow');
+          };
 
-              if (missing.length) { Swal.close(); return swalErr('Missing elements', `<div class="text-start"><code>${missing.join('</code><br><code>')}</code></div>`); }
-              if (!window.QRCode) { Swal.close(); return swalErr('QR library not found', 'Include <code>https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js</code> above this block.'); }
+          // jQuery UI Autocomplete (works for dynamically injected inputs in the modal)
+          window.__initMaterialAutocomplete = function (root) {
+            try {
+              if (!window.jQuery || !jQuery.fn.autocomplete) return;
+              const $root = root ? jQuery(root) : jQuery(document);
+              $root.find('.material-input').each(function () {
+                const $input = jQuery(this);
+                // Prevent re-binding
+                if ($input.data('ui-autocomplete')) return;
 
-              const mat = $('mixCode').value.trim();
-              const lot = $('lotNumber').value.trim();
-              const wt  = $('weightPerBag').value.trim();
-              const start = $('startBagNo') ? parseInt(($('startBagNo').value || '1'), 10) : 1;
-              const qty = parseInt((getQtyEl().value || '1'), 10);
-
-              const problems = [];
-              if (!mat) problems.push('Sintergy Mix Code / Material Code');
-              if (!lot) problems.push('Lot Number');
-              if (!wt)  problems.push('Weight');
-              if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # must be ≥ 1');
-              if (!Number.isFinite(qty)   || qty < 1)   problems.push('Label Quantity must be ≥ 1');
-
-              if (problems.length) { Swal.close(); return swalW('Missing or invalid fields', `<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`); }
-
-              clearQr();
-              const container = getCont();
-              const firstPayload = payload(mat, lot, wt, start).replace(/\n$/, '');
-              let rendered = 0;
-
-              if (!isMulti() && qty > 1) {
-                const holder = document.createElement('div');
-                holder.style.width='256px'; holder.style.height='256px';
-                holder.className='d-flex align-items-center justify-content-center';
-                container.appendChild(holder);
-                renderOne(holder, firstPayload + '\n');
-                rendered = 1;
-                if ($('qrTextPreview')) $('qrTextPreview').value = firstPayload;
-
-                const imgs = collectImages();
-                if (imgs.length) { if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false; if ($('btnPrintQr')) $('btnPrintQr').disabled=false; }
-                Swal.close();
-                return swalW('Generated 1 label (single container)',
-                  `Add a grid container <code>#qrGrid</code> to render all ${qty} labels.<br><br>First payload:<br><code>${firstPayload}</code>`);
-              }
-
-              if (isMulti()) {
-                for (let i=0;i<qty;i++){
-                  const bag = start + i;
-                  const p   = payload(mat, lot, wt, bag);
-
-                  const col  = document.createElement('div'); col.className='col-12 col-sm-6 col-md-4 col-lg-3';
-                  const card = document.createElement('div'); card.className='border rounded p-3 h-100 d-flex flex-column align-items-center justify-content-between';
-                  const holder = document.createElement('div'); holder.style.width='256px'; holder.style.height='256px'; holder.className='d-flex align-items-center justify-content-center';
-                  const cap = document.createElement('div'); cap.className='mt-2 small text-center'; cap.textContent = `Material ${mat} • Lot ${lot} • Wt ${wt} • Bag ${bag}`;
-
-                  card.appendChild(holder); card.appendChild(cap); col.appendChild(card); container.appendChild(col);
-                  renderOne(holder, p);
-                  if (i===0 && $('qrTextPreview')) $('qrTextPreview').value = p.replace(/\n$/,'');
-                  rendered++;
-                }
-                const imgs = collectImages();
-                if (imgs.length) { if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false; if ($('btnPrintQr')) $('btnPrintQr').disabled=false; }
-                Swal.close();
-                return swalOK(`Generated ${rendered} label${rendered>1?'s':''}`,
-                  `<div class="text-start">
-                     <div><b>Material:</b> ${mat}</div>
-                     <div><b>Lot:</b> ${lot}</div>
-                     <div><b>Weight:</b> ${wt}</div>
-                     <div><b>Bags:</b> ${start} → ${start + rendered - 1}</div>
-                     <hr class="my-2">
-                     <div><b>First payload:</b><br><code>${firstPayload}</code></div>
-                   </div>`);
-              }
-
-              Swal.close();
-              swalErr('No container found', 'Add <code>#qrGrid</code> (preferred) or <code>#qrContainer</code>.');
+                $input.autocomplete({
+                  source: function (request, response) {
+                    jQuery.getJSON('/Schedule/GetMaterialSuggestions', {
+                      part: $input.data('partcode'),
+                      comp: $input.data('component'),
+                      term: request.term
+                    }, response);
+                  },
+                  minLength: 1,
+                  // Force menu to live inside the modal so it appears above the backdrop
+                  appendTo: '#queryResultsModal',
+                  // Tweak menu positioning relative to the input
+                  position: { my: "left top", at: "left bottom", of: $input }
+                });
+              });
+            } catch (e) {
+              console.warn('initMaterialAutocomplete error', e);
             }
+          };
 
-            // Download first
-            if (e.target?.id === 'btnDownloadQr') {
-              const imgs = collectImages();
-              if (!imgs.length) return swalW('Nothing to download', 'Generate a QR first.');
-              const a = document.createElement('a'); a.href = imgs[0]; a.download = 'mix-qr.png';
-              document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            }
-
-            // Print all
-            if (e.target?.id === 'btnPrintQr') {
-              const imgs = collectImages();
-              if (!imgs.length) return swalW('Nothing to print', 'Generate at least one QR first.');
-              const w = window.open('', '_blank');
-              const html = imgs.map(src => `<div style="display:inline-block;margin:8px;text-align:center;"><img src="${src}" style="width:256px;height:256px;" /></div>`).join('');
-              w.document.write(`<html><head><title>Print Mix QR Sheet</title></head><body style="margin:16px;">${html}</body></html>`);
-              w.document.close(); w.focus(); w.print();
-            }
-          });
+          // Make the suggestions menu sit above Bootstrap modal
+          const style = document.createElement('style');
+          style.textContent = `
+            .ui-autocomplete { z-index: 2000 !important; }
+          `;
+          document.head.appendChild(style);
         })();
     </script>
 
     <script>
-        (() => {
-          // ---- minimal notifier (only for errors/warnings) ----
-          function say(opts) {
-            if (window.Swal && Swal.fire) Swal.fire(opts);
-            else alert(`${opts.title || ''}\n\n${(opts.text || opts.html || '').replace(/<[^>]*>/g,'')}`);
+        /* ========= Start Scheduling -> Query (single handler; no spurious error) ========= */
+        (function () {
+          const byId = (id) => document.getElementById(id);
+
+          document.addEventListener('click', async (e) => {
+            if (e.target?.id !== 'queryButtonModal') return;
+
+            // Stop any legacy/duplicate listeners
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            const startEl = byId('startSchedulingModal');
+            const resultsEl = byId('queryResultsModal');
+            const resultsBodySel = '#queryResultsContent';
+
+            try {
+              // Read + normalize
+              const partEl = byId('queryPart');
+              const qtyEl  = byId('queryQuantity');
+              let part = (partEl?.value || '').trim();
+              const quantity = (qtyEl?.value || '').trim();
+
+              if (!part || !quantity) {
+                return window.Swal?.fire
+                  ? Swal.fire({icon:'warning', title:'Missing', text:'Enter part and quantity.'})
+                  : alert('Enter part and quantity.');
+              }
+
+              part = part.toUpperCase();
+              if (partEl) partEl.value = part;
+
+              // Close the first modal (even if no instance yet)
+              if (startEl) bootstrap.Modal.getOrCreateInstance(startEl).hide();
+
+              // Fetch partial
+              const url = `/Schedule/GetComponents?part=${encodeURIComponent(part)}&quantity=${encodeURIComponent(quantity)}`;
+              const r = await fetch(url, { cache: 'no-store' });
+
+              // We only show an error toast if the response is *actually* bad and we
+              // cannot show anything. If it's OK-ish, continue quietly.
+              let htmlText = '';
+              try { htmlText = await r.text(); } catch { htmlText = '<p class="text-center text-danger">Failed to read response.</p>'; }
+
+              // Inject HTML safely if target exists
+              const tgt = document.querySelector(resultsBodySel);
+              if (tgt) tgt.innerHTML = htmlText;
+
+              // Wire autocomplete *inside* the results modal
+              window.__initMaterialAutocomplete(resultsEl);
+
+              // Show results modal
+              if (resultsEl) {
+                const m = new bootstrap.Modal(resultsEl);
+                // When it closes, ensure no backdrop lingers
+                resultsEl.addEventListener('hidden.bs.modal', window.__cleanBackdrops, { once: true });
+                m.show();
+              }
+
+              // Do NOT show the generic “could not load components” unless response was NOT ok and target missing
+              if (!r.ok && !tgt) {
+                window.Swal?.fire?.({icon:'error', title:'Error', text:'Could not load components.'});
+              }
+            } catch (err) {
+              console.error('[Schedule] Query error:', err);
+              // Only alert if we truly couldn’t display anything
+              window.Swal?.fire?.({icon:'error', title:'Error', text:'Could not load components.'});
+            }
+          }, true);
+
+          // Global safety: if any modal hides, clean stray backdrops
+          document.addEventListener('hidden.bs.modal', window.__cleanBackdrops);
+        })();
+    </script>
+
+    <script>
+        /* ========= MIX QR: multiple labels; download all (ZIP) or one; print all ========= */
+        (function () {
+          function setBtnState(enabled) {
+            const dl = document.getElementById('btnDownloadQr');
+            const pr = document.getElementById('btnPrintQr');
+            if (dl) dl.disabled = !enabled;
+            if (pr) pr.disabled = !enabled;
           }
-          const warn=(t,h)=>say({icon:'warning',title:t,html:h});
-          const err =(t,h)=>say({icon:'error',  title:t,html:h});
-
-          const $      = (id) => document.getElementById(id);
-          const qtyEl  = () => $('labelQty') || $('totalQty');           // support either id
-          const cont   = () => $('qrGrid')   || $('qrContainer');         // support either container
-          const payload= (mix,lot,wt,bag) => `ADV;${mix};${lot};${wt};${bag}\n`;
-
-          // store labeled images for print/download
-          let labeledImages = [];
-
           function clearPreview() {
-            const c = cont();
-            if (c) c.innerHTML='';
-            if ($('qrTextPreview')) $('qrTextPreview').value='';
-            if ($('btnDownloadQr')) $('btnDownloadQr').disabled=true;
-            if ($('btnPrintQr'))    $('btnPrintQr').disabled=true;
-            labeledImages = [];
+            const grid = document.getElementById('qrGrid') || document.getElementById('qrContainer');
+            if (grid) grid.innerHTML = '';
+            const prev = document.getElementById('qrTextPreview');
+            if (prev) prev.value = '';
+            setBtnState(false);
           }
 
-          // ---- make raw QR as a CANVAS (off-DOM) ----
           async function makeQrCanvas(text) {
+            if (!window.QRCode) throw new Error('QRCode library not found.');
             const holder = document.createElement('div');
-            holder.style.position='absolute';
-            holder.style.left='-10000px';
+            holder.style.position = 'absolute';
+            holder.style.left = '-10000px';
             document.body.appendChild(holder);
 
             new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
-            await new Promise(r=>setTimeout(r,60)); // allow rendering
+            await new Promise(r => setTimeout(r, 60));
 
-            const canvas = holder.querySelector('canvas');
-            const img    = holder.querySelector('img');
+            const srcCanvas = holder.querySelector('canvas');
+            const srcImg = holder.querySelector('img');
 
-            const out = document.createElement('canvas');
-            out.width = 256; out.height = 256;
+            const out = document.createElement('canvas'); out.width=256; out.height=256;
             const ctx = out.getContext('2d');
 
-            if (canvas) {
-              ctx.drawImage(canvas, 0, 0);
-            } else if (img) {
+            if (srcCanvas) ctx.drawImage(srcCanvas, 0, 0);
+            else if (srcImg) {
               await new Promise((res, rej) => {
-                if (img.complete) { ctx.drawImage(img, 0, 0, 256, 256); res(); }
-                else { img.onload = () => { ctx.drawImage(img, 0, 0, 256, 256); res(); };
-                       img.onerror= () => rej(new Error('QR image failed to load')); }
+                if (srcImg.complete) { ctx.drawImage(srcImg, 0, 0, 256, 256); res(); }
+                else { srcImg.onload=()=>{ ctx.drawImage(srcImg, 0, 0, 256, 256); res(); };
+                       srcImg.onerror=()=>rej(new Error('QR image failed to load')); }
               });
             } else {
               document.body.removeChild(holder);
-              throw new Error('QRCode library did not produce canvas or img.');
+              throw new Error('QR did not render');
             }
-
             document.body.removeChild(holder);
             return out;
           }
 
-          // ---- make labeled image (centered text, proper QR border) ----
-          async function makeLabeledImage({mix, lot, wt, bag}) {
-            const QR_SIZE = 256;
-            const W = 360;                 // total image width
-            const headerH = 44;            // header band height
-            const padTop = 12;
-            const padBetween = 14;         // gap between QR and text
-            const padBottom = 18;
-            const lineH = 22;
+          async function makeLabeledImage({ mix, lot, wt, bag }) {
+            const QR_SIZE=256, W=360, headerH=44, padTop=12, padBetween=14, padBottom=18, lineH=22;
+            const payload = `ADV;${mix};${lot};${wt};${bag}\n`;
 
-            const qr = await makeQrCanvas(payload(mix, lot, wt, bag));
-
-            const lines = [
-              `Mix Code: ${mix}`,
-              `Lot #: ${lot}`,
-              `Weight: ${wt}`,
-              `Bag: ${bag}`
-            ];
-            const textBlockH = lines.length * lineH;
-            const H = headerH + padTop + QR_SIZE + padBetween + textBlockH + padBottom;
-
-            const cx = document.createElement('canvas');
-            cx.width = W; cx.height = H;
+            const qr = await makeQrCanvas(payload);
+            const cx = document.createElement('canvas'); cx.width=W; cx.height=headerH + padTop + QR_SIZE + padBetween + (4 * lineH) + padBottom;
             const ctx = cx.getContext('2d');
 
-            // background
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#FFF'; ctx.fillRect(0,0,cx.width,cx.height);
 
-            // header text
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 22px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            // Header (inside image)
+            ctx.fillStyle='#000'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
             ctx.fillText('Sintergy', W/2, headerH/2);
 
-            // QR centered
-            const qrX = Math.round((W - QR_SIZE)/2);
-            const qrY = headerH + padTop;
+            // QR
+            const qrX = Math.round((W - QR_SIZE)/2), qrY = headerH + padTop;
             ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
+            ctx.lineWidth=2; ctx.strokeStyle='#000'; ctx.strokeRect(qrX-1, qrY-1, QR_SIZE+2, QR_SIZE+2);
 
-            // crisp border around the QR area (not through the middle)
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#000000';
-            ctx.strokeRect(qrX - 1, qrY - 1, QR_SIZE + 2, QR_SIZE + 2);
-
-            // info text under QR (centered)
-            ctx.font = '16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
+            // Info (inside image)
+            ctx.font='16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
             let y = qrY + QR_SIZE + padBetween;
-            for (const line of lines) {
-              ctx.fillText(line, W/2, y);
-              y += lineH;
-            }
+            ctx.fillText(`Mix Code: ${mix}`, W/2, y); y += lineH;
+            ctx.fillText(`Lot #: ${lot}`, W/2, y);    y += lineH;
+            ctx.fillText(`Weight: ${wt}`, W/2, y);    y += lineH;
+            ctx.fillText(`Bag: ${bag}`, W/2, y);
 
-            return cx.toDataURL('image/png');
+            return { dataUrl: cx.toDataURL('image/png'), payload };
           }
 
-          // ---- PREVIEW: only the first image, centered; no duplicate caption, no borders/cards ----
-          function showFirstPreview(dataUrl) {
-            const c = cont();
-            if (!c) return;
-            c.innerHTML = '';
-
-            const wrap = document.createElement('div');
-            wrap.style.display = 'flex';
-            wrap.style.justifyContent = 'center';
-            wrap.style.alignItems = 'center';
-            wrap.style.padding = '8px';
-
-            const img = document.createElement('img');
-            img.src = dataUrl;
-            img.style.width  = '360px';
-            img.style.height = 'auto';
-            img.style.display= 'block';
-
-            wrap.appendChild(img);
-            c.appendChild(wrap);
+          function printDataUrls(urls) {
+            if (!urls.length) return;
+            const w = window.open('', '_blank');
+            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return; }
+            w.document.write(
+              '<!doctype html><html><head><meta charset="utf-8"><title>Print Sintergy Labels</title></head>' +
+              '<body style="margin:16px;text-align:center;">' +
+              urls.map(u => `<img src="${u}" style="width:360px;height:auto;display:inline-block;margin:8px;" />`).join('') +
+              '<script>window.onload=function(){setTimeout(function(){window.focus();window.print();window.close();},100);};<\/script>' +
+              '</body></html>'
+            );
+            w.document.close();
           }
 
-          // ---- modal open: reset & focus ----
-          document.getElementById('createMixQrModal')?.addEventListener('shown.bs.modal', () => {
-            clearPreview();
-            if ($('startBagNo') && !$('startBagNo').value) $('startBagNo').value = 1;
-            $('mixCode')?.focus();
+          async function ensureJSZip() {
+            if (window.JSZip) return;
+            await new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+              s.onload = resolve; s.onerror = () => reject(new Error('Failed to load JSZip'));
+              document.head.appendChild(s);
+            });
+          }
+
+          // Reset on modal open / tidy on close
+          document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('createMixQrModal');
+            if (!modal) return;
+
+            modal.addEventListener('shown.bs.modal', () => {
+              clearPreview();
+              const startBag = document.getElementById('startBagNo');
+              if (startBag && !startBag.value) startBag.value = 1;
+              document.getElementById('mixCode')?.focus();
+            });
+            modal.addEventListener('hidden.bs.modal', window.__cleanBackdrops);
           });
 
-          // ---- master click handler ----
+          // Generate labels (N images, no extra DOM header/footer outside the image)
+          document.addEventListener('click', async (e) => {
+            if (e.target?.id !== 'btnGenerateQr') return;
+
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            try {
+              const mix   = (document.getElementById('mixCode')?.value || '').trim();
+              const lot   = (document.getElementById('lotNumber')?.value || '').trim();
+              const wt    = (document.getElementById('weightPerBag')?.value || '').trim();
+              const start = document.getElementById('startBagNo') ? parseInt(document.getElementById('startBagNo').value || '1', 10) : 1;
+              const qtyEl = document.getElementById('labelQty') || document.getElementById('totalQty');
+              const qty   = qtyEl ? parseInt(qtyEl.value || '1', 10) : 1;
+
+              const problems = [];
+              if (!mix) problems.push('Mix Code');
+              if (!lot) problems.push('Lot Number');
+              if (!wt)  problems.push('Weight per Bag/Drum');
+              if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # ≥ 1');
+              if (!Number.isFinite(qty)   || qty < 1)   problems.push('Number of labels ≥ 1');
+              if (problems.length) {
+                window.Swal?.fire
+                  ? Swal.fire({icon:'warning', title:'Missing or invalid', html:`<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`})
+                  : alert('Missing/invalid: ' + problems.join(', '));
+                return;
+              }
+
+              const grid = document.getElementById('qrGrid') || document.getElementById('qrContainer');
+              if (!grid) return;
+
+              clearPreview();
+              const urls = [];
+              let firstPayload = null;
+
+              for (let i = 0; i < qty; i++) {
+                const bag = start + i;
+                const { dataUrl, payload } = await makeLabeledImage({ mix, lot, wt, bag });
+                if (!firstPayload) firstPayload = payload;
+                urls.push({ bag, dataUrl });
+
+                const col = document.createElement('div');
+                col.className = 'col-auto d-flex justify-content-center';
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.alt = `Label for bag ${bag}`;
+                img.style.width = '360px';
+                img.style.height = 'auto';
+                img.className = 'mixqr-label-img';
+                img.dataset.bag = String(bag);
+                col.appendChild(img);
+                grid.appendChild(col);
+              }
+
+              const prev = document.getElementById('qrTextPreview');
+              if (prev && firstPayload) prev.value = firstPayload.replace(/\n$/, '');
+              setBtnState(true);
+            } catch (err) {
+              console.error('[MixQR] generate error:', err);
+              window.Swal?.fire?.({icon:'error', title:'Error generating labels', text: err?.message || String(err)});
+            }
+          }, true);
+
+          // Download (single -> PNG; multiple -> ZIP) & Print (all)
           document.addEventListener('click', async (e) => {
             const id = e.target?.id;
 
-            // Generate
-            if (id === 'btnGenerateQr') {
-              if (!window.QRCode) return err('QR library not loaded',
-                `Include <code>https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js</code> above this script.`);
-              if (!($('mixCode') && $('lotNumber') && $('weightPerBag') && qtyEl() && cont())) {
-                return err('Missing elements',
-                  'Need #mixCode, #lotNumber, #weightPerBag, #labelQty (or #totalQty), and #qrGrid (or #qrContainer).');
+            if (id === 'btnDownloadQr') {
+              e.preventDefault();
+
+              const imgs = Array.from(document.querySelectorAll('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img'));
+              if (!imgs.length) { window.Swal?.fire?.({icon:'warning', title:'Nothing to download'}); return; }
+
+              if (imgs.length === 1) {
+                const src = imgs[0].currentSrc || imgs[0].src;
+                const a = document.createElement('a');
+                a.href = src;
+                a.download = `sintergy-label-bag-${imgs[0].dataset.bag || '1'}.png`;
+                document.body.appendChild(a); a.click(); a.remove();
+                return;
               }
-
-              const mix = $('mixCode').value.trim();
-              const lot = $('lotNumber').value.trim();
-              const wt  = $('weightPerBag').value.trim();
-              const start = $('startBagNo') ? parseInt(($('startBagNo').value || '1'), 10) : 1;
-              const qty   = parseInt((qtyEl().value || '1'), 10);
-
-              const problems=[];
-              if (!mix) problems.push('Mix Code');
-              if (!lot) problems.push('Lot Number');
-              if (!wt)  problems.push('Weight');
-              if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # must be ≥ 1');
-              if (!Number.isFinite(qty)   || qty < 1)   problems.push('Label Quantity must be ≥ 1');
-              if (problems.length) return warn('Missing or invalid fields', `<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`);
-
-              clearPreview();
 
               try {
-                for (let i=0;i<qty;i++){
-                  const bag = start + i;
-                  const dataUrl = await makeLabeledImage({mix, lot, wt, bag});
-                  labeledImages.push({bag, dataUrl});
-                  if (i===0) {
-                    // preview just the first one
-                    if ($('qrTextPreview')) $('qrTextPreview').value = payload(mix, lot, wt, bag).replace(/\n$/,'');
-                    showFirstPreview(dataUrl);
-                  }
-                }
-
-                if (labeledImages.length) {
-                  if ($('btnDownloadQr')) $('btnDownloadQr').disabled=false;
-                  if ($('btnPrintQr'))    $('btnPrintQr').disabled=false;
-                }
-                // NOTE: No success SweetAlert here (per your request).
-
-              } catch (ex) {
-                err('Error generating labels', `<pre style="white-space:pre-wrap">${ex?.message || ex}</pre>`);
+                await ensureJSZip();
+                const zip = new JSZip();
+                imgs.forEach((img, idx) => {
+                  const dataUrl = img.currentSrc || img.src;
+                  const base64 = dataUrl.split(',')[1];
+                  const bag = img.dataset.bag || (idx + 1);
+                  zip.file(`sintergy-label-bag-${bag}.png`, base64, { base64: true });
+                });
+                const blob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'sintergy-labels.zip';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+              } catch (zipErr) {
+                console.error('ZIP error', zipErr);
+                window.Swal?.fire?.({icon:'error', title:'Download error', text:'Could not create ZIP. Try printing instead.'});
               }
             }
 
-            // Download (first labeled image)
-            if (id === 'btnDownloadQr') {
-              if (!labeledImages.length) return warn('Nothing to download', 'Generate a label first.');
-              const a = document.createElement('a');
-              a.href = labeledImages[0].dataUrl;
-              a.download = `sintergy-label-bag-${labeledImages[0].bag}.png`;
-              document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            }
-
-            // Print (all labeled images)
             if (id === 'btnPrintQr') {
-              if (!labeledImages.length) return warn('Nothing to print', 'Generate at least one label first.');
-              const w = window.open('', '_blank');
-              const html = labeledImages.map(({bag, dataUrl}) =>
-                `<div style="display:inline-block;margin:8px;text-align:center;">
-                   <img src="${dataUrl}" style="width:360px;height:auto;" alt="label ${bag}">
-                 </div>`).join('');
-              w.document.write(`<html><head><title>Print Sintergy Labels</title></head><body style="margin:16px;">${html}</body></html>`);
-              w.document.close(); w.focus(); w.print();
+              e.preventDefault();
+              const imgs = Array.from(document.querySelectorAll('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img'));
+              if (!imgs.length) { window.Swal?.fire?.({icon:'warning', title:'Nothing to print'}); return; }
+              const urls = imgs.map(img => img.currentSrc || img.src).filter(Boolean);
+              printDataUrls(urls);
             }
-          });
+          }, true);
         })();
     </script>
-
-
-
 }
+
+
