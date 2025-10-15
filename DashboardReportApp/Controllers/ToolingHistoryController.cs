@@ -193,12 +193,7 @@ namespace DashboardReportApp.Controllers
                             Revision = item.Revision,
                             Quantity = item.Quantity,
                             Cost = item.Cost,
-                            ToolWorkHours = item.ToolWorkHours,
-                            DateDue = item.DateDue,
-                            DateFitted = item.DateFitted,
-                            DateReceived = item.DateReceived,
-                            ReceivedBy = item.ReceivedBy,
-                            FittedBy = item.FittedBy
+                            ToolWorkHours = item.ToolWorkHours
                         };
                         _service.UpdateToolItem(vm);
                     }
@@ -214,57 +209,7 @@ namespace DashboardReportApp.Controllers
             return PartialView("_ToolItemsModal", refreshed);
         }
 
-        [HttpGet]
-        public IActionResult ReceiveAllModal(int groupID)
-        {
-            return PartialView("_ReceiveAllModal", groupID);
-        }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult ReceiveAll(int groupID, string receivedBy, bool alsoFit)
-        {
-            Console.WriteLine($"[ReceiveAll] groupID={groupID}, receivedBy='{receivedBy}', alsoFit={alsoFit}");
-
-            try
-            {
-                _service.ReceiveAllInGroup(groupID, receivedBy, DateTime.Now, alsoFit);
-                var model = new GroupDetailsViewModel
-                {
-                    GroupID = groupID,
-                    ToolItems = _service.GetToolItemsByGroupID(groupID),
-                    NewToolItem = new ToolItemViewModel { GroupID = groupID }
-                };
-                return PartialView("_ToolItemsModal", model);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ReceiveAll][ERR] {ex.Message}");
-                Response.StatusCode = 500;
-                return Content("Error: " + ex.Message);
-            }
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken] // <-- was "lidateAntiForgeryToken" before
-        public IActionResult FitAll(int groupID, string fittedBy)
-        {
-            if (string.IsNullOrWhiteSpace(fittedBy))
-            {
-                Response.StatusCode = 400;
-                return Content("Fitted By is required.");
-            }
-
-            _service.FitAllInGroup(groupID, fittedBy.Trim(), DateTime.Today);
-
-            var vm = new GroupDetailsViewModel
-            {
-                GroupID = groupID,
-                ToolItems = _service.GetToolItemsByGroupID(groupID),
-                NewToolItem = new ToolItemViewModel { GroupID = groupID }
-            };
-            return PartialView("_ToolItemsModal", vm);
-        }
 
         // --------- PO request (no textbox; uses config default) ----------
         [HttpPost]
@@ -279,7 +224,7 @@ namespace DashboardReportApp.Controllers
                 // ⬇️ Put it here
                 var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_history_item
 
-                var subject = $"PO Request: Group {record.GroupID} / {record.Part} / {record.ToolNumber}";
+                var subject = $"PO Request: Group {record.GroupID} / {record.Part}";
                 var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
                 var body = $@"
 PO Request (Tooling History)
@@ -288,18 +233,16 @@ GroupID: {record.GroupID}
 Reason: {record.Reason}
 Vendor: {record.ToolVendor}
 Part: {record.Part}
-Tool#: {record.ToolNumber}
-Revision: {record.Revision}
 Due: {record.DateDue:yyyy-MM-dd}
 Estimated Cost: {(record.Cost?.ToString("C") ?? "n/a")}
 Hours: {(record.ToolWorkHours?.ToString() ?? "n/a")}
-Desc: {record.ToolDesc}
 
 Items:
 {string.Join("\n", items.Select(it => $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={(it.Quantity)} | Cost={(it.Cost?.ToString("C") ?? "n/a")}"))}
 
 Open in Dashboard: {link}
 ";
+
 
                 var to = string.IsNullOrWhiteSpace(_cfg["Tooling:PoRequestTo"])
                     ? "tooling@sintergy.local"
@@ -321,12 +264,7 @@ Open in Dashboard: {link}
                 return Json(new { ok = false, error = ex.Message });
             }
         }
-        [HttpGet]
-        public IActionResult FitAllModal(int groupID)
-        {
-            // Reuse the same simple modal pattern as ReceiveAll
-            return PartialView("_FitAllModal", groupID);
-        }
+       
       
         // GET /ToolingHistory/GeneratePackingSlip?groupID=123
         [HttpGet]

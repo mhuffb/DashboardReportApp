@@ -19,8 +19,8 @@ namespace DashboardReportApp.Services
         {
             var list = new List<ToolingHistoryModel>();
             const string sql = @"
-SELECT Id, GroupID, Part, ToolNumber, Revision, PO, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, ToolWorkHours, ToolDesc, AccountingCode, InitiatedBy, DateReceived
+SELECT Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
+       Cost, ToolWorkHours, AccountingCode, InitiatedBy, DateReceived
 FROM tooling_history_header
 ORDER BY Id DESC;";
 
@@ -35,8 +35,6 @@ ORDER BY Id DESC;";
                     Id = Convert.ToInt32(r["Id"]),
                     GroupID = Convert.ToInt32(r["GroupID"]),
                     Part = r["Part"]?.ToString(),
-                    ToolNumber = r["ToolNumber"]?.ToString(),
-                    Revision = r["Revision"]?.ToString(),
                     PO = r["PO"]?.ToString(),
                     Reason = r["Reason"]?.ToString(),
                     ToolVendor = r["ToolVendor"]?.ToString(),
@@ -44,10 +42,9 @@ ORDER BY Id DESC;";
                     DateDue = r["DateDue"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateDue"]),
                     Cost = r["Cost"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(r["Cost"]),
                     ToolWorkHours = r["ToolWorkHours"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["ToolWorkHours"]),
-                    ToolDesc = r["ToolDesc"]?.ToString(),
                     AccountingCode = r["AccountingCode"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["AccountingCode"]),
                     InitiatedBy = r["InitiatedBy"]?.ToString(),
-                    DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"])
+                    DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]) // ADDED
                 });
             }
             return list;
@@ -67,8 +64,8 @@ ORDER BY Id DESC;";
         public ToolingHistoryModel? GetToolingHistoryById(int id)
         {
             const string sql = @"
-SELECT Id, GroupID, Part, ToolNumber, Revision, PO, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, ToolWorkHours, ToolDesc, AccountingCode, InitiatedBy, DateReceived
+SELECT Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
+       Cost, ToolWorkHours, AccountingCode, InitiatedBy
 FROM tooling_history_header
 WHERE Id = @Id
 LIMIT 1;";
@@ -85,8 +82,6 @@ LIMIT 1;";
                 Id = Convert.ToInt32(r["Id"]),
                 GroupID = Convert.ToInt32(r["GroupID"]),
                 Part = r["Part"]?.ToString(),
-                ToolNumber = r["ToolNumber"]?.ToString(),
-                Revision = r["Revision"]?.ToString(),
                 PO = r["PO"]?.ToString(),
                 Reason = r["Reason"]?.ToString(),
                 ToolVendor = r["ToolVendor"]?.ToString(),
@@ -94,10 +89,8 @@ LIMIT 1;";
                 DateDue = r["DateDue"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateDue"]),
                 Cost = r["Cost"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(r["Cost"]),
                 ToolWorkHours = r["ToolWorkHours"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["ToolWorkHours"]),
-                ToolDesc = r["ToolDesc"]?.ToString(),
                 AccountingCode = r["AccountingCode"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["AccountingCode"]),
-                InitiatedBy = r["InitiatedBy"]?.ToString(),
-                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"])
+                InitiatedBy = r["InitiatedBy"]?.ToString()
             };
         }
         private int GetHeaderIdByGroup(MySqlConnection conn, MySqlTransaction? tx, int groupId)
@@ -116,10 +109,10 @@ LIMIT 1;";
             const string sql = @"
 INSERT INTO tooling_history_item
  (HeaderId, GroupID, Action, ToolItem, ToolNumber, ToolDesc, Revision, Quantity, Cost, ToolWorkHours,
-  DateDue, DateFitted, DateReceived, ReceivedBy, FittedBy)
+  DateDue)
 VALUES
  (@HeaderId, @GroupID, @Action, @ToolItem, @ToolNumber, @ToolDesc, @Revision, @Quantity, @Cost, @ToolWorkHours,
-  @DateDue, @DateFitted, @DateReceived, @ReceivedBy, @FittedBy);";
+  @DateDue);";
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -138,10 +131,6 @@ VALUES
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DateDue", (object?)m.DateDue ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@DateFitted", (object?)m.DateFitted ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ReceivedBy", (object?)m.ReceivedBy ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@FittedBy", (object?)m.FittedBy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
             tx.Commit();
         }
@@ -151,8 +140,7 @@ VALUES
             const string sql = @"
 UPDATE tooling_history_item SET
   Action=@Action, ToolItem=@ToolItem, ToolNumber=@ToolNumber, ToolDesc=@ToolDesc, Revision=@Revision,
-  Quantity=@Quantity, Cost=@Cost, ToolWorkHours=@ToolWorkHours, DateDue=@DateDue, DateFitted=@DateFitted,
-  DateReceived=@DateReceived, ReceivedBy=@ReceivedBy, FittedBy=@FittedBy
+  Quantity=@Quantity, Cost=@Cost, ToolWorkHours=@ToolWorkHours, DateDue=@DateDue
 WHERE Id=@Id;";
 
             using var conn = new MySqlConnection(_connectionString);
@@ -168,10 +156,6 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DateDue", (object?)m.DateDue ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@DateFitted", (object?)m.DateFitted ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ReceivedBy", (object?)m.ReceivedBy ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@FittedBy", (object?)m.FittedBy ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
         public void AddToolingHistory(ToolingHistoryModel m)
@@ -202,17 +186,15 @@ WHERE Id=@Id;";
 
             const string sql = @"
 INSERT INTO tooling_history_header
- (GroupID, Part, ToolNumber, Revision, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
-  ToolWorkHours, ToolDesc, AccountingCode, InitiatedBy, DateReceived)
+ (GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
+  ToolWorkHours, AccountingCode, InitiatedBy)
 VALUES
- (@GroupID, @Part, @ToolNumber, @Revision, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
-  @ToolWorkHours, @ToolDesc, @AccountingCode, @InitiatedBy, @DateReceived);";
+ (@GroupID, @Part, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
+  @ToolWorkHours, @AccountingCode, @InitiatedBy);";
 
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@GroupID", m.GroupID);
             cmd.Parameters.AddWithValue("@Part", (object?)m.Part ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ToolNumber", (object?)m.ToolNumber ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Revision", (object?)m.Revision ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PO", (object?)m.PO ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Reason", (object?)m.Reason ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolVendor", (object?)m.ToolVendor ?? DBNull.Value);
@@ -220,10 +202,8 @@ VALUES
             cmd.Parameters.AddWithValue("@DateDue", (object?)m.DateDue ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ToolDesc", (object?)m.ToolDesc ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@AccountingCode", (object?)accountingCode ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? "Emery, J" : m.InitiatedBy);
-            cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
 
@@ -232,9 +212,9 @@ VALUES
         {
             const string sql = @"
 UPDATE tooling_history_header SET
-  Part=@Part, ToolNumber=@ToolNumber, Revision=@Revision, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
-  DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost, ToolWorkHours=@ToolWorkHours, ToolDesc=@ToolDesc,
-  InitiatedBy=@InitiatedBy, DateReceived=@DateReceived
+  Part=@Part, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
+  DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost,
+  ToolWorkHours=@ToolWorkHours, InitiatedBy=@InitiatedBy
 WHERE Id=@Id;";
 
             using var conn = new MySqlConnection(_connectionString);
@@ -242,8 +222,6 @@ WHERE Id=@Id;";
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Id", m.Id);
             cmd.Parameters.AddWithValue("@Part", (object?)m.Part ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ToolNumber", (object?)m.ToolNumber ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Revision", (object?)m.Revision ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PO", (object?)m.PO ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Reason", (object?)m.Reason ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolVendor", (object?)m.ToolVendor ?? DBNull.Value);
@@ -251,9 +229,7 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@DateDue", (object?)m.DateDue ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ToolDesc", (object?)m.ToolDesc ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? (object)DBNull.Value : m.InitiatedBy);
-            cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
 
@@ -308,81 +284,18 @@ ORDER BY i.Id ASC;";
      
 
        
-        public void ReceiveAllInGroup(int groupID, string receivedBy, DateTime receivedDate, bool alsoFit)
-        {
-            using var conn = new MySqlConnection(_connectionString);
-            conn.Open();
-            using var tx = conn.BeginTransaction();
-
-            const string receiveSql = @"
-UPDATE tooling_history_item
-SET ReceivedBy=@ReceivedBy, DateReceived=@DateReceived
-WHERE GroupID=@GroupID;";
-
-            using (var cmd = new MySqlCommand(receiveSql, conn, tx))
-            {
-                cmd.Parameters.AddWithValue("@GroupID", groupID);
-                cmd.Parameters.AddWithValue("@ReceivedBy", receivedBy);
-                cmd.Parameters.AddWithValue("@DateReceived", receivedDate);
-                cmd.ExecuteNonQuery();
-            }
-
-            if (alsoFit)
-            {
-                const string fitSql = @"
-UPDATE tooling_history_item
-SET FittedBy=@FittedBy, DateFitted=@DateFitted
-WHERE GroupID=@GroupID;";
-
-                using var cmd2 = new MySqlCommand(fitSql, conn, tx);
-                cmd2.Parameters.AddWithValue("@GroupID", groupID);
-                cmd2.Parameters.AddWithValue("@FittedBy", receivedBy);
-                cmd2.Parameters.AddWithValue("@DateFitted", receivedDate);
-                cmd2.ExecuteNonQuery();
-            }
-
-            tx.Commit();
-        }
-
-        public void FitAllInGroup(int groupID, string fittedBy, DateTime fittedDate)
-        {
-            const string sql = @"
-UPDATE tooling_history_item
-SET FittedBy=@FittedBy, DateFitted=@DateFitted
-WHERE GroupID=@GroupID;";
-
-            using var conn = new MySqlConnection(_connectionString);
-            conn.Open();
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@GroupID", groupID);
-            cmd.Parameters.AddWithValue("@FittedBy", fittedBy);
-            cmd.Parameters.AddWithValue("@DateFitted", fittedDate);
-            cmd.ExecuteNonQuery();
-        }
+       
+      
 
         public ToolingHistoryModel? GetHeaderByGroupID(int groupID)
         {
             const string sql = @"
-        SELECT
-            Id,
-            GroupID,
-            Part,
-            PO,
-            Reason,
-            ToolVendor,
-            DateInitiated,
-            DateDue,
-            AccountingCode,
-            ToolNumber,
-            Revision,
-            Cost,
-            ToolWorkHours,
-            ToolDesc,
-            InitiatedBy,
-            DateReceived
-        FROM tooling_history_header
-        WHERE GroupID = @GroupID
-        LIMIT 1;";
+SELECT
+    Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
+    AccountingCode, Cost, ToolWorkHours, InitiatedBy
+FROM tooling_history_header
+WHERE GroupID = @GroupID
+LIMIT 1;";
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -403,13 +316,9 @@ WHERE GroupID=@GroupID;";
                 DateInitiated = r["DateInitiated"] != DBNull.Value ? Convert.ToDateTime(r["DateInitiated"]) : DateTime.Today,
                 DateDue = r["DateDue"] != DBNull.Value ? (DateTime?)Convert.ToDateTime(r["DateDue"]) : null,
                 AccountingCode = r["AccountingCode"] != DBNull.Value ? (int?)Convert.ToInt32(r["AccountingCode"]) : null,
-                ToolNumber = r["ToolNumber"]?.ToString(),
-                Revision = r["Revision"]?.ToString(),
                 Cost = r["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(r["Cost"]) : null,
                 ToolWorkHours = r["ToolWorkHours"] != DBNull.Value ? (int?)Convert.ToInt32(r["ToolWorkHours"]) : null,
-                ToolDesc = r["ToolDesc"]?.ToString(),
-                InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null,
-                DateReceived = r["DateReceived"] != DBNull.Value ? (DateTime?)Convert.ToDateTime(r["DateReceived"]) : null
+                InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null
             };
         }
 
@@ -484,13 +393,13 @@ WHERE GroupID=@GroupID;";
                             AddCell("Reason", header.Reason ?? "-");
                             AddCell("Vendor", header.ToolVendor ?? "-");
 
-                            AddCell("Tool #", header.ToolNumber ?? "-");
-                            AddCell("Revision", header.Revision ?? "-");
                             AddCell("PO", header.PO ?? "-");
-
                             AddCell("Initiated By", header.InitiatedBy ?? "-");
                             AddCell("Date Initiated", header.DateInitiated.ToString("MM-dd-yyyy"));
+
                             AddCell("Due", header.DateDue?.ToString("MM-dd-yyyy") ?? "-");
+                            AddCell("Est. Cost", header.Cost?.ToString("C") ?? "-");
+                            AddCell("Hours", header.ToolWorkHours?.ToString() ?? "-");
                         });
 
 

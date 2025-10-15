@@ -2,10 +2,29 @@
 @removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var recvFit = ViewBag.PeopleRecvFit as List<string> ?? new List<string> { "Shuckers, C", "Klebecha, B" };
+    // Preset actions & items
+    var actions = new[] { "Make New", "Metalife Coat", "Tinalox Coat", "Reface", "Fitting" };
+    var itemPresets = new[]
+    {
+        "Top Punch",
+        "Bottom Punch",
+        "Pin",
+        "Die",
+        "Top Inner Punch",
+        "Bottom Inner Punch",
+        "Top Outer Punch",
+        "Bottom Outer Punch"
+    };
 }
+
 <style>
-    #toolItemsHeaderBar { position: sticky; top: 0; z-index: 2; background: #fff; padding-top: .25rem; }
+    #toolItemsHeaderBar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #fff;
+        padding-top: .25rem;
+    }
 </style>
 
 <div class="modal-header">
@@ -15,24 +34,19 @@
     <div id="toolItemsHeaderBar" class="ms-auto d-flex gap-2"></div>
 </div>
 
-
 <div class="modal-body">
+    <!-- Shared suggestions; users can still type anything -->
+    <datalist id="toolitem-presets">
+        @foreach (var p in itemPresets)
+        {
+            <option value="@p" />
+        }
+    </datalist>
+
     <!-- Add New Tool Item -->
     <form id="addItemForm" asp-action="AddToolItemAjax" method="post" class="mb-2">
         @Html.AntiForgeryToken()
         <input type="hidden" name="GroupID" value="@Model.GroupID" />
-
-        @{
-            // choices for dropdowns
-            var actions = new[]
-            {
-                "Make New","Metalife Coat","Tinalox Coat","Reface","Fitting"
-                };
-            var items = new[]
-            {
-                "Top Punch","Bottom Punch","Molding Die","Complete Set"
-                };
-        }
 
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -48,12 +62,11 @@
 
             <div class="col-md-3">
                 <label class="form-label">Tool Item</label>
-                @Html.DropDownList(
-                                "ToolItem",
-                                new SelectList(items, Model.NewToolItem?.ToolItem),
-                                "-- Select Tool Item --",
-                                new { @class = "form-select" }
-                                )
+                <input name="ToolItem"
+                       class="form-control"
+                       list="toolitem-presets"
+                       value="@Model.NewToolItem?.ToolItem"
+                       placeholder="Type or pick..." />
                 @Html.ValidationMessage("ToolItem", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
@@ -65,7 +78,7 @@
 
             <div class="col-md-3">
                 <label class="form-label">Cost</label>
-                @Html.TextBox("Cost", Model.NewToolItem?.Cost, new { @class = "form-control", type = "number", step = "0.01" })
+                @Html.TextBox("Cost", Model.NewToolItem?.Cost, new { @class = "form-control", type = "number", step = "0.01", min = "0" })
                 @Html.ValidationMessage("Cost", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
@@ -83,69 +96,30 @@
 
             <div class="col-md-2">
                 <label class="form-label">Qty</label>
-                @Html.TextBox("Quantity", Model.NewToolItem?.Quantity, new { @class = "form-control", type = "number" })
+                @Html.TextBox("Quantity", Model.NewToolItem?.Quantity, new { @class = "form-control", type = "number", min = "0" })
                 @Html.ValidationMessage("Quantity", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
             <div class="col-md-2">
                 <label class="form-label">Hours</label>
-                @Html.TextBox("ToolWorkHours", Model.NewToolItem?.ToolWorkHours, new { @class = "form-control", type = "number" })
+                @Html.TextBox("ToolWorkHours", Model.NewToolItem?.ToolWorkHours, new { @class = "form-control", type = "number", min = "0" })
                 @Html.ValidationMessage("ToolWorkHours", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
-            <div class="col-md-2">
-                <label class="form-label">Due</label>
-                @Html.TextBox("DateDue",
-                                Model.NewToolItem?.DateDue?.ToString("yyyy-MM-dd"),
-                                new { @class = "form-control", type = "date" })
-                @Html.ValidationMessage("DateDue", null, new { @class = "text-danger small d-block mt-1" })
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label">Fitted</label>
-                @Html.TextBox("DateFitted",
-                                Model.NewToolItem?.DateFitted?.ToString("yyyy-MM-dd"),
-                                new { @class = "form-control", type = "date" })
-                @Html.ValidationMessage("DateFitted", null, new { @class = "text-danger small d-block mt-1" })
-            </div>
-
+            <!-- Keep only Date Received -->
             <div class="col-md-3">
-                <label class="form-label">Received By</label>
-                @Html.DropDownList(
-                                "ReceivedBy",
-                                new SelectList(recvFit, Model.NewToolItem?.ReceivedBy),
-                                "",
-                                new { @class = "form-select" }
-                                )
-                @Html.ValidationMessage("ReceivedBy", null, new { @class = "text-danger small d-block mt-1" })
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Fitted By</label>
-                @Html.DropDownList(
-                                "FittedBy",
-                                new SelectList(recvFit, Model.NewToolItem?.FittedBy),
-                                "",
-                                new { @class = "form-select" }
-                                )
-                @Html.ValidationMessage("FittedBy", null, new { @class = "text-danger small d-block mt-1" })
+                <label class="form-label">Date Received</label>
+                @Html.TextBox("DateReceived",
+                                Model.NewToolItem?.DateReceived?.ToString("yyyy-MM-dd"),
+                                new { @class = "form-control", type = "date" })
+                @Html.ValidationMessage("DateReceived", null, new { @class = "text-danger small d-block mt-1" })
             </div>
         </div>
-
 
         <div class="d-flex justify-content-center flex-wrap gap-2 mt-3">
             <button type="submit" class="btn btn-success">Add New Tool Item</button>
-            <button type="button" class="btn btn-outline-success"
-                    data-modal-action="open-receive-all" data-group="@Model.GroupID">
-                Receive All
-            </button>
-            <button type="button" class="btn btn-outline-primary"
-                    data-modal-action="open-fit-all" data-group="@Model.GroupID">
-                Fit All
-            </button>
         </div>
     </form>
-
 
     <!-- Save All Tool Items -->
     <form id="saveAllForm" asp-action="SaveAllToolItemsAjax" method="post">
@@ -153,7 +127,7 @@
         <input type="hidden" name="GroupID" value="@Model.GroupID" />
 
         <div class="table-responsive mt-3">
-            <table class="table table-striped table-bordered shadow-sm" style="min-width: 1600px;">
+            <table class="table table-striped table-bordered shadow-sm" style="min-width: 1200px;">
                 <thead class="table-dark">
                     <tr>
                         <th>Action</th>
@@ -164,73 +138,51 @@
                         <th>Qty</th>
                         <th>Cost</th>
                         <th>Hours</th>
-                        <th>Due</th>
-                        <th>Fitted</th>
-                        <th>Recv</th>
-                        <th>Fitted By</th>
+                        <th>Recv Date</th>
                     </tr>
                 </thead>
                 <tbody>
-                @if (Model.ToolItems != null)
-                {
-                    for (var i = 0; i < Model.ToolItems.Count; i++)
+                    @if (Model.ToolItems != null)
                     {
-                        var tool = Model.ToolItems[i];
-                        <tr>
-                            <input type="hidden" name="ToolItems[@i].Id" value="@tool.Id" />
-                            <input type="hidden" name="ToolItems[@i].GroupID" value="@tool.GroupID" />
+                        for (var i = 0; i < Model.ToolItems.Count; i++)
+                        {
+                            var tool = Model.ToolItems[i];
+                            <tr>
+                                <input type="hidden" name="ToolItems[@i].Id" value="@tool.Id" />
+                                <input type="hidden" name="ToolItems[@i].GroupID" value="@tool.GroupID" />
 
-                            <td>
-                                <select name="ToolItems[@i].Action" class="form-select">
-                                    <option value=""></option>
-                                    <option value="Make New" @(tool.Action=="Make New" ? "selected":"")>Make New</option>
-                                    <option value="Metalife Coat" @(tool.Action=="Metalife Coat" ? "selected":"")>Metalife Coat</option>
-                                    <option value="Tinalox Coat" @(tool.Action=="Tinalox Coat" ? "selected":"")>Tinalox Coat</option>
-                                    <option value="Reface" @(tool.Action=="Reface" ? "selected":"")>Reface</option>
-                                    <option value="Fitting" @(tool.Action=="Fitting" ? "selected":"")>Fitting</option>
-                                </select>
-                            </td>
+                                <td>
+                                    <select name="ToolItems[@i].Action" class="form-select">
+                                        <option value=""></option>
+                                        <option value="Make New" @(tool.Action == "Make New" ? "selected" : "")>Make New</option>
+                                        <option value="Metalife Coat" @(tool.Action == "Metalife Coat" ? "selected" : "")>Metalife Coat</option>
+                                        <option value="Tinalox Coat" @(tool.Action == "Tinalox Coat" ? "selected" : "")>Tinalox Coat</option>
+                                        <option value="Reface" @(tool.Action == "Reface" ? "selected" : "")>Reface</option>
+                                        <option value="Fitting" @(tool.Action == "Fitting" ? "selected" : "")>Fitting</option>
+                                    </select>
+                                </td>
 
-                            <td>
-                                <select name="ToolItems[@i].ToolItem" class="form-select">
-                                    <option value=""></option>
-                                    <option value="Top Punch" @(tool.ToolItem=="Top Punch" ? "selected":"")>Top Punch</option>
-                                    <option value="Bottom Punch" @(tool.ToolItem=="Bottom Punch" ? "selected":"")>Bottom Punch</option>
-                                    <option value="Molding Die" @(tool.ToolItem=="Molding Die" ? "selected":"")>Molding Die</option>
-                                    <option value="Complete Set" @(tool.ToolItem=="Complete Set" ? "selected":"")>Complete Set</option>
-                                </select>
-                            </td>
+                                <td>
+                                    <!-- Free-text with suggestions -->
+                                    <input name="ToolItems[@i].ToolItem"
+                                           class="form-control"
+                                           list="toolitem-presets"
+                                           value="@tool.ToolItem"
+                                           placeholder="Type or pick..." />
+                                </td>
 
-                            <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@tool.ToolNumber" /></td>
-                            <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@tool.ToolDesc" /></td>
-                            <td><input name="ToolItems[@i].Revision" class="form-control" value="@tool.Revision" /></td>
-                            <td><input name="ToolItems[@i].Quantity" type="number" class="form-control" value="@(tool.Quantity)" /></td>
-                            <td><input name="ToolItems[@i].Cost" type="number" step="0.01" class="form-control" value="@(tool.Cost ?? 0)" /></td>
-                            <td><input name="ToolItems[@i].ToolWorkHours" type="number" class="form-control" value="@(tool.ToolWorkHours ?? 0)" /></td>
-                            <td><input name="ToolItems[@i].DateDue" type="date" class="form-control" value="@tool.DateDue?.ToString("yyyy-MM-dd")" /></td>
-                            <td><input name="ToolItems[@i].DateFitted" type="date" class="form-control" value="@tool.DateFitted?.ToString("yyyy-MM-dd")" /></td>
+                                <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@tool.ToolNumber" /></td>
+                                <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@tool.ToolDesc" /></td>
+                                <td><input name="ToolItems[@i].Revision" class="form-control" value="@tool.Revision" /></td>
+                                <td><input name="ToolItems[@i].Quantity" type="number" min="0" class="form-control" value="@(tool.Quantity)" /></td>
+                                <td><input name="ToolItems[@i].Cost" type="number" step="0.01" min="0" class="form-control" value="@(tool.Cost ?? 0)" /></td>
+                                <td><input name="ToolItems[@i].ToolWorkHours" type="number" min="0" class="form-control" value="@(tool.ToolWorkHours ?? 0)" /></td>
 
-                            <td>
-                                <select name="ToolItems[@i].ReceivedBy" class="form-select">
-                                    <option value=""></option>
-                                    @foreach (var p in recvFit)
-                                    {
-                                        <option value="@p" @(string.Equals(tool.ReceivedBy ?? "", p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>@p</option>
-                                    }
-                                </select>
-                            </td>
-                            <td>
-                                <select name="ToolItems[@i].FittedBy" class="form-select">
-                                    <option value=""></option>
-                                    @foreach (var p in recvFit)
-                                    {
-                                        <option value="@p" @(string.Equals(tool.FittedBy ?? "", p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>@p</option>
-                                    }
-                                </select>
-                            </td>
-                        </tr>
+                                <!-- Only Recv Date kept -->
+                                <td><input name="ToolItems[@i].DateReceived" type="date" class="form-control" value="@tool.DateReceived?.ToString("yyyy-MM-dd")" /></td>
+                            </tr>
+                        }
                     }
-                }
                 </tbody>
             </table>
         </div>
@@ -240,8 +192,10 @@
         </div>
     </form>
 </div>
+
 <script>
+    // Optional: top "Save All" shortcut if you add a header button elsewhere
     document.getElementById('btnSaveAllTop')?.addEventListener('click', function () {
-        document.getElementById('saveAllForm')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      document.getElementById('saveAllForm')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     });
 </script>

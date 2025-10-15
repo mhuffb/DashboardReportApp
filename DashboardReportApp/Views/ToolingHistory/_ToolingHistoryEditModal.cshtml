@@ -38,7 +38,7 @@
     @Html.AntiForgeryToken()
     <input type="hidden" name="Id" value="@Model.Id" />
     <input type="hidden" name="GroupID" value="@Model.GroupID" />
-    
+
     @{
         var allErrors = ViewData.ModelState
         .Where(kvp => kvp.Value?.Errors?.Count > 0)
@@ -58,6 +58,7 @@
             </ul>
         </div>
     }
+
     <div class="modal-body">
         <p class="text-muted mb-2"><span class="text-danger">Required Fields *</span> Required</p>
 
@@ -66,25 +67,18 @@
                 <label class="form-label">Assembly # (Part) <span class="text-danger req">*</span></label>
                 <input class="form-control" name="Part" value="@Model.Part" required />
             </div>
-            <div class="col-md-4">
-                <label class="form-label">Tool Number</label>
-                <input class="form-control" name="ToolNumber" value="@Model.ToolNumber" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Revision</label>
-                <input class="form-control" name="Revision" value="@Model.Revision" />
-            </div>
+
+            <!-- ToolNumber, Revision, DateReceived, ToolDesc removed per schema drop -->
+
             <div class="col-md-2">
                 <label class="form-label">PO</label>
                 <input class="form-control" name="PO" value="@Model.PO" />
             </div>
+
             <div class="col-md-4">
                 <label class="form-label">Estimated Cost</label>
                 <input class="form-control"
-                       type="number"
-                       step="0.01"
-                       min="0"
-                       inputmode="decimal"
+                       type="number" step="0.01" min="0" inputmode="decimal"
                        name="Cost"
                        value="@(Model.Cost?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
                 <div class="form-text">Leave blank if unknown.</div>
@@ -119,9 +113,7 @@
                 <select name="InitiatedBy" class="form-select">
                     @foreach (var p in peopleAll)
                     {
-                        <option value="@p" @(string.Equals(selectedInitiator, p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>
-                            @p
-                        </option>
+                        <option value="@p" @(string.Equals(selectedInitiator, p, StringComparison.OrdinalIgnoreCase) ? "selected" : "")>@p</option>
                     }
                 </select>
             </div>
@@ -134,20 +126,10 @@
 
             <div class="col-md-4">
                 <label class="form-label">Date Due</label>
-                <input class="form-control" type="date" name="DateDue"
-                       value="@(DateOrEmpty(Model.DateDue))" />
+                <input class="form-control" type="date" name="DateDue" value="@(DateOrEmpty(Model.DateDue))" />
             </div>
 
-            <div class="col-md-4">
-                <label class="form-label">Received Date</label>
-                <input class="form-control" type="date" name="DateReceived"
-                       value="@(DateOrEmpty(Model.DateReceived))" />
-            </div>
-
-            <div class="col-md-12">
-                <label class="form-label">Tool Description</label>
-                <input class="form-control" name="ToolDesc" value="@Model.ToolDesc" />
-            </div>
+            <!-- header-level DateReceived & ToolDesc removed -->
         </div>
     </div>
 

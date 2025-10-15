@@ -28,15 +28,12 @@
                 <tr>
                     <th>Group</th>
                     <th>Assembly #</th>
-                    <th>Tool #</th>
-                    <th>Rev</th>
                     <th>Reason</th>
                     <th>Vendor</th>
                     <th>Initiated</th>
-                    <th>Due</th>
+                    <th>Received</th>  <!-- ADDED -->
                     <th>Cost</th>
-                    <th>Desc</th>
-                    <th style="min-width:340px;">Actions</th>
+                    <th style="min-width:260px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -47,27 +44,28 @@
                         <tr>
                             <td>@item.GroupID</td>
                             <td>@item.Part</td>
-                            <td>@item.ToolNumber</td>
-                            <td>@item.Revision</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
                             <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateReceived?.ToString("yyyy-MM-dd")</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
-                            <td class="text-truncate" style="max-width:220px;">@item.ToolDesc</td>
+
                             <td class="d-flex flex-wrap gap-2">
+                                <!-- opens Edit Tooling History modal -->
                                 <button class="btn btn-primary btn-sm"
                                         data-action="edit-history"
                                         data-id="@item.Id">
                                     Edit Tool History
                                 </button>
 
+                                <!-- opens Tool Items modal -->
                                 <button class="btn btn-secondary btn-sm"
                                         data-action="tool-items"
                                         data-group="@item.GroupID">
                                     Add/Edit Tool Items
                                 </button>
 
+                                <!-- Request PO # (POST) -->
                                 <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
@@ -75,7 +73,8 @@
                                         Request PO #
                                     </button>
                                 </form>
-                                @* Only show when Reason = Fitting/Setting (case-insensitive, ignores whitespace) *@
+
+                                <!-- Optional: Packing Slip (only when Reason = Fitting/Setting) -->
                                 @if (string.Equals(item.Reason?.Trim(), "Fitting/Setting", StringComparison.OrdinalIgnoreCase))
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
@@ -84,14 +83,13 @@
                                         Create Packing Slip
                                     </a>
                                 }
-
-
-
                             </td>
                         </tr>
                     }
                 }
             </tbody>
+
+
         </table>
     </div>
 </div>
@@ -170,23 +168,13 @@
           }
         });
 
-        // --- open Receive/Fit selector modals from within Tool Items modal ---
-        modalEl.addEventListener('click', (e) => {
-          const btn = e.target.closest('button');
-          if (!btn) return;
-          const group = btn.dataset.group;
-          if (btn.dataset.modalAction === 'open-receive-all') {
-            loadModal('@Url.Action("ReceiveAllModal", "ToolingHistory")' + '?groupID=' + group);
-          }
-          if (btn.dataset.modalAction === 'open-fit-all') {
-            loadModal('@Url.Action("FitAllModal", "ToolingHistory")' + '?groupID=' + group);
-          }
-        });
+      
 
         // --- SINGLE handler for all modal form posts ---
               modalEl.addEventListener('submit', async (e) => {
           const form = e.target;
-          const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm','receiveAllForm','fitAllForm']);
+          const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm']);
+
           if (!ids.has(form.id)) return;
 
           e.preventDefault();
@@ -245,8 +233,7 @@
           // Success popups still OK:
           if (form.id === 'addItemForm')    await alertSuc('Added','Tool item added.');
           if (form.id === 'saveAllForm')    await alertSuc('Saved','All tool items saved.');
-          if (form.id === 'receiveAllForm') await alertSuc('Received','All items marked received.');
-          if (form.id === 'fitAllForm')     await alertSuc('Fitted','All items marked fitted.');
+         
           return;
         }
 
