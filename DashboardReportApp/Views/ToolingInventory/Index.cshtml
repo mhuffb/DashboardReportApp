@@ -26,6 +26,101 @@
             </button>
         </div>
     </div>
+    <!-- ====================== In Progress Tools (from Tooling History) ====================== -->
+    @if (ViewBag.ToolingInProgress != null)
+    {
+        <div class="table-responsive mb-4">
+            <h3 class="mb-2">In Progress Tools</h3>
+            <table class="table table-striped table-bordered shadow-sm w-100" id="tblInProgress">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:48px;"></th>  <!-- expand -->
+                        <th>Group</th>
+                        <th>Assembly #</th>
+                        <th>Reason</th>
+                        <th>Vendor</th>
+                        <th>Initiated</th>
+                        <th>Due</th>
+                        <th>Cost</th>
+                        <th style="min-width:260px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingInProgress)
+                    {
+                        var rowId = $"row-items-{item.GroupID}";
+                        var reason = (item.Reason ?? string.Empty).Trim();
+                        var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+
+                        <tr data-group="@item.GroupID">
+                            <td>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-action="toggle-items"
+                                        data-group="@item.GroupID"
+                                        aria-expanded="false"
+                                        aria-controls="@rowId"
+                                        title="Show tool items">
+                                    <i class="bi bi-caret-right-fill"></i>
+                                </button>
+                            </td>
+                            <td>@item.GroupID</td>
+                            <td>@item.Part</td>
+                            <td>@item.Reason</td>
+                            <td>@item.ToolVendor</td>
+                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
+                            <td>@(item.Cost?.ToString("0.00"))</td>
+                            <td class="d-flex flex-wrap gap-2">
+                                <a class="btn btn-primary btn-sm"
+                                   href="@Url.Action("EditToolingHistoryModal", "ToolingHistory", new { id = item.Id })"
+                                   data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
+                                    Edit Tool History
+                                </a>
+
+                                <a class="btn btn-secondary btn-sm"
+                                   href="@Url.Action("ToolItemsModal", "ToolingHistory", new { groupID = item.GroupID })"
+                                   data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
+                                    Add/Edit Tool Items
+                                </a>
+
+                                <form asp-action="RequestPoNumber" asp-controller="ToolingHistory" method="post" class="request-po-form d-inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    @{
+                                        bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
+                                        bool wasRequested = item.PoRequestedAt.HasValue;
+                                        var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
+                                        var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
+                                        var disabledAttr = hasPo ? "disabled" : "";
+                                    }
+                                    <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                </form>
+
+                                @if (showPackingSlip)
+                                {
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       target="_blank" rel="noopener">
+                                        Create Packing Slip
+                                    </a>
+                                }
+                            </td>
+                        </tr>
+                        <!-- Collapsible items row -->
+                        <tr id="@rowId" class="d-none">
+                            <td></td>
+                            <td colspan="8">
+                                <div class="p-2 border rounded bg-light" data-items-container="@item.GroupID">
+                                    <div class="text-muted">Loading...</div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 
     <div class="table-responsive">
         <table class="table table-striped table-bordered shadow-sm align-middle">
@@ -83,6 +178,12 @@
             </div>
             <div class="modal-body" id="toolModalBody"></div>
         </div>
+    </div>
+</div>
+<!-- Reuse a large modal for ToolingHistory partials -->
+<div class="modal fade" id="toolingHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xxl modal-dialog-scrollable">
+        <div class="modal-content"></div>
     </div>
 </div>
 
@@ -218,4 +319,96 @@
           }
         })();
     </script>
+    <script>
+        // Load ToolingHistory partials into the toolingHistoryModal
+        document.addEventListener('click', async (e) => {
+          const a = e.target.closest('a[data-bs-target="#toolingHistoryModal"]');
+          if (!a) return;
+          e.preventDefault();
+          const url = a.getAttribute('href');
+          const modalEl = document.getElementById('toolingHistoryModal');
+          const content = modalEl.querySelector('.modal-content');
+          try {
+            const r = await fetch(url, { credentials: 'same-origin' });
+            const html = await r.text();
+            content.innerHTML = html;
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+          } catch (err) {
+            console.error('Failed loading modal', err);
+          }
+        });
+
+        // Expand/collapse + lazy-load tool items
+        document.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button[data-action="toggle-items"]');
+          if (!btn) return;
+          const group = btn.dataset.group;
+          const row = document.getElementById(`row-items-${group}`);
+          const icon = btn.querySelector('i');
+
+          const expanded = btn.getAttribute('aria-expanded') === 'true';
+          if (expanded) {
+            btn.setAttribute('aria-expanded', 'false');
+            row?.classList.add('d-none');
+            icon?.classList.remove('rotate-90');
+            return;
+          }
+
+          btn.setAttribute('aria-expanded', 'true');
+          row?.classList.remove('d-none');
+          icon?.classList.add('rotate-90');
+
+          const container = row?.querySelector(`[data-items-container="${group}"]`);
+          if (!container) return;
+          if (container.dataset.loaded === '1') return;
+
+          try {
+            const url = '@Url.Action("ItemsTable", "ToolingHistory")' + '?groupID=' + encodeURIComponent(group);
+            const res = await fetch(url, { credentials: 'same-origin' });
+            const html = await res.text();
+            container.innerHTML = html;
+            container.dataset.loaded = '1';
+          } catch (err) {
+            container.innerHTML = `<div class="text-danger">Failed to load items: ${err?.message || 'Unknown error'}</div>`;
+          }
+        });
+
+        // Optional: simple PO request handler (no SweetAlert here; reuse if you have it globally)
+        document.addEventListener('submit', async (e) => {
+          const form = e.target.closest('.request-po-form');
+          if (!form) return;
+          e.preventDefault();
+          const btn = form.querySelector('button[type="submit"]');
+          const prevDisabled = btn?.disabled;
+          if (btn) btn.disabled = true;
+
+          try {
+            const res = await fetch(form.action, {
+              method: 'POST',
+              body: new FormData(form),
+              credentials: 'same-origin'
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok || !payload.ok) {
+              alert(payload.error || 'PO request failed.');
+              return;
+            }
+            alert('PO request sent.');
+            location.reload();
+          } catch (err) {
+            alert('PO request failed: ' + (err?.message || 'Unknown error'));
+          } finally {
+            if (btn) btn.disabled = prevDisabled ?? false;
+          }
+        });
+    </script>
+
+    <style>
+        .rotate-90 {
+            transform: rotate(90deg);
+            transition: transform .15s ease;
+        }
+    </style>
+
 }

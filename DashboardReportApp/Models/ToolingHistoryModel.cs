@@ -10,8 +10,6 @@ namespace DashboardReportApp.Models
         public int GroupID { get; set; }
         [Required]
         public string Part { get; set; }
-        public string? ToolNumber { get; set; }
-        public string? Revision { get; set; }
         public string? PO { get; set; }
         [Required]
         public string Reason { get; set; }

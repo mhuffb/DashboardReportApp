@@ -22,27 +22,27 @@
         </div>
     }
 
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm w-100">
+    <!-- ====================== In Progress Tools ====================== -->
+    <div class="table-responsive mb-4">
+        <h3 class="mb-2">In Progress Tools</h3>
+        <table class="table table-striped table-bordered shadow-sm w-100" id="tblInProgress">
             <thead class="table-dark">
                 <tr>
-                    <th style="width:48px;"></th>  <!-- NEW expand col -->
+                    <th style="width:48px;"></th>  <!-- expand -->
                     <th>Group</th>
                     <th>Assembly #</th>
                     <th>Reason</th>
                     <th>Vendor</th>
                     <th>Initiated</th>
                     <th>Due</th>
-                    <th>Received</th>
                     <th>Cost</th>
                     <th style="min-width:260px;">Actions</th>
                 </tr>
             </thead>
-
             <tbody>
-                @if (ViewBag.ToolingHistories != null)
+                @if (ViewBag.ToolingInProgress != null)
                 {
-                    @foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingHistories)
+                    foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingInProgress)
                     {
                         var rowId = $"row-items-{item.GroupID}";
                         <tr data-group="@item.GroupID">
@@ -63,51 +63,25 @@
                             <td>@item.ToolVendor</td>
                             <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
                             <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateReceived?.ToString("yyyy-MM-dd")</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
-                                <!-- opens Edit Tooling History modal -->
-                                <button class="btn btn-primary btn-sm"
-                                        data-action="edit-history"
-                                        data-id="@item.Id">
-                                    Edit Tool History
-                                </button>
+                                <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit Tool History</button>
+                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Add/Edit Tool Items</button>
 
-                                <!-- opens Tool Items modal -->
-                                <button class="btn btn-secondary btn-sm"
-                                        data-action="tool-items"
-                                        data-group="@item.GroupID">
-                                    Add/Edit Tool Items
-                                </button>
-
-                                <!-- Request PO # (POST) -->
                                 <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
-
                                     @{
                                         bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
                                         bool wasRequested = item.PoRequestedAt.HasValue;
 
-                                        var btnText = hasPo
-                                        ? $"PO sent: {item.PO}"
-                                        : (wasRequested ? "PO was requested" : "Request PO #");
-
-                                        var btnClass = hasPo
-                                        ? "btn btn-success btn-sm"
-                                        : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
-
-                                        // Optional: once PO is sent, don't allow requesting again
+                                        var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
+                                        var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
                                         var disabledAttr = hasPo ? "disabled" : "";
                                     }
-
-                                    <button type="submit" class="@btnClass" @disabledAttr>
-                                        @btnText
-                                    </button>
+                                    <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
                                 </form>
 
-
-                                <!-- Packing Slip: show for every reason EXCEPT "New Customer Purchase" -->
                                 @{
                                     var reason = (item.Reason ?? string.Empty).Trim();
                                     var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
@@ -120,10 +94,8 @@
                                         Create Packing Slip
                                     </a>
                                 }
-
                             </td>
                         </tr>
-                        <!-- Collapsible items row -->
                         <tr id="@rowId" class="d-none">
                             <td></td>
                             <td colspan="8">
@@ -135,10 +107,89 @@
                     }
                 }
             </tbody>
-
-
         </table>
     </div>
+
+    <!-- ====================== All Tooling Transactions ====================== -->
+    <div class="table-responsive">
+        <h3 class="mb-2">All Tooling Transactions</h3>
+        <table class="table table-striped table-bordered shadow-sm w-100" id="tblAll">
+            <thead class="table-dark">
+                <tr>
+                    <th>Group</th>
+                    <th>Assembly #</th>
+                    <th>Reason</th>
+                    <th>Vendor</th>
+                    <th>Initiated</th>
+                    <th>Due</th>
+                    <th>Received</th>
+                    <th>Cost</th>
+                    <th style="min-width:220px;">Actions</th>
+                </tr>
+                <!-- Per-column filter inputs -->
+                <tr class="bg-light">
+                    <th><input class="form-control form-control-sm" placeholder="Search group" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="Search assembly" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="Search reason" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="Search vendor" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="yyyy-mm-dd" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="yyyy-mm-dd" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="yyyy-mm-dd" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="Cost" /></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (ViewBag.ToolingAll != null)
+                {
+                    foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingAll)
+                    {
+                        var reason = (item.Reason ?? string.Empty).Trim();
+                        var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+
+                        <tr>
+                            <td>@item.GroupID</td>
+                            <td>@item.Part</td>
+                            <td>@item.Reason</td>
+                            <td>@item.ToolVendor</td>
+                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateReceived?.ToString("yyyy-MM-dd")</td>
+                            <td>@(item.Cost?.ToString("0.00"))</td>
+                            <td class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit</button>
+                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Items</button>
+
+                                <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    @{
+                                        bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
+                                        bool wasRequested = item.PoRequestedAt.HasValue;
+
+                                        var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
+                                        var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
+                                        var disabledAttr = hasPo ? "disabled" : "";
+                                    }
+                                    <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                </form>
+
+                                @if (showPackingSlip)
+                                {
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       target="_blank" rel="noopener">
+                                        Packing Slip
+                                    </a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
 </div>
 
 <!-- EXTRA-WIDE modal -->
@@ -385,6 +436,33 @@
           } catch (err) {
             container.innerHTML = `<div class="text-danger">Failed to load items: ${err?.message || 'Unknown error'}</div>`;
           }
+        });
+    </script>
+    <!-- DataTables (Bootstrap 5 build) -->
+    <link href="https://cdn.datatables.net/v/bs5/dt-2.0.8/datatables.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.datatables.net/v/bs5/dt-2.0.8/datatables.min.js"></script>
+
+    <script>
+        // Initialize the big "All Tooling Transactions" table
+        $(function () {
+          // Move the filter row into thead as DataTables expects (already there)
+          const table = $('#tblAll').DataTable({
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            order: [[0, 'desc']], // default sort by Group desc
+            stateSave: true,
+            autoWidth: false
+          });
+
+          // Hook up per-column inputs (second header row)
+          $('#tblAll thead tr:eq(1) th').each(function (i) {
+            const $input = $('input', this);
+            if (!$input.length) return;
+            $input.on('keyup change', function () {
+              table.column(i).search(this.value).draw();
+            });
+          });
         });
     </script>
 

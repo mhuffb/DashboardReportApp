@@ -43,6 +43,9 @@ namespace DashboardReportApp.Controllers
             var toolingHistories = _service.GetToolingHistories();
             ViewBag.ToolingHistories = toolingHistories;
 
+            ViewBag.ToolingAll = toolingHistories;
+            ViewBag.ToolingInProgress = toolingHistories.Where(h => !h.DateReceived.HasValue).ToList();
+
             PopulateHeaderLists(toolingHistory);
             return View(toolingHistory);
         }
