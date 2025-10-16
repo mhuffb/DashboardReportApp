@@ -61,8 +61,8 @@
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
-                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateInitiated.ToShortDateString()</td>
+                            <td>@item.DateDue?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit Tool History</button>
@@ -152,9 +152,9 @@
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
-                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateReceived?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateInitiated.ToShortDateString()</td>
+                            <td>@item.DateDue?.ToShortDateString()</td>
+                            <td>@item.DateReceived?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit</button>

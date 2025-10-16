@@ -380,7 +380,7 @@ LIMIT 1;";
                         });
                         r.ConstantItem(200).AlignRight().Column(c =>
                         {
-                            c.Item().Text($"Date: {DateTime.Now:yyyy-MM-dd}");
+                            c.Item().Text($"Date: {DateTime.Now:MM-dd-yyyy}");
                             c.Item().Text($"Group: {header.GroupID}");
                         });
                     });

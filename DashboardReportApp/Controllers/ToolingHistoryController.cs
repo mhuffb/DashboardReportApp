@@ -233,7 +233,7 @@ GroupID: {record.GroupID}
 Reason: {record.Reason}
 Vendor: {record.ToolVendor}
 Part: {record.Part}
-Due: {record.DateDue:yyyy-MM-dd}
+Due: {record.DateDue:MM-dd-yyyy}
 Estimated Cost: {(record.Cost?.ToString("C") ?? "n/a")}
 
 Items:

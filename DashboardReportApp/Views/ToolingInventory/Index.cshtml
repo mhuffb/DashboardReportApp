@@ -68,8 +68,8 @@
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
-                            <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
-                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateInitiated.ToShortDateString()</td>
+                            <td>@item.DateDue?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <a class="btn btn-primary btn-sm"
@@ -153,8 +153,8 @@
                             {
                                 <div>
                                     <div><strong>Reason:</strong> @t.UnavailableReason</div>
-                                    <div><strong>Since:</strong> @(t.DateUnavailable?.ToString("yyyy-MM-dd") ?? "-")</div>
-                                    <div><strong>ETA:</strong> @(t.EstimatedAvailableDate?.ToString("yyyy-MM-dd") ?? "-")</div>
+                                    <div><strong>Since:</strong> @(t.DateUnavailable?.ToShortDateString() ?? "-")</div>
+                                    <div><strong>ETA:</strong> @(t.EstimatedAvailableDate?.ToShortDateString() ?? "-")</div>
                                 </div>
                             }
                         </td>

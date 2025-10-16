@@ -1,7 +1,12 @@
-using DashboardReportApp.Services;
-using Serilog;
-using Microsoft.AspNetCore.Authentication.Negotiate;
 using DashboardReportApp.Models;
+using DashboardReportApp.Services;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.Localization;
+using Serilog;
+using System.Globalization;
+
+
 
 
 Log.Logger = new LoggerConfiguration()
@@ -105,8 +110,23 @@ try
         app.UseExceptionHandler("/Home/Error");
         app.UseHsts();
     }
+    // inside Program.cs (after builder.Services... and BEFORE app.Run())
+    var ci = new CultureInfo("en-GB");          // start from a close culture
+    ci.DateTimeFormat.ShortDatePattern = "MM-dd-yyyy";
+    ci.DateTimeFormat.LongDatePattern = "MM-dd-yyyy"; // optional
+    ci.DateTimeFormat.DateSeparator = "-";
 
-   // app.UseHttpsRedirection();
+    CultureInfo.DefaultThreadCurrentCulture = ci;
+    CultureInfo.DefaultThreadCurrentUICulture = ci;
+
+    var supported = new[] { ci }; // or add more cultures if you need
+    app.UseRequestLocalization(new RequestLocalizationOptions
+    {
+        DefaultRequestCulture = new RequestCulture(ci),
+        SupportedCultures = supported,
+        SupportedUICultures = supported
+    });
+    // app.UseHttpsRedirection();
     app.UseStaticFiles();
 
     app.UseRouting();
