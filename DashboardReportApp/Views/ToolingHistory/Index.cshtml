@@ -26,30 +26,45 @@
         <table class="table table-striped table-bordered shadow-sm w-100">
             <thead class="table-dark">
                 <tr>
+                    <th style="width:48px;"></th>  <!-- NEW expand col -->
                     <th>Group</th>
                     <th>Assembly #</th>
                     <th>Reason</th>
                     <th>Vendor</th>
                     <th>Initiated</th>
-                    <th>Received</th>  <!-- ADDED -->
+                    <th>Due</th>
+                    <th>Received</th>
                     <th>Cost</th>
                     <th style="min-width:260px;">Actions</th>
                 </tr>
             </thead>
+
             <tbody>
                 @if (ViewBag.ToolingHistories != null)
                 {
-                    foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingHistories)
+                    @foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingHistories)
                     {
-                        <tr>
+                        var rowId = $"row-items-{item.GroupID}";
+                        <tr data-group="@item.GroupID">
+                            <td>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        data-action="toggle-items"
+                                        data-group="@item.GroupID"
+                                        aria-expanded="false"
+                                        aria-controls="@rowId"
+                                        title="Show tool items">
+                                    <i class="bi bi-caret-right-fill"></i>
+                                </button>
+                            </td>
                             <td>@item.GroupID</td>
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
                             <td>@item.DateInitiated.ToString("yyyy-MM-dd")</td>
+                            <td>@item.DateDue?.ToString("yyyy-MM-dd")</td>
                             <td>@item.DateReceived?.ToString("yyyy-MM-dd")</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
-
                             <td class="d-flex flex-wrap gap-2">
                                 <!-- opens Edit Tooling History modal -->
                                 <button class="btn btn-primary btn-sm"
@@ -69,13 +84,35 @@
                                 <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
-                                    <button type="submit" class="btn btn-warning btn-sm">
-                                        Request PO #
+
+                                    @{
+                                        bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
+                                        bool wasRequested = item.PoRequestedAt.HasValue;
+
+                                        var btnText = hasPo
+                                        ? $"PO sent: {item.PO}"
+                                        : (wasRequested ? "PO was requested" : "Request PO #");
+
+                                        var btnClass = hasPo
+                                        ? "btn btn-success btn-sm"
+                                        : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
+
+                                        // Optional: once PO is sent, don't allow requesting again
+                                        var disabledAttr = hasPo ? "disabled" : "";
+                                    }
+
+                                    <button type="submit" class="@btnClass" @disabledAttr>
+                                        @btnText
                                     </button>
                                 </form>
 
-                                <!-- Optional: Packing Slip (only when Reason = Fitting/Setting) -->
-                                @if (string.Equals(item.Reason?.Trim(), "Fitting/Setting", StringComparison.OrdinalIgnoreCase))
+
+                                <!-- Packing Slip: show for every reason EXCEPT "New Customer Purchase" -->
+                                @{
+                                    var reason = (item.Reason ?? string.Empty).Trim();
+                                    var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+                                }
+                                @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
                                        href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
@@ -83,6 +120,16 @@
                                         Create Packing Slip
                                     </a>
                                 }
+
+                            </td>
+                        </tr>
+                        <!-- Collapsible items row -->
+                        <tr id="@rowId" class="d-none">
+                            <td></td>
+                            <td colspan="8">
+                                <div class="p-2 border rounded bg-light" data-items-container="@item.GroupID">
+                                    <div class="text-muted">Loading...</div>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -291,5 +338,55 @@
           }
         });
     </script>
+    <style>
+        /* optional: rotate chevron on expand */
+        .rotate-90 {
+            transform: rotate(90deg);
+            transition: transform .15s ease;
+        }
+    </style>
+
+    <script>
+        // Expand/collapse + lazy-load per group
+        document.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button[data-action="toggle-items"]');
+          if (!btn) return;
+
+          const group = btn.dataset.group;
+          const row = document.getElementById(`row-items-${group}`);
+          const icon = btn.querySelector('i');
+
+          const expanded = btn.getAttribute('aria-expanded') === 'true';
+          if (expanded) {
+            // collapse
+            btn.setAttribute('aria-expanded', 'false');
+            row?.classList.add('d-none');
+            icon?.classList.remove('rotate-90');
+            return;
+          }
+
+          // expand (and load if needed)
+          btn.setAttribute('aria-expanded', 'true');
+          row?.classList.remove('d-none');
+          icon?.classList.add('rotate-90');
+
+          const container = row?.querySelector(`[data-items-container="${group}"]`);
+          if (!container) return;
+
+          // Load only once
+          if (container.dataset.loaded === '1') return;
+
+          try {
+            const url = '@Url.Action("ItemsTable", "ToolingHistory")' + '?groupID=' + encodeURIComponent(group);
+            const res = await fetch(url, { credentials: 'same-origin' });
+            const html = await res.text();
+            container.innerHTML = html;
+            container.dataset.loaded = '1';
+          } catch (err) {
+            container.innerHTML = `<div class="text-danger">Failed to load items: ${err?.message || 'Unknown error'}</div>`;
+          }
+        });
+    </script>
+
 }
 
