@@ -11,7 +11,6 @@ namespace DashboardReportApp.Controllers
         private readonly HoldTagService _holdTagService;
         private readonly SharedService _sharedService;
 
-
         public HoldTagController(HoldTagService service, SharedService sharedService)
         {
             _holdTagService = service;
@@ -30,16 +29,12 @@ namespace DashboardReportApp.Controllers
 
             var model = new HoldTagIndexViewModel
             {
-                FormModel = new HoldTagModel(), // Empty model for the form
-                Records = records // List of records for the table
+                FormModel = new HoldTagModel(),
+                Records = records
             };
 
             return View(model);
         }
-
-
-
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -56,22 +51,30 @@ namespace DashboardReportApp.Controllers
             {
                 record.Date = DateTime.Now;
 
+                // Save base record (no file yet)
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
                 record.Id = newId;
 
+                // If there is an upload, save it and store only the filename in DB
                 if (file != null && file.Length > 0)
                 {
-                    var savedPath = _holdTagService.SaveHoldFile(file, record.Id, "HoldTagFile1");
-                    record.FileAddress1 = savedPath;
-                    await _holdTagService.UpdateFileAddress1Async(record.Id, savedPath);
+                    var fileNameOnly = _holdTagService.SaveHoldFile(file, record.Id, "HoldTagFile1");
+                    record.FileAddress1 = fileNameOnly;
+                    await _holdTagService.UpdateFileAddress1Async(record.Id, fileNameOnly);
                 }
 
                 var pdfPath = _holdTagService.GenerateHoldTagPdf(record);
+
+                // Resolve optional attachment (works for filename or legacy full path)
+                var attachment1Abs = _holdTagService.GetUploadsAbsolutePath(record.FileAddress1);
+
                 _sharedService.PrintFileToSpecificPrinter("QaholdTags", pdfPath, record.Quantity.GetValueOrDefault(1));
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
                 string body = $"Discrepancy: {record.Discrepancy}\nQuantity: {record.Quantity} {record.Unit}\nIssued By: {record.IssuedBy}\nIssued Date: {record.Date:MM/dd/yyyy}";
-                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, record.FileAddress1, subject, body);
+
+                // Pass absolute path (or empty) so the emailer can attach it if present
+                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, attachment1Abs, subject, body);
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
@@ -94,8 +97,9 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                var savedPath = _holdTagService.SaveHoldFile(file, id, "HoldTagFile1");
-                await _holdTagService.UpdateFileAddress1Async(id, savedPath);
+                // Save and store filename only
+                var fileNameOnly = _holdTagService.SaveHoldFile(file, id, "HoldTagFile1");
+                await _holdTagService.UpdateFileAddress1Async(id, fileNameOnly);
 
                 TempData["SuccessMessage"] = "File uploaded and updated successfully.";
             }
@@ -107,59 +111,37 @@ namespace DashboardReportApp.Controllers
             return RedirectToAction("Index");
         }
 
-
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {
             try
             {
-
-
                 if (string.IsNullOrEmpty(filePath))
-                {
                     return Json(new { success = false, message = "No file path provided." });
-                }
 
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return Json(new { success = false, message = $"File not found: {filePath}" });
-                }
+                // Resolve filename or legacy full path to an actual existing path
+                var abs = _holdTagService.GetExistingFilePath(filePath);
 
-
-                // Ensure the directory exists
-                var fileName = System.IO.Path.GetFileName(filePath);
-                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/Uploads");
+                var fileName = Path.GetFileName(abs);
+                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
                 var destinationPath = Path.Combine(destinationDir, fileName);
 
                 if (!Directory.Exists(destinationDir))
-                {
-                    Directory.CreateDirectory(destinationDir); // Create the directory if it doesn't exist
-                }
-                if (System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Delete(destinationPath);
-                }
-                Console.WriteLine($"[DEBUG] Copying from '{filePath}' to '{destinationPath}'...");
-                // Copy the file to the destination path
-                if (!System.IO.File.Exists(destinationPath))
-                {
-                    System.IO.File.Copy(filePath, destinationPath, overwrite: true);
-                }
+                    Directory.CreateDirectory(destinationDir);
 
-                // Return the relative path to the image
+                if (System.IO.File.Exists(destinationPath))
+                    System.IO.File.Delete(destinationPath);
+
+                System.IO.File.Copy(abs, destinationPath, overwrite: true);
+
                 var relativePath = $"/Uploads/{fileName}";
                 return Json(new { success = true, url = relativePath });
             }
             catch (Exception ex)
             {
-                // Log exception so you see EXACT error cause
                 Console.WriteLine($"[ERROR] FetchImage exception: {ex}");
-                // Return an appropriate error response
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
-       
-
     }
-
 }

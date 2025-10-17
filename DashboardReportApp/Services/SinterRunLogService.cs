@@ -1,20 +1,23 @@
-﻿using MySql.Data.MySqlClient;
+﻿using DashboardReportApp.Models;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using MySql.Data.MySqlClient;
+using Mysqlx.Crud;
 using System;
 using System.Collections.Generic;
-using System.Data.Odbc;
-using Microsoft.Extensions.Configuration;
-using DashboardReportApp.Models;
 using System.Data;
-using Mysqlx.Crud;
+using System.Data.Odbc;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 public class SinterRunLogService
 {
     private readonly string _connectionStringMySQL;
+    private readonly string _sqlServerConnection;
 
     public SinterRunLogService(IConfiguration configuration)
     {
         _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
+        _sqlServerConnection = configuration.GetConnectionString("SqlServerConnectionsinTSQL");
     }
     /// <summary>
     /// Get *all* runs in descending order by startDateTime.
@@ -71,27 +74,54 @@ public class SinterRunLogService
 
 
     // Get a list of operators from MySQL
-    public List<string> GetOperators()
+    public List<CalendarModel> GetOperators()
     {
-        var operators = new List<string>();
-        string query = "SELECT name FROM operators WHERE dept = 'sintering' ORDER BY name";
+        var list = new List<CalendarModel>();
 
-        using (var connection = new MySqlConnection(_connectionStringMySQL))
+        const string sql = @"
+                SELECT fname, lname, date_employed, active_status, email, vac_balance
+                FROM dbo.employee
+                WHERE active_status = 'A'
+                ORDER BY lname";
+
+        using var conn = new SqlConnection(_sqlServerConnection);
+        using var cmd = new SqlCommand(sql, conn);
+        conn.Open();
+
+        using var rdr = cmd.ExecuteReader();
+        int ordF = rdr.GetOrdinal("fname");
+        int ordL = rdr.GetOrdinal("lname");
+        int ordD = rdr.GetOrdinal("date_employed");
+        int ordA = rdr.GetOrdinal("active_status");
+        int ordE = rdr.GetOrdinal("email");
+        int ordV = rdr.GetOrdinal("vac_balance");
+
+        while (rdr.Read())
         {
-            connection.Open();
-            using (var command = new MySqlCommand(query, connection))
+            var m = new CalendarModel
             {
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        operators.Add(reader["name"].ToString());
-                    }
-                }
-            }
+                FirstName = rdr.IsDBNull(ordF) ? "" : rdr.GetString(ordF).Trim(),
+                LastName = rdr.IsDBNull(ordL) ? "" : rdr.GetString(ordL).Trim(),
+                DateEmployed = rdr.IsDBNull(ordD) ? DateTime.MinValue : rdr.GetDateTime(ordD),
+                ActiveStatus = rdr.IsDBNull(ordA) ? "" : rdr.GetString(ordA).Trim(),
+                Email = rdr.IsDBNull(ordE) ? "" : rdr.GetString(ordE).Trim(),
+                VacationBalance = rdr.IsDBNull(ordV) ? 0m : Convert.ToDecimal(rdr.GetValue(ordV))
+            };
+            list.Add(m);
         }
 
-        return operators;
+        // ✅ Keep your manual test employee
+        list.Add(new CalendarModel
+        {
+            FirstName = "User",
+            LastName = "Test",
+            DateEmployed = DateTime.Today,
+            ActiveStatus = "A",
+            Email = "asdfff@sintergy.net",
+            VacationBalance = 999m
+        });
+
+        return list;
     }
 
     // Fetch furnaces from MySQL

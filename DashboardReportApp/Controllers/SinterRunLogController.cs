@@ -27,9 +27,23 @@ namespace DashboardReportApp.Controllers
             var total = await _sinterRunLogService.GetRunsCountAsync(search);
             var items = await _sinterRunLogService.GetRunsPageAsync(page, pageSize, sort, dir, search);
 
+            // Fix for CS0029 and IDE0028
+            // Change: Operators = operators ?? new List<CalendarModel>(),
+            // To: Operators = operators?.Select(o => o.FirstName + " " + o.LastName).ToList() ?? new List<string>(),
+
             var vm = new SinterRunLogViewModel
             {
-                Operators = operators ?? new List<string>(),
+                Operators = operators?
+    .Select(o =>
+    {
+        var last = (o.LastName ?? "").Trim();
+        var first = (o.FirstName ?? "").Trim();
+        var initial = first.Length > 0 ? char.ToUpperInvariant(first[0]).ToString() : "";
+        return string.IsNullOrEmpty(last) ? initial : $"{last}, {initial}";
+    })
+    .ToList()
+    ?? new List<string>(),
+
                 Furnaces = furnaces ?? new List<string>(),
                 OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>(),
                 OpenSinterRuns = openSinterRuns ?? new List<SinterRunSkid>(),

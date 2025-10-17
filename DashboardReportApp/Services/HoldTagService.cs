@@ -5,7 +5,6 @@ using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using MySql.Data.MySqlClient;
 
@@ -21,10 +20,10 @@ namespace DashboardReportApp.Services
                               IOptionsMonitor<PathOptions> pathOptions,
                               IWebHostEnvironment env)
         {
-            _connectionString = configuration.GetConnectionString("MySQLConnection");
+            _connectionString = configuration.GetConnectionString("MySQLConnection")
+                                 ?? throw new InvalidOperationException("Missing MySQLConnection.");
 
-            // pull from config
-            var po = pathOptions.CurrentValue;
+            var po = pathOptions.CurrentValue ?? new PathOptions();
 
             _uploadsBase = ResolveBase(po.HoldTagUploads, env.ContentRootPath);
             _exportsBase = ResolveBase(po.HoldTagExports, env.ContentRootPath);
@@ -38,15 +37,13 @@ namespace DashboardReportApp.Services
             if (string.IsNullOrWhiteSpace(configured))
                 throw new InvalidOperationException("Missing path in PathOptions for HoldTag.");
 
-            // If absolute (including UNC), use as-is; else make it relative to content root
             return Path.IsPathFullyQualified(configured)
                 ? configured
                 : Path.GetFullPath(Path.Combine(contentRoot, configured));
         }
 
         /// <summary>
-        /// Save an uploaded file into the configured HoldTag uploads folder.
-        /// Returns the absolute path on disk (you can store this in DB).
+        /// Save an uploaded file into HoldTag uploads. Returns the FILENAME ONLY for DB storage.
         /// </summary>
         public string SaveHoldFile(IFormFile file, int recordId, string prefix = "HoldTagFile1")
         {
@@ -54,22 +51,49 @@ namespace DashboardReportApp.Services
                 throw new ArgumentException("File is null or empty.", nameof(file));
 
             var ext = Path.GetExtension(file.FileName);
-            var name = $"{prefix}_{recordId}_{DateTime.UtcNow.Ticks}{ext}";
-            var fullPath = Path.Combine(_uploadsBase, name);
+            var fileName = $"{prefix}_{recordId}_{DateTime.UtcNow.Ticks}{ext}";
+            var fullPath = Path.Combine(_uploadsBase, fileName);
 
             using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
             file.CopyTo(fs);
 
-            return fullPath; // store absolute path or just the file name if you prefer
+            // Return just the filename so the DB does not contain full paths
+            return fileName;
         }
 
         /// <summary>
-        /// If you store only the file name, this turns it into an absolute path.
+        /// Returns an absolute path to a stored file.
+        /// Accepts either legacy absolute path or new filename.
+        /// Returns empty string if not resolvable.
         /// </summary>
         public string GetUploadsAbsolutePath(string? stored)
         {
-            var leaf = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
-            return string.IsNullOrWhiteSpace(leaf) ? "" : Path.Combine(_uploadsBase, leaf);
+            if (string.IsNullOrWhiteSpace(stored)) return "";
+
+            // If legacy absolute/UNC path and it exists, use it
+            if (Path.IsPathRooted(stored) && File.Exists(stored))
+                return stored;
+
+            // Otherwise treat as filename
+            var fileName = Path.GetFileName(stored);
+            var combined = Path.Combine(_uploadsBase, fileName);
+            return File.Exists(combined) ? combined : "";
+        }
+
+        /// <summary>
+        /// Throws with clear message if file cannot be found.
+        /// </summary>
+        public string GetExistingFilePath(string? stored)
+        {
+            var abs = GetUploadsAbsolutePath(stored);
+            if (!string.IsNullOrWhiteSpace(abs) && File.Exists(abs))
+                return abs;
+
+            // Also try if 'stored' itself is a path and exists (defensive)
+            if (!string.IsNullOrWhiteSpace(stored) && File.Exists(stored))
+                return stored;
+
+            throw new FileNotFoundException($"File not found for stored value: {stored}");
         }
 
         public async Task<int> AddHoldRecordAsync(HoldTagModel record)
@@ -80,9 +104,9 @@ INSERT INTO holdrecords
 VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
 SELECT LAST_INSERT_ID();";
 
-            using var connection = new MySqlConnection(_connectionString);
+            await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
-            using var command = new MySqlCommand(query, connection);
+            await using var command = new MySqlCommand(query, connection);
 
             command.Parameters.AddWithValue("@part", record.Part);
             command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
@@ -96,6 +120,8 @@ SELECT LAST_INSERT_ID();";
             command.Parameters.AddWithValue("@unit", record.Unit);
             command.Parameters.AddWithValue("@pcsScrapped", (object?)record.PcsScrapped ?? DBNull.Value);
             command.Parameters.AddWithValue("@dateCompleted", (object?)record.DateCompleted ?? DBNull.Value);
+
+            // Store whatever is currently on the model (filename or null)
             command.Parameters.AddWithValue("@fileAddress1", (object?)record.FileAddress1 ?? DBNull.Value);
             command.Parameters.AddWithValue("@fileAddress2", (object?)record.FileAddress2 ?? DBNull.Value);
 
@@ -117,134 +143,78 @@ SELECT LAST_INSERT_ID();";
 
             document.Add(new Paragraph("Hold").SetFont(boldFont).SetFontSize(18).SetTextAlignment(TextAlignment.CENTER));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("ID:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph((record.Id == 0 ? "N/A" : record.Id.ToString())).SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part).SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("Discrepancy:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(record.Discrepancy ?? "N/A").SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("Issued By:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy).SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("Issued Date:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph($"{record.Date:MM/dd/yyyy}").SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("Corrective Action Needed: Yes ☐  No ☐").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             var qtyUnit = $"{record.Quantity} {record.Unit}".Trim();
             document.Add(new Paragraph("Amount:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(string.IsNullOrWhiteSpace(qtyUnit) ? "N/A" : qtyUnit).SetFont(normalFont).SetFontSize(12));
             document.Add(new Paragraph("\n"));
-
             document.Add(new Paragraph("Return Form To QA Manager Once Completed")
                 .SetFont(boldFont).SetFontSize(12).SetTextAlignment(TextAlignment.CENTER));
 
             return filePath;
         }
 
-        public async Task UpdateFileAddress1Async(int id, string pathOnDisk)
+        public async Task UpdateFileAddress1Async(int id, string filenameOnly)
         {
             const string sql = @"UPDATE holdrecords SET FileAddress1 = @FileAddress1 WHERE Id = @Id";
-            using var connection = new MySqlConnection(_connectionString);
+            await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
-            using var cmd = new MySqlCommand(sql, connection);
+            await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@Id", id);
-            cmd.Parameters.AddWithValue("@FileAddress1", pathOnDisk);
+            cmd.Parameters.AddWithValue("@FileAddress1", filenameOnly);
             await cmd.ExecuteNonQueryAsync();
         }
 
-
-
-
-        // 1. Get all HoldRecord rows
         public async Task<List<HoldTagModel>> GetAllHoldRecordsAsync()
         {
             var records = new List<HoldTagModel>();
-
-            using var connection = new MySqlConnection(_connectionString);
+            await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            string query = "SELECT * FROM HoldRecords order by id desc"; // or your actual table name
-
-            using var command = new MySqlCommand(query, connection);
-            using var reader = await command.ExecuteReaderAsync();
+            const string query = "SELECT * FROM HoldRecords ORDER BY Id DESC;";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
-                // Use 'IsDBNull' checks for nullable columns
-                var record = new HoldTagModel
+                var rec = new HoldTagModel
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                    Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp"))
-                        ? null
-                        : reader.GetDateTime(reader.GetOrdinal("Timestamp")),
-                    Part = reader.IsDBNull(reader.GetOrdinal("Part"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("Part")),
-                    Discrepancy = reader.IsDBNull(reader.GetOrdinal("Discrepancy"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("Discrepancy")),
-                    Date = reader.IsDBNull(reader.GetOrdinal("Date"))
-                        ? null
-                        : reader.GetDateTime(reader.GetOrdinal("Date")),
-                    IssuedBy = reader.IsDBNull(reader.GetOrdinal("IssuedBy"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("IssuedBy")),
-                    Disposition = reader.IsDBNull(reader.GetOrdinal("Disposition"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("Disposition")),
-                    DispositionBy = reader.IsDBNull(reader.GetOrdinal("DispositionBy"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("DispositionBy")),
-                    ReworkInstr = reader.IsDBNull(reader.GetOrdinal("ReworkInstr"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("ReworkInstr")),
-                    ReworkInstrBy = reader.IsDBNull(reader.GetOrdinal("ReworkInstrBy"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("ReworkInstrBy")),
-
-                    // ✅ Fix for integer column 'Quantity'
-                    Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity"))
-                        ? (int?)null
-                        : reader.GetInt32(reader.GetOrdinal("Quantity")),
-
-                    Unit = reader.IsDBNull(reader.GetOrdinal("Unit"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("Unit")),
-
-                    // ✅ Already int? in the model
-                    PcsScrapped = reader.IsDBNull(reader.GetOrdinal("PcsScrapped"))
-                        ? (int?)null
-                        : reader.GetInt32(reader.GetOrdinal("PcsScrapped")),
-
-                    DateCompleted = reader.IsDBNull(reader.GetOrdinal("DateCompleted"))
-                        ? null
-                        : reader.GetDateTime(reader.GetOrdinal("DateCompleted")),
-                    FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("FileAddress1")),
-                    FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2"))
-                        ? null
-                        : reader.GetString(reader.GetOrdinal("FileAddress2"))
-
+                    Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp")) ? null : reader.GetDateTime(reader.GetOrdinal("Timestamp")),
+                    Part = reader.IsDBNull(reader.GetOrdinal("Part")) ? null : reader.GetString(reader.GetOrdinal("Part")),
+                    Discrepancy = reader.IsDBNull(reader.GetOrdinal("Discrepancy")) ? null : reader.GetString(reader.GetOrdinal("Discrepancy")),
+                    Date = reader.IsDBNull(reader.GetOrdinal("Date")) ? null : reader.GetDateTime(reader.GetOrdinal("Date")),
+                    IssuedBy = reader.IsDBNull(reader.GetOrdinal("IssuedBy")) ? null : reader.GetString(reader.GetOrdinal("IssuedBy")),
+                    Disposition = reader.IsDBNull(reader.GetOrdinal("Disposition")) ? null : reader.GetString(reader.GetOrdinal("Disposition")),
+                    DispositionBy = reader.IsDBNull(reader.GetOrdinal("DispositionBy")) ? null : reader.GetString(reader.GetOrdinal("DispositionBy")),
+                    ReworkInstr = reader.IsDBNull(reader.GetOrdinal("ReworkInstr")) ? null : reader.GetString(reader.GetOrdinal("ReworkInstr")),
+                    ReworkInstrBy = reader.IsDBNull(reader.GetOrdinal("ReworkInstrBy")) ? null : reader.GetString(reader.GetOrdinal("ReworkInstrBy")),
+                    Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("Quantity")),
+                    Unit = reader.IsDBNull(reader.GetOrdinal("Unit")) ? null : reader.GetString(reader.GetOrdinal("Unit")),
+                    PcsScrapped = reader.IsDBNull(reader.GetOrdinal("PcsScrapped")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("PcsScrapped")),
+                    DateCompleted = reader.IsDBNull(reader.GetOrdinal("DateCompleted")) ? null : reader.GetDateTime(reader.GetOrdinal("DateCompleted")),
+                    FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1")) ? null : reader.GetString(reader.GetOrdinal("FileAddress1")),
+                    FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2")) ? null : reader.GetString(reader.GetOrdinal("FileAddress2"))
                 };
-
-                records.Add(record);
+                records.Add(rec);
             }
 
             return records;
         }
-
-      
-        
-
     }
 }
