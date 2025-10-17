@@ -10,8 +10,6 @@ namespace DashboardReportApp.Models
         public int GroupID { get; set; }
         [Required]
         public string Part { get; set; }
-        public string? ToolNumber { get; set; }
-        public string? Revision { get; set; }
         public string? PO { get; set; }
         [Required]
         public string Reason { get; set; }
@@ -20,16 +18,17 @@ namespace DashboardReportApp.Models
         public DateTime DateInitiated { get; set; }
         public DateTime? DateDue { get; set; }           // nullable so Razor can use ?.
         public decimal? Cost { get; set; }
-        public int? ToolWorkHours { get; set; }
         public string? ToolDesc { get; set; }
         public int? AccountingCode { get; set; }
 
         [Required]
         public string InitiatedBy { get; set; }          // picker (default: Emery, J)
         public DateTime? DateReceived { get; set; }       // header received date
+        public DateTime? PoRequestedAt { get; set; }
+
     }
 
-   
+
 
     // View model used by forms/modals (matches what the Controller expects)
     public sealed class ToolItemViewModel
@@ -52,12 +51,9 @@ namespace DashboardReportApp.Models
         public decimal? Cost { get; set; }
         public decimal? ToolWorkHours { get; set; }
 
-        public DateTime? DateDue { get; set; }
-        public DateTime? DateFitted { get; set; }
-        public DateTime? DateReceived { get; set; }
+       
 
-        public string? ReceivedBy { get; set; }
-        public string? FittedBy { get; set; }
+       
 
         // Optional audit-ish
         public string? InitiatedBy { get; set; }

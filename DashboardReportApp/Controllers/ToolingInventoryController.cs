@@ -10,16 +10,23 @@ namespace DashboardReportApp.Controllers
     public class ToolingInventoryController : Controller
     {
         private readonly ToolingInventoryService _svc;
-
-        public ToolingInventoryController(ToolingInventoryService svc)
+        private readonly ToolingHistoryService _history;
+        public ToolingInventoryController(ToolingInventoryService svc, ToolingHistoryService history)
         {
             _svc = svc;
+            _history = history;
         }
 
         // List
         public async Task<IActionResult> Index()
         {
             var items = await _svc.GetAllAsync();
+            // Pull In-Progress headers (no DateReceived)
+            var inProgress = _history.GetToolingHistories()
+            .Where(h => !h.DateReceived.HasValue)
+            .OrderByDescending(h => h.GroupID)
+            .ToList();
+            ViewBag.ToolingInProgress = inProgress;
             return View(items);
         }
 

@@ -1,10 +1,12 @@
 ﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
+using iText.Layout.Element;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq; // for string.Join / Select in RequestPoNumber
 
 namespace DashboardReportApp.Controllers
@@ -31,19 +33,20 @@ namespace DashboardReportApp.Controllers
             var nextGroupId = _service.GetNextGroupID();
             ViewBag.NextGroupID = nextGroupId;
 
-            // names lists
-            ViewBag.PeopleAll = new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" };
-            ViewBag.PeopleRecvFit = new List<string> { "Shuckers, C", "Klebecha, B" };
-
             var toolingHistory = new ToolingHistoryModel
             {
                 DateInitiated = DateTime.Today,
                 DateDue = DateTime.Today,
-                InitiatedBy = "Emery, J" // default as requested
+                InitiatedBy = "Emery, J"
             };
 
             var toolingHistories = _service.GetToolingHistories();
             ViewBag.ToolingHistories = toolingHistories;
+
+            ViewBag.ToolingAll = toolingHistories;
+            ViewBag.ToolingInProgress = toolingHistories.Where(h => !h.DateReceived.HasValue).ToList();
+
+            PopulateHeaderLists(toolingHistory);
             return View(toolingHistory);
         }
 
@@ -58,12 +61,11 @@ namespace DashboardReportApp.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var toolingHistories = _service.GetToolingHistories();
-            ViewBag.ToolingHistories = toolingHistories;
+            ViewBag.ToolingHistories = _service.GetToolingHistories();
+            PopulateHeaderLists(toolingHistory);
             return View(toolingHistory);
         }
 
-        // --------- Edit/Create Tooling History (modal) ----------
         [HttpGet]
         public IActionResult EditToolingHistoryModal(int? id)
         {
@@ -74,7 +76,8 @@ namespace DashboardReportApp.Controllers
                 {
                     DateInitiated = DateTime.Today,
                     DateDue = DateTime.Today,
-                    GroupID = _service.GetNextGroupID()
+                    GroupID = _service.GetNextGroupID(),
+                    InitiatedBy = "Emery, J"
                 };
             }
             else
@@ -82,6 +85,8 @@ namespace DashboardReportApp.Controllers
                 model = _service.GetToolingHistoryById(id.Value);
                 if (model == null) return NotFound();
             }
+
+            PopulateHeaderLists(model);
             return PartialView("_ToolingHistoryEditModal", model);
         }
 
@@ -92,32 +97,27 @@ namespace DashboardReportApp.Controllers
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = 400;
+                PopulateHeaderLists(model);
                 return PartialView("_ToolingHistoryEditModal", model);
             }
 
             try
             {
-                if (model.Id == 0)
-                    _service.AddToolingHistory(model);
-                else
-                    _service.UpdateToolingHistory(model);
+                if (model.Id == 0) _service.AddToolingHistory(model);
+                else _service.UpdateToolingHistory(model);
 
                 return Json(new { ok = true });
-            }
-            catch (MySqlException ex) when (ex.Number == 1062) // duplicate key
-            {
-                ModelState.AddModelError("", "That Group ID already exists. A new Group ID will be assigned — please try saving again.");
-                Response.StatusCode = 400;
-                return PartialView("_ToolingHistoryEditModal", model);
             }
             catch (Exception ex)
             {
                 ModelState.AddModelError("", ex.Message);
                 Response.StatusCode = 400;
+                PopulateHeaderLists(model);
                 return PartialView("_ToolingHistoryEditModal", model);
             }
         }
-         
+
+
 
         [HttpGet]
         public IActionResult ToolItemsModal(int groupID)
@@ -193,12 +193,7 @@ namespace DashboardReportApp.Controllers
                             Revision = item.Revision,
                             Quantity = item.Quantity,
                             Cost = item.Cost,
-                            ToolWorkHours = item.ToolWorkHours,
-                            DateDue = item.DateDue,
-                            DateFitted = item.DateFitted,
-                            DateReceived = item.DateReceived,
-                            ReceivedBy = item.ReceivedBy,
-                            FittedBy = item.FittedBy
+                            ToolWorkHours = item.ToolWorkHours
                         };
                         _service.UpdateToolItem(vm);
                     }
@@ -214,57 +209,7 @@ namespace DashboardReportApp.Controllers
             return PartialView("_ToolItemsModal", refreshed);
         }
 
-        [HttpGet]
-        public IActionResult ReceiveAllModal(int groupID)
-        {
-            return PartialView("_ReceiveAllModal", groupID);
-        }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult ReceiveAll(int groupID, string receivedBy, bool alsoFit)
-        {
-            Console.WriteLine($"[ReceiveAll] groupID={groupID}, receivedBy='{receivedBy}', alsoFit={alsoFit}");
-
-            try
-            {
-                _service.ReceiveAllInGroup(groupID, receivedBy, DateTime.Now, alsoFit);
-                var model = new GroupDetailsViewModel
-                {
-                    GroupID = groupID,
-                    ToolItems = _service.GetToolItemsByGroupID(groupID),
-                    NewToolItem = new ToolItemViewModel { GroupID = groupID }
-                };
-                return PartialView("_ToolItemsModal", model);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ReceiveAll][ERR] {ex.Message}");
-                Response.StatusCode = 500;
-                return Content("Error: " + ex.Message);
-            }
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken] // <-- was "lidateAntiForgeryToken" before
-        public IActionResult FitAll(int groupID, string fittedBy)
-        {
-            if (string.IsNullOrWhiteSpace(fittedBy))
-            {
-                Response.StatusCode = 400;
-                return Content("Fitted By is required.");
-            }
-
-            _service.FitAllInGroup(groupID, fittedBy.Trim(), DateTime.Today);
-
-            var vm = new GroupDetailsViewModel
-            {
-                GroupID = groupID,
-                ToolItems = _service.GetToolItemsByGroupID(groupID),
-                NewToolItem = new ToolItemViewModel { GroupID = groupID }
-            };
-            return PartialView("_ToolItemsModal", vm);
-        }
 
         // --------- PO request (no textbox; uses config default) ----------
         [HttpPost]
@@ -279,7 +224,7 @@ namespace DashboardReportApp.Controllers
                 // ⬇️ Put it here
                 var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_history_item
 
-                var subject = $"PO Request: Group {record.GroupID} / {record.Part} / {record.ToolNumber}";
+                var subject = $"PO Request: Group {record.GroupID} / {record.Part}";
                 var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
                 var body = $@"
 PO Request (Tooling History)
@@ -288,18 +233,15 @@ GroupID: {record.GroupID}
 Reason: {record.Reason}
 Vendor: {record.ToolVendor}
 Part: {record.Part}
-Tool#: {record.ToolNumber}
-Revision: {record.Revision}
-Due: {record.DateDue:yyyy-MM-dd}
+Due: {record.DateDue:MM-dd-yyyy}
 Estimated Cost: {(record.Cost?.ToString("C") ?? "n/a")}
-Hours: {(record.ToolWorkHours?.ToString() ?? "n/a")}
-Desc: {record.ToolDesc}
 
 Items:
 {string.Join("\n", items.Select(it => $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={(it.Quantity)} | Cost={(it.Cost?.ToString("C") ?? "n/a")}"))}
 
 Open in Dashboard: {link}
 ";
+
 
                 var to = string.IsNullOrWhiteSpace(_cfg["Tooling:PoRequestTo"])
                     ? "tooling@sintergy.local"
@@ -312,6 +254,7 @@ Open in Dashboard: {link}
                     subject: subject,
                     body: body
                 );
+                _service.MarkPoRequested(id);
 
                 return Json(new { ok = true });
             }
@@ -321,12 +264,7 @@ Open in Dashboard: {link}
                 return Json(new { ok = false, error = ex.Message });
             }
         }
-        [HttpGet]
-        public IActionResult FitAllModal(int groupID)
-        {
-            // Reuse the same simple modal pattern as ReceiveAll
-            return PartialView("_FitAllModal", groupID);
-        }
+       
       
         // GET /ToolingHistory/GeneratePackingSlip?groupID=123
         [HttpGet]
@@ -356,6 +294,49 @@ Open in Dashboard: {link}
 
             var fileName = System.IO.Path.GetFileName(path);
             return PhysicalFile(path, "application/pdf", fileName, enableRangeProcessing: true);
+        }
+        [HttpGet]
+        public IActionResult ItemsTable(int groupID)
+        {
+            var items = _service.GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+            return PartialView("_ToolItemsInlineTable", items);
+        }
+        private void PopulateHeaderLists(ToolingHistoryModel? current = null)
+        {
+            // Sensible defaults (front-load the common ones)
+            var defaultReasons = new List<string> { "New Customer Purchase (5030)", "Repair at Sintergy Cost (5045)", "Breakage Due to Negligence (5040)", "Fitting/Setting" };
+            var defaultVendors = new List<string> { "J.I.T. Tool & Die", "Gerg Tool & Die Inc.", "Quala Die", "Elk County Tool & Die", "Internal Toolroom" };
+            var defaultPeople = new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" };
+
+            // Pull distincts from existing data
+            var dbReasons = _service.GetDistinctReasons();
+            var dbVendors = _service.GetDistinctVendors();
+            var dbPeople = _service.GetDistinctInitiators();
+
+            // Merge & de-dup while preserving order (defaults first)
+            static List<string> Merge(List<string> defaults, List<string> db, string? ensure)
+            {
+                var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var res = new List<string>();
+
+                foreach (var s in defaults)
+                    if (!string.IsNullOrWhiteSpace(s) && set.Add(s)) res.Add(s);
+
+                foreach (var s in db)
+                    if (!string.IsNullOrWhiteSpace(s) && set.Add(s)) res.Add(s);
+
+                if (!string.IsNullOrWhiteSpace(ensure) && set.Add(ensure)) res.Add(ensure);
+
+                return res;
+            }
+
+            var reasons = Merge(defaultReasons, dbReasons, current?.Reason);
+            var vendors = Merge(defaultVendors, dbVendors, current?.ToolVendor);
+            var people = Merge(defaultPeople, dbPeople, current?.InitiatedBy);
+
+            ViewBag.ReasonList = reasons;
+            ViewBag.VendorList = vendors;
+            ViewBag.InitiatedList = people;
         }
 
     }
