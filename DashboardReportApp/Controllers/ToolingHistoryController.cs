@@ -7,6 +7,7 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using System.Linq; // for string.Join / Select in RequestPoNumber
 
 namespace DashboardReportApp.Controllers
@@ -234,11 +235,14 @@ Reason: {record.Reason}
 Vendor: {record.ToolVendor}
 Part: {record.Part}
 Due: {record.DateDue:MM-dd-yyyy}
-Estimated Cost: {(record.Cost?.ToString("C") ?? "n/a")}
-
+Estimated Cost: {(record.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}
 Items:
-{string.Join("\n", items.Select(it => $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={(it.Quantity)} | Cost={(it.Cost?.ToString("C") ?? "n/a")}"))}
-
+{string.Join("\n",
+    items.Select(it =>
+        $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
+        $"Cost={(it.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}"
+    )
+)}
 Open in Dashboard: {link}
 ";
 
