@@ -1,85 +1,95 @@
 ﻿@model DashboardReportApp.Models.ToolItemModel
 @using DashboardReportApp.Models
 @{
-    var isCreate = Model.Id == 0;
-    // IMPORTANT: include controller name to avoid routing issues
-    var action = isCreate ? Url.Action("Create", "ToolingInventory") : Url.Action("Edit", "ToolingInventory");
+    var isEdit = Model?.Id > 0;
+    var action = isEdit ? "Edit" : "Create";
+    var toolItemList = ViewBag.ToolItemList as List<string> ?? new List<string>();
 }
-<form id="toolItemForm" method="post" action="@action">
+
+<form id="toolItemForm" method="post" asp-action="@action" asp-controller="ToolingInventory">
     @Html.AntiForgeryToken()
-    @if (!isCreate)
+    @if (isEdit)
     {
-        @Html.HiddenFor(m => m.Id)
+        <input type="hidden" asp-for="Id" />
     }
+
+    <div class="mb-3">
+        <label class="form-label" asp-for="AssemblyNumber">Assembly #</label>
+        <input class="form-control" asp-for="AssemblyNumber" />
+        <span class="text-danger" asp-validation-for="AssemblyNumber"></span>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" asp-for="ToolNumber">Tool #</label>
+        <input class="form-control" asp-for="ToolNumber" />
+        <span class="text-danger" asp-validation-for="ToolNumber"></span>
+    </div>
+
+    <!-- ToolItem with type-ahead list -->
+    @* in _ToolItemForm.cshtml *@
+    <div class="mb-3">
+        <label class="form-label" asp-for="ToolItem">Tool Item</label>
+        <input class="form-control" asp-for="ToolItem" list="toolitem-presets" placeholder="Type or pick..." />
+        <datalist id="toolitem-presets">
+            @foreach (var s in (IEnumerable<string>)(ViewBag.ToolItemList ?? Array.Empty<string>()))
+            {
+                <option value="@s"></option>
+            }
+        </datalist>
+        <span class="text-danger" asp-validation-for="ToolItem"></span>
+    </div>
+
 
     <div class="row g-3">
         <div class="col-md-4">
-            <label class="form-label">Assembly #</label>
-            @Html.TextBoxFor(m => m.AssemblyNumber, new { @class = "form-control", required = "required", placeholder = "ASM-1001" })
-            @Html.ValidationMessageFor(m => m.AssemblyNumber, null, new { @class = "text-danger" })
+            <label class="form-label" for="Condition">Condition</label>
+            <select class="form-select" asp-for="Condition" asp-items="Html.GetEnumSelectList<ToolCondition>()">
+                <option value="">(none)</option>
+            </select>
         </div>
         <div class="col-md-4">
-            <label class="form-label">Tool #</label>
-            @Html.TextBoxFor(m => m.ToolNumber, new { @class = "form-control", required = "required", placeholder = "e.g., TP-200" })
-            @Html.ValidationMessageFor(m => m.ToolNumber, null, new { @class = "text-danger" })
+            <label class="form-label" for="Status">Status</label>
+            <select class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<ToolStatus>()">
+                <option value="">(none)</option>
+            </select>
         </div>
         <div class="col-md-4">
-            <label class="form-label">Location</label>
-            @Html.TextBoxFor(m => m.Location, new { @class = "form-control", placeholder = "Cabinet / Drawer" })
+            <label class="form-label" asp-for="Location">Location</label>
+            <input class="form-control" asp-for="Location" />
         </div>
+    </div>
 
-        <div class="col-md-4">
-            <label class="form-label">Category</label>
-            <select asp-for="Category" class="form-select"
-                    asp-items="Html.GetEnumSelectList<ToolCategory>()"></select>
-            @Html.ValidationMessageFor(m => m.Category, null, new { @class = "text-danger" })
+    <div class="mt-3 border rounded p-3" data-box="unavail" style="display:@((Model?.Status == ToolStatus.Unavailable) ? "block" : "none")">
+        <div class="mb-2">
+            <label class="form-label" asp-for="UnavailableReason">Unavailable Reason</label>
+            <input class="form-control" asp-for="UnavailableReason" />
         </div>
-
-        <div class="col-md-4">
-            <label class="form-label">Condition</label>
-            <select asp-for="Condition" class="form-select"
-                    asp-items="Html.GetEnumSelectList<ToolCondition>()"></select>
-            @Html.ValidationMessageFor(m => m.Condition, null, new { @class = "text-danger" })
-        </div>
-
-        <div class="col-md-4">
-            <label class="form-label">Status</label>
-            <select asp-for="Status" class="form-select"
-                    asp-items="Html.GetEnumSelectList<ToolStatus>()"></select>
-            @Html.ValidationMessageFor(m => m.Status, null, new { @class = "text-danger" })
-        </div>
-
-        <div class="col-12 border rounded p-3" data-box="unavail" style="display:none">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Reason Unavailable</label>
-                    @Html.TextBoxFor(m => m.UnavailableReason, new { @class = "form-control", placeholder = "e.g., out for coating, regrind, chipped" })
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Date Unavailable</label>
-                    @Html.TextBoxFor(m => m.DateUnavailable, "{0:MM-dd-yyy}", new { @type = "date", @class = "form-control" })
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Estimated Availability</label>
-                    @Html.TextBoxFor(m => m.EstimatedAvailableDate, "{0:MM-dd-yyy}", new { @type = "date", @class = "form-control" })
-                </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" asp-for="DateUnavailable">Date Unavailable</label>
+                <input type="date" class="form-control" asp-for="DateUnavailable" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" asp-for="EstimatedAvailableDate">Estimated Available</label>
+                <input type="date" class="form-control" asp-for="EstimatedAvailableDate" />
             </div>
         </div>
     </div>
 
-    <div class="mt-3 d-flex gap-2">
-        @if (isCreate)
+    <div class="d-flex gap-2 mt-4">
+        @if (!isEdit)
         {
-            <!-- Save, clear Assembly #, keep modal open -->
-            <button type="submit" class="btn btn-primary" name="mode" value="add_clear">Add Tool</button>
-
-            <!-- Save, retain Assembly #, keep modal open -->
+            <button type="submit" class="btn btn-primary" name="mode" value="add_clear">Save</button>
             <button type="submit" class="btn btn-outline-primary" name="mode" value="add_more">Save & Add Another</button>
         }
         else
         {
             <button type="submit" class="btn btn-primary">Save Changes</button>
         }
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

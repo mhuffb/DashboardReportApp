@@ -16,16 +16,7 @@
         <div class="alert alert-danger">@TempData["Error"]</div>
     }
 
-    <!-- ONLY: Add for Assembly -->
-    <div class="d-flex gap-2 mb-3 align-items-center">
-        <div class="input-group" style="max-width:420px">
-            <span class="input-group-text">Assembly #</span>
-            <input id="quickAssembly" type="text" class="form-control" placeholder="e.g., ASM-1001" />
-            <button id="btnAddForAssembly" class="btn btn-primary" type="button">
-                Add for Assembly
-            </button>
-        </div>
-    </div>
+   
     <!-- ====================== In Progress Tools (from Tooling History) ====================== -->
     @if (ViewBag.ToolingInProgress != null)
     {
@@ -72,17 +63,21 @@
                             <td>@item.DateDue?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
-                                <a class="btn btn-primary btn-sm"
-                                   href="@Url.Action("EditToolingHistoryModal", "ToolingHistory", new { id = item.Id })"
-                                   data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
-                                    Edit Tool History
-                                </a>
+                                <div class="btn-group btn-group-sm">
 
-                                <a class="btn btn-secondary btn-sm"
-                                   href="@Url.Action("ToolItemsModal", "ToolingHistory", new { groupID = item.GroupID })"
-                                   data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
-                                    Add/Edit Tool Items
-                                </a>
+                                    <a class="btn btn-primary btn-sm"
+                                       href="@Url.Action("EditToolingHistoryModalByGroup", "ToolingHistory", new { groupID = item.GroupID })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
+                                        Edit Tool History
+                                    </a>
+
+                                    <a class="btn btn-secondary btn-sm"
+                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingHistory", new { groupID = item.GroupID })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
+                                        Add/Edit Tool Items
+                                    </a>
+
+                                </div>
 
                                 <form asp-action="RequestPoNumber" asp-controller="ToolingHistory" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
@@ -121,15 +116,42 @@
             </table>
         </div>
     }
+    <!-- ONLY: Add for Assembly -->
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <div class="input-group" style="max-width:420px">
+            <span class="input-group-text">Assembly #</span>
+            <input id="quickAssembly" type="text" class="form-control" placeholder="e.g., ASM-1001" />
+            <button id="btnAddForAssembly" class="btn btn-primary" type="button">
+                Add for Assembly
+            </button>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <div class="input-group" style="max-width:420px">
+            <span class="input-group-text">Search</span>
+            <input id="invSearch" type="text" class="form-control" placeholder="Type to search any field..." />
+        </div>
+
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <label class="form-label mb-0" for="invPageSize">Rows per page</label>
+            <select id="invPageSize" class="form-select form-select-sm" style="width: auto;">
+                <option>10</option>
+                <option selected>25</option>
+                <option>50</option>
+                <option>100</option>
+            </select>
+        </div>
+    </div>
 
     <div class="table-responsive">
-        <table class="table table-striped table-bordered shadow-sm align-middle">
+        <h3 class="mb-2">Tooling Inventory</h3>
+        <table id="tblInventory" class="table table-striped table-bordered shadow-sm align-middle">
             <thead class="table-dark">
                 <tr>
                     <th>Id</th>
                     <th>Assembly #</th>
                     <th>Tool #</th>
-                    <th>Category</th>
+                    <th>Tool Item</th>
                     <th>Condition</th>
                     <th>Status</th>
                     <th>Location</th>
@@ -144,7 +166,7 @@
                         <td>@t.Id</td>
                         <td>@t.AssemblyNumber</td>
                         <td>@t.ToolNumber</td>
-                        <td>@t.CategoryLabel</td>
+                        <td>@t.ToolItem</td>
                         <td>@t.Condition</td>
                         <td>@t.Status</td>
                         <td>@t.Location</td>
@@ -166,7 +188,14 @@
             </tbody>
         </table>
     </div>
-</div>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+        <div id="invPageInfo" class="text-muted small"></div>
+        <nav>
+            <ul id="invPager" class="pagination pagination-sm mb-0"></ul>
+        </nav>
+    </div>
+
 
 <!-- Reusable modal -->
 <div class="modal fade" id="toolModal" tabindex="-1" aria-hidden="true">
@@ -180,12 +209,13 @@
         </div>
     </div>
 </div>
-<!-- Reuse a large modal for ToolingHistory partials -->
-<div class="modal fade" id="toolingHistoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xxl modal-dialog-scrollable">
-        <div class="modal-content"></div>
+
+
+    <div class="modal fade" id="toolingHistoryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xxl modal-dialog-scrollable">
+            <div class="modal-content"></div>
+        </div>
     </div>
-</div>
 
 @section Scripts {
     <script>
@@ -219,7 +249,11 @@
           });
 
           async function loadPartial(url) {
-            const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        const r = await fetch(url, {
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
             if (!r.ok) { console.error('loadPartial failed', r.status); return; }
             body.innerHTML = await r.text();
             initDynamicBits();
@@ -320,24 +354,24 @@
         })();
     </script>
     <script>
-        // Load ToolingHistory partials into the toolingHistoryModal
-        document.addEventListener('click', async (e) => {
-          const a = e.target.closest('a[data-bs-target="#toolingHistoryModal"]');
-          if (!a) return;
-          e.preventDefault();
-          const url = a.getAttribute('href');
-          const modalEl = document.getElementById('toolingHistoryModal');
-          const content = modalEl.querySelector('.modal-content');
-          try {
-            const r = await fetch(url, { credentials: 'same-origin' });
-            const html = await r.text();
-            content.innerHTML = html;
-            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.show();
-          } catch (err) {
-            console.error('Failed loading modal', err);
-          }
-        });
+                   document.addEventListener('click', async (e) => {
+              const a = e.target.closest('a[data-bs-target="#toolingHistoryModal"]');
+              if (!a) return;
+              e.preventDefault();
+              const url = a.getAttribute('href');
+
+              const r = await fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+              });
+              const html = await r.text();
+
+              const modalEl = document.getElementById('toolingHistoryModal');
+              modalEl.querySelector('.modal-content').innerHTML = html;   // inject fragment
+              bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+
+
 
         // Expand/collapse + lazy-load tool items
         document.addEventListener('click', async (e) => {
@@ -403,6 +437,127 @@
           }
         });
     </script>
+        <script>
+            (function () {
+              const table = document.getElementById('tblInventory');
+              if (!table) return;
+
+              const tbody = table.querySelector('tbody');
+              const rows = Array.from(tbody.querySelectorAll('tr'));
+              const searchInput = document.getElementById('invSearch');
+              const pageSizeSel = document.getElementById('invPageSize');
+              const pager = document.getElementById('invPager');
+              const pageInfo = document.getElementById('invPageInfo');
+
+              let currentPage = 1;
+              let pageSize = parseInt(pageSizeSel?.value || '25', 10);
+              let filtered = rows;
+
+              function normalize(s) { return (s || '').toString().toLowerCase(); }
+
+              function applyFilter() {
+                const q = normalize(searchInput?.value || '');
+                if (!q) {
+                  filtered = rows;
+                } else {
+                  filtered = rows.filter(tr => normalize(tr.innerText).includes(q));
+                }
+                currentPage = 1;
+                render();
+              }
+
+              function getPageCount() {
+                return Math.max(1, Math.ceil(filtered.length / pageSize));
+              }
+
+              function render() {
+                // hide all rows first
+                rows.forEach(tr => tr.style.display = 'none');
+
+                // compute slice for current page
+                const totalPages = getPageCount();
+                if (currentPage > totalPages) currentPage = totalPages;
+
+                const startIdx = (currentPage - 1) * pageSize;
+                const endIdx = startIdx + pageSize;
+
+                const pageRows = filtered.slice(startIdx, endIdx);
+                pageRows.forEach(tr => tr.style.display = '');
+
+                // page info
+                const from = filtered.length ? startIdx + 1 : 0;
+                const to = Math.min(endIdx, filtered.length);
+                pageInfo.textContent = `Showing ${from}-${to} of ${filtered.length} record(s)`;
+
+                // pager UI
+                renderPager(totalPages);
+              }
+
+              function renderPager(totalPages) {
+                pager.innerHTML = '';
+                const ul = pager;
+
+                function addItem(label, page, disabled = false, active = false) {
+                  const li = document.createElement('li');
+                  li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+                  const a = document.createElement('a');
+                  a.className = 'page-link';
+                  a.href = '#';
+                  a.textContent = label;
+                  if (!disabled && !active) {
+                    a.addEventListener('click', (e) => { e.preventDefault(); currentPage = page; render(); });
+                  }
+                  li.appendChild(a);
+                  ul.appendChild(li);
+                }
+
+                // Prev
+                addItem('‹', Math.max(1, currentPage - 1), currentPage === 1, false);
+
+                // Page numbers (compact: show first, last, and window around current)
+                const windowSize = 2;
+                const pages = [];
+                for (let p = 1; p <= totalPages; p++) {
+                  if (p === 1 || p === totalPages || (p >= currentPage - windowSize && p <= currentPage + windowSize)) {
+                    pages.push(p);
+                  }
+                }
+                // fill gaps with ellipses
+                let prev = 0;
+                pages.forEach(p => {
+                  if (p - prev > 1) {
+                    const li = document.createElement('li');
+                    li.className = 'page-item disabled';
+                    li.innerHTML = '<span class="page-link">…</span>';
+                    ul.appendChild(li);
+                  }
+                  addItem(String(p), p, false, p === currentPage);
+                  prev = p;
+                });
+
+                // Next
+                addItem('›', Math.min(totalPages, currentPage + 1), currentPage === totalPages, false);
+              }
+
+              // debounce search
+              let t = null;
+              searchInput?.addEventListener('input', () => {
+                clearTimeout(t);
+                t = setTimeout(applyFilter, 150);
+              });
+
+              pageSizeSel?.addEventListener('change', () => {
+                pageSize = parseInt(pageSizeSel.value, 10) || 25;
+                currentPage = 1;
+                render();
+              });
+
+              // initial render
+              render();
+
+              // If rows are added dynamically in the future, call applyFilter() again.
+            })();
+        </script>
 
     <style>
         .rotate-90 {
@@ -410,5 +565,16 @@
             transition: transform .15s ease;
         }
     </style>
+        <style>
+            #toolingHistoryModal .modal-dialog {
+                max-width: 95vw;
+                width: 95vw;
+            }
+
+            #toolingHistoryModal .modal-body {
+                max-height: 80vh;
+                overflow: auto;
+            }
+        </style>
 
 }

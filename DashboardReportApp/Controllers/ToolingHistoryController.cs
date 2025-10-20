@@ -342,6 +342,34 @@ Open in Dashboard: {link}
             ViewBag.VendorList = vendors;
             ViewBag.InitiatedList = people;
         }
+        // Open the Edit Tool History modal by GroupID
+        // ToolingHistoryController.cs
+
+        [HttpGet]
+        public IActionResult EditToolingHistoryModalByGroup(int groupID)
+        {
+            // Find a history row for this group (pick most recent if multiple)
+            var hx = _service.GetToolingHistories()
+                         .Where(h => h.GroupID == groupID)
+                         .OrderByDescending(h => h.DateInitiated)
+                         .FirstOrDefault();
+
+            if (hx == null)
+                return NotFound($"No tooling history found for group {groupID}.");
+
+            // Reuse your existing modal action that expects a history Id
+            // IMPORTANT: call the action method directly to render the same partial
+            return EditToolingHistoryModal(hx.Id);
+        }
+
+        [HttpGet]
+        public IActionResult ToolItemsModalByGroup(int groupID)
+        {
+            // Reuse your existing modal action that already takes groupID
+            return ToolItemsModal(groupID);
+        }
+
+
 
     }
 }
