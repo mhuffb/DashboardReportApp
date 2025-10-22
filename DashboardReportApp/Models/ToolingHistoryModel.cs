@@ -25,7 +25,7 @@ namespace DashboardReportApp.Models
         public string InitiatedBy { get; set; }          // picker (default: Emery, J)
         public DateTime? DateReceived { get; set; }       // header received date
         public DateTime? PoRequestedAt { get; set; }
-
+        public string? Received_CompletedBy { get; set; }
     }
 
 

@@ -80,8 +80,17 @@
 
             <!-- ✅ NEW: Date Received (header-level) -->
             <div class="col-md-3">
-                <label class="form-label">Date Received</label>
+                <label class="form-label">Date Received / Date Work Completed</label>
                 @Html.TextBoxFor(m => m.DateReceived, "{0:yyyy-MM-dd}", new { @class = "form-control", type = "date" })
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Received By</label>
+                @Html.DropDownListFor(m => m.Received_CompletedBy,
+                                new SelectList(people, Model?.Received_CompletedBy),
+                                "-- Select Person --",
+                                new { @class = "form-select" })
+                @Html.ValidationMessageFor(m => m.Received_CompletedBy, "", new { @class = "text-danger small" })
             </div>
         </div>
     </div>

@@ -20,7 +20,8 @@ namespace DashboardReportApp.Services
             var list = new List<ToolingHistoryModel>();
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, AccountingCode, InitiatedBy, DateReceived
+       Cost, AccountingCode, InitiatedBy, DateReceived,              
+       Received_CompletedBy                                        
 FROM tooling_history_header
 ORDER BY Id DESC;
 ";
@@ -44,8 +45,9 @@ ORDER BY Id DESC;
                     Cost = r["Cost"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(r["Cost"]),
                     AccountingCode = r["AccountingCode"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["AccountingCode"]),
                     InitiatedBy = r["InitiatedBy"]?.ToString(),
-                    DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]), // ADDED
+                    DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
                     PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
+                    Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()  
 
                 });
             }
@@ -67,7 +69,8 @@ ORDER BY Id DESC;
         {
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, AccountingCode, InitiatedBy, DateReceived
+       Cost, AccountingCode, InitiatedBy, DateReceived,
+       Received_CompletedBy                          -- + NEW
 FROM tooling_history_header
 WHERE Id = @Id
 LIMIT 1;
@@ -96,6 +99,7 @@ LIMIT 1;
                 InitiatedBy = r["InitiatedBy"]?.ToString(),
                 PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                 DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()   // + NEW
 
             };
         }
@@ -203,10 +207,10 @@ WHERE Id=@Id;";
             const string sql = @"
 INSERT INTO tooling_history_header
  (GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
-   AccountingCode, InitiatedBy, DateReceived)
+   AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy)     -- + NEW
 VALUES
  (@GroupID, @Part, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
-   @AccountingCode, @InitiatedBy, @DateReceived);";
+   @AccountingCode, @InitiatedBy, @DateReceived, @Received_CompletedBy);";
 
 
 
@@ -223,6 +227,7 @@ VALUES
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? "Emery, J" : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
             cmd.ExecuteNonQuery();
         }
 
@@ -233,9 +238,9 @@ VALUES
 UPDATE tooling_history_header SET
   Part=@Part, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
   DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost, InitiatedBy=@InitiatedBy,
-  DateReceived=@DateReceived
+  DateReceived=@DateReceived,
+  Received_CompletedBy=@Received_CompletedBy          
 WHERE Id=@Id;";
-
 
 
             using var conn = new MySqlConnection(_connectionString);
@@ -252,6 +257,7 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? (object)DBNull.Value : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
             cmd.ExecuteNonQuery();
         }
 
@@ -310,11 +316,11 @@ ORDER BY i.Id ASC;
             const string sql = @"
 SELECT
     Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
-    AccountingCode, Cost, InitiatedBy
+    AccountingCode, Cost, InitiatedBy, DateReceived,              
+    Received_CompletedBy                                          
 FROM tooling_history_header
 WHERE GroupID = @GroupID
 LIMIT 1;";
-
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
@@ -335,7 +341,9 @@ LIMIT 1;";
                 DateDue = r["DateDue"] != DBNull.Value ? (DateTime?)Convert.ToDateTime(r["DateDue"]) : null,
                 AccountingCode = r["AccountingCode"] != DBNull.Value ? (int?)Convert.ToInt32(r["AccountingCode"]) : null,
                 Cost = r["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(r["Cost"]) : null,
-                InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null
+                InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null,
+                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),        
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()
             };
         }
 
