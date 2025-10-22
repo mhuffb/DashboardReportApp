@@ -52,7 +52,11 @@
                 <input name="ToolItem" class="form-control" list="toolitem-presets" value="@Model.NewToolItem?.ToolItem" placeholder="Type or pick..." />
                 @Html.ValidationMessage("ToolItem", null, new { @class = "text-danger small d-block mt-1" })
             </div>
-
+            <div class="col-md-2">
+                <label class="form-label">Qty</label>
+                @Html.TextBox("Quantity", Model.NewToolItem?.Quantity, new { @class = "form-control", type = "number", min = "0" })
+                @Html.ValidationMessage("Quantity", null, new { @class = "text-danger small d-block mt-1" })
+            </div>
             <div class="col-md-3">
                 <label class="form-label">Tool #</label>
                 @Html.TextBox("ToolNumber", Model.NewToolItem?.ToolNumber, new { @class = "form-control" })
@@ -77,11 +81,7 @@
                 @Html.ValidationMessage("Revision", null, new { @class = "text-danger small d-block mt-1" })
             </div>
 
-            <div class="col-md-2">
-                <label class="form-label">Qty</label>
-                @Html.TextBox("Quantity", Model.NewToolItem?.Quantity, new { @class = "form-control", type = "number", min = "0" })
-                @Html.ValidationMessage("Quantity", null, new { @class = "text-danger small d-block mt-1" })
-            </div>
+           
 
             <div class="col-md-2">
                 <label class="form-label">Hours</label>
@@ -106,12 +106,13 @@
                     <tr>
                         <th>Action</th>
                         <th>Item</th>
+                        <th>Qty</th>
                         <th>Tool #</th>
                         <th>Desc</th>
                         <th>Rev</th>
-                        <th>Qty</th>
                         <th>Cost</th>
                         <th>Hours</th>
+                        <th class="text-end" style="width:100px">Delete</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -120,7 +121,7 @@
                         for (var i = 0; i < Model.ToolItems.Count; i++)
                         {
                             var tool = Model.ToolItems[i];
-                            <tr>
+                            <tr data-item-id="@tool.Id" data-group-id="@Model.GroupID">
                                 <input type="hidden" name="ToolItems[@i].Id" value="@tool.Id" />
                                 <input type="hidden" name="ToolItems[@i].GroupID" value="@tool.GroupID" />
 
@@ -136,12 +137,20 @@
                                 </td>
 
                                 <td><input name="ToolItems[@i].ToolItem" class="form-control" list="toolitem-presets" value="@tool.ToolItem" /></td>
+
+                                <td><input name="ToolItems[@i].Quantity" type="number" min="0" class="form-control" value="@(tool.Quantity)" /></td>
                                 <td><input name="ToolItems[@i].ToolNumber" class="form-control" value="@tool.ToolNumber" /></td>
                                 <td><input name="ToolItems[@i].ToolDesc" class="form-control" value="@tool.ToolDesc" /></td>
                                 <td><input name="ToolItems[@i].Revision" class="form-control" value="@tool.Revision" /></td>
-                                <td><input name="ToolItems[@i].Quantity" type="number" min="0" class="form-control" value="@(tool.Quantity)" /></td>
                                 <td><input name="ToolItems[@i].Cost" type="number" step="0.01" min="0" class="form-control" value="@(tool.Cost ?? 0)" /></td>
                                 <td><input name="ToolItems[@i].ToolWorkHours" type="number" min="0" class="form-control" value="@(tool.ToolWorkHours ?? 0)" /></td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            data-action="delete-tool-item">
+                                        Delete
+                                    </button>
+
+                                </td>
                             </tr>
                         }
                     }
@@ -161,3 +170,4 @@
       document.getElementById('saveAllForm')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     });
 </script>
+

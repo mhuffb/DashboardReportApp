@@ -133,7 +133,11 @@ namespace DashboardReportApp.Controllers
                 GroupID = groupID,
                 GroupName = header?.Part,                 // <-- put Part here
                 ToolItems = groupRecords,
-                NewToolItem = new ToolItemViewModel { GroupID = groupID }
+                NewToolItem = new ToolItemViewModel
+                {
+                    GroupID = groupID,
+                    Quantity = 1   // <-- default qty
+                }
             };
             return PartialView("_ToolItemsModal", model);
         }
@@ -369,6 +373,82 @@ Open in Dashboard: {link}
             return ToolItemsModal(groupID);
         }
 
+        // ToolingHistoryController.cs
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeleteToolItemAjax(int id, int groupID)
+        {
+            try
+            {
+                _service.DeleteToolItem(id);
+
+                // Re-render just the items table for this group
+                var items = _service.GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+                return PartialView("_ToolItemsInlineTable", items);
+            }
+            catch (Exception ex)
+            {
+                Response.StatusCode = 500;
+                return Content("Delete failed: " + ex.Message);
+            }
+        }
+        // ToolingHistoryController.cs
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult RequestWorkOrder(int id)
+        {
+            try
+            {
+                var record = _service.GetToolingHistoryById(id);
+                if (record == null) return NotFound();
+
+                var items = _service.GetToolItemsByGroupID(record.GroupID);
+
+                var subject = $"Work Order Request: Group {record.GroupID} / {record.Part}";
+                var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
+
+                var body = $@"
+WORK ORDER REQUEST (Internal Toolroom)
+-------------------------------------
+GroupID: {record.GroupID}
+Part: {record.Part}
+Reason: {record.Reason}
+Requested By: {record.InitiatedBy}
+Due: {record.DateDue:MM-dd-yyyy}
+
+Requested Work Items:
+{string.Join("\n", items.Select(it =>
+            $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
+            $"Est.Hours={(it.ToolWorkHours?.ToString() ?? "n/a")}"
+        ))}
+
+Open in Dashboard: {link}
+".Trim();
+
+                var to = string.IsNullOrWhiteSpace(_cfg["Tooling:WorkOrderRequestTo"])
+                    ? "toolroom@sintergy.local"
+                    : _cfg["Tooling:WorkOrderRequestTo"];
+
+                _shared.SendEmailWithAttachment(
+                    receiverEmail: to,
+                    attachmentPath: null,
+                    attachmentPath2: null,
+                    subject: subject,
+                    body: body
+                );
+
+                // reuse existing flag so UI can show "requested"
+                _service.MarkPoRequested(id);
+
+                return Json(new { ok = true });
+            }
+            catch (Exception ex)
+            {
+                Response.StatusCode = 500;
+                return Json(new { ok = false, error = ex.Message });
+            }
+        }
 
 
     }

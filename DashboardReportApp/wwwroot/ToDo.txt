@@ -1,0 +1,11 @@
+﻿10.20.25
+
+x1. ability to delete tool items
+x2. remove request po on internal
+x3. if internal, request work order instead of po
+4. work order completed instead of create packing slip
+5. make it received/completed drop down
+6. add run and prod number to relevant pages / data: hold, deviation, 
+7. fix schedule nav bar locking up
+
+

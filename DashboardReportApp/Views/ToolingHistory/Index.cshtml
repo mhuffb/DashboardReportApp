@@ -68,19 +68,39 @@
                                 <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit Tool History</button>
                                 <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Add/Edit Tool Items</button>
 
-                                <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="id" value="@item.Id" />
-                                    @{
-                                        bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
-                                        bool wasRequested = item.PoRequestedAt.HasValue;
+                                @{
+                                    bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
+                                    bool wasRequested = item.PoRequestedAt.HasValue;
+                                    bool isInternal = string.Equals(item.ToolVendor, "Internal Toolroom", StringComparison.OrdinalIgnoreCase);
+                                }
 
-                                        var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
-                                        var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
-                                        var disabledAttr = hasPo ? "disabled" : "";
-                                    }
-                                    <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
-                                </form>
+                                @if (isInternal)
+                                {
+                                    <form asp-action="RequestWorkOrder" method="post" class="request-wo-form d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        @{
+                                            var btnText = wasRequested ? "WO was requested" : "Request Work Order";
+                                            var btnClass = wasRequested ? "btn btn-secondary btn-sm" : "btn btn-info btn-sm";
+                                            var disabledAttr = hasPo ? "disabled" : ""; // usually N/A for internal, but safe
+                                        }
+                                        <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        @{
+                                            var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
+                                            var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
+                                            var disabledAttr = hasPo ? "disabled" : "";
+                                        }
+                                        <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                    </form>
+                                }
+
 
                                 @{
                                     var reason = (item.Reason ?? string.Empty).Trim();
@@ -160,19 +180,39 @@
                                 <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit</button>
                                 <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Items</button>
 
-                                <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="id" value="@item.Id" />
-                                    @{
-                                        bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
-                                        bool wasRequested = item.PoRequestedAt.HasValue;
+                                @{
+                                    bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
+                                    bool wasRequested = item.PoRequestedAt.HasValue;
+                                    bool isInternal = string.Equals(item.ToolVendor, "Internal Toolroom", StringComparison.OrdinalIgnoreCase);
+                                }
 
-                                        var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
-                                        var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
-                                        var disabledAttr = hasPo ? "disabled" : "";
-                                    }
-                                    <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
-                                </form>
+                                @if (isInternal)
+                                {
+                                    <form asp-action="RequestWorkOrder" method="post" class="request-wo-form d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        @{
+                                            var btnText = wasRequested ? "WO was requested" : "Request Work Order";
+                                            var btnClass = wasRequested ? "btn btn-secondary btn-sm" : "btn btn-info btn-sm";
+                                            var disabledAttr = hasPo ? "disabled" : ""; // usually N/A for internal, but safe
+                                        }
+                                        <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form asp-action="RequestPoNumber" method="post" class="request-po-form d-inline-block">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        @{
+                                            var btnText = hasPo ? $"PO sent: {item.PO}" : (wasRequested ? "PO was requested" : "Request PO #");
+                                            var btnClass = hasPo ? "btn btn-success btn-sm" : (wasRequested ? "btn btn-secondary btn-sm" : "btn btn-warning btn-sm");
+                                            var disabledAttr = hasPo ? "disabled" : "";
+                                        }
+                                        <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
+                                    </form>
+                                }
+
 
                                 @if (showPackingSlip)
                                 {
@@ -181,6 +221,10 @@
                                        target="_blank" rel="noopener">
                                         Packing Slip
                                     </a>
+                                }
+                                else
+                                {
+                                    <span class="btn btn-outline-primary btn-sm disabled" style="visibility:hidden;">Packing Slip</span>
                                 }
                             </td>
                         </tr>
@@ -356,38 +400,67 @@
 
 
         // --- PO request handler (SweetAlert only; exactly one handler) ---
-        document.addEventListener('submit', async (e) => {
+                   document.addEventListener('submit', async (e) => {
           const form = e.target;
-          if (!form.classList.contains('request-po-form')) return;
-          e.preventDefault();
 
-          const btn = form.querySelector('button[type="submit"]');
-          const prevDisabled = btn?.disabled;
-          if (btn) btn.disabled = true;
+          // ----- PO -----
+          if (form.classList.contains('request-po-form')) {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const prevDisabled = btn?.disabled; if (btn) btn.disabled = true;
 
-          try {
-            const res = await fetch(form.action, {
-              method: 'POST',
-              headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
-              body: new FormData(form),
-              credentials: 'same-origin'
-            });
+            try {
+              const res = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
+                body: new FormData(form),
+                credentials: 'same-origin'
+              });
+              const payload = await res.json();
 
-            if (!res.ok) {
-              let msg = res.statusText;
-              try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
-              await alertErr('PO request failed', msg || 'Unknown error');
-              return;
+              if (payload.ok) {
+                await alertSuc('Sent', 'PO request email sent.');
+                // OPTIONAL: close modal if open
+                // bootstrap.Modal.getInstance(document.getElementById('appModal'))?.hide();
+                location.reload();   // <-- put it here
+                return;
+              }
+              await alertErr('PO request failed', payload.error || 'Unknown error');
+            } finally {
+              if (btn) btn.disabled = prevDisabled ?? false;
             }
-            const payload = await res.json();
-            if (payload.ok) await alertSuc('Sent', 'PO request email sent.');
-            else await alertErr('PO request failed', payload.error || 'Unknown error');
-          } catch (err) {
-            await alertErr('PO request failed', err?.message || 'Unexpected error');
-          } finally {
-            if (btn) btn.disabled = prevDisabled ?? false;
+            return;
+          }
+
+          // ----- WORK ORDER (Internal Toolroom) -----
+          if (form.classList.contains('request-wo-form')) {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const prevDisabled = btn?.disabled; if (btn) btn.disabled = true;
+
+            try {
+              const res = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
+                body: new FormData(form),
+                credentials: 'same-origin'
+              });
+              const payload = await res.json();
+
+              if (payload.ok) {
+                await alertSuc('Sent', 'Work order request email sent.');
+                // OPTIONAL: close modal if open
+                // bootstrap.Modal.getInstance(document.getElementById('appModal'))?.hide();
+                location.reload();   // <-- and here
+                return;
+              }
+              await alertErr('Work order request failed', payload.error || 'Unknown error');
+            } finally {
+              if (btn) btn.disabled = prevDisabled ?? false;
+            }
           }
         });
+
     </script>
     <style>
         /* optional: rotate chevron on expand */
@@ -465,6 +538,110 @@
           });
         });
     </script>
+    <script>
+        // Reusable confirm dialog
+        async function confirmDelete(title = 'Delete this tool item?', text = 'This cannot be undone.') {
+          const res = await Swal.fire({
+            title,
+            text,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+          });
+          return res.isConfirmed;
+        }
+
+        // One-time delegated listener
+        if (!window._toolItemsDeleteWired) {
+          document.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="delete-tool-item"]');
+            if (btn) { e.preventDefault(); window.deleteToolItem(btn); }
+          });
+          window._toolItemsDeleteWired = true;
+        }
+
+        // Global delete handler with SweetAlert
+        window.deleteToolItem = async function(buttonEl) {
+          const row = buttonEl.closest('tr');
+
+          // Prefer data attrs; fallback to hidden inputs in the modal form
+          const id = row?.dataset?.itemId || row.querySelector('input[name$=".Id"]')?.value;
+          const groupID = row?.dataset?.groupId
+                       || row.querySelector('input[name$=".GroupID"]')?.value
+                       || document.querySelector('#saveAllForm input[name="GroupID"]')?.value;
+
+          if (!id || !groupID) {
+            await Swal.fire({ icon: 'error', title: 'Missing info', text: 'Could not determine item/group to delete.' });
+            return;
+          }
+
+          // SweetAlert confirm
+          const ok = await confirmDelete();
+          if (!ok) return;
+
+          // Show loading while deleting
+          Swal.fire({
+            title: 'Deleting…',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading()
+          });
+
+          const token =
+            document.querySelector('#appModal input[name="__RequestVerificationToken"]')?.value ||
+            document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+          const form = new FormData();
+          form.append('__RequestVerificationToken', token);
+          form.append('id', id);
+          form.append('groupID', groupID);
+
+          const inModal = !!row.closest('#appModal');
+
+          try {
+            // 1) Delete
+            const res = await fetch('/ToolingHistory/DeleteToolItemAjax', {
+              method: 'POST',
+              headers: { 'RequestVerificationToken': token },
+              body: form,
+              credentials: 'same-origin'
+            });
+
+            const payload = await res.text();
+
+            if (!res.ok) {
+              Swal.fire({ icon: 'error', title: 'Delete failed', html: `<pre style="text-align:left;white-space:pre-wrap">${(payload || res.statusText).slice(0,600)}</pre>` });
+              return;
+            }
+
+            // 2) Refresh UI
+            if (inModal) {
+              // Refresh the entire modal so all indices & validations stay correct
+              const url = '/ToolingHistory/ToolItemsModal?groupID=' + encodeURIComponent(groupID);
+              const r2 = await fetch(url, { credentials: 'same-origin' });
+              const html2 = await r2.text();
+              const modalContent = document.querySelector('#appModal .modal-content');
+              if (modalContent) modalContent.innerHTML = html2;
+            } else {
+              // Inline expando: payload is the updated _ToolItemsInlineTable
+              const inlineContainer = row.closest('[data-items-container]')
+                                   || document.querySelector(`[data-items-container="${groupID}"]`);
+              if (inlineContainer) inlineContainer.innerHTML = payload;
+            }
+
+            // 3) Success toast
+            Swal.fire({ icon: 'success', title: 'Deleted', timer: 1200, showConfirmButton: false });
+
+          } catch (e) {
+            Swal.fire({ icon: 'error', title: 'Network error', text: e?.message || 'Unexpected error' });
+          }
+        };
+    </script>
+
+
 
 }
 

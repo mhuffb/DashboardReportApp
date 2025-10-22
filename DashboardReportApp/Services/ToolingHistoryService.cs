@@ -522,6 +522,16 @@ LIMIT 1;";
             while (r.Read()) list.Add(r["InitiatedBy"]?.ToString() ?? "");
             return list;
         }
+        // ToolingHistoryService.cs
+        public void DeleteToolItem(int id)
+        {
+            const string sql = "DELETE FROM tooling_history_item WHERE Id=@Id;";
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.ExecuteNonQuery();
+        }
 
     }
 }

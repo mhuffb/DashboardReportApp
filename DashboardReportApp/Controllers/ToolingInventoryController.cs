@@ -58,7 +58,7 @@ namespace DashboardReportApp.Controllers
             ViewBag.ToolItemList = await _svc.GetDistinctToolItemsAsync();
 
             var model = await _svc.GetByIdAsync(id);
-            if (model is null) return NotFound("Tooling item not found.");
+            if (model is null) return NotFound("Tooling item not found.");  
             return PartialView("_ToolItemForm", model);
         }
 

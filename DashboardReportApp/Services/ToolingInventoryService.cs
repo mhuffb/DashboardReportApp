@@ -144,7 +144,7 @@ WHERE Id=@Id;";
             return new ToolItemModel
             {
                 Id = r.GetInt32("Id"),
-                AssemblyNumber = r.GetString("AssemblyNumber"),
+                AssemblyNumber = r.GetString("AssemblyNumber"), 
                 ToolNumber = r.GetString("ToolNumber"),
                 ToolItem = r.GetString("ToolItem"),
 

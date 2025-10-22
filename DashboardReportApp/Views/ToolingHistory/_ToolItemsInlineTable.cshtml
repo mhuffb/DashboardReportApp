@@ -18,12 +18,13 @@ else
                     <th style="width:80px">Qty</th>
                     <th style="width:120px">Cost</th>
                     <th style="width:100px">Hours</th>
+                    <th class="text-end" style="width:100px">Delete</th> @* NEW *@
                 </tr>
             </thead>
             <tbody>
                 @foreach (var it in Model)
                 {
-                    <tr>
+                    <tr data-item-id="@it.Id" data-group-id="@it.GroupID">
                         <td>@it.Action</td>
                         <td>@it.ToolItem</td>
                         <td>@it.ToolNumber</td>
@@ -32,15 +33,16 @@ else
                         <td>@(it.Quantity == 0 ? "" : it.Quantity.ToString())</td>
                         <td>@(it.Cost?.ToString("0.00"))</td>
                         <td>@(it.ToolWorkHours?.ToString())</td>
-                        
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-action="delete-tool-item">
+                                Delete
+                            </button>
+
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
-}
-@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
 }
