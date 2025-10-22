@@ -318,8 +318,20 @@
 
                 <div class="modal-footer">
                     <button type="button" id="btnGenerateQr" class="btn btn-primary">Generate</button>
-                    <button type="button" id="btnDownloadQr" class="btn btn-outline-secondary" disabled>Download PNG</button>
-                    <button type="button" id="btnPrintQr" class="btn btn-outline-dark" disabled>Print</button>
+                    <button type="button" id="btnDownloadQr"
+                            class="btn btn-outline-secondary"
+                            onclick="return window.mixqrDownload()"
+                            disabled>
+                        Download PNG
+                    </button>
+
+                    <button type="button" id="btnPrintQr"
+                            class="btn btn-outline-dark"
+                            onclick="return window.mixqrPrint()"
+                            disabled>
+                        Print
+                    </button>
+
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </form>
@@ -333,7 +345,6 @@
     }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 
     <!-- Vendor libraries (keep these above all custom scripts) -->
@@ -588,164 +599,7 @@
 
        </script>
 
-<script>
-    /* ===== MIX QR (DOM-ready, resilient, scoped to #createMixQrModal) ===== */
-    (function () {
-      document.addEventListener('DOMContentLoaded', () => {
-        const modal = document.getElementById('createMixQrModal');
-        if (!modal) { console.warn('[MixQR] #createMixQrModal not in DOM at ready'); return; }
-        console.log('[MixQR] init OK');
 
-        const $  = (sel, root = modal) => root.querySelector(sel);
-        const say = (opts) => (window.Swal && Swal.fire) ? Swal.fire(opts)
-                     : alert((opts.title||'') + '\n\n' + (opts.text || (opts.html||'').replace(/<[^>]*>/g,'')));
-        const payload = (mix, lot, wt, bag) => `ADV;${mix};${lot};${wt};${bag}\n`;
-        let labeledImages = []; // [{bag, dataUrl}]
-
-        function setBtnState(enabled) {
-          const dl = $('#btnDownloadQr'); if (dl) dl.disabled = !enabled;
-          const pr = $('#btnPrintQr');    if (pr) pr.disabled = !enabled;
-        }
-        function clearPreview() {
-          const grid = $('#qrGrid') || $('#qrContainer');
-          if (grid) grid.innerHTML = '';
-          const prev = $('#qrTextPreview');
-          if (prev) prev.value = '';
-          setBtnState(false);
-          labeledImages = [];
-        }
-        function downloadDataUrl(filename, dataUrl) {
-          const a = document.createElement('a');
-          a.href = dataUrl; a.download = filename;
-          document.body.appendChild(a); a.click(); a.remove();
-        }
-        function printImagesViaIframe(dataUrls) {
-          const iframe = document.createElement('iframe');
-          iframe.style.position='fixed'; iframe.style.right='0'; iframe.style.bottom='0';
-          iframe.style.width='0'; iframe.style.height='0'; iframe.style.border='0';
-          document.body.appendChild(iframe);
-          const doc = iframe.contentDocument || iframe.contentWindow.document;
-          const html = `
-            <!doctype html><html><head><meta charset="utf-8"><title>Print Sintergy Labels</title></head>
-            <body style="margin:16px;">
-              ${dataUrls.map(src => `
-                <div style="display:inline-block;margin:8px;text-align:center;">
-                  <img src="${src}" style="width:360px;height:auto;" />
-                </div>`).join('')}
-              <script>
-                window.onload = function () {
-                  setTimeout(function(){
-                    window.focus(); window.print();
-                    setTimeout(function(){ window.close && window.close(); }, 250);
-                  }, 50);
-                };
-              <\/script>
-            </body></html>`;
-          doc.open(); doc.write(html); doc.close();
-        }
-        async function makeQrCanvas(text) {
-          if (!window.QRCode) throw new Error('QRCode library not found (qrcode.min.js).');
-          const holder = document.createElement('div');
-          holder.style.position='absolute'; holder.style.left='-10000px';
-          document.body.appendChild(holder);
-          new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
-          await new Promise(r=>setTimeout(r,60));
-          const srcCanvas = holder.querySelector('canvas');
-          const srcImg = holder.querySelector('img');
-
-          const out = document.createElement('canvas'); out.width=256; out.height=256;
-          const ctx = out.getContext('2d');
-
-          if (srcCanvas) ctx.drawImage(srcCanvas,0,0);
-          else if (srcImg) {
-            await new Promise((res, rej)=>{
-              if (srcImg.complete) { ctx.drawImage(srcImg,0,0,256,256); res(); }
-              else { srcImg.onload=()=>{ ctx.drawImage(srcImg,0,0,256,256); res(); };
-                     srcImg.onerror=()=>rej(new Error('QR image failed to load')); }
-            });
-          } else { document.body.removeChild(holder); throw new Error('QR code did not render'); }
-          document.body.removeChild(holder);
-          return out;
-        }
-        async function makeLabeledImage({ mix, lot, wt, bag }) {
-          const QR_SIZE=256, W=360, headerH=44, padTop=12, padBetween=14, padBottom=18, lineH=22;
-          const qr = await makeQrCanvas(payload(mix, lot, wt, bag));
-          const lines = [`Mix Code: ${mix}`, `Lot #: ${lot}`, `Weight: ${wt}`, `Bag: ${bag}`];
-          const textH = lines.length * lineH;
-          const H = headerH + padTop + QR_SIZE + padBetween + textH + padBottom;
-
-          const cx = document.createElement('canvas'); cx.width=W; cx.height=H;
-          const ctx = cx.getContext('2d');
-
-          ctx.fillStyle='#FFF'; ctx.fillRect(0,0,W,H);
-          ctx.fillStyle='#000'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText('Sintergy', W/2, headerH/2);
-
-          const qrX = Math.round((W - QR_SIZE)/2), qrY = headerH + padTop;
-          ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
-          ctx.lineWidth=2; ctx.strokeStyle='#000'; ctx.strokeRect(qrX-1, qrY-1, QR_SIZE+2, QR_SIZE+2);
-
-          ctx.font='16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
-          let y = qrY + QR_SIZE + padBetween;
-          for (const line of lines) { ctx.fillText(line, W/2, y); y += lineH; }
-
-          return cx.toDataURL('image/png');
-        }
-        function showFirstPreview({ mix, lot, wt, bag, dataUrl }) {
-          const grid = $('#qrGrid') || $('#qrContainer'); if (!grid) return;
-          grid.innerHTML = '';
-          const head = document.createElement('div'); head.className='text-center fw-bold mb-2'; head.textContent='Sintergy';
-          const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.justifyContent='center'; wrap.style.alignItems='center'; wrap.style.padding='8px';
-          const img = document.createElement('img'); img.src=dataUrl; img.style.width='360px'; img.style.height='auto'; img.alt='Mix QR label'; wrap.appendChild(img);
-          const info = document.createElement('div'); info.className='text-center mt-2';
-          info.innerHTML = `<div>Mix Code: <b>${mix}</b></div><div>Lot #: <b>${lot}</b></div><div>Weight: <b>${wt}</b></div><div>Bag: <b>${bag}</b></div>`;
-          grid.appendChild(head); grid.appendChild(wrap); grid.appendChild(info);
-        }
-
-        // Reset each time the modal is opened
-        modal.addEventListener('shown.bs.modal', () => {
-          clearPreview();
-          const startBag = $('#startBagNo'); if (startBag && !startBag.value) startBag.value = 1;
-          $('#mixCode')?.focus();
-          console.log('[MixQR] modal shown');
-        });
-
-        // Delegated clicks inside modal (works even if buttons are re-rendered)
-        modal.addEventListener('click', async (e) => {
-          const id = e.target?.id;
-          if (!id) return;
-
-          
-
-          if (id === 'btnDownloadQr') {
-            console.log('[MixQR] download clicked; images=', labeledImages.length);
-            if (!labeledImages.length) { say({icon:'warning', title:'Nothing to download'}); return; }
-            downloadDataUrl(`sintergy-label-bag-${labeledImages[0].bag}.png`, labeledImages[0].dataUrl);
-          }
-
-          if (id === 'btnPrintQr') {
-            console.log('[MixQR] print clicked; images=', labeledImages.length);
-            if (!labeledImages.length) { say({icon:'warning', title:'Nothing to print'}); return; }
-            printImagesViaIframe(labeledImages.map(x => x.dataUrl));
-          }
-        });
-
-        // EXTRA: direct listeners (in case something stops event bubbling)
-        const btnDl = $('#btnDownloadQr');
-        const btnPr = $('#btnPrintQr');
-        if (btnDl) btnDl.addEventListener('click', (e) => {
-          if (e.currentTarget.disabled) return;
-          if (!labeledImages.length) return;
-          downloadDataUrl(`sintergy-label-bag-${labeledImages[0].bag}.png`, labeledImages[0].dataUrl);
-        });
-        if (btnPr) btnPr.addEventListener('click', (e) => {
-          if (e.currentTarget.disabled) return;
-          if (!labeledImages.length) return;
-          printImagesViaIframe(labeledImages.map(x => x.dataUrl));
-        });
-      });
-    })();
-</script>
 
 @section Scripts {
     <script>
@@ -878,9 +732,14 @@
         })();
     </script>
 
+   
     <script>
-        /* ========= MIX QR: multiple labels; download all (ZIP) or one; print all ========= */
+        /* ===== MIX QR v2: reliable Generate binding ===== */
         (function () {
+          if (window.__MIXQR_V2_INIT__) return;
+          window.__MIXQR_V2_INIT__ = true;
+
+          // ---- small helpers used below ----
           function setBtnState(enabled) {
             const dl = document.getElementById('btnDownloadQr');
             const pr = document.getElementById('btnPrintQr');
@@ -894,28 +753,23 @@
             if (prev) prev.value = '';
             setBtnState(false);
           }
-
           async function makeQrCanvas(text) {
-            if (!window.QRCode) throw new Error('QRCode library not found.');
+            if (!window.QRCode) throw new Error('QRCode library not found. Make sure qrcode.min.js loads before this script.');
             const holder = document.createElement('div');
             holder.style.position = 'absolute';
             holder.style.left = '-10000px';
             document.body.appendChild(holder);
-
             new QRCode(holder, { text, width:256, height:256, correctLevel: QRCode.CorrectLevel.M });
             await new Promise(r => setTimeout(r, 60));
-
             const srcCanvas = holder.querySelector('canvas');
             const srcImg = holder.querySelector('img');
-
             const out = document.createElement('canvas'); out.width=256; out.height=256;
             const ctx = out.getContext('2d');
-
             if (srcCanvas) ctx.drawImage(srcCanvas, 0, 0);
             else if (srcImg) {
               await new Promise((res, rej) => {
-                if (srcImg.complete) { ctx.drawImage(srcImg, 0, 0, 256, 256); res(); }
-                else { srcImg.onload=()=>{ ctx.drawImage(srcImg, 0, 0, 256, 256); res(); };
+                if (srcImg.complete) { ctx.drawImage(srcImg,0,0,256,256); res(); }
+                else { srcImg.onload=()=>{ ctx.drawImage(srcImg,0,0,256,256); res(); };
                        srcImg.onerror=()=>rej(new Error('QR image failed to load')); }
               });
             } else {
@@ -925,81 +779,31 @@
             document.body.removeChild(holder);
             return out;
           }
-
           async function makeLabeledImage({ mix, lot, wt, bag }) {
             const QR_SIZE=256, W=360, headerH=44, padTop=12, padBetween=14, padBottom=18, lineH=22;
             const payload = `ADV;${mix};${lot};${wt};${bag}\n`;
-
             const qr = await makeQrCanvas(payload);
-            const cx = document.createElement('canvas'); cx.width=W; cx.height=headerH + padTop + QR_SIZE + padBetween + (4 * lineH) + padBottom;
+            const H = headerH + padTop + QR_SIZE + padBetween + (4 * lineH) + padBottom;
+            const cx = document.createElement('canvas'); cx.width=W; cx.height=H;
             const ctx = cx.getContext('2d');
-
-            ctx.fillStyle='#FFF'; ctx.fillRect(0,0,cx.width,cx.height);
-
-            // Header (inside image)
+            ctx.fillStyle='#FFF'; ctx.fillRect(0,0,W,H);
             ctx.fillStyle='#000'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
             ctx.fillText('Sintergy', W/2, headerH/2);
-
-            // QR
             const qrX = Math.round((W - QR_SIZE)/2), qrY = headerH + padTop;
             ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
             ctx.lineWidth=2; ctx.strokeStyle='#000'; ctx.strokeRect(qrX-1, qrY-1, QR_SIZE+2, QR_SIZE+2);
-
-            // Info (inside image)
             ctx.font='16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
             let y = qrY + QR_SIZE + padBetween;
             ctx.fillText(`Mix Code: ${mix}`, W/2, y); y += lineH;
-            ctx.fillText(`Lot #: ${lot}`, W/2, y);    y += lineH;
-            ctx.fillText(`Weight: ${wt}`, W/2, y);    y += lineH;
-            ctx.fillText(`Bag: ${bag}`, W/2, y);
-
+            ctx.fillText(`Lot #: ${lot}`,     W/2, y); y += lineH;
+            ctx.fillText(`Weight: ${wt}`,     W/2, y); y += lineH;
+            ctx.fillText(`Bag: ${bag}`,       W/2, y);
             return { dataUrl: cx.toDataURL('image/png'), payload };
           }
 
-          function printDataUrls(urls) {
-            if (!urls.length) return;
-            const w = window.open('', '_blank');
-            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return; }
-            w.document.write(
-              '<!doctype html><html><head><meta charset="utf-8"><title>Print Sintergy Labels</title></head>' +
-              '<body style="margin:16px;text-align:center;">' +
-              urls.map(u => `<img src="${u}" style="width:360px;height:auto;display:inline-block;margin:8px;" />`).join('') +
-              '<script>window.onload=function(){setTimeout(function(){window.focus();window.print();window.close();},100);};<\/script>' +
-              '</body></html>'
-            );
-            w.document.close();
-          }
-
-          async function ensureJSZip() {
-            if (window.JSZip) return;
-            await new Promise((resolve, reject) => {
-              const s = document.createElement('script');
-              s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-              s.onload = resolve; s.onerror = () => reject(new Error('Failed to load JSZip'));
-              document.head.appendChild(s);
-            });
-          }
-
-          // Reset on modal open / tidy on close
-          document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('createMixQrModal');
-            if (!modal) return;
-
-            modal.addEventListener('shown.bs.modal', () => {
-              clearPreview();
-              const startBag = document.getElementById('startBagNo');
-              if (startBag && !startBag.value) startBag.value = 1;
-              document.getElementById('mixCode')?.focus();
-            });
-            modal.addEventListener('hidden.bs.modal', window.__cleanBackdrops);
-          });
-
-          // Generate labels (N images, no extra DOM header/footer outside the image)
-          document.addEventListener('click', async (e) => {
-            if (e.target?.id !== 'btnGenerateQr') return;
-
+          async function handleGenerateClick(e) {
             e.preventDefault();
-            e.stopImmediatePropagation();
+            e.stopPropagation();
 
             try {
               const mix   = (document.getElementById('mixCode')?.value || '').trim();
@@ -1015,25 +819,24 @@
               if (!wt)  problems.push('Weight per Bag/Drum');
               if (!Number.isFinite(start) || start < 1) problems.push('Starting Bag # ≥ 1');
               if (!Number.isFinite(qty)   || qty < 1)   problems.push('Number of labels ≥ 1');
+
               if (problems.length) {
-                window.Swal?.fire
+                (window.Swal?.fire)
                   ? Swal.fire({icon:'warning', title:'Missing or invalid', html:`<ul class="text-start"><li>${problems.join('</li><li>')}</li></ul>`})
                   : alert('Missing/invalid: ' + problems.join(', '));
                 return;
               }
 
               const grid = document.getElementById('qrGrid') || document.getElementById('qrContainer');
-              if (!grid) return;
+              if (!grid) { console.warn('[MixQR] #qrGrid/#qrContainer not found'); return; }
 
               clearPreview();
-              const urls = [];
-              let firstPayload = null;
 
+              let firstPayload = null;
               for (let i = 0; i < qty; i++) {
                 const bag = start + i;
                 const { dataUrl, payload } = await makeLabeledImage({ mix, lot, wt, bag });
                 if (!firstPayload) firstPayload = payload;
-                urls.push({ bag, dataUrl });
 
                 const col = document.createElement('div');
                 col.className = 'col-auto d-flex justify-content-center';
@@ -1053,60 +856,371 @@
               setBtnState(true);
             } catch (err) {
               console.error('[MixQR] generate error:', err);
-              window.Swal?.fire?.({icon:'error', title:'Error generating labels', text: err?.message || String(err)});
+              (window.Swal?.fire)
+                ? Swal.fire({icon:'error', title:'Error generating labels', text: err?.message || String(err)})
+                : alert('Error generating labels: ' + (err?.message || String(err)));
             }
-          }, true);
+          }
 
-          // Download (single -> PNG; multiple -> ZIP) & Print (all)
-          document.addEventListener('click', async (e) => {
-            const id = e.target?.id;
+          // Bind directly on DOM ready (and add a delegated fallback)
+          document.addEventListener('DOMContentLoaded', function () {
+            // Ensure QRCode is present; fail fast with guidance.
+            if (!window.QRCode) {
+              console.error('[MixQR] QRCode not found. Check <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js">');
+              window.Swal?.fire?.({
+                icon: 'error',
+                title: 'QR library missing',
+                text: 'qrcode.min.js didn’t load. Make sure it’s included before this script.'
+              });
+            }
 
-            if (id === 'btnDownloadQr') {
-              e.preventDefault();
+            const modal = document.getElementById('createMixQrModal');
+            if (modal) {
+              modal.addEventListener('shown.bs.modal', () => {
+                clearPreview();
+                const startBag = document.getElementById('startBagNo');
+                if (startBag && !startBag.value) startBag.value = 1;
+                document.getElementById('mixCode')?.focus();
+              });
+              modal.addEventListener('hidden.bs.modal', window.__cleanBackdrops || (()=>{}));
+            }
 
-              const imgs = Array.from(document.querySelectorAll('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img'));
-              if (!imgs.length) { window.Swal?.fire?.({icon:'warning', title:'Nothing to download'}); return; }
+            const btn = document.getElementById('btnGenerateQr');
+            if (btn) btn.addEventListener('click', handleGenerateClick);
 
-              if (imgs.length === 1) {
-                const src = imgs[0].currentSrc || imgs[0].src;
-                const a = document.createElement('a');
-                a.href = src;
-                a.download = `sintergy-label-bag-${imgs[0].dataset.bag || '1'}.png`;
-                document.body.appendChild(a); a.click(); a.remove();
+            // Delegated fallback in case button is re-rendered later
+            document.addEventListener('click', function (e) {
+              const t = e.target;
+              if (t && t.id === 'btnGenerateQr') handleGenerateClick(e);
+            });
+          });
+        })();
+    </script>
+    <script>
+        /* ===== MIX QR: FINAL DIAG/WORKING PRINT+DOWNLOAD ===== */
+        (function () {
+          if (window.__MIXQR_FINAL_IO__) return;
+          window.__MIXQR_FINAL_IO__ = true;
+
+          const $  = (s, r=document)=>r.querySelector(s);
+          const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+
+          function getImgs() {
+            const list = $$('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img');
+            console.log('[mixqr] found images:', list.length, list);
+            return list;
+          }
+          function enableButtons(flag) {
+            const dl = $('#btnDownloadQr'), pr = $('#btnPrintQr');
+            if (dl) dl.disabled = !flag;
+            if (pr) pr.disabled = !flag;
+          }
+
+          // Turn any <img> (data: or blob: or normal URL) into a PNG dataURL via <canvas>
+          function imageToPngDataURL(img) {
+            return new Promise((resolve, reject) => {
+              // If it’s already data: PNG, just return
+              const src = img.currentSrc || img.src || '';
+              if (src.startsWith('data:image/png')) {
+                console.log('[mixqr] using existing PNG dataURL');
+                return resolve(src);
+              }
+              // Draw onto canvas to normalize (works for blob:/http: as long as CORS allows it)
+              const tmp = new Image();
+              tmp.crossOrigin = 'anonymous';
+              tmp.onload = function () {
+                try {
+                  const w = img.naturalWidth || 360;
+                  const h = img.naturalHeight || 360;
+                  const cx = document.createElement('canvas');
+                  cx.width = w; cx.height = h;
+                  const ctx = cx.getContext('2d');
+                  ctx.drawImage(tmp, 0, 0, w, h);
+                  const data = cx.toDataURL('image/png');
+                  resolve(data);
+                } catch (err) {
+                  console.warn('[mixqr] canvas normalize failed', err);
+                  reject(err);
+                }
+              };
+              tmp.onerror = () => reject(new Error('image failed to load: ' + src));
+              tmp.src = src;
+            });
+          }
+
+          function aDownload(dataUrl, filename) {
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove();
+          }
+
+          // ---------- DOWNLOAD ----------
+          async function onDownload(e) {
+            e.preventDefault(); e.stopPropagation();
+
+            const list = getImgs();
+            if (!list.length) return Swal?.fire?.({icon:'warning', title:'Nothing to download'}) || alert('Nothing to download');
+
+            try {
+              // Single → 1 file
+              if (list.length === 1) {
+                const img = list[0];
+                const dataUrl = await imageToPngDataURL(img);
+                const bag = img.dataset.bag || '1';
+                console.log('[mixqr] downloading single PNG, size=', dataUrl.length);
+                return aDownload(dataUrl, `sintergy-label-bag-${bag}.png`);
+              }
+
+              // Multiple → try JSZip if already present; if not, do many single downloads (most reliable)
+              const allData = list.every(im => (im.currentSrc || im.src || '').startsWith('data:'));
+              if (!window.JSZip || !allData) {
+                console.log('[mixqr] JSZip unavailable or non-data URLs present → downloading individually');
+                for (let i=0;i<list.length;i++) {
+                  const im = list[i];
+                  const dataUrl = await imageToPngDataURL(im);
+                  const bag = im.dataset.bag || (i+1);
+                  aDownload(dataUrl, `sintergy-label-bag-${bag}.png`);
+                }
                 return;
               }
 
-              try {
-                await ensureJSZip();
-                const zip = new JSZip();
-                imgs.forEach((img, idx) => {
-                  const dataUrl = img.currentSrc || img.src;
-                  const base64 = dataUrl.split(',')[1];
-                  const bag = img.dataset.bag || (idx + 1);
-                  zip.file(`sintergy-label-bag-${bag}.png`, base64, { base64: true });
-                });
-                const blob = await zip.generateAsync({ type: 'blob' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = 'sintergy-labels.zip';
-                document.body.appendChild(a); a.click(); a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 2000);
-              } catch (zipErr) {
-                console.error('ZIP error', zipErr);
-                window.Swal?.fire?.({icon:'error', title:'Download error', text:'Could not create ZIP. Try printing instead.'});
+              // JSZip path (if you already include JSZip elsewhere)
+              const zip = new JSZip();
+              for (let i=0;i<list.length;i++) {
+                const im = list[i];
+                const dataUrl = await imageToPngDataURL(im);
+                const base64 = dataUrl.split(',')[1];
+                const bag = im.dataset.bag || (i+1);
+                zip.file(`sintergy-label-bag-${bag}.png`, base64, { base64:true });
               }
+              const blob = await zip.generateAsync({ type:'blob' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = 'sintergy-labels.zip';
+              document.body.appendChild(a); a.click(); a.remove();
+              setTimeout(()=>URL.revokeObjectURL(url), 1500);
+            } catch (err) {
+              console.error('[mixqr] download error:', err);
+              Swal?.fire?.({icon:'error', title:'Download failed', text:String(err)}) || alert('Download failed: ' + err);
             }
+          }
 
-            if (id === 'btnPrintQr') {
-              e.preventDefault();
-              const imgs = Array.from(document.querySelectorAll('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img'));
-              if (!imgs.length) { window.Swal?.fire?.({icon:'warning', title:'Nothing to print'}); return; }
-              const urls = imgs.map(img => img.currentSrc || img.src).filter(Boolean);
-              printDataUrls(urls);
+          // ---------- PRINT ----------
+          async function onPrint(e) {
+            e.preventDefault(); e.stopPropagation();
+
+            const list = getImgs();
+            if (!list.length) return Swal?.fire?.({icon:'warning', title:'Nothing to print'}) || alert('Nothing to print');
+
+            // Open the window/tab immediately (user gesture) — no awaits before this
+            const w = window.open('', '_blank');
+            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return; }
+
+            try {
+              // Pre-build the skeleton page synchronously
+              w.document.open();
+              w.document.write(`<!doctype html>
+                <html><head><meta charset="utf-8"><title>Print Labels</title></head>
+                <body style="margin:16px;text-align:center;"></body></html>`);
+              w.document.close();
+
+              // Now convert images to data: PNGs (await allowed after window is open)
+              const urls = [];
+              for (const im of list) urls.push(await imageToPngDataURL(im));
+
+              // Inject images then auto-print
+              const body = w.document.body;
+              urls.forEach(u => {
+                const img = w.document.createElement('img');
+                img.src = u;
+                img.style.cssText = 'width:360px;height:auto;display:inline-block;margin:8px;';
+                body.appendChild(img);
+              });
+
+              const script = w.document.createElement('script');
+              script.textContent = `
+                window.onload = function () {
+                  setTimeout(function () {
+                    window.focus(); window.print();
+                    setTimeout(function(){ window.close && window.close(); }, 300);
+                  }, 50);
+                };
+              `;
+              w.document.body.appendChild(script);
+            } catch (err) {
+              console.error('[mixqr] print error:', err);
+              w && w.close();
+              Swal?.fire?.({icon:'error', title:'Print failed', text:String(err)}) || alert('Print failed: ' + err);
             }
-          }, true);
+          }
+
+          // ---------- WIRING ----------
+          document.addEventListener('DOMContentLoaded', () => {
+            $('#btnDownloadQr')?.addEventListener('click', onDownload);
+            $('#btnPrintQr')?.addEventListener('click', onPrint);
+
+            // auto-enable when labels appear
+            const container = $('#qrGrid') || $('#qrContainer');
+            if (container && window.MutationObserver) {
+              new MutationObserver(() => enableButtons(getImgs().length > 0))
+                .observe(container, { childList:true, subtree:true });
+            }
+          });
+
+          // delegated backup (survives re-renders)
+          document.addEventListener('click', (e) => {
+            const dl = e.target.closest?.('#btnDownloadQr'); if (dl) return onDownload(e);
+            const pr = e.target.closest?.('#btnPrintQr');    if (pr) return onPrint(e);
+          });
+
+          // When QR modal shows, sync button state
+          $('#createMixQrModal')?.addEventListener('shown.bs.modal', () => {
+            enableButtons(getImgs().length > 0);
+          });
         })();
     </script>
+
+    <script>
+        /* ===== Ultra-simple, inline-wired handlers ===== */
+        (function () {
+          if (window.__MIXQR_INLINE_IO__) return;
+          window.__MIXQR_INLINE_IO__ = true;
+
+          const $  = (s, r=document)=>r.querySelector(s);
+          const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+
+          function getImgs() {
+            const list = $$('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img');
+            console.log('[mixqr] images found:', list.length, list);
+            return list;
+          }
+          function enableButtons(flag) {
+            const dl = $('#btnDownloadQr'), pr = $('#btnPrintQr');
+            if (dl) dl.disabled = !flag;
+            if (pr) pr.disabled = !flag;
+          }
+
+          // Convert any <img> to a PNG dataURL via <canvas> (robust across src types)
+          function imgToDataURL(img) {
+            return new Promise((resolve, reject) => {
+              const src = img.currentSrc || img.src || '';
+              if (src.startsWith('data:image/png')) return resolve(src);
+
+              const probe = new Image();
+              probe.crossOrigin = 'anonymous';
+              probe.onload = () => {
+                try {
+                  const w = img.naturalWidth || probe.naturalWidth || 360;
+                  const h = img.naturalHeight || probe.naturalHeight || 360;
+                  const cx = document.createElement('canvas');
+                  cx.width = w; cx.height = h;
+                  const ctx = cx.getContext('2d');
+                  ctx.drawImage(probe, 0, 0, w, h);
+                  resolve(cx.toDataURL('image/png'));
+                } catch (err) { reject(err); }
+              };
+              probe.onerror = () => reject(new Error('failed to load: ' + src));
+              probe.src = src;
+            });
+          }
+
+          function aDownload(dataUrl, filename) {
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove();
+          }
+
+          // Expose globals used by inline onclick=
+          window.mixqrDownload = async function () {
+            try {
+              const imgs = getImgs();
+              if (!imgs.length) { alert('Nothing to download'); return false; }
+
+              if (imgs.length === 1) {
+                const img = imgs[0];
+                const data = await imgToDataURL(img);
+                const bag = img.dataset.bag || '1';
+                aDownload(data, `sintergy-label-bag-${bag}.png`);
+                return false;
+              }
+
+              // Multiple → download one-by-one (most reliable across CSP/pop-up settings)
+              for (let i = 0; i < imgs.length; i++) {
+                const img = imgs[i];
+                const data = await imgToDataURL(img);
+                const bag = img.dataset.bag || (i + 1);
+                aDownload(data, `sintergy-label-bag-${bag}.png`);
+              }
+            } catch (err) {
+              console.error('[mixqr] download error', err);
+              alert('Download failed: ' + (err?.message || err));
+            }
+            return false;
+          };
+
+          window.mixqrPrint = async function () {
+            const imgs = getImgs();
+            if (!imgs.length) { alert('Nothing to print'); return false; }
+
+            // Open the window/tab immediately (sync with the click)
+            const w = window.open('', '_blank');
+            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return false; }
+
+            // Build shell first (still sync)
+            w.document.open();
+            w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title></head><body style="margin:16px;text-align:center;"></body></html>');
+            w.document.close();
+
+            try {
+              // Now convert asynchronously
+              const urls = [];
+              for (const im of imgs) urls.push(await imgToDataURL(im));
+
+              urls.forEach(u => {
+                const img = w.document.createElement('img');
+                img.src = u;
+                img.style.cssText = 'width:360px;height:auto;display:inline-block;margin:8px;';
+                w.document.body.appendChild(img);
+              });
+
+              const s = w.document.createElement('script');
+              s.textContent = `
+                window.onload = function () {
+                  setTimeout(function () {
+                    window.focus(); window.print();
+                    setTimeout(function(){ window.close && window.close(); }, 300);
+                  }, 60);
+                };
+              `;
+              w.document.body.appendChild(s);
+            } catch (err) {
+              console.error('[mixqr] print error', err);
+              try { w.close(); } catch {}
+              alert('Print failed: ' + (err?.message || err));
+            }
+            return false;
+          };
+
+          // Auto-enable buttons when labels appear
+          document.addEventListener('DOMContentLoaded', () => {
+            const container = $('#qrGrid') || $('#qrContainer');
+            if (container && window.MutationObserver) {
+              new MutationObserver(() => enableButtons(getImgs().length > 0))
+                .observe(container, { childList:true, subtree:true });
+            }
+          });
+
+          // Also re-check whenever the modal is shown
+          $('#createMixQrModal')?.addEventListener('shown.bs.modal', () => {
+            enableButtons(getImgs().length > 0);
+          });
+        })();
+    </script>
+
+
+
 
 }
 
