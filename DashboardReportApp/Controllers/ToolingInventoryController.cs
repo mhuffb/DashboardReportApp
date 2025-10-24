@@ -10,8 +10,8 @@ namespace DashboardReportApp.Controllers
     public class ToolingInventoryController : Controller
     {
         private readonly ToolingInventoryService _svc;
-        private readonly ToolingHistoryService _history;
-        public ToolingInventoryController(ToolingInventoryService svc, ToolingHistoryService history)
+        private readonly ToolingWorkOrderService _history;
+        public ToolingInventoryController(ToolingInventoryService svc, ToolingWorkOrderService history)
         {
             _svc = svc;
             _history = history;
@@ -24,7 +24,7 @@ namespace DashboardReportApp.Controllers
         {
             var items = await _svc.GetAllAsync();
 
-            var inProgress = _history.GetToolingHistories()
+            var inProgress = _history.GetToolingWorkOrders()
                 .Where(h => !h.DateReceived.HasValue)
                 .OrderByDescending(h => h.GroupID)
                 .ToList();
@@ -115,6 +115,8 @@ namespace DashboardReportApp.Controllers
             await _svc.UpdateAsync(model);
             return Json(new { ok = true });
         }
+
+      
 
 
         private bool IsAjax()

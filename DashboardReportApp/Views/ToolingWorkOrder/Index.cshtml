@@ -2,7 +2,7 @@
 @inject IConfiguration Config
 
 <div class="container-fluid px-3">
-    <h2 class="text-center mb-4">Tooling History</h2>
+    <h2 class="text-center mb-4">Tooling Work Orders</h2>
     <a href="@Url.Action("Logout", "Admin")" class="btn btn-danger mb-3">Logout</a>
 
     <!-- Global hidden anti-forgery token so JS can read it even if no visible form -->
@@ -10,8 +10,8 @@
 
     <!-- Centered Add button -->
     <div class="d-flex justify-content-center mb-3">
-        <button id="btnAddToolHistory" class="btn btn-success">
-            <i class="bi bi-plus"></i> Add New Tool History
+        <button id="btnAddToolWorkOrder" class="btn btn-success">
+            <i class="bi bi-plus"></i> Add New Tool WorkOrder
         </button>
     </div>
 
@@ -65,7 +65,7 @@
                             <td>@item.DateDue?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit Tool History</button>
+                                <button class="btn btn-primary btn-sm" data-action="edit-workorder" data-id="@item.Id">Edit Tool Work Order</button>
                                 <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Add/Edit Tool Items</button>
 
                                 @{
@@ -109,7 +109,7 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
                                        target="_blank" rel="noopener">
                                         Create Packing Slip
                                     </a>
@@ -177,7 +177,7 @@
                             <td>@item.DateReceived?.ToShortDateString()</td>
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-primary btn-sm" data-action="edit-history" data-id="@item.Id">Edit</button>
+                                <button class="btn btn-primary btn-sm" data-action="edit-workorder" data-id="@item.Id">Edit</button>
                                 <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Items</button>
 
                                 @{
@@ -217,7 +217,7 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
                                        target="_blank" rel="noopener">
                                         Packing Slip
                                     </a>
@@ -275,128 +275,117 @@
         const modalEl = document.getElementById('appModal');
         const modal   = new bootstrap.Modal(modalEl);
 
-        async function loadModal(url) {
+                        async function loadModal(url) {
           try {
-            const res = await fetch(url, { credentials: 'same-origin' });
+            const res = await fetch(url, {
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }   // tell server it's AJAX
+            });
+            const html = await res.text();                         // read ONCE
             if (!res.ok) {
-              const t = await res.text().catch(()=>res.statusText);
-              await alertErr('Failed to load', t?.slice(0,600) || res.statusText);
+              await alertErr('Failed to load', html.slice(0, 600) || res.statusText);
               return;
             }
-            modalEl.querySelector('.modal-content').innerHTML = await res.text();
+            modalEl.querySelector('.modal-content').innerHTML = html;
             modal.show();
           } catch (err) {
             await alertErr('Network error', err?.message || 'Unexpected error');
           }
         }
 
+
+
         // --- open modals ---
-        document.getElementById('btnAddToolHistory')?.addEventListener('click', () => {
-          loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")');
+        document.getElementById('btnAddToolWorkOrder')?.addEventListener('click', () => {
+          loadModal('@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder")');
         });
 
         document.addEventListener('click', (e) => {
           const btn = e.target.closest('button');
           if (!btn) return;
 
-          if (btn.dataset.action === 'edit-history') {
+          if (btn.dataset.action === 'edit-workorder') {
             const id = btn.dataset.id;
-            loadModal('@Url.Action("EditToolingHistoryModal", "ToolingHistory")' + '?id=' + id);
+            loadModal('@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder")' + '?id=' + id);
           }
 
           if (btn.dataset.action === 'tool-items') {
             const groupId = btn.dataset.group;
-            loadModal('@Url.Action("ToolItemsModal", "ToolingHistory")' + '?groupID=' + groupId);
+            loadModal('@Url.Action("ToolItemsModal", "ToolingWorkOrder")' + '?groupID=' + groupId);
           }
         });
 
-      
+
 
         // --- SINGLE handler for all modal form posts ---
-              modalEl.addEventListener('submit', async (e) => {
-          const form = e.target;
-          const ids = new Set(['toolHistoryForm','addItemForm','saveAllForm']);
+              if (!window._appModalSubmitWired) {
+          document.getElementById('appModal')?.addEventListener('submit', async (e) => {
+            const form = e.target;
+            if (!form || !['toolWorkOrderForm','addItemForm','saveAllForm'].includes(form.id)) return;
 
-          if (!ids.has(form.id)) return;
+            e.preventDefault();
 
-          e.preventDefault();
+            const btn = form.querySelector('[type="submit"]');
+            const prevHtml = btn?.innerHTML;
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
 
-          
+            try {
+              const res = await fetch(form.action, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },  // key for server branching
+                body: new FormData(form)                             // includes the hidden __RequestVerificationToken
+              });
 
-          const btn = form.querySelector('[type="submit"]');
-          const prevDisabled = btn?.disabled;
-          if (btn) btn.disabled = true;
+              const ct = res.headers.get('content-type') || '';
 
-          const tokenInForm = form.querySelector('input[name="__RequestVerificationToken"]')?.value;
-          const token = tokenInForm || getPageAntiforgeryToken();
-
-          try {
-            const res = await fetch(form.action, {
-              method: 'POST',
-              headers: { 'RequestVerificationToken': token },
-              body: new FormData(form),
-              credentials: 'same-origin'
-            });
-
-            const ct = res.headers.get('content-type') || '';
-
-            // TOOL HISTORY FORM: JSON on success; HTML (partial) on validation fail
-            if (form.id === 'toolHistoryForm') {
-              if (ct.includes('application/json')) {
-                const data = await res.json();
-                if (data.ok) {
-                  await alertSuc('Saved','Tooling history saved.');
-                  modal.hide(); location.reload(); return;
+              // Work-order save: JSON on success, HTML partial on validation
+              if (form.id === 'toolWorkOrderForm') {
+                if (ct.includes('application/json')) {
+                  const data = await res.json();
+                  if (data.ok) {
+                    await alertSuc('Saved', data.message || 'Work order saved.');
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('appModal')).hide();
+                    location.reload();
+                    return;
+                  }
+                  await alertErr('Save failed', data.error || 'Could not save.');
+                  return;
                 }
-                await alertErr('Save failed', data.error || 'Could not save tooling history.');
+                const html = await res.text();
+                document.querySelector('#appModal .modal-content').innerHTML = html;
+                await alertWarn('Validation', 'Please fix the highlighted errors.');
                 return;
               }
-              // HTML -> re-render modal with validation summary (even if 400)
+
+              // Tool items (add / save-all): always return HTML partial to rehydrate modal on success/validation
+              if (ct.includes('text/html')) {
+                const html = await res.text();
+                document.querySelector('#appModal .modal-content').innerHTML = html;
+                if (res.ok) {
+                  if (form.id === 'addItemForm') await alertSuc('Added', 'Tool item added.');
+                  if (form.id === 'saveAllForm') await alertSuc('Saved', 'All tool items saved.');
+                }
+                return;
+              }
+
+              // Fallbacks
+              if (!res.ok) {
+                const t = await res.text().catch(()=>res.statusText);
+                await alertErr('Action failed', (t || res.statusText).slice(0,600));
+                return;
+              }
               const html = await res.text();
-              modalEl.querySelector('.modal-content').innerHTML = html;
-              await alertWarn('Validation','Please fix the errors shown at the top.');
-              return;
+              document.querySelector('#appModal .modal-content').innerHTML = html;
+
+            } catch (err) {
+              await alertErr('Error', err?.message || 'Unexpected error.');
+            } finally {
+              if (btn) { btn.disabled = false; btn.innerHTML = prevHtml; }
             }
-
-                   // OTHER FORMS (Add Item / Save All / Receive All / Fit All):
-        if (ct.includes('text/html')) {
-          const html = await res.text();
-          modalEl.querySelector('.modal-content').innerHTML = html;
-
-          if (!res.ok) {
-            // Validation fail -> for addItemForm, NO SweetAlert, just show inline summary.
-            if (form.id === 'addItemForm') return;
-
-            // For other forms you can keep a warning if you want:
-            await alertWarn('Validation','Please review the highlighted errors above.');
-            return;
-          }
-
-          // Success popups still OK:
-          if (form.id === 'addItemForm')    await alertSuc('Added','Tool item added.');
-          if (form.id === 'saveAllForm')    await alertSuc('Saved','All tool items saved.');
-         
-          return;
+          });
+          window._appModalSubmitWired = true;
         }
-
-
-            // Non-HTML error fallback
-            if (!res.ok) {
-              const t = await res.text().catch(()=>res.statusText);
-              await alertErr('Action failed', t?.slice(0,600) || res.statusText);
-              return;
-            }
-
-            // Success fallback (rarely hit here): inject whatever it is
-            const html = await res.text();
-            modalEl.querySelector('.modal-content').innerHTML = html;
-
-          } catch (err) {
-            await alertErr('Error', err?.message || 'Unexpected error.');
-          } finally {
-            if (btn) btn.disabled = prevDisabled ?? false;
-          }
-        });
 
 
         // --- PO request handler (SweetAlert only; exactly one handler) ---
@@ -410,12 +399,15 @@
             const prevDisabled = btn?.disabled; if (btn) btn.disabled = true;
 
             try {
-              const res = await fetch(form.action, {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
-                body: new FormData(form),
-                credentials: 'same-origin'
-              });
+                      const res = await fetch(form.action, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',              // <-- add
+            'RequestVerificationToken': getPageAntiforgeryToken()
+          },
+          body: new FormData(form),
+          credentials: 'same-origin'
+        });
               const payload = await res.json();
 
               if (payload.ok) {
@@ -439,12 +431,15 @@
             const prevDisabled = btn?.disabled; if (btn) btn.disabled = true;
 
             try {
-              const res = await fetch(form.action, {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': getPageAntiforgeryToken() },
-                body: new FormData(form),
-                credentials: 'same-origin'
-              });
+                      const res = await fetch(form.action, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',              // <-- add
+            'RequestVerificationToken': getPageAntiforgeryToken()
+          },
+          body: new FormData(form),
+          credentials: 'same-origin'
+        });
               const payload = await res.json();
 
               if (payload.ok) {
@@ -501,7 +496,7 @@
           if (container.dataset.loaded === '1') return;
 
           try {
-            const url = '@Url.Action("ItemsTable", "ToolingHistory")' + '?groupID=' + encodeURIComponent(group);
+            const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?groupID=' + encodeURIComponent(group);
             const res = await fetch(url, { credentials: 'same-origin' });
             const html = await res.text();
             container.innerHTML = html;
@@ -603,7 +598,7 @@
 
           try {
             // 1) Delete
-            const res = await fetch('/ToolingHistory/DeleteToolItemAjax', {
+            const res = await fetch('/ToolingWorkOrder/DeleteToolItemAjax', {
               method: 'POST',
               headers: { 'RequestVerificationToken': token },
               body: form,
@@ -620,7 +615,7 @@
             // 2) Refresh UI
             if (inModal) {
               // Refresh the entire modal so all indices & validations stay correct
-              const url = '/ToolingHistory/ToolItemsModal?groupID=' + encodeURIComponent(groupID);
+              const url = '/ToolingWorkOrder/ToolItemsModal?groupID=' + encodeURIComponent(groupID);
               const r2 = await fetch(url, { credentials: 'same-origin' });
               const html2 = await r2.text();
               const modalContent = document.querySelector('#appModal .modal-content');

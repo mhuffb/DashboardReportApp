@@ -1,26 +1,20 @@
 ﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
-using iText.Layout.Element;
 using Microsoft.AspNetCore.Mvc;
-using MySql.Data.MySqlClient;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.Metrics;
 using System.Globalization;
-using System.Linq; // for string.Join / Select in RequestPoNumber
 
 namespace DashboardReportApp.Controllers
 {
     [PasswordProtected(Password = "5intergy")]
-    public class ToolingHistoryController : Controller
+    public class ToolingWorkOrderController : Controller
     {
-        private readonly ToolingHistoryService _service;
+        private readonly ToolingWorkOrderService _service;
         private readonly SharedService _shared;
         private readonly IConfiguration _cfg;
 
-        public ToolingHistoryController(
-            ToolingHistoryService service,
+        public ToolingWorkOrderController(
+            ToolingWorkOrderService service,
             SharedService shared,
             IConfiguration cfg)
         {
@@ -34,41 +28,41 @@ namespace DashboardReportApp.Controllers
             var nextGroupId = _service.GetNextGroupID();
             ViewBag.NextGroupID = nextGroupId;
 
-            var toolingHistory = new ToolingHistoryModel
+            var toolingWorkOrder = new ToolingHistoryModel
             {
                 DateInitiated = DateTime.Today,
                 DateDue = DateTime.Today,
                 InitiatedBy = "Emery, J"
             };
 
-            var toolingHistories = _service.GetToolingHistories();
-            ViewBag.ToolingHistories = toolingHistories;
+            var toolingWorkOrders = _service.GetToolingWorkOrders();
+            ViewBag.ToolingWorkOrders = toolingWorkOrders;
 
-            ViewBag.ToolingAll = toolingHistories;
-            ViewBag.ToolingInProgress = toolingHistories.Where(h => !h.DateReceived.HasValue).ToList();
+            ViewBag.ToolingAll = toolingWorkOrders;
+            ViewBag.ToolingInProgress = toolingWorkOrders.Where(h => !h.DateReceived.HasValue).ToList();
 
-            PopulateHeaderLists(toolingHistory);
-            return View(toolingHistory);
+            PopulateHeaderLists(toolingWorkOrder);
+            return View(toolingWorkOrder);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Index(ToolingHistoryModel toolingHistory)
+        public IActionResult Index(ToolingHistoryModel toolingWorkOrder)
         {
             if (ModelState.IsValid)
             {
-                _service.AddToolingHistory(toolingHistory);
-                TempData["Success"] = "Tooling history created.";
+                _service.AddToolingWorkOrder(toolingWorkOrder);
+                TempData["Success"] = "Tooling Work Order created.";
                 return RedirectToAction(nameof(Index));
             }
 
-            ViewBag.ToolingHistories = _service.GetToolingHistories();
-            PopulateHeaderLists(toolingHistory);
-            return View(toolingHistory);
+            ViewBag.ToolingWorkOrders = _service.GetToolingWorkOrders();
+            PopulateHeaderLists(toolingWorkOrder);
+            return View(toolingWorkOrder);
         }
 
         [HttpGet]
-        public IActionResult EditToolingHistoryModal(int? id)
+        public IActionResult EditToolingWorkOrderModal(int? id)
         {
             ToolingHistoryModel model;
             if (id is null || id == 0)
@@ -83,40 +77,52 @@ namespace DashboardReportApp.Controllers
             }
             else
             {
-                model = _service.GetToolingHistoryById(id.Value);
+                model = _service.GetToolingWorkOrdersById(id.Value);
                 if (model == null) return NotFound();
             }
 
             PopulateHeaderLists(model);
-            return PartialView("_ToolingHistoryEditModal", model);
+            return PartialView("_ToolingWorkOrderEditModal", model);
         }
+
+        private bool IsAjax() =>
+      string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult SaveToolingHistory(ToolingHistoryModel model)
+        public IActionResult SaveToolingWorkOrder(ToolingHistoryModel model)
         {
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = 400;
                 PopulateHeaderLists(model);
-                return PartialView("_ToolingHistoryEditModal", model);
+                return IsAjax()
+                    ? PartialView("_ToolingWorkOrderEditModal", model)
+                    : View("EditToolingWorkOrder", model);
             }
 
             try
             {
-                if (model.Id == 0) _service.AddToolingHistory(model);
-                else _service.UpdateToolingHistory(model);
+                if (model.Id == 0) _service.AddToolingWorkOrder(model);
+                else _service.UpdateToolingWorkOrder(model);
 
-                return Json(new { ok = true });
+                if (IsAjax())
+                    return Json(new { ok = true, message = $"Work order for Group {model.GroupID} saved." });
+
+                TempData["Success"] = $"Work order for Group {model.GroupID} saved.";
+                return RedirectToAction("Index", "ToolingInventory");
             }
             catch (Exception ex)
             {
                 ModelState.AddModelError("", ex.Message);
                 Response.StatusCode = 400;
                 PopulateHeaderLists(model);
-                return PartialView("_ToolingHistoryEditModal", model);
+                return IsAjax()
+                    ? PartialView("_ToolingWorkOrderEditModal", model)
+                    : View("EditToolingWorkOrder", model);
             }
         }
+
 
 
 
@@ -126,7 +132,7 @@ namespace DashboardReportApp.Controllers
             var groupRecords = _service.GetToolItemsByGroupID(groupID); // List<ToolItemViewModel>
 
             // get header to read the Part (assembly #)
-            var header = _service.GetHeaderByGroupID(groupID); // returns ToolingHistoryModel
+            var header = _service.GetHeaderByGroupID(groupID); 
 
             var model = new GroupDetailsViewModel
             {
@@ -169,7 +175,6 @@ namespace DashboardReportApp.Controllers
             return PartialView("_ToolItemsModal", vm);
         }
 
-        // NEW: Save all tool items for the group in one go
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult SaveAllToolItemsAjax(GroupDetailsViewModel model)
@@ -177,7 +182,7 @@ namespace DashboardReportApp.Controllers
             if (model == null || model.GroupID <= 0)
             {
                 Response.StatusCode = 400;
-                return Content("Invalid group.");
+                return IsAjax() ? Content("Invalid group.") : RedirectToAction("Index", "ToolingInventory");
             }
 
             if (model.ToolItems != null)
@@ -186,7 +191,6 @@ namespace DashboardReportApp.Controllers
                 {
                     if (item.Id > 0)
                     {
-                        // Map GroupToolItem -> ToolItemViewModel for update (if your service expects VM)
                         var vm = new ToolItemViewModel
                         {
                             Id = item.Id,
@@ -205,14 +209,23 @@ namespace DashboardReportApp.Controllers
                 }
             }
 
-            var refreshed = new GroupDetailsViewModel
+            // AJAX => return refreshed modal body; Non-AJAX => redirect
+            if (IsAjax())
             {
-                GroupID = model.GroupID,
-                ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
-                NewToolItem = new ToolItemViewModel { GroupID = model.GroupID }
-            };
-            return PartialView("_ToolItemsModal", refreshed);
+                var refreshed = new GroupDetailsViewModel
+                {
+                    GroupID = model.GroupID,
+                    GroupName = _service.GetHeaderByGroupID(model.GroupID)?.Part,
+                    ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
+                    NewToolItem = new ToolItemViewModel { GroupID = model.GroupID, Quantity = 1 }
+                };
+                return PartialView("_ToolItemsModal", refreshed);
+            }
+
+            TempData["Success"] = "Tool items saved.";
+            return RedirectToAction("Index", "ToolingInventory");
         }
+
 
 
 
@@ -223,16 +236,16 @@ namespace DashboardReportApp.Controllers
         {
             try
             {
-                var record = _service.GetToolingHistoryById(id);
+                var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
                 // ⬇️ Put it here
-                var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_history_item
+                var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_WorkOrder_item
 
                 var subject = $"PO Request: Group {record.GroupID} / {record.Part}";
-                var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
+                var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
                 var body = $@"
-PO Request (Tooling History)
+PO Request (Tooling Work Order)
 ----------------------------
 GroupID: {record.GroupID}
 Reason: {record.Reason}
@@ -272,9 +285,9 @@ Open in Dashboard: {link}
                 return Json(new { ok = false, error = ex.Message });
             }
         }
-       
-      
-        // GET /ToolingHistory/GeneratePackingSlip?groupID=123
+
+
+        // GET /ToolingWorkOrder/GeneratePackingSlip?groupID=123
         [HttpGet]
         public IActionResult GeneratePackingSlip(int groupID, bool email = true)
         {
@@ -346,24 +359,24 @@ Open in Dashboard: {link}
             ViewBag.VendorList = vendors;
             ViewBag.InitiatedList = people;
         }
-        // Open the Edit Tool History modal by GroupID
-        // ToolingHistoryController.cs
+        // Open the Edit Tool Work Order modal by GroupID
+        // ToolingWorkOrderController.cs
 
         [HttpGet]
-        public IActionResult EditToolingHistoryModalByGroup(int groupID)
+        public IActionResult EditToolingWorkOrderModalByGroup(int groupID)
         {
-            // Find a history row for this group (pick most recent if multiple)
-            var hx = _service.GetToolingHistories()
+            // Find a WorkOrder row for this group (pick most recent if multiple)
+            var hx = _service.GetToolingWorkOrders()
                          .Where(h => h.GroupID == groupID)
                          .OrderByDescending(h => h.DateInitiated)
                          .FirstOrDefault();
 
             if (hx == null)
-                return NotFound($"No tooling history found for group {groupID}.");
+                return NotFound($"No tooling Work Order found for group {groupID}.");
 
-            // Reuse your existing modal action that expects a history Id
+            // Reuse your existing modal action that expects a WorkOrder Id
             // IMPORTANT: call the action method directly to render the same partial
-            return EditToolingHistoryModal(hx.Id);
+            return EditToolingWorkOrderModal(hx.Id);
         }
 
         [HttpGet]
@@ -373,7 +386,7 @@ Open in Dashboard: {link}
             return ToolItemsModal(groupID);
         }
 
-        // ToolingHistoryController.cs
+        // ToolingWorkOrderController.cs
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult DeleteToolItemAjax(int id, int groupID)
@@ -392,7 +405,7 @@ Open in Dashboard: {link}
                 return Content("Delete failed: " + ex.Message);
             }
         }
-        // ToolingHistoryController.cs
+        // ToolingWorkOrderController.cs
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -400,13 +413,13 @@ Open in Dashboard: {link}
         {
             try
             {
-                var record = _service.GetToolingHistoryById(id);
+                var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
                 var items = _service.GetToolItemsByGroupID(record.GroupID);
 
                 var subject = $"Work Order Request: Group {record.GroupID} / {record.Part}";
-                var link = Url.Action("Index", "ToolingHistory", null, Request.Scheme);
+                var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
 
                 var body = $@"
 WORK ORDER REQUEST (Internal Toolroom)

@@ -6,23 +6,23 @@ using QuestPDF.Infrastructure;
 
 namespace DashboardReportApp.Services
 {
-    public class ToolingHistoryService
+    public class ToolingWorkOrderService
     {
         private readonly string _connectionString;
 
-        public ToolingHistoryService(IConfiguration configuration)
+        public ToolingWorkOrderService(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection");
         }
 
-        public List<ToolingHistoryModel> GetToolingHistories()
+        public List<ToolingHistoryModel> GetToolingWorkOrders()
         {
             var list = new List<ToolingHistoryModel>();
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
        Cost, AccountingCode, InitiatedBy, DateReceived,              
        Received_CompletedBy                                        
-FROM tooling_history_header
+FROM tooling_workorder_header
 ORDER BY Id DESC;
 ";
 
@@ -57,7 +57,7 @@ ORDER BY Id DESC;
 
         public int GetNextGroupID()
         {
-            const string sql = "SELECT IFNULL(MAX(GroupID), 0) + 1 FROM tooling_history_header;";
+            const string sql = "SELECT IFNULL(MAX(GroupID), 0) + 1 FROM tooling_workorder_header;";
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
@@ -65,13 +65,13 @@ ORDER BY Id DESC;
         }
 
 
-        public ToolingHistoryModel? GetToolingHistoryById(int id)
+        public ToolingHistoryModel? GetToolingWorkOrdersById(int id)
         {
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
        Cost, AccountingCode, InitiatedBy, DateReceived,
-       Received_CompletedBy                          -- + NEW
-FROM tooling_history_header
+       Received_CompletedBy                         
+FROM tooling_workorder_header
 WHERE Id = @Id
 LIMIT 1;
 
@@ -105,7 +105,7 @@ LIMIT 1;
         }
         private int GetHeaderIdByGroup(MySqlConnection conn, MySqlTransaction? tx, int groupId)
         {
-            const string sql = "SELECT Id FROM tooling_history_header WHERE GroupID=@G LIMIT 1;";
+            const string sql = "SELECT Id FROM tooling_workorder_header WHERE GroupID=@G LIMIT 1;";
             using var cmd = new MySqlCommand(sql, conn, tx);
             cmd.Parameters.AddWithValue("@G", groupId);
             var o = cmd.ExecuteScalar();
@@ -115,7 +115,7 @@ LIMIT 1;
         public void MarkPoRequested(int id)
         {
             const string sql = @"
-UPDATE tooling_history_header
+UPDATE tooling_workorder_header
 SET PoRequestedAt = IFNULL(PoRequestedAt, NOW())
 WHERE Id = @Id;";
 
@@ -130,7 +130,7 @@ WHERE Id = @Id;";
         public void AddToolItem(ToolItemViewModel m)
         {
             const string sql = @"
-INSERT INTO tooling_history_item
+INSERT INTO tooling_workorder_item
  (HeaderId, GroupID, Action, ToolItem, ToolNumber, ToolDesc, Revision, Quantity, Cost, ToolWorkHours
   )
 VALUES
@@ -159,7 +159,7 @@ VALUES
         public void UpdateToolItem(ToolItemViewModel m)
         {
             const string sql = @"
-UPDATE tooling_history_item SET
+UPDATE tooling_workorder_item SET
   Action=@Action, ToolItem=@ToolItem, ToolNumber=@ToolNumber, ToolDesc=@ToolDesc, Revision=@Revision,
   Quantity=@Quantity, Cost=@Cost, ToolWorkHours=@ToolWorkHours
 WHERE Id=@Id;";
@@ -178,20 +178,20 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
-        public void AddToolingHistory(ToolingHistoryModel m)
+        public void AddToolingWorkOrder(ToolingHistoryModel m)
         {
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
 
             // ensure unique GroupID
             using (var check = new MySqlCommand(
-                "SELECT COUNT(*) FROM tooling_history_header WHERE GroupID=@G;", conn))
+                "SELECT COUNT(*) FROM tooling_workorder_header WHERE GroupID=@G;", conn))
             {
                 check.Parameters.AddWithValue("@G", m.GroupID);
                 var exists = Convert.ToInt32(check.ExecuteScalar()) > 0;
                 if (exists)
                 {
-                    using var maxCmd = new MySqlCommand("SELECT IFNULL(MAX(GroupID),0)+1 FROM tooling_history_header;", conn);
+                    using var maxCmd = new MySqlCommand("SELECT IFNULL(MAX(GroupID),0)+1 FROM tooling_workorder_header;", conn);
                     m.GroupID = Convert.ToInt32(maxCmd.ExecuteScalar());
                 }
             }
@@ -205,7 +205,7 @@ WHERE Id=@Id;";
             };
 
             const string sql = @"
-INSERT INTO tooling_history_header
+INSERT INTO tooling_workorder_header
  (GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
    AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy)     -- + NEW
 VALUES
@@ -232,10 +232,10 @@ VALUES
         }
 
 
-        public void UpdateToolingHistory(ToolingHistoryModel m)
+        public void UpdateToolingWorkOrder(ToolingHistoryModel m)
         {
             const string sql = @"
-UPDATE tooling_history_header SET
+UPDATE tooling_workorder_header SET
   Part=@Part, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
   DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost, InitiatedBy=@InitiatedBy,
   DateReceived=@DateReceived,
@@ -271,7 +271,7 @@ WHERE Id=@Id;";
             const string sql = @"
 SELECT i.Id, i.GroupID, i.Action, i.ToolItem, i.ToolNumber, i.ToolDesc, i.Revision,
        i.Quantity, i.Cost, i.ToolWorkHours
-FROM tooling_history_item i
+FROM tooling_workorder_item i
 WHERE i.GroupID = @GroupID
 ORDER BY i.Id ASC;
 ";
@@ -318,7 +318,7 @@ SELECT
     Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
     AccountingCode, Cost, InitiatedBy, DateReceived,              
     Received_CompletedBy                                          
-FROM tooling_history_header
+FROM tooling_workorder_header
 WHERE GroupID = @GroupID
 LIMIT 1;";
             using var conn = new MySqlConnection(_connectionString);
@@ -497,7 +497,7 @@ LIMIT 1;";
         }
         public List<string> GetDistinctReasons()
         {
-            const string sql = @"SELECT DISTINCT Reason FROM tooling_history_header WHERE Reason IS NOT NULL AND Reason <> '' ORDER BY Reason;";
+            const string sql = @"SELECT DISTINCT Reason FROM tooling_workorder_header WHERE Reason IS NOT NULL AND Reason <> '' ORDER BY Reason;";
             var list = new List<string>();
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -509,7 +509,7 @@ LIMIT 1;";
 
         public List<string> GetDistinctVendors()
         {
-            const string sql = @"SELECT DISTINCT ToolVendor FROM tooling_history_header WHERE ToolVendor IS NOT NULL AND ToolVendor <> '' ORDER BY ToolVendor;";
+            const string sql = @"SELECT DISTINCT ToolVendor FROM tooling_workorder_header WHERE ToolVendor IS NOT NULL AND ToolVendor <> '' ORDER BY ToolVendor;";
             var list = new List<string>();
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -521,7 +521,7 @@ LIMIT 1;";
 
         public List<string> GetDistinctInitiators()
         {
-            const string sql = @"SELECT DISTINCT InitiatedBy FROM tooling_history_header WHERE InitiatedBy IS NOT NULL AND InitiatedBy <> '' ORDER BY InitiatedBy;";
+            const string sql = @"SELECT DISTINCT InitiatedBy FROM tooling_workorder_header WHERE InitiatedBy IS NOT NULL AND InitiatedBy <> '' ORDER BY InitiatedBy;";
             var list = new List<string>();
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -530,10 +530,9 @@ LIMIT 1;";
             while (r.Read()) list.Add(r["InitiatedBy"]?.ToString() ?? "");
             return list;
         }
-        // ToolingHistoryService.cs
         public void DeleteToolItem(int id)
         {
-            const string sql = "DELETE FROM tooling_history_item WHERE Id=@Id;";
+            const string sql = "DELETE FROM tooling_workorder_item WHERE Id=@Id;";
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);

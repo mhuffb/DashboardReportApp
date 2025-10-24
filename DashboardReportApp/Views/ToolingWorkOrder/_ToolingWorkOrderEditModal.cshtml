@@ -5,11 +5,11 @@
     var people = (List<string>)(ViewBag.InitiatedList ?? new List<string>());
 }
 <div class="modal-header">
-    <h5 class="modal-title">Tooling History — @Model.GroupID</h5>
+    <h5 class="modal-title">Tooling Work Order — @Model.GroupID</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
-<form id="toolHistoryForm" asp-action="SaveToolingHistory" method="post">
+<form id="toolWorkOrderForm" asp-action="SaveToolingWorkOrder" method="post">
     @Html.AntiForgeryToken()
     @Html.HiddenFor(m => m.Id)
     @Html.HiddenFor(m => m.GroupID)

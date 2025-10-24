@@ -17,7 +17,7 @@
     }
 
    
-    <!-- ====================== In Progress Tools (from Tooling History) ====================== -->
+    <!-- ====================== In Progress Tools (from Tooling WorkOrder) ====================== -->
     @if (ViewBag.ToolingInProgress != null)
     {
         <div class="table-responsive mb-4">
@@ -66,20 +66,20 @@
                                 <div class="btn-group btn-group-sm">
 
                                     <a class="btn btn-primary btn-sm"
-                                       href="@Url.Action("EditToolingHistoryModalByGroup", "ToolingHistory", new { groupID = item.GroupID })"
-                                       data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
-                                        Edit Tool History
+                                       href="@Url.Action("EditToolingWorkOrderModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
+                                        Edit Tool Work Order
                                     </a>
 
                                     <a class="btn btn-secondary btn-sm"
-                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingHistory", new { groupID = item.GroupID })"
-                                       data-bs-toggle="modal" data-bs-target="#toolingHistoryModal">
+                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Add/Edit Tool Items
                                     </a>
 
                                 </div>
 
-                                <form asp-action="RequestPoNumber" asp-controller="ToolingHistory" method="post" class="request-po-form d-inline-block">
+                                <form asp-action="RequestPoNumber" asp-controller="ToolingWorkOrder" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
                                     @{
@@ -95,7 +95,7 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingHistory", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
                                        target="_blank" rel="noopener">
                                         Create Packing Slip
                                     </a>
@@ -211,13 +211,34 @@
 </div>
 
 
-    <div class="modal fade" id="toolingHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="toolingWorkOrderModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xxl modal-dialog-scrollable">
             <div class="modal-content"></div>
         </div>
     </div>
 
 @section Scripts {
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+        <!-- Hidden anti-forgery so JS can grab a token even if no visible form -->
+        <form id="__afForm" class="d-none">@Html.AntiForgeryToken()</form>
+
+        <script>
+            function getPageAntiforgeryToken() {
+              const input = document.querySelector('#__afForm input[name="__RequestVerificationToken"]');
+              return input ? input.value : '';
+            }
+
+            async function swalConfirmDelete(title='Delete this?', text='This cannot be undone.') {
+              const r = await Swal.fire({
+                title, text, icon:'warning',
+                showCancelButton:true, confirmButtonText:'Delete', cancelButtonText:'Cancel',
+                reverseButtons:true, focusCancel:true
+              });
+              return r.isConfirmed;
+            }
+        </script>
+
     <script>
         (function () {
           const modalEl = document.getElementById('toolModal');
@@ -351,22 +372,95 @@
               if (typeof onClose === 'function') onClose();
             }
           }
+
+                      if (!window._invEditDeleteWired) {
+              document.getElementById('toolModal')?.addEventListener('click', async (e) => {
+                const btn = e.target.closest('[data-action="delete-inventory-item"]');
+                if (!btn) return;
+
+                e.preventDefault();
+
+                const id = btn.dataset.id;
+                const url = btn.dataset.url || '/ToolingInventory/Delete';
+
+                if (!id) {
+                  await Swal.fire({ icon:'error', title:'Missing ID', text:'Could not determine the Tool Item ID.' });
+                  return;
+                }
+
+                const ok = await swalConfirmDelete('Delete this Tool Item?', 'This cannot be undone.');
+                if (!ok) return;
+
+                await Swal.fire({
+                  title: 'Deleting…',
+                  allowOutsideClick: false,
+                  allowEscapeKey: false,
+                  didOpen: () => Swal.showLoading()
+                });
+
+                const token = getPageAntiforgeryToken();
+                const fd = new FormData();
+                fd.append('__RequestVerificationToken', token);
+                fd.append('id', id);
+
+                try {
+                  const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                      'X-Requested-With': 'XMLHttpRequest',
+                      'RequestVerificationToken': token
+                    },
+                    body: fd,
+                    credentials: 'same-origin'
+                  });
+
+                  // Accept either JSON {ok:true} or a redirect/empty
+                  let okJson = false, json = null;
+                  try { json = await res.clone().json(); okJson = true; } catch {}
+
+                  if (okJson && json && json.ok) {
+                    await Swal.fire({ icon:'success', title:'Deleted', timer: 1200, showConfirmButton:false });
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('toolModal')).hide();
+                    location.reload();
+                    return;
+                  }
+
+                  if (!res.ok) {
+                    const t = await res.text().catch(()=>res.statusText);
+                    await Swal.fire({ icon:'error', title:'Delete failed', html:`<pre style="text-align:left;white-space:pre-wrap">${(t || res.statusText).slice(0,600)}</pre>` });
+                    return;
+                  }
+
+                  // Fallback success
+                  await Swal.fire({ icon:'success', title:'Deleted', timer: 1200, showConfirmButton:false });
+                  bootstrap.Modal.getOrCreateInstance(document.getElementById('toolModal')).hide();
+                  location.reload();
+                } catch (err) {
+                  await Swal.fire({ icon:'error', title:'Network error', text: err?.message || 'Unexpected error' });
+                }
+              });
+
+              window._invEditDeleteWired = true;
+            }
         })();
     </script>
     <script>
                    document.addEventListener('click', async (e) => {
-              const a = e.target.closest('a[data-bs-target="#toolingHistoryModal"]');
+                  const a = e.target.closest('a[data-bs-target="#toolingWorkOrderModal"]');
               if (!a) return;
               e.preventDefault();
               const url = a.getAttribute('href');
 
-              const r = await fetch(url, {
-                credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-              });
-              const html = await r.text();
+                         const r = await fetch(url, {
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const html = await r.text();
+            document.querySelector('#toolingWorkOrderModal .modal-content').innerHTML = html;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('toolingWorkOrderModal')).show();
 
-              const modalEl = document.getElementById('toolingHistoryModal');
+
+                  const modalEl = document.getElementById('toolingWorkOrderModal');
               modalEl.querySelector('.modal-content').innerHTML = html;   // inject fragment
               bootstrap.Modal.getOrCreateInstance(modalEl).show();
             });
@@ -398,9 +492,13 @@
           if (container.dataset.loaded === '1') return;
 
           try {
-            const url = '@Url.Action("ItemsTable", "ToolingHistory")' + '?groupID=' + encodeURIComponent(group);
-            const res = await fetch(url, { credentials: 'same-origin' });
+                const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?groupID=' + encodeURIComponent(group);
+                       const res = await fetch(url, {
+              credentials: 'same-origin',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
             const html = await res.text();
+
             container.innerHTML = html;
             container.dataset.loaded = '1';
           } catch (err) {
@@ -408,35 +506,44 @@
           }
         });
 
-        // Optional: simple PO request handler (no SweetAlert here; reuse if you have it globally)
-        document.addEventListener('submit', async (e) => {
-          const form = e.target.closest('.request-po-form');
-          if (!form) return;
-          e.preventDefault();
-          const btn = form.querySelector('button[type="submit"]');
-          const prevDisabled = btn?.disabled;
-          if (btn) btn.disabled = true;
-
-          try {
-            const res = await fetch(form.action, {
-              method: 'POST',
-              body: new FormData(form),
-              credentials: 'same-origin'
-            });
-            const payload = await res.json().catch(() => ({}));
-            if (!res.ok || !payload.ok) {
-              alert(payload.error || 'PO request failed.');
-              return;
-            }
-            alert('PO request sent.');
-            location.reload();
-          } catch (err) {
-            alert('PO request failed: ' + (err?.message || 'Unknown error'));
-          } finally {
-            if (btn) btn.disabled = prevDisabled ?? false;
-          }
-        });
+      
     </script>
+        <script>
+            document.addEventListener('submit', async (e) => {
+              const form = e.target.closest('.request-po-form');
+              if (!form) return;
+              e.preventDefault();
+
+              const btn = form.querySelector('button[type="submit"]');
+              const prevDisabled = btn?.disabled; if (btn) btn.disabled = true;
+
+              try {
+                const res = await fetch(form.action, {
+                  method: 'POST',
+                  headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': getPageAntiforgeryToken()
+                  },
+                  body: new FormData(form),
+                  credentials: 'same-origin'
+                });
+
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || !payload.ok) {
+                  await Swal.fire({ icon:'error', title:'PO request failed', text: payload.error || 'Unknown error' });
+                  return;
+                }
+
+                await Swal.fire({ icon:'success', title:'Sent', text:'PO request email sent.' });
+                location.reload();
+              } catch (err) {
+                await Swal.fire({ icon:'error', title:'PO request failed', text: err?.message || 'Network error' });
+              } finally {
+                if (btn) btn.disabled = prevDisabled ?? false;
+              }
+            });
+        </script>
+
         <script>
             (function () {
               const table = document.getElementById('tblInventory');
@@ -558,6 +665,149 @@
               // If rows are added dynamically in the future, call applyFilter() again.
             })();
         </script>
+        <script>
+                      if (!window._twModalSubmitWired) {
+              document.getElementById('toolingWorkOrderModal')?.addEventListener('submit', async (e) => {
+                const form = e.target;
+                if (!form || !['toolWorkOrderForm','addItemForm','saveAllForm'].includes(form.id)) return;
+
+                e.preventDefault();
+
+                const btn = form.querySelector('[type="submit"]');
+                const prevHtml = btn?.innerHTML;
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
+
+                try {
+                  const res = await fetch(form.action, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: new FormData(form)
+                  });
+
+                  const ct = res.headers.get('content-type') || '';
+
+                  if (form.id === 'toolWorkOrderForm') {
+                    if (ct.includes('application/json')) {
+                      const data = await res.json();
+                      if (data.ok) {
+                        await Swal.fire({ icon:'success', title:'Saved', text: data.message || 'Work order saved.' });
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('toolingWorkOrderModal')).hide();
+                        location.reload();
+                        return;
+                      }
+                      await Swal.fire({ icon:'error', title:'Save failed', text: data.error || 'Could not save.' });
+                      return;
+                    }
+                    const html = await res.text();
+                    document.querySelector('#toolingWorkOrderModal .modal-content').innerHTML = html;
+                    await Swal.fire({ icon:'warning', title:'Validation', text:'Please fix the highlighted errors.' });
+                    return;
+                  }
+
+                  if (ct.includes('text/html')) {
+                    const html = await res.text();
+                    document.querySelector('#toolingWorkOrderModal .modal-content').innerHTML = html;
+                    if (res.ok) {
+                      if (form.id === 'addItemForm') await Swal.fire({ icon:'success', title:'Added', text:'Tool item added.' });
+                      if (form.id === 'saveAllForm') await Swal.fire({ icon:'success', title:'Saved', text:'All tool items saved.' });
+                    }
+                    return;
+                  }
+
+                  if (!res.ok) {
+                    const t = await res.text().catch(()=>res.statusText);
+                    await Swal.fire({ icon:'error', title:'Action failed', text:(t||res.statusText).slice(0,600) });
+                    return;
+                  }
+                  const html = await res.text();
+                  document.querySelector('#toolingWorkOrderModal .modal-content').innerHTML = html;
+
+                } catch (err) {
+                  await Swal.fire({ icon:'error', title:'Error', text: err?.message || 'Unexpected error.' });
+                } finally {
+                  if (btn) { btn.disabled = false; btn.innerHTML = prevHtml; }
+                }
+              });
+              window._twModalSubmitWired = true;
+            }
+
+        </script>
+        <script>
+            if (!window._invInlineDeleteWired) {
+              document.addEventListener('click', async (e) => {
+                const btn = e.target.closest('[data-action="delete-tool-item"]');
+                if (!btn) return;
+
+                e.preventDefault();
+
+                // Find row + ids
+                const row = btn.closest('tr');
+                const id = row?.dataset?.itemId || row?.querySelector('input[name$=".Id"]')?.value;
+                // groupID can be on row or in the expando container id
+                let groupID = row?.dataset?.groupId
+                           || row?.querySelector('input[name$=".GroupID"]')?.value;
+
+                if (!groupID) {
+                  // try to infer from container attribute used in your page
+                  const container = btn.closest('[data-items-container]');
+                  groupID = container?.getAttribute('data-items-container') || '';
+                }
+
+                if (!id || !groupID) {
+                  await Swal.fire({ icon:'error', title:'Missing info', text:'Could not determine item/group to delete.' });
+                  return;
+                }
+
+                const ok = await swalConfirmDelete('Delete this tool item?', 'This cannot be undone.');
+                if (!ok) return;
+
+                // Show loading
+                await Swal.fire({
+                  title: 'Deleting…',
+                  allowOutsideClick: false,
+                  allowEscapeKey: false,
+                  didOpen: () => Swal.showLoading()
+                });
+
+                const token = getPageAntiforgeryToken();
+                const form = new FormData();
+                form.append('__RequestVerificationToken', token);
+                form.append('id', id);
+                form.append('groupID', groupID);
+
+                try {
+                  const res = await fetch('/ToolingWorkOrder/DeleteToolItemAjax', {
+                    method: 'POST',
+                    headers: {
+                      'X-Requested-With': 'XMLHttpRequest',
+                      'RequestVerificationToken': token
+                    },
+                    body: form,
+                    credentials: 'same-origin'
+                  });
+
+                  const payload = await res.text();
+
+                  if (!res.ok) {
+                    await Swal.fire({ icon:'error', title:'Delete failed', html:`<pre style="text-align:left;white-space:pre-wrap">${(payload || res.statusText).slice(0,600)}</pre>` });
+                    return;
+                  }
+
+                  // Refresh just the inline table for this group
+                  const container = document.querySelector(`[data-items-container="${groupID}"]`) || btn.closest('[data-items-container]');
+                  if (container) container.innerHTML = payload;
+
+                  await Swal.fire({ icon:'success', title:'Deleted', timer: 1200, showConfirmButton:false });
+                } catch (err) {
+                  await Swal.fire({ icon:'error', title:'Network error', text: err?.message || 'Unexpected error' });
+                }
+              });
+
+              window._invInlineDeleteWired = true;
+            }
+        </script>
+
 
     <style>
         .rotate-90 {
@@ -566,14 +816,21 @@
         }
     </style>
         <style>
-            #toolingHistoryModal .modal-dialog {
+            #toolingWorkOrderModal .modal-dialog {
                 max-width: 95vw;
                 width: 95vw;
             }
 
-            #toolingHistoryModal .modal-body {
+            #toolingWorkOrderModal .modal-body {
                 max-height: 80vh;
                 overflow: auto;
+            }
+        </style>
+        <style>
+            /* Hide *any* delete buttons that may be rendered by shared partials */
+            [data-action="delete-tool-item"],
+            [data-action="delete-inventory-item"] {
+                display: none !important;
             }
         </style>
 
