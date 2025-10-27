@@ -11,8 +11,7 @@ x7. fix schedule nav bar locking up
 
 10.22.25
 
-1. If tooling transcation is make new, add it to the inventory
-2. change name of tooling history to tooling transactions
+x1. If tooling transcation is make new, add it to the inventory. and if its reface, fitting, etc mark it unavailable in inventory
 3. paginate mix bag change records
 4. maintenance page paginate
 5. hold tags paginate
@@ -22,3 +21,5 @@ x7. fix schedule nav bar locking up
 10.23.25
 1. make it so call off with a vacation day used needs approval instead of auto approved
 
+10/27/25 
+1. Make print tag option on assembly page

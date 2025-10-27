@@ -73,9 +73,17 @@ namespace DashboardReportApp.Controllers
             model.DatesRequested = parsed;
             model.SubmittedOn = DateTime.Now;
 
-            /* auto‑approve when Attribute present */
-            bool needsApproval = string.IsNullOrWhiteSpace(model.Attribute) || model.TimeOffType == "Other";
+            /* Approval rules:
+  * - Paid Vacation: ALWAYS needs approval
+  * - Other: needs approval
+  * - Otherwise: needs approval if Attribute is empty
+  */
+            bool isPaidVacation = string.Equals(model.TimeOffType, "Paid Vacation", StringComparison.OrdinalIgnoreCase);
+            bool isOther = string.Equals(model.TimeOffType, "Other", StringComparison.OrdinalIgnoreCase);
+
+            bool needsApproval = isPaidVacation || isOther || string.IsNullOrWhiteSpace(model.Attribute);
             model.Status = needsApproval ? "Waiting" : "Approved";
+
 
 
             _calendarService.SaveServiceRecord(model);
@@ -250,6 +258,17 @@ Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
             var del = new MySqlCommand("DELETE FROM servicerecord_dates WHERE servicerecord_id = @id", conn, tran);
             del.Parameters.AddWithValue("@id", id);
             del.ExecuteNonQuery();
+
+            // If edited to Paid Vacation, ensure it requires approval again
+            if (string.Equals(type, "Paid Vacation", StringComparison.OrdinalIgnoreCase))
+            {
+                var forceWaiting = new MySqlCommand(@"
+        UPDATE servicerecords
+           SET status = 'Waiting', approved_by = NULL
+         WHERE id = @id;", conn, tran);
+                forceWaiting.Parameters.AddWithValue("@id", id);
+                forceWaiting.ExecuteNonQuery();
+            }
 
             var newDates = new List<DateTime>();
             foreach (var dateStr in dates.Split(',', StringSplitOptions.RemoveEmptyEntries))
