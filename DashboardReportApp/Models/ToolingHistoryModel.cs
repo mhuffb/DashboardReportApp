@@ -72,5 +72,16 @@ namespace DashboardReportApp.Models
         // Form-backing object for "Add New"
         public ToolItemViewModel NewToolItem { get; set; } = new();
     }
+    public class CompleteWorkOrderVM
+    {
+        [Required]
+        public int GroupID { get; set; }
 
+        [Required]
+        [DataType(DataType.Date)]
+        public DateTime DateReceived { get; set; }
+
+        [Required(ErrorMessage = "Received/Completed By is required.")]
+        public string Received_CompletedBy { get; set; } = string.Empty;
+    }
 }

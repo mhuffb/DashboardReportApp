@@ -193,6 +193,58 @@ WHERE Id=@Id;";
             return list;
         }
 
+        public async Task<ToolItemModel?> FindByKeyAsync(string assembly, string toolItem, string toolNumber)
+        {
+            const string sql = SelectCols + @"
+    WHERE AssemblyNumber=@asm AND ToolItem=@ti AND ToolNumber=@tn
+    LIMIT 1;";
+            await using var conn = new MySqlConnection(_conn);
+            await conn.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@asm", assembly);
+            cmd.Parameters.AddWithValue("@ti", toolItem);
+            cmd.Parameters.AddWithValue("@tn", toolNumber);
+            await using var r = await cmd.ExecuteReaderAsync(CommandBehavior.CloseConnection);
+            return await r.ReadAsync() ? Map(r) : null;
+        }
+
+        // quick create with sane defaults
+        public async Task<int> CreateBasicAsync(string assembly, string toolItem, string toolNumber)
+        {
+            var m = new ToolItemModel
+            {
+                AssemblyNumber = assembly.Trim(),
+                ToolItem = toolItem.Trim(),
+                ToolNumber = toolNumber.Trim(),
+                Condition = ToolCondition.ReadyForProduction,
+                Status = ToolStatus.Available,
+                Location = null,
+                UnavailableReason = null,
+                DateUnavailable = null,
+                EstimatedAvailableDate = null
+            };
+            return await CreateAsync(m);
+        }
+
+        public async Task MarkUnavailableAsync(
+            string assembly, string toolItem, string toolNumber,
+            string reason, DateTime dateUnavailable, DateTime? eta)
+        {
+            // ensure a row exists; if not, create it
+            var existing = await FindByKeyAsync(assembly, toolItem, toolNumber);
+            if (existing == null)
+            {
+                var id = await CreateBasicAsync(assembly, toolItem, toolNumber);
+                existing = await GetByIdAsync(id);
+            }
+
+            existing!.Status = ToolStatus.Unavailable;
+            existing.UnavailableReason = reason;
+            existing.DateUnavailable = dateUnavailable;
+            existing.EstimatedAvailableDate = eta;
+
+            await UpdateAsync(existing);
+        }
 
     }
 }

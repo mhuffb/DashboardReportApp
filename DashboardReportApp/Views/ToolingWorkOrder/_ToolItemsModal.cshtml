@@ -5,9 +5,25 @@
     var actions = new[] { "Make New", "Metalife Coat", "Tinalox Coat", "Reface", "Fitting" };
     var itemPresets = new[]
     {
-        "Top Punch","Bottom Punch","Pin","Die",
-        "Top Inner Punch","Bottom Inner Punch","Top Outer Punch","Bottom Outer Punch"
+        ""
     };
+
+    var dbItems = ViewBag.ToolItemList as List<string> ?? new List<string>();
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var mergedToolItems = new List<string>();
+
+    void Add(string? s) { if (!string.IsNullOrWhiteSpace(s) && seen.Add(s)) mergedToolItems.Add(s); }
+
+    // 1) your hard-coded presets
+    foreach (var p in itemPresets) Add(p);
+
+    // 2) distinct values from DB
+    foreach (var s in dbItems) Add(s);
+
+    // 3) ensure currently visible values are present, even if not in DB/presets
+    if (Model?.ToolItems != null)
+        foreach (var t in Model.ToolItems) Add(t.ToolItem);
+    Add(Model?.NewToolItem?.ToolItem);
 }
 
 <style>
@@ -29,14 +45,15 @@
 
 <div class="modal-body">
     <datalist id="toolitem-presets">
-        @foreach (var p in itemPresets)
+        @foreach (var p in mergedToolItems)
         {
             <option value="@p" />
         }
     </datalist>
 
+
     <!-- Add New Tool Item (NO Date Received here) -->
-    <form id="addItemForm" asp-action="AddToolItemAjax" method="post" class="mb-2">
+    <form id="addItemForm" asp-action="AddToolItemAjax" method="post" class="mb-2" autocomplete="off">
         @Html.AntiForgeryToken()
         <input type="hidden" name="GroupID" value="@Model.GroupID" />
 

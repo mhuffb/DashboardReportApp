@@ -12,16 +12,21 @@ namespace DashboardReportApp.Controllers
         private readonly ToolingWorkOrderService _service;
         private readonly SharedService _shared;
         private readonly IConfiguration _cfg;
+        private readonly ToolingInventoryService _inv;
 
         public ToolingWorkOrderController(
             ToolingWorkOrderService service,
             SharedService shared,
-            IConfiguration cfg)
+            IConfiguration cfg,
+            ToolingInventoryService inv)      // ← add
         {
             _service = service;
             _shared = shared;
             _cfg = cfg;
+            _inv = inv;                       // ← add
         }
+
+       
 
         public IActionResult Index()
         {
@@ -70,7 +75,7 @@ namespace DashboardReportApp.Controllers
                 model = new ToolingHistoryModel
                 {
                     DateInitiated = DateTime.Today,
-                    DateDue = DateTime.Today,
+                    DateDue = null,
                     GroupID = _service.GetNextGroupID(),
                     InitiatedBy = "Emery, J"
                 };
@@ -145,6 +150,7 @@ namespace DashboardReportApp.Controllers
                     Quantity = 1   // <-- default qty
                 }
             };
+            PopulateItemLists(model.NewToolItem.ToolItem);
             return PartialView("_ToolItemsModal", model);
         }
 
@@ -162,6 +168,7 @@ namespace DashboardReportApp.Controllers
                     ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
                     NewToolItem = model
                 };
+                PopulateItemLists(model.ToolItem);
                 return PartialView("_ToolItemsModal", vmBad);
             }
 
@@ -172,6 +179,7 @@ namespace DashboardReportApp.Controllers
                 ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
                 NewToolItem = new ToolItemViewModel { GroupID = model.GroupID }
             };
+            PopulateItemLists();
             return PartialView("_ToolItemsModal", vm);
         }
 
@@ -219,6 +227,7 @@ namespace DashboardReportApp.Controllers
                     ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
                     NewToolItem = new ToolItemViewModel { GroupID = model.GroupID, Quantity = 1 }
                 };
+                PopulateItemLists();
                 return PartialView("_ToolItemsModal", refreshed);
             }
 
@@ -463,6 +472,159 @@ Open in Dashboard: {link}
             }
         }
 
+        // Controllers/ToolingWorkOrderController.cs  (additions)
+
+        [HttpGet]
+        public IActionResult CompleteWorkOrderModal(int groupID)
+        {
+            var header = _service.GetHeaderByGroupID(groupID);
+            if (header == null) return NotFound($"No work order found for group {groupID}.");
+
+            
+
+            var defaults = new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" }; // ← your defaults
+            var db = _service.GetDistinctReceivers();
+
+            var merged = Merge(defaults, db, header?.Received_CompletedBy);
+            ViewBag.ReceivedByList = merged;
+
+            var vm = new CompleteWorkOrderVM
+            {
+                GroupID = groupID,
+                DateReceived = header?.DateReceived ?? DateTime.Today,
+                Received_CompletedBy = header?.Received_CompletedBy ?? string.Empty
+            };
+            ModelState.Clear();  // <- IMPORTANT: let the model’s default render
+            return PartialView("_CompleteWorkOrderModal", vm);
+        }
+        static List<string> Merge(IEnumerable<string> defaults, IEnumerable<string> db, string? ensure)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<string>();
+
+            foreach (var s in defaults.Where(s => !string.IsNullOrWhiteSpace(s)))
+                if (set.Add(s)) result.Add(s);
+
+            foreach (var s in db.Where(s => !string.IsNullOrWhiteSpace(s)))
+                if (set.Add(s)) result.Add(s);
+
+            if (!string.IsNullOrWhiteSpace(ensure) && set.Add(ensure!))
+                result.Add(ensure!);
+
+            return result;
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CompleteWorkOrder(CompleteWorkOrderVM vm)
+        {
+            if (!ModelState.IsValid)
+            {
+                Response.StatusCode = 400;
+                ViewBag.ReceivedByList = _service.GetDistinctReceivers();
+                return PartialView("_CompleteWorkOrderModal", vm);
+            }
+
+            var header = _service.GetHeaderByGroupID(vm.GroupID);
+            if (header == null)
+            {
+                Response.StatusCode = 404;
+                return Json(new { ok = false, error = $"No header for group {vm.GroupID}." });
+            }
+
+            var items = _service.GetToolItemsByGroupID(vm.GroupID) ?? new List<ToolItemViewModel>();
+            var makeNew = 0; var makeNewExists = 0;
+            var markedUnavailable = 0;
+            var details = new List<string>();
+
+            // normalize helpers
+            static string N(string? s) => (s ?? string.Empty).Trim();
+            var asm = N(header.Part);                         // Assembly #
+            var dateInit = header.DateInitiated;              // Date Initiated
+            DateTime? eta = header.DateDue;                   // Date Due (ETA)
+
+            var unavailableActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "Tinalox Coat", "Metalife Coat", "Reface", "Fitting" };
+
+            foreach (var it in items)
+            {
+                var action = N(it.Action);
+                var toolItem = N(it.ToolItem);
+                var toolNum = N(it.ToolNumber);
+
+                if (string.IsNullOrWhiteSpace(toolItem) || string.IsNullOrWhiteSpace(toolNum) || string.IsNullOrWhiteSpace(asm))
+                    continue; // skip incomplete keys
+
+                // --- MAKE NEW: Add to inventory if missing ---
+                if (action.Equals("Make New", StringComparison.OrdinalIgnoreCase))
+                {
+                    var exists = await _inv.FindByKeyAsync(asm, toolItem, toolNum);
+                    if (exists == null)
+                    {
+                        var newId = await _inv.CreateBasicAsync(asm, toolItem, toolNum);
+                        makeNew++;
+                        details.Add($"Added to inventory (Id {newId}): {asm} | {toolItem} | {toolNum}");
+                    }
+                    else
+                    {
+                        makeNewExists++;
+                        details.Add($"Already in inventory: {asm} | {toolItem} | {toolNum}");
+                    }
+                    continue;
+                }
+
+                // --- COAT/REPAIR/FITTING: mark unavailable ---
+                if (unavailableActions.Contains(action))
+                {
+                    await _inv.MarkUnavailableAsync(
+                        asm, toolItem, toolNum,
+                        reason: action,
+                        dateUnavailable: dateInit,
+                        eta: eta);
+                    markedUnavailable++;
+                    details.Add($"Marked unavailable ({action}): {asm} | {toolItem} | {toolNum}");
+                }
+            }
+
+            // mark the WO complete
+            _service.MarkWorkOrderCompleteByGroup(vm.GroupID, vm.DateReceived, vm.Received_CompletedBy);
+
+            // Build a compact summary for SweetAlert
+            var parts = new List<string>();
+            if (makeNew > 0) parts.Add($"<li><strong>Added to inventory</strong>: {makeNew}</li>");
+            if (makeNewExists > 0) parts.Add($"<li><strong>Already in inventory</strong>: {makeNewExists}</li>");
+            if (markedUnavailable > 0) parts.Add($"<li><strong>Marked unavailable</strong>: {markedUnavailable}</li>");
+
+            var html = parts.Count > 0
+                ? $"<ul class='mb-0'>{string.Join("", parts)}</ul>"
+                : "<span>No inventory changes recorded.</span>";
+
+            // Optional: keep a tiny preview instead of the full list
+            // var preview = details.Take(5).ToList();
+            // if (details.Count > 5) preview.Add($"…and {details.Count - 5} more.");
+            // var html = $"<ul class='mb-0'>{string.Join("", preview.Select(p => $"<li>{System.Net.WebUtility.HtmlEncode(p)}</li>"))}</ul>";
+
+            return Json(new
+            {
+                ok = true,
+                title = $"Completed Group {vm.GroupID}",
+                html,
+                // message kept for logging/debug if you want:
+                // message = $"Completed Tool Work Order {vm.GroupID}..."
+            });
+
+        }
+
+        // ToolingWorkOrderController
+        private void PopulateItemLists(string? ensureToolItem = null)
+        {
+            var db = _service.GetDistinctToolItemNames();
+            // merge + dedupe with the current value so it appears even if not in DB yet
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var merged = new List<string>();
+            foreach (var s in db) if (!string.IsNullOrWhiteSpace(s) && set.Add(s)) merged.Add(s);
+            if (!string.IsNullOrWhiteSpace(ensureToolItem) && set.Add(ensureToolItem)) merged.Add(ensureToolItem);
+            ViewBag.ToolItemList = merged;
+        }
 
     }
 }

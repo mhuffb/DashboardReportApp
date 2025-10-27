@@ -539,6 +539,64 @@ LIMIT 1;";
             cmd.Parameters.AddWithValue("@Id", id);
             cmd.ExecuteNonQuery();
         }
+        // Services/ToolingWorkOrderService.cs  (add these)
+        public List<string> GetDistinctReceivers()
+        {
+            const string sql = @"
+        SELECT DISTINCT Received_CompletedBy AS Name
+        FROM tooling_workorder_header
+        WHERE Received_CompletedBy IS NOT NULL AND Received_CompletedBy <> ''
+        UNION
+        SELECT DISTINCT InitiatedBy
+        FROM tooling_workorder_header
+        WHERE InitiatedBy IS NOT NULL AND InitiatedBy <> ''
+        ORDER BY Name;";
+
+            var list = new List<string>();
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add(r.GetString(0));
+            return list;
+        }
+
+        // Choose by GroupID because your UI acts on Group
+        public void MarkWorkOrderCompleteByGroup(int groupID, DateTime dateReceived, string receivedBy)
+        {
+            const string sql = @"
+        UPDATE tooling_workorder_header
+        SET DateReceived=@dateReceived,
+            Received_CompletedBy=@receivedBy
+        WHERE GroupID=@gid;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@dateReceived", dateReceived);
+            cmd.Parameters.AddWithValue("@receivedBy", receivedBy?.Trim());
+            cmd.Parameters.AddWithValue("@gid", groupID);
+            cmd.ExecuteNonQuery();
+        }
+        // Services/ToolingWorkOrderService.cs
+        public List<string> GetDistinctToolItemNames()
+        {
+            const string sql = @"
+        SELECT DISTINCT ToolItem FROM tooling_workorder_item
+        WHERE ToolItem IS NOT NULL AND ToolItem <> ''
+        UNION
+        SELECT DISTINCT ToolItem FROM tooling_inventory
+        WHERE ToolItem IS NOT NULL AND ToolItem <> ''
+        ORDER BY ToolItem;";
+
+            var list = new List<string>();
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add(r.GetString(0));
+            return list;
+        }
 
     }
 }

@@ -100,6 +100,13 @@
                                         Create Packing Slip
                                     </a>
                                 }
+                                <a class="btn btn-success btn-sm"
+                                   href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                   data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
+                                    Complete Work Order
+                                </a>
+
+
                             </td>
                         </tr>
                         <!-- Collapsible items row -->
@@ -669,7 +676,8 @@
                       if (!window._twModalSubmitWired) {
               document.getElementById('toolingWorkOrderModal')?.addEventListener('submit', async (e) => {
                 const form = e.target;
-                if (!form || !['toolWorkOrderForm','addItemForm','saveAllForm'].includes(form.id)) return;
+                if (!form || !['toolWorkOrderForm','addItemForm','saveAllForm','completeWorkOrderForm'].includes(form.id)) return;
+
 
                 e.preventDefault();
 
@@ -690,12 +698,27 @@
                   if (form.id === 'toolWorkOrderForm') {
                     if (ct.includes('application/json')) {
                       const data = await res.json();
-                      if (data.ok) {
-                        await Swal.fire({ icon:'success', title:'Saved', text: data.message || 'Work order saved.' });
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('toolingWorkOrderModal')).hide();
-                        location.reload();
-                        return;
-                      }
+                                  // after const data = await res.json();
+                       if (data.ok) {
+              const swalTitle = data.title || 'Success';
+              const swalHtml =
+                typeof data.html === 'string' && data.html.length
+                  ? data.html
+                  : (data.message ? `<p>${data.message}</p>` : '');
+
+              await Swal.fire({
+                icon: 'success',
+                title: swalTitle,
+                html: swalHtml,
+                confirmButtonText: 'OK'
+              });
+
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('toolingWorkOrderModal')).hide();
+              location.reload();
+              return;
+            }
+
+
                       await Swal.fire({ icon:'error', title:'Save failed', text: data.error || 'Could not save.' });
                       return;
                     }
