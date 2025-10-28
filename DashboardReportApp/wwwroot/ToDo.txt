@@ -1,25 +1,12 @@
-﻿10.20.25
-
-x1. ability to delete tool items
-x2. remove request po on internal
-x3. if internal, request work order instead of po
-x4. work order completed instead of create packing slip
-x5. make it received/completed drop down
-x6. add run and prod number to relevant pages / data: hold, deviation, 
-x7. fix schedule nav bar locking up
-
+﻿
 
 10.22.25
-
-x1. If tooling transcation is make new, add it to the inventory. and if its reface, fitting, etc mark it unavailable in inventory
 3. paginate mix bag change records
 4. maintenance page paginate
 5. hold tags paginate
 6. deviation paginate
 7. process change paginate
 
-10.23.25
-1. make it so call off with a vacation day used needs approval instead of auto approved
 
 10/27/25 
 1. Make print tag option on assembly page
