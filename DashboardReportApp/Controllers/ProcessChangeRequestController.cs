@@ -68,7 +68,7 @@ namespace DashboardReportApp.Controllers
                 }
 
                 _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", filePath, null ,"Process Change Request", model.Request);
-
+                _sharedService.SendEmailWithAttachment("mhuff@sintergy.net", filePath, null, "Process Change Request", model.Request);
                 return RedirectToAction("Index");
             }
             catch (Exception ex)

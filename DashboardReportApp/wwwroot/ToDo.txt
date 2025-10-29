@@ -10,3 +10,7 @@
 
 10/27/25 
 1. Make print tag option on assembly page
+
+10.29.25
+1. Hold tags production number
+2. make modal extra wide on hold tags
