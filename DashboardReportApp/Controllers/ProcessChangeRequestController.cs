@@ -66,9 +66,76 @@ namespace DashboardReportApp.Controllers
                 {
                     filePath = _serviceProcessChangeRequest.UpdateFileAddress1(newRequestId, file);
                 }
+                Console.WriteLine("Filepath: " + filePath);
+                // Build a direct link to the uploaded file (if any)
+                string? fileUrl = null;
+                if (!string.IsNullOrWhiteSpace(filePath))
+                {
+                    var fileName = Path.GetFileName(filePath);
+                    fileUrl = Url.Action(nameof(StreamFile), "ProcessChangeRequest",
+                                         new { name = fileName }, Request.Scheme);
+                }
 
-                _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", filePath, null ,"Process Change Request", model.Request);
-                _sharedService.SendEmailWithAttachment("mhuff@sintergy.net", filePath, null, "Process Change Request", model.Request);
+                // Safe fallbacks so the email is always informative
+                string part = string.IsNullOrWhiteSpace(model.Part) ? "(no part specified)" : model.Part;
+                string requestText = string.IsNullOrWhiteSpace(model.Request) ? "(no request text provided)" : model.Request;
+                string operatorName = string.IsNullOrWhiteSpace(model.Requester) ? "(not provided)" : model.Requester;     
+
+                string subject = $"PCR #{newRequestId} — {part}";
+
+                // Compose a clean, width-friendly plain-text email
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Process Change Request (PCR) #{newRequestId}");
+                sb.AppendLine($"Submitted: {DateTime.Now:yyyy-MM-dd HH:mm}");
+                sb.AppendLine($"Operator : {operatorName}");
+                sb.AppendLine($"Part     : {part}");
+                sb.AppendLine(new string('-', 64));
+                sb.AppendLine("REQUEST DETAILS");
+                sb.AppendLine(new string('-', 64));
+                sb.AppendLine(requestText);
+                sb.AppendLine();
+
+                if (!string.IsNullOrWhiteSpace(fileUrl))
+                {
+                    sb.AppendLine("ATTACHMENT");
+                    sb.AppendLine(new string('-', 64));
+                    sb.AppendLine($"File Name : {Path.GetFileName(filePath)}");
+                    sb.AppendLine($"Direct URL: {fileUrl}");
+                    sb.AppendLine();
+                }
+
+                sb.AppendLine("LINKS");
+                sb.AppendLine(new string('-', 64));
+                sb.AppendLine($"Open list : {Url.Action("Index", "ProcessChangeRequest", null, Request.Scheme)}");
+                sb.AppendLine();
+
+
+                // Final body (plain text)
+                string bodyText = sb.ToString();
+
+
+
+                string? storedName = null;
+                if (file != null && file.Length > 0)
+                    storedName = _serviceProcessChangeRequest.UpdateFileAddress1(newRequestId, file); // returns filename only
+
+                // 🔴 storedName is like "ProcessChangeRequestFile1_409.pdf"
+                // ✅ convert to ABSOLUTE path for email:
+                string? attachmentAbsPath = null;
+                if (!string.IsNullOrWhiteSpace(storedName))
+                {
+                    attachmentAbsPath = _serviceProcessChangeRequest.GetAbsolutePath(storedName);
+                    if (!System.IO.File.Exists(attachmentAbsPath))
+                    {
+                        Console.WriteLine($"[Email] Attachment not found at {attachmentAbsPath}, sending without attachment.");
+                        attachmentAbsPath = null;
+                    }
+                }
+                // Send (same attachment behavior; body is text-only)
+                _sharedService.SendEmailWithAttachment("dalmendarez@sintergy.net", attachmentAbsPath, null, subject, bodyText);
+                _sharedService.SendEmailWithAttachment("mhuff@sintergy.net", attachmentAbsPath, null, subject, bodyText);
+
+
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
@@ -91,6 +158,7 @@ namespace DashboardReportApp.Controllers
 
             try
             {
+
 
                 _serviceProcessChangeRequest.UpdateFileAddress1(id, file);
 
