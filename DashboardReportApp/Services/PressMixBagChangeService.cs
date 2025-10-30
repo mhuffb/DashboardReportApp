@@ -326,6 +326,76 @@
             return (true, result.ToString() ?? "");
         }
 
+        public async Task<PagedResult<PressMixBagChangeModel>> GetMixBagChangesPageAsync(int page, int pageSize)
+        {
+            // guard rails
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 25;
+            if (pageSize > 200) pageSize = 200;
+
+            var result = new PagedResult<PressMixBagChangeModel>
+            {
+                Page = page,
+                PageSize = pageSize
+            };
+
+            const string sqlCount = @"SELECT COUNT(*) FROM pressmixbagchange;";
+            const string sqlPage = @"
+        SELECT id,
+               part, component, prodNumber, run,
+               operator, machine,
+               lotNumber, materialCode, weightLbs, bagNumber,
+               sentDateTime, notes,
+               isOverride, overrideBy, overrideAt
+        FROM pressmixbagchange
+        ORDER BY id DESC
+        LIMIT @offset, @take;";
+
+            await using var connection = new MySqlConnection(_connectionStringMySQL);
+            await connection.OpenAsync();
+
+            // total count
+            await using (var cmdCount = new MySqlCommand(sqlCount, connection))
+            {
+                var cnt = await cmdCount.ExecuteScalarAsync();
+                result.TotalCount = Convert.ToInt32(cnt);
+            }
+
+            var offset = (page - 1) * pageSize;
+
+            await using (var cmd = new MySqlCommand(sqlPage, connection))
+            {
+                cmd.Parameters.AddWithValue("@offset", offset);
+                cmd.Parameters.AddWithValue("@take", pageSize);
+
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var m = new PressMixBagChangeModel
+                    {
+                        Id = reader.GetInt32("id"),
+                        Part = reader["part"]?.ToString() ?? "",
+                        Component = reader["component"]?.ToString() ?? "",
+                        ProdNumber = reader["prodNumber"]?.ToString() ?? "",
+                        Run = reader["run"]?.ToString() ?? "",
+                        Operator = reader["operator"]?.ToString() ?? "",
+                        Machine = reader["machine"]?.ToString() ?? "",
+                        LotNumber = reader["lotNumber"]?.ToString() ?? "",
+                        MaterialCode = reader["materialCode"]?.ToString() ?? "",
+                        WeightLbs = reader.IsDBNull(reader.GetOrdinal("weightLbs")) ? (decimal?)null : reader.GetDecimal("weightLbs"),
+                        BagNumber = reader["bagNumber"]?.ToString() ?? "",
+                        SentDateTime = reader.GetDateTime("sentDateTime"),
+                        Notes = reader["notes"]?.ToString() ?? "",
+                        IsOverride = !reader.IsDBNull(reader.GetOrdinal("isOverride")) && Convert.ToBoolean(reader["isOverride"]),
+                        OverrideBy = reader["overrideBy"]?.ToString() ?? "",
+                        OverrideAt = reader.IsDBNull(reader.GetOrdinal("overrideAt")) ? (DateTime?)null : reader.GetDateTime("overrideAt")
+                    };
+                    result.Items.Add(m);
+                }
+            }
+
+            return result;
+        }
 
     }
 }

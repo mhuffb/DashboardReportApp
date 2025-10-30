@@ -15,20 +15,28 @@ public class PressMixBagChangeController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int page = 1, int pageSize = 25)
     {
         var equipment = await _pressMixBagChangeService.GetEquipmentAsync();
         var operators = await _pressMixBagChangeService.GetOperatorsAsync();
-        var openPartsWithRuns = await _pressMixBagChangeService.GetOpenPartsWithRunsAsync(); // ✅ Fetch parts & runs
-        var allRecords = await _pressMixBagChangeService.GetAllMixBagChangesAsync(); // Fetch all records
+        var openPartsWithRuns = await _pressMixBagChangeService.GetOpenPartsWithRunsAsync();
+
+        var paged = await _pressMixBagChangeService.GetMixBagChangesPageAsync(page, pageSize);
 
         ViewData["EquipmentList"] = equipment;
         ViewData["OperatorList"] = operators;
         ViewData["Parts"] = openPartsWithRuns;
-        ViewData["AllRecords"] = allRecords;
+
+        // only the current page’s rows:
+        ViewData["AllRecords"] = paged.Items;
+        ViewData["Page"] = paged.Page;
+        ViewData["PageSize"] = paged.PageSize;
+        ViewData["TotalCount"] = paged.TotalCount;
+        ViewData["TotalPages"] = paged.TotalPages;
 
         return View();
     }
+
 
     // PressMixBagChangeController.cs
     [HttpPost]

@@ -1,7 +1,7 @@
 ﻿
 
 10.22.25
-3. paginate mix bag change records
+x3. paginate mix bag change records
 4. maintenance page paginate
 5. hold tags paginate
 6. deviation paginate
@@ -14,3 +14,5 @@
 10.29.25
 1. Hold tags production number
 2. make modal extra wide on hold tags
+3. add internal qr code picture on bag change page
+
