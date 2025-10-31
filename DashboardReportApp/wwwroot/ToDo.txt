@@ -1,7 +1,6 @@
 ﻿
 
 10.22.25
-x3. paginate mix bag change records
 4. maintenance page paginate
 5. hold tags paginate
 6. deviation paginate
@@ -17,5 +16,4 @@ x3. paginate mix bag change records
 3. add internal qr code picture on bag change page
 
 10/31/25
-x1. Andrea approval sends email for each date 
 2. add explination into approval email? check with roger

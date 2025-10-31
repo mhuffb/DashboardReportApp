@@ -34,7 +34,6 @@ namespace DashboardReportApp.Controllers
             _sharedService = sharedService;
 
             _logger = logger;      // ← store
-            _mysql = cfg.GetConnectionString("MySQLConnection");
 
             var emailSec = cfg.GetSection("Email");
             _emailOverrideAllTo = emailSec["OverrideAllTo"] ?? "";
