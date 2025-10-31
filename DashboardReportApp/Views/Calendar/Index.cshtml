@@ -401,17 +401,24 @@
     /* ===== init ====================================================== */
     document.addEventListener('DOMContentLoaded',() => {
                  /* ─── FullCalendar ─── */
-          const cal = new FullCalendar.Calendar(
-              document.getElementById('calendar'), {
-                initialView: 'dayGridMonth',
-                height:      'auto',
-                headerToolbar:{
-                  left:'prev,next today', center:'title', right:'dayGridMonth,listMonth'
-                },
-                events:'/Calendar/GetEvents',
-                eventClick: handleEventClick
-              });
-          cal.render();
+                 // put this at a higher scope in your script file
+        window.__calendar = null;
+
+        // later in DOMContentLoaded:
+        window.__calendar = new FullCalendar.Calendar(
+          document.getElementById('calendar'),
+          {
+            initialView: 'dayGridMonth',
+            height: 'auto',
+            headerToolbar: {
+              left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth'
+            },
+            events: '/Calendar/GetEvents',
+            eventClick: handleEventClick
+          }
+        );
+        window.__calendar.render();
+
 
           /* ─── Date/time pickers ─── */
           fpMulti = flatpickr('.datepicker', {
@@ -604,9 +611,26 @@
                 console.log('PIN:', payload.pin);
 
             fetchWithSpinner('/Calendar/Approve',{method:'POST',body:new URLSearchParams(payload)})
-              .then(resp=>resp.ok?(ev.setProp('backgroundColor','#28a745'),
-                                   Swal.fire('Approved','Please enter record into TA and Employee Tracking.','success'))
-                                  :Swal.fire('Error','Invalid PIN','error'));
+                      .then(resp => {
+          if (!resp.ok) {
+            Swal.fire('Error','Invalid PIN','error');
+            return;
+          }
+
+          // Make every date for this service record green in the current view
+          const cal = window.__calendar;
+          if (cal) {
+            // Your service-record events all use the same id like "SR{Id}"
+            const sameRecord = cal.getEvents().filter(e => e.id === ev.id);
+            sameRecord.forEach(e => {
+              e.setProp('backgroundColor', '#28a745');
+              e.setProp('borderColor', '#28a745');
+            });
+          }
+
+          Swal.fire('Approved','Please enter record into TA and Employee Tracking.','success');
+        })
+
         });
     }
 

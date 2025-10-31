@@ -13,6 +13,18 @@ namespace DashboardReportApp.Controllers
         private readonly string _mysql;
 
         private readonly ILogger<CalendarController> _logger;   // ← field
+
+
+        private readonly Dictionary<string, string> _approverByPin;
+        private readonly HashSet<string> _adminPins;
+        private readonly HashSet<string> _voucherReportPins;
+
+
+        private readonly string _emailOverrideAllTo;
+        private readonly string _emailCalendarTo;
+        private readonly string _emailHrTo;
+
+        private readonly string _emailDevTo;
         public CalendarController(CalendarService calendarService,
                               SharedService sharedService,
                               IConfiguration cfg,
@@ -23,10 +35,35 @@ namespace DashboardReportApp.Controllers
 
             _logger = logger;      // ← store
             _mysql = cfg.GetConnectionString("MySQLConnection");
+
+            var emailSec = cfg.GetSection("Email");
+            _emailOverrideAllTo = emailSec["OverrideAllTo"] ?? "";
+            _emailCalendarTo = emailSec["CalendarTo"] ?? "";
+            _emailHrTo = emailSec["HrTo"] ?? "";
+            _emailDevTo = emailSec["DevTo"] ?? "";
+
+            // ─── Approvals config  ───
+            var approvals = cfg.GetSection("Approvals");
+            _approverByPin = approvals.GetSection("Pins")
+                .GetChildren()
+                .Select(s => new { Pin = (s["Pin"] ?? "").Trim(), Name = (s["Name"] ?? "").Trim() })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Pin) && !string.IsNullOrWhiteSpace(x.Name))
+                .GroupBy(x => x.Pin)
+                .ToDictionary(g => g.Key, g => g.First().Name, StringComparer.Ordinal);
+
+            _adminPins = approvals.GetSection("AdminPins").Get<string[]>() is { Length: > 0 } a
+                ? new HashSet<string>(a.Select(p => p.Trim()), StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+
+            _voucherReportPins = approvals.GetSection("VoucherReportPins").Get<string[]>() is { Length: > 0 } v
+                ? new HashSet<string>(v.Select(p => p.Trim()), StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
         }
         /* ───────────────────────── INDEX VIEW ───────────────────────── */
 
+       
 
+       
         public IActionResult Index()
         {
             var vm = new CalendarIndexViewModel
@@ -111,11 +148,9 @@ Submitted on {model.SubmittedOn:g}
 Link to Calendar:
 http://192.168.1.9:5000/Calendar";
 
-                _sharedService.SendEmailWithAttachment("hr@sintergy.net", null, null,
-                    $"Time‑Off Request: {model.LastName}, {model.FirstName}", body);
-
-                _sharedService.SendEmailWithAttachment("mhuff@sintergy.net", null, null,
-                    $"Time‑Off Request: {model.LastName}, {model.FirstName}", body);
+                var tos = new[] { _emailHrTo, _emailDevTo }.Where(x => !string.IsNullOrWhiteSpace(x));
+                SendConfiguredBatch(new[] { _emailHrTo, _emailDevTo },
+        $"Time-Off Request: {model.LastName}, {model.FirstName}", body);
             }
 
             TempData["Success"] = "Record submitted";
@@ -127,14 +162,7 @@ http://192.168.1.9:5000/Calendar";
         [ValidateAntiForgeryToken]
         public IActionResult Approve(int id, string pin, string occ)
         {
-            var pinMap = new Dictionary<string, string>
-    {
-        { "9412", "Roger Jones" },
-        { "8888", "Tom Grieneisen" },
-        { "3005", "Andrea Kline" }
-    };
-
-            if (!pinMap.TryGetValue(pin, out string approver))
+            if (!TryResolveApprover(pin, out var approver))
                 return BadRequest("Invalid PIN");
 
             bool emailFailed = false;
@@ -151,14 +179,13 @@ http://192.168.1.9:5000/Calendar";
                 cmd.ExecuteNonQuery();
             }
 
-            // Build email body
-            CalendarModel rec = _calendarService.GetServiceRecordById(id);
-            List<DateTime> dates = _calendarService.GetRequestedDates(id);
-            string datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
+            var rec = _calendarService.GetServiceRecordById(id);
+            var dates = _calendarService.GetRequestedDates(id);
+            var datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
+            var voucherLine = occ == "SEPP Voucher required" ? "\n\n⚠ SEPP Voucher required" : "";
 
-            string voucherLine = occ == "SEPP Voucher required" ? "\n\n⚠ SEPP Voucher required" : "";
-
-            string body = $@"Time‑off request has been *approved*.
+            var subject = $"Time-Off Request: {rec.LastName}, {rec.FirstName}";
+            var body = $@"Time-off request has been *approved*.
 
 Employee   : {rec.LastName}, {rec.FirstName}
 Department : {rec.Department}
@@ -169,42 +196,25 @@ Attribute  : {rec.Attribute}
 Occurrence : {occ}
 Dates      : {datesText}
 
-Approved on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
+Approved by {approver} on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
 
-            // Send to user
+            // Recipients: employee + calendar (deduped; also dedupes when OverrideAllTo collapses)
+            var toList = new List<string?>();
             if (!string.IsNullOrWhiteSpace(rec.Email) && rec.Email.Contains("@"))
-            {
-                try
-                {
-                    _sharedService.SendEmailWithAttachment(rec.Email, null, null,
-                        $"Time‑Off Request: {rec.LastName}, {rec.FirstName}", body);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Failed to send approval email to {rec.Email}");
-                    emailFailed = true;
-                }
-            }
+                toList.Add(rec.Email);
             else
-            {
-                emailFailed = true;
-                _sharedService.PrintPlainText("HPFront", body, 1);
-            }
+                emailFailed = true; // no user email on file
 
-            // Always send internal copy
-            try
-            {
-                _sharedService.SendEmailWithAttachment("calendar@sintergy.net", null, null,
-                    $"Time‑Off Request: {rec.LastName}, {rec.FirstName}", body);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send calendar approval email.");
-                emailFailed = true;
-            }
+            toList.Add(_emailCalendarTo);
+
+            if (!toList.Any(t => !string.IsNullOrWhiteSpace(t)))
+                _sharedService.PrintPlainText("HPFront", body, 1); // last resort
+
+            SendConfiguredBatch(toList, subject, body);
 
             return Json(new { success = true, emailFailed });
         }
+
 
 
 
@@ -317,11 +327,9 @@ Link to Calendar:
 http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
-            _sharedService.SendEmailWithAttachment(
-                "calendar@sintergy.net",    // to calendar
-                null, null,
-                $"Edited Time-Off Request: {original.LastName}, {original.FirstName}",
-                body);
+            SendConfigured(_emailCalendarTo,
+    $"Edited Time-Off Request: {original.LastName}, {original.FirstName}", body);
+
 
             return Ok();
         }
@@ -369,11 +377,9 @@ Link to Calendar:
 http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
-            _sharedService.SendEmailWithAttachment(
-                "calendar@sintergy.net",    // to calendar
-                null, null,
-                $"Deleted Time-Off Request: {rec.LastName}, {rec.FirstName}",
-                body);
+            SendConfigured(_emailCalendarTo,
+    $"Deleted Time-Off Request: {rec.LastName}, {rec.FirstName}", body);
+
 
             return Ok();
         }
@@ -477,16 +483,17 @@ http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
                 // main notification
-                TrySendMail("calendar@sintergy.net", $"New Event: {seed.Title}", body);
+                SendConfigured(_emailCalendarTo, $"New Event: {seed.Title}", body);
 
                 // try to notify the scheduler directly (look up email from Employees)
+                // scheduler direct (if found)
                 var parts = (seed.Scheduler ?? "").Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 2)
                 {
                     var emp = _calendarService.GetEmployees()
                                 .FirstOrDefault(e => e.FirstName == parts[0] && e.LastName == parts[1]);
                     if (!string.IsNullOrWhiteSpace(emp?.Email))
-                        TrySendMail(emp.Email, $"New Event (you scheduled): {seed.Title}", body);
+                        SendConfigured(emp.Email, $"Your event has been scheduled: {seed.Title}", body);
                 }
             }
             catch (Exception ex)
@@ -606,7 +613,8 @@ http://192.168.1.9:5000/Calendar
 
 
                 /* 5️⃣  Try to send e-mail (swallow any SMTP failure) */
-                TrySendMail("calendar@sintergy.net", $"Edited Event: {before.Title}", body);
+                SendConfigured(_emailCalendarTo, $"Edited Event: {before.Title}", body);
+
 
                 /* 6️⃣  All good → HTTP 200 */
                 return Ok();
@@ -659,23 +667,18 @@ Link to Calendar:
 http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
-            TrySendMail("calendar@sintergy.net", $"Deleted Event: {ev.Title}", body);
+            SendConfigured(_emailCalendarTo, $"Deleted Event: {ev.Title}", body);
+
 
             return Ok();
         }
 
         [HttpGet]
-        public IActionResult VerifyAdminPin(string pin)
-        {
-            const string adminPinRogerJones = "9412";
-            const string adminPinAndreaKline = "3005"; // Replace with actual second PIN
+public IActionResult VerifyAdminPin(string pin)
+{
+    return _adminPins.Contains((pin ?? "").Trim()) ? Ok() : Unauthorized();
+}
 
-            // 200 OK if pin matches either admin PIN, 401 otherwise
-            if (pin == adminPinRogerJones || pin == adminPinAndreaKline)
-                return Ok();
-
-            return Unauthorized();
-        }
 
 
 
@@ -685,7 +688,7 @@ http://192.168.1.9:5000/Calendar
             pin = pin?.Trim();
             Console.WriteLine($"Pin submitted: '{pin}'");
 
-            var validPins = new[] { "9412", "3005", "7777" };
+            var validPins = new[] { "9412", "3005", "8888" };
             if (!validPins.Contains(pin))
                 return Unauthorized();
 
@@ -776,8 +779,11 @@ ORDER BY count DESC", conn);
         {
             if (string.IsNullOrWhiteSpace(seriesId)) return BadRequest("Missing seriesId");
             _calendarService.DeleteCalendarSeries_All(seriesId);
-            TrySendMail("calendar@sintergy.net", "Deleted Event Series",
-        $@"Series {seriesId} deleted (all occurrences).");
+            SendConfigured(_emailCalendarTo, "Deleted Event Series",
+    $@"Series {seriesId} deleted (all occurrences).");
+
+           
+
             return Ok();
         }
 
@@ -789,11 +795,47 @@ ORDER BY count DESC", conn);
             if (string.IsNullOrWhiteSpace(seriesId)) return BadRequest("Missing seriesId");
             if (!DateTime.TryParse(pivotDate, out var pivot)) return BadRequest("Bad pivot date");
             _calendarService.DeleteCalendarSeries_Future(seriesId, pivot.Date);
-            TrySendMail("calendar@sintergy.net", "Deleted Future Series",
-        $@"Series {seriesId} deleted from {pivot:MM/dd/yyyy} onward.");
+            SendConfigured(_emailCalendarTo, "Deleted Future Series",
+               $@"Series {seriesId} deleted from {pivot:MM/dd/yyyy} onward.");
             return Ok();
         }
 
+        private bool TryResolveApprover(string pin, out string approver)
+    => _approverByPin.TryGetValue((pin ?? "").Trim(), out approver);
+
+        // Core send (no override logic here)
+        private void DoSend(string to, string subject, string body, string? cc = null, string? bcc = null)
+        {
+            try
+            {
+                _sharedService.SendEmailWithAttachment(to, cc, bcc, subject, body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Email send failed: to='{To}', subject='{Subject}'", to, subject);
+            }
+        }
+
+        // Existing single-recipient helper (kept for convenience)
+        private void SendConfigured(string to, string subject, string body, string? cc = null, string? bcc = null)
+        {
+            var effectiveTo = string.IsNullOrWhiteSpace(_emailOverrideAllTo) ? to : _emailOverrideAllTo;
+            var effectiveCc = string.IsNullOrWhiteSpace(_emailOverrideAllTo) ? cc : null;
+            var effectiveBcc = string.IsNullOrWhiteSpace(_emailOverrideAllTo) ? bcc : null;
+            DoSend(effectiveTo, subject, body, effectiveCc, effectiveBcc);
+        }
+
+        // NEW: batch send with de-duplication AFTER override is applied
+        private void SendConfiguredBatch(IEnumerable<string?> tos, string subject, string body)
+        {
+            var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var raw in tos.Where(x => !string.IsNullOrWhiteSpace(x))!)
+            {
+                var dest = string.IsNullOrWhiteSpace(_emailOverrideAllTo) ? raw! : _emailOverrideAllTo;
+                if (unique.Add(dest))
+                    DoSend(dest, subject, body);
+            }
+        }
 
     }
 

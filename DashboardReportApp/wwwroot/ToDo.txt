@@ -16,3 +16,6 @@ x3. paginate mix bag change records
 2. make modal extra wide on hold tags
 3. add internal qr code picture on bag change page
 
+10/31/25
+x1. Andrea approval sends email for each date 
+2. add explination into approval email? check with roger

@@ -368,7 +368,7 @@
                 cmd.Parameters.AddWithValue("@offset", offset);
                 cmd.Parameters.AddWithValue("@take", pageSize);
 
-                await using var reader = await cmd.ExecuteReaderAsync();
+                await using var reader = await cmd.ExecuteReaderAsync(); 
                 while (await reader.ReadAsync())
                 {
                     var m = new PressMixBagChangeModel
