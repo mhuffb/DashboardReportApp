@@ -42,7 +42,7 @@
     </div>
 
     <div class="modal fade" id="bagChangeModal" tabindex="-1" data-bs-focus="false" aria-labelledby="bagChangeModalLabel">
-        <div class="modal-dialog modal-xl" style="max-width:1200px;">
+        <div class="modal-dialog modal-xxl" style="max-width:1200px;">
 
 
             <div class="modal-content">
@@ -61,6 +61,7 @@
                                 <img src="/img/advantage.jpg" class="label-img" data-type="advantage" style="height:200px;cursor:pointer;">
                                 <img src="/img/hoganas.jpg" class="label-img" data-type="hoganas" style="height:200px;cursor:pointer;">
                                 <img src="/img/hoeganaes.jpg" class="label-img" data-type="hoeganaes" style="height:200px;cursor:pointer;">
+                                <img src="/img/sintergy.jpg" class="label-img" data-type="sintergy" style="height:200px;cursor:pointer;">
                             </div>
                         </div>
 
@@ -166,8 +167,12 @@
     <div class="card shadow mb-4">
         <div class="card-body">
             <div class="container-fluid px-3 mt-4">
-                <div id="mixBagChangeTableRoot"
-                     data-records='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))'></div>
+                <div id="mixBagChangeTableRoot"></div>
+                <script id="mixBagChangeData" type="application/json">
+                    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(allRecords))
+                </script>
+
+
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <div>
                         <form id="pageSizeForm" class="d-inline">
@@ -213,35 +218,32 @@
 <script src="/js/mydatatable.bundle.js" defer></script>
 
 <script>
-    function updateFields() {
-           const opt = partNumber.options[partNumber.selectedIndex];
-           if (!opt) return;
-           RunNumber.value    = opt.dataset.run        || "";
-           Component.value    = opt.dataset.component  || "";
-           ProdNumber.value   = opt.dataset.prodnumber || "";
+      function updateFields() {
+      const partNumber   = document.getElementById('partNumber');
+      const RunNumber    = document.getElementById('RunNumber');
+      const Component    = document.getElementById('Component');
+      const ProdNumber   = document.getElementById('ProdNumber');
+      const operatorName = document.getElementById('operatorName');
+      const machine      = document.getElementById('machine');
 
-          fetch(`/PressMixBagChange/GetRunInfo?part=${opt.value}&prod=${ProdNumber.value}&run=${RunNumber.value}`)
-    .then(r => r.json())
-    .then(data => {
-        operatorName.value = data.op || "";
-        machine.value      = data.mach || "";
-    });
+      const opt = partNumber.options[partNumber.selectedIndex];
+      if (!opt) return;
 
-       }
+      RunNumber.value  = opt.dataset.run        || "";
+      Component.value  = opt.dataset.component  || "";
+      ProdNumber.value = opt.dataset.prodnumber || "";
 
-
-    document.addEventListener('DOMContentLoaded', () => {
-
-        const partNumber    = document.getElementById('partNumber');
-        const RunNumber     = document.getElementById('RunNumber');
-        const Component     = document.getElementById('Component');
-        const ProdNumber    = document.getElementById('ProdNumber');
-        const operatorName  = document.getElementById('operatorName');
-        const machine       = document.getElementById('machine');
+      fetch(`/PressMixBagChange/GetRunInfo?part=${opt.value}&prod=${ProdNumber.value}&run=${RunNumber.value}`)
+        .then(r => r.json())
+        .then(data => {
+          operatorName.value = data.op || "";
+          machine.value      = data.mach || "";
+        });
+    }
 
 
 
-
+   
           const raw = document.getElementById('mixBagChangeTableRoot').dataset.records || "[]";
     const data = JSON.parse(raw);
 
@@ -287,133 +289,161 @@
     });
 
   
-        let selectedType = "";
-    let scanCount = 0;
-    let tempScan1 = "";
-
-    document.querySelectorAll('.label-img').forEach(img => {
-        img.addEventListener('click', () => {
-            selectedType = img.dataset.type;
-            document.getElementById('labelStep').classList.add('d-none');
-            document.getElementById('scanStep').classList.remove('d-none');
-            document.getElementById('barcodeInput1').value = "";
-            document.getElementById('barcodeInput2').value = "";
-            document.getElementById('barcodeInput2').classList.add('d-none');
-            scanCount = 0;
-            tempScan1 = "";
-
-            if (selectedType === "advantage") {
-                document.getElementById('labelPreview').src = "/img/advantage-highlight.jpg";
-            }
-            if (selectedType === "hoganas") {
-                document.getElementById('labelPreview').src = "/img/hoganas-highlight.jpg";
-            }
-            if (selectedType === "hoeganaes") {
-                document.getElementById('labelPreview').src = "/img/hoeganaes-highlight.jpg";
-                // show second box since two scans needed
-                document.getElementById('barcodeInput2').classList.remove('d-none');
-            }
-            // Put cursor in first scan box
-            document.getElementById('barcodeInput1').focus();
-        });
-    });
-
-    // handle scan
-    document.getElementById('barcodeInput1').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = e.target.value.trim();
-            const lot = document.getElementById('LotNumber');
-            const mat = document.getElementById('MaterialCode');
-            const wgt = document.getElementById('WeightLbs');
-            const bag = document.getElementById('BagNumber');
-
-            // Advantage
-            if (selectedType === "advantage") {
-                const parts = val.split(";");
-                mat.value = parts[1] || "";
-                lot.value = parts[2] || "";
-                wgt.value = parts[3] || "";
-                bag.value = parts[4] || "";
-                gotoForm();
-                return;
-            }
-
-               // Hoganas
-    if (selectedType === "hoganas") {
-        const b = val.slice(6,13);
-        const c = val.slice(14,17);
-        const d = val.slice(17,20);
-        lot.value = b;
-        wgt.value = Math.round(parseFloat(c) * 2.20462).toFixed(2);
-        bag.value = d;
-
-        // AJAX lookup to powdermix table
-        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${b}`)
-            .then(r => r.text())
-            .then(code => {
-                mat.value = code;
-                gotoForm();
-            });
-        return;
-    }
-
-
-            // Hoeganaes - first scan
-            if (selectedType === "hoeganaes") {
-                tempScan1 = val;
-                // move focus to second box
-                document.getElementById('barcodeInput2').focus();
-            }
-        }
-    });
-
-    document.getElementById('barcodeInput2').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = e.target.value.trim();
-            const lot = document.getElementById('LotNumber');
-            const mat = document.getElementById('MaterialCode');
-            const wgt = document.getElementById('WeightLbs');
-            const bag = document.getElementById('BagNumber');
-
-               if (selectedType === "hoeganaes") {
-        const lt = tempScan1.slice(0,10);
-        const bg = tempScan1.slice(10,14);
-        lot.value = lt;
-        bag.value = bg;
-        wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
-
-        // AJAX lookup to powdermix table
-        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${lt}`)
-            .then(r => r.text())
-            .then(code => {
-                mat.value = code;
-                gotoForm();
-            });
-    }
-
-        }
-    });
-
-    function gotoForm() {
-        document.getElementById('scanStep').classList.add('d-none');
-        document.getElementById('formStep').classList.remove('d-none');
-        document.getElementById('submitBtn').classList.remove('d-none');
-    }
-
-    document.getElementById('backToLabelsBtn').addEventListener('click', () => {
-        document.getElementById('scanStep').classList.add('d-none');
-        document.getElementById('labelStep').classList.remove('d-none');
-        document.getElementById('barcodeInput1').value = "";
-        document.getElementById('barcodeInput2').value = "";
-        document.getElementById('barcodeInput2').classList.add('d-none');
-        scanCount = 0;
-        tempScan1 = "";
-    });
-
-
 </script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1) SHARED CONSTANTS
+      const previewByType = {
+        advantage: "/img/advantage-highlight.jpg",
+        hoganas:   "/img/hoganas-highlight.jpg",
+        hoeganaes: "/img/hoeganaes-highlight.jpg",
+        sintergy:  "/img/sintergy-highlight.jpg"
+      };
+      const advantageLike = new Set(["advantage","sintergy"]);
+
+      // 2) STATE
+      let selectedType = "";
+      let tempScan1 = "";
+
+      // 3) ELEMENTS
+      const labelStep   = document.getElementById('labelStep');
+      const scanStep    = document.getElementById('scanStep');
+      const formStep    = document.getElementById('formStep');
+      const submitBtn   = document.getElementById('submitBtn');
+      const labelPrev   = document.getElementById('labelPreview');
+      const in1         = document.getElementById('barcodeInput1');
+      const in2         = document.getElementById('barcodeInput2');
+
+      const lot = document.getElementById('LotNumber');
+      const mat = document.getElementById('MaterialCode');
+      const wgt = document.getElementById('WeightLbs');
+      const bag = document.getElementById('BagNumber');
+
+      // 4) CLICK HANDLERS FOR LABELS
+      document.querySelectorAll('.label-img').forEach(img => {
+        img.addEventListener('click', () => {
+          selectedType = img.dataset.type;
+
+          labelStep.classList.add('d-none');
+          scanStep.classList.remove('d-none');
+
+          in1.value = ""; in2.value = "";
+          in2.classList.add('d-none');
+
+          labelPrev.src = previewByType[selectedType] || "";
+
+          if (selectedType === "hoeganaes") {
+            in2.classList.remove('d-none');
+          }
+
+          in1.focus();
+        });
+      });
+
+      // 5) SCAN #1
+      in1.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const val = in1.value.trim();
+
+        // Advantage-like (Advantage + Sintergy)
+        if (advantageLike.has(selectedType)) {
+          // expected: [ignored];[mat];[lot];[wgt];[bag]
+          const p = val.split(';');
+          mat.value = p[1] || "";
+          lot.value = p[2] || "";
+          wgt.value = p[3] || "";
+          bag.value = p[4] || "";
+          gotoForm();
+          return;
+        }
+
+        // Hoganas
+        if (selectedType === "hoganas") {
+          const b = val.slice(6,13);
+          const c = val.slice(14,17);
+          const d = val.slice(17,20);
+          lot.value = b;
+          wgt.value = Math.round(parseFloat(c) * 2.20462).toFixed(2);
+          bag.value = d;
+
+          fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${b}`)
+            .then(r => r.text())
+            .then(code => { mat.value = code; gotoForm(); });
+          return;
+        }
+
+        // Hoeganaes (needs second scan)
+        if (selectedType === "hoeganaes") {
+          tempScan1 = val;
+          in2.focus();
+        }
+      });
+
+      // 6) SCAN #2 (Hoeganaes)
+      in2.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const val = in2.value.trim();
+
+        if (selectedType === "hoeganaes") {
+          const lt = tempScan1.slice(0,10);
+          const bg = tempScan1.slice(10,14);
+          lot.value = lt;
+          bag.value = bg;
+          wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
+
+          fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${lt}`)
+            .then(r => r.text())
+            .then(code => { mat.value = code; gotoForm(); });
+        }
+      });
+
+      // 7) NAV + FORM
+      document.getElementById('backToLabelsBtn').addEventListener('click', () => {
+        scanStep.classList.add('d-none');
+        labelStep.classList.remove('d-none');
+        in1.value = ""; in2.value = "";
+        in2.classList.add('d-none');
+        tempScan1 = "";
+      });
+
+      function gotoForm() {
+        scanStep.classList.add('d-none');
+        formStep.classList.remove('d-none');
+        submitBtn.classList.remove('d-none');
+      }
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dataTag = document.getElementById('mixBagChangeData');
+      let data = [];
+      try { data = JSON.parse(dataTag?.textContent || "[]"); } catch { data = []; }
+
+      data.forEach(r => {
+        const v = r.IsOverride;
+        r.IsOverrideDisplay = (v === true || v === 1 || v === "1") ? "Yes"
+                             : (v === false || v === 0 || v === "0") ? "No" : "";
+        if (r.SentDateTime) r.SentDateTime = new Date(r.SentDateTime).toLocaleString();
+        if (r.OverrideAt)   r.OverrideAt   = new Date(r.OverrideAt).toLocaleString();
+      });
+
+      const cols = [
+        {key:'Id',label:'ID'}, {key:'Part',label:'Part'}, {key:'Component',label:'Component'},
+        {key:'ProdNumber',label:'Production Number'}, {key:'Run',label:'Run'},
+        {key:'Operator',label:'Operator'}, {key:'Machine',label:'Machine'},
+        {key:'LotNumber',label:'Lot Number'}, {key:'MaterialCode',label:'Material Code'},
+        {key:'WeightLbs',label:'Weight (lbs)'}, {key:'BagNumber',label:'Bag #'},
+        {key:'SentDateTime',label:'Sent Time'}, {key:'Notes',label:'Notes'},
+        {key:'IsOverrideDisplay',label:'Override?'}, {key:'OverrideBy',label:'Supervisor'},
+        {key:'OverrideAt',label:'Override Time'}
+      ];
+
+      window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
+    });
+</script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         var err = '@TempData["Error"]';
@@ -430,10 +460,6 @@
         }
     });
 </script>
-<form id="bagChangeForm" asp-action="Submit" method="post">
-    <!-- id added -->
-    
-</form>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
