@@ -183,7 +183,8 @@ ORDER  BY sr.id, d.requested_date";
             var cmd = new MySqlCommand(@"
 SELECT id, fname, lname, email, vac_balance,
           department, shift, schedule, time_off_type,
-          explanation 
+          explanation ,
+       attribute   
 FROM servicerecords WHERE id=@id", conn);
             cmd.Parameters.AddWithValue("@id", id);
 
@@ -201,7 +202,8 @@ FROM servicerecords WHERE id=@id", conn);
                 Shift = rdr["shift"].ToString(),
                 Schedule = rdr["schedule"].ToString(),
                 TimeOffType = rdr["time_off_type"].ToString(),
-                Explanation = rdr["explanation"].ToString()
+                Explanation = rdr["explanation"].ToString(),
+                Attribute = rdr["attribute"]?.ToString() ?? ""
             };
         }
 

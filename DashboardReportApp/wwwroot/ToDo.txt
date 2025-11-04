@@ -13,9 +13,3 @@
 
 10/31/25
 2. add explination into approval email? check with roger
-
-11/3/25
-x1. Make schedule table searchable, paginatable, server rendered html tables and jquery datatables
-x2. Hold tags production number
-x3. make modal extra wide on hold tags
-x4. Make email and paths configurable in appsettings

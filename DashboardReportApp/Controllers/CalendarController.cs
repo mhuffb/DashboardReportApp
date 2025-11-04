@@ -183,7 +183,7 @@ http://192.168.1.9:5000/Calendar";
             var dates = _calendarService.GetRequestedDates(id);
             var datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
             var voucherLine = occ == "SEPP Voucher required" ? "\n\n⚠ SEPP Voucher required" : "";
-
+            var attrText = string.IsNullOrWhiteSpace(rec.Attribute) ? "(none)" : rec.Attribute;
             var subject = $"Time-Off Request: {rec.LastName}, {rec.FirstName}";
             var body = $@"Time-off request has been *approved*.
 
@@ -192,7 +192,7 @@ Department : {rec.Department}
 Shift      : {rec.Shift}
 Schedule   : {rec.Schedule}
 Type       : {rec.TimeOffType}
-Attribute  : {rec.Attribute}
+Attribute  : {attrText}
 Occurrence : {occ}
 Dates      : {datesText}
 
