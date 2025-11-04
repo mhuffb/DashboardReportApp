@@ -10,10 +10,12 @@
 10/27/25 
 1. Make print tag option on assembly page
 
-10.29.25
-1. Hold tags production number
-2. make modal extra wide on hold tags
-3. add internal qr code picture on bag change page
 
 10/31/25
 2. add explination into approval email? check with roger
+
+11/3/25
+1. Make schedule table searchable, paginatable, server rendered html tables and jquery datatables
+2. Hold tags production number
+3. make modal extra wide on hold tags
+4. Make email and paths configurable in appsettings
