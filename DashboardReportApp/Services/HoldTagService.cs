@@ -100,15 +100,18 @@ namespace DashboardReportApp.Services
         {
             const string query = @"
 INSERT INTO holdrecords 
-(part, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
-VALUES (@part, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
+(part, prodNumber, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
+VALUES (@part, @prodNumber, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
 SELECT LAST_INSERT_ID();";
+
+
 
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
             await using var command = new MySqlCommand(query, connection);
 
             command.Parameters.AddWithValue("@part", record.Part);
+            command.Parameters.AddWithValue("@prodNumber", (object?)record.ProdNumber ?? DBNull.Value);
             command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
             command.Parameters.AddWithValue("@date", record.Date);
             command.Parameters.AddWithValue("@issuedBy", record.IssuedBy);
@@ -148,6 +151,11 @@ SELECT LAST_INSERT_ID();";
             document.Add(new Paragraph("\n"));
             document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part).SetFont(normalFont).SetFontSize(12));
+            document.Add(new Paragraph("\n"));
+            document.Add(new Paragraph("Production Number:").SetFont(boldFont).SetFontSize(12));
+            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.ProdNumber) ? "N/A" : record.ProdNumber)
+                .SetFont(normalFont).SetFontSize(12));
+
             document.Add(new Paragraph("\n"));
             document.Add(new Paragraph("Discrepancy:").SetFont(boldFont).SetFontSize(12));
             document.Add(new Paragraph(record.Discrepancy ?? "N/A").SetFont(normalFont).SetFontSize(12));
@@ -197,6 +205,10 @@ SELECT LAST_INSERT_ID();";
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp")) ? null : reader.GetDateTime(reader.GetOrdinal("Timestamp")),
                     Part = reader.IsDBNull(reader.GetOrdinal("Part")) ? null : reader.GetString(reader.GetOrdinal("Part")),
+                    ProdNumber = reader.IsDBNull(reader.GetOrdinal("ProdNumber"))
+    ? null
+    : reader.GetString(reader.GetOrdinal("ProdNumber")),
+
                     Discrepancy = reader.IsDBNull(reader.GetOrdinal("Discrepancy")) ? null : reader.GetString(reader.GetOrdinal("Discrepancy")),
                     Date = reader.IsDBNull(reader.GetOrdinal("Date")) ? null : reader.GetDateTime(reader.GetOrdinal("Date")),
                     IssuedBy = reader.IsDBNull(reader.GetOrdinal("IssuedBy")) ? null : reader.GetString(reader.GetOrdinal("IssuedBy")),
@@ -216,5 +228,33 @@ SELECT LAST_INSERT_ID();";
 
             return records;
         }
+        public async Task<List<string>> GetLastProdNumbersForPartAsync(string part)
+        {
+            var result = new List<string>();
+
+            const string sql = @"
+SELECT ProdNumber
+FROM schedule
+WHERE Part = @Part
+  AND ProdNumber IS NOT NULL
+GROUP BY ProdNumber
+ORDER BY MAX(Id) DESC
+LIMIT 10;";
+
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            await using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Part", part);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    result.Add(reader.GetString(0));
+            }
+
+            return result;
+        }
+
     }
 }

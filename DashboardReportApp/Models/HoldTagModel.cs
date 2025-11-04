@@ -34,6 +34,9 @@ namespace DashboardReportApp.Models
 
         public string? FileAddress1 { get; set; } // Nullable string
         public string? FileAddress2 { get; set; } // Nullable string
+        [Required(ErrorMessage = "Production number is required.")]
+        public string? ProdNumber { get; set; }
+
     }
     public class HoldTagIndexViewModel
     {

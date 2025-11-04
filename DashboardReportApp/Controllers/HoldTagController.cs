@@ -10,12 +10,22 @@ namespace DashboardReportApp.Controllers
     {
         private readonly HoldTagService _holdTagService;
         private readonly SharedService _sharedService;
-
-        public HoldTagController(HoldTagService service, SharedService sharedService)
+        private readonly string _holdTagEmailTo;
+        private readonly string _holdTagPrinter;
+        public HoldTagController(HoldTagService service,
+                         SharedService sharedService,
+                         IConfiguration cfg)
         {
             _holdTagService = service;
             _sharedService = sharedService;
+
+            // Configurable email + printer, with sane fallbacks
+            _holdTagEmailTo = cfg["Email:HoldTagTo"]
+                         ?? cfg["Email:DevTo"]
+                         ?? "holdtag@sintergy.net";
+            _holdTagPrinter = cfg["Printers:HoldTag"] ?? "QaholdTags";
         }
+
 
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
@@ -34,6 +44,15 @@ namespace DashboardReportApp.Controllers
             };
 
             return View(model);
+        }
+        [HttpGet("ProdNumbersForPart")]
+        public async Task<IActionResult> ProdNumbersForPart(string part)
+        {
+            if (string.IsNullOrWhiteSpace(part))
+                return Json(Array.Empty<string>());
+
+            var list = await _holdTagService.GetLastProdNumbersForPartAsync(part);
+            return Json(list);
         }
 
         [HttpPost]
@@ -68,14 +87,18 @@ namespace DashboardReportApp.Controllers
                 // Resolve optional attachment (works for filename or legacy full path)
                 var attachment1Abs = _holdTagService.GetUploadsAbsolutePath(record.FileAddress1);
 
-                _sharedService.PrintFileToSpecificPrinter("QaholdTags", pdfPath, record.Quantity.GetValueOrDefault(1));
+                _sharedService.PrintFileToSpecificPrinter(_holdTagPrinter, pdfPath, record.Quantity.GetValueOrDefault(1));
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
-                string body = $"Discrepancy: {record.Discrepancy}\nQuantity: {record.Quantity} {record.Unit}\nIssued By: {record.IssuedBy}\nIssued Date: {record.Date:MM/dd/yyyy}";
+                string body =
+                    $"Discrepancy: {record.Discrepancy}\n" +
+                    $"Production Number: {record.ProdNumber ?? "N/A"}\n" +
+                    $"Quantity: {record.Quantity} {record.Unit}\n" +
+                    $"Issued By: {record.IssuedBy}\n" +
+                    $"Issued Date: {record.Date:MM/dd/yyyy}";
 
                 // Pass absolute path (or empty) so the emailer can attach it if present
-                _sharedService.SendEmailWithAttachment("holdtag@sintergy.net", pdfPath, attachment1Abs, subject, body);
-
+                _sharedService.SendEmailWithAttachment(_holdTagEmailTo, pdfPath, attachment1Abs, subject, body);
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
             }

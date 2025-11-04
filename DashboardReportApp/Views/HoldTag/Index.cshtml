@@ -1,6 +1,19 @@
 ﻿@model DashboardReportApp.Models.HoldTagIndexViewModel
 @using System.Text.Json
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+<style>
+    #imageModal .modal-dialog {
+        max-width: 95% !important;
+    }
+
+    #imageModal .modal-body {
+        padding: 0;
+        background-color: #000;
+    }
+</style>
+
+
 <h1 class="text-center mb-4">Hold Tag</h1>
 
 <!-- NEW: Add Request Button -->
@@ -71,6 +84,7 @@
                 <tr>
                     <th class="sortable" data-label="ID" style="width: 3%;">ID</th>
                     <th class="sortable" data-label="Part" style="width: 7%;">Part</th>
+                    <th class="sortable" data-label="ProdNumber" style="width: 7%;">Production #</th>
                     <th class="sortable" data-label="Discrepancy" style="width: 10%;">Discrepancy</th>
                     <th class="sortable" data-label="Date" style="width: 7%;">Date</th>
                     <th class="sortable" data-label="Issued By" style="width: 7%;">Issued By</th>
@@ -86,6 +100,7 @@
                     <th class="sortable" data-label="File2" style="width: 5%;">File 2</th>
                     <th style="width: 6%;">Actions</th>
                 </tr>
+
             </thead>
             <tbody>
                 @foreach (var record in Model.Records)
@@ -93,6 +108,7 @@
                     <tr>
                         <td>@record.Id</td>
                         <td>@record.Part</td>
+                        <td>@record.ProdNumber</td>
                         <td>@record.Discrepancy</td>
                         <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>@record.IssuedBy</td>
@@ -125,7 +141,6 @@
                             }
                         </td>
                         <td>
-                            <!-- UPDATED: Instead of showing a modal, this button now triggers a hidden file input -->
                             <button type="button"
                                     class="btn btn-secondary btn-sm add-file-btn"
                                     data-id="@record.Id">
@@ -134,6 +149,7 @@
                         </td>
                     </tr>
                 }
+
             </tbody>
         </table>
     </div>
@@ -153,17 +169,29 @@
                 <div class="modal-body">
                     <!-- PART -->
                     <div class="mb-3">
-                        <label for="ModalPartDropdown" class="form-label">Part</label>
-                        <select id="ModalPartDropdown" class="form-control">
-                            <option value="">-- Select or Enter Part --</option>
-                            @foreach (var part in (ViewData["Parts"] as List<string>) ?? new List<string>())
-                            {
-                                <option value="@part">@part</option>
-                            }
-                        </select>
-                        <input type="text" id="ModalCustomPartInput" name="Part" class="form-control mt-2" placeholder="Type a custom part number if not listed" />
+                        <label for="ModalPart" class="form-label">Part</label>
+                        <input type="text"
+                               id="ModalPart"
+                               name="Part"
+                               class="form-control"
+                               required />
                         <span asp-validation-for="FormModel.Part" class="text-danger"></span>
                     </div>
+                    <!-- PRODUCTION NUMBER -->
+                    <div class="mb-3">
+                        <label for="ModalProdNumber" class="form-label">Production Number</label>
+                        <input type="text"
+                               id="ModalProdNumber"
+                               name="ProdNumber"
+                               class="form-control"
+                               list="ProdNumberList"
+                               autocomplete="off"
+                               required />
+
+                        <datalist id="ProdNumberList"></datalist>
+                        <span asp-validation-for="FormModel.ProdNumber" class="text-danger"></span>
+                    </div>
+
                     <!-- OPERATOR -->
                     <div class="mb-3">
                         <label for="ModalIssuedBy" class="form-label">Issued By (Operator)</label>
@@ -227,19 +255,20 @@
 
 <!-- Bootstrap Modal for File Preview -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none;" />
-                <iframe id="modalFile" class="w-100" style="height:500px; display:none;" frameborder="0"></iframe>
+                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none; max-height:85vh; object-fit:contain;" />
+                <iframe id="modalFile" class="w-100" style="height:85vh; display:none;" frameborder="0"></iframe>
             </div>
         </div>
     </div>
 </div>
+
 
 @section Scripts {
     <!-- jQuery DataTables JS (uses the jQuery already in your layout) -->
@@ -248,16 +277,7 @@
 
     <!-- Optional: DataTables Bootstrap 5 CSS (for nicer styling on this page only) -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" />
-    <script>
-        // Copy selected part from the dropdown into the text input for the main form
-        document.addEventListener('DOMContentLoaded', function () {
-            const partDropdown = document.getElementById('PartDropdown');
-            const customPartInput = document.getElementById('CustomPartInput');
-            partDropdown.addEventListener('change', () => {
-                customPartInput.value = partDropdown.value;
-            });
-        });
-    </script>
+   
 
     <!-- QR Code Generation for Both QR Codes -->
     <script>
@@ -285,6 +305,44 @@
                     console.log("Wi‑Fi QR code generated!");
                 }
             });
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const partInput = document.getElementById('ModalPart');
+            const prodInput = document.getElementById('ModalProdNumber');
+            const prodList = document.getElementById('ProdNumberList');
+
+            async function loadProdNumbersForPart() {
+                const part = partInput.value.trim();
+                prodList.innerHTML = '';
+
+                if (!part) {
+                    return;
+                }
+
+                try {
+                    const resp = await fetch(`/HoldTag/ProdNumbersForPart?part=${encodeURIComponent(part)}`);
+                    if (!resp.ok) {
+                        throw new Error('Failed to load production numbers.');
+                    }
+
+                    const data = await resp.json(); // expected: ["12345","23456",...]
+                    data.forEach(pn => {
+                        const opt = document.createElement('option');
+                        opt.value = pn;
+                        prodList.appendChild(opt);
+                    });
+                } catch (err) {
+                    console.error('Error fetching prod numbers:', err);
+                }
+            }
+
+            // Load suggestions when they leave the Part box or change it
+            if (partInput) {
+                partInput.addEventListener('blur', loadProdNumbersForPart);
+                partInput.addEventListener('change', loadProdNumbersForPart);
+            }
         });
     </script>
 
@@ -334,7 +392,7 @@
                 var endVal = endDateInput.value;
 
                 // Date column index (0-based) -> "Date" is column 3
-                var dateStr = data[3] || '';  // yyyy-MM-dd from your Razor output
+                var dateStr = data[4] || '';  // yyyy-MM-dd from your Razor output
 
                 if (!startVal && !endVal) {
                     return true; // no date filters
@@ -412,16 +470,7 @@
         });
     </script>
 
-    <!-- Copy selected part for the Add Request modal -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const modalPartDropdown = document.getElementById('ModalPartDropdown');
-            const modalCustomPartInput = document.getElementById('ModalCustomPartInput');
-            modalPartDropdown.addEventListener('change', () => {
-                modalCustomPartInput.value = modalPartDropdown.value;
-            });
-        });
-    </script>
+   
 
     <!-- File Preview Script -->
     <script>
