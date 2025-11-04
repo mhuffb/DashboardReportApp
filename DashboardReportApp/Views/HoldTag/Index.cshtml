@@ -65,8 +65,9 @@
     </div>
 
     <div class="table-responsive">
-        <table class="custom-table" style="width:100%; border-collapse:collapse;">
+        <table id="holdTagTable" class="table table-striped table-bordered shadow-sm custom-table" style="width:100%; border-collapse:collapse;">
             <thead class="table-dark">
+
                 <tr>
                     <th class="sortable" data-label="ID" style="width: 3%;">ID</th>
                     <th class="sortable" data-label="Part" style="width: 7%;">Part</th>
@@ -241,6 +242,12 @@
 </div>
 
 @section Scripts {
+    <!-- jQuery DataTables JS (uses the jQuery already in your layout) -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Optional: DataTables Bootstrap 5 CSS (for nicer styling on this page only) -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" />
     <script>
         // Copy selected part from the dropdown into the text input for the main form
         document.addEventListener('DOMContentLoaded', function () {
@@ -284,85 +291,100 @@
     <!-- Table Filtering and Sorting Scripts -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
+            // Initialize DataTable
+            var table = $('#holdTagTable').DataTable({
+                // default page length and options
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100],
+                // order by ID desc by default (column 0)
+                order: [[0, 'desc']],
+                // Bootstrap-friendly layout
+                dom:
+                    '<"row mb-2"' +
+                        '<"col-sm-6"l>' +
+                        '<"col-sm-6"f>' +
+                    '>' +
+                    't' +
+                    '<"row mt-2"' +
+                        '<"col-sm-6"i>' +
+                        '<"col-sm-6"p>' +
+                    '>',
+            });
+
             const searchInput = document.getElementById("recordSearchInput");
             const startDateInput = document.getElementById("recordStartDate");
             const endDateInput = document.getElementById("recordEndDate");
             const clearBtn = document.getElementById("clearFilters");
-            const table = document.querySelector(".custom-table tbody");
-            const rows = Array.from(table.querySelectorAll("tr"));
-            const headers = document.querySelectorAll(".sortable");
 
-            // SEARCH FUNCTION
-            searchInput.addEventListener("keyup", function () {
-                const searchTerm = searchInput.value.toLowerCase();
-                rows.forEach(row => {
-                    const rowText = row.textContent.toLowerCase();
-                    row.style.display = rowText.includes(searchTerm) ? "" : "none";
-                });
-            });
-
-            // DATE FILTER FUNCTION: Filter rows between start and end dates
-            function filterByDate() {
-                const startDateValue = startDateInput.value;
-                const endDateValue = endDateInput.value;
-                rows.forEach(row => {
-                    const dateCell = row.children[3]; // Assuming Date is in the 4th column (index 3)
-                    const rowDateStr = dateCell.textContent.trim();
-                    if (rowDateStr === "") {
-                        row.style.display = "";
-                        return;
-                    }
-                    const rowDate = new Date(rowDateStr);
-                    let showRow = true;
-                    if (startDateValue) {
-                        const startDate = new Date(startDateValue);
-                        if (rowDate < startDate) {
-                            showRow = false;
-                        }
-                    }
-                    if (endDateValue) {
-                        const endDate = new Date(endDateValue);
-                        if (rowDate > endDate) {
-                            showRow = false;
-                        }
-                    }
-                    row.style.display = showRow ? "" : "none";
+            // Hook your custom search box to DataTables search
+            if (searchInput) {
+                searchInput.addEventListener("keyup", function () {
+                    table.search(this.value).draw();
                 });
             }
-            startDateInput.addEventListener("change", filterByDate);
-            endDateInput.addEventListener("change", filterByDate);
 
-            // Clear Filters Button
-            clearBtn.addEventListener("click", function () {
-                searchInput.value = "";
-                startDateInput.value = "";
-                endDateInput.value = "";
-                rows.forEach(row => row.style.display = "");
+            // Custom date range filter using DataTables' ext.search
+            $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+                // Only apply to this table
+                if (settings.nTable.id !== 'holdTagTable') {
+                    return true;
+                }
+
+                var startVal = startDateInput.value;
+                var endVal = endDateInput.value;
+
+                // Date column index (0-based) -> "Date" is column 3
+                var dateStr = data[3] || '';  // yyyy-MM-dd from your Razor output
+
+                if (!startVal && !endVal) {
+                    return true; // no date filters
+                }
+
+                if (!dateStr) {
+                    return false; // row has no date; hide when filtering by date
+                }
+
+                var rowDate = new Date(dateStr);
+                if (isNaN(rowDate)) {
+                    return false;
+                }
+
+                var pass = true;
+
+                if (startVal) {
+                    var startDate = new Date(startVal);
+                    if (rowDate < startDate) {
+                        pass = false;
+                    }
+                }
+
+                if (endVal) {
+                    var endDate = new Date(endVal);
+                    // Make end date inclusive by adding 1 day at midnight if you want:
+                    endDate.setDate(endDate.getDate() + 1);
+                    if (rowDate >= endDate) {
+                        pass = false;
+                    }
+                }
+
+                return pass;
             });
 
-            // SORTING FUNCTION
-            headers.forEach((header, index) => {
-                header.addEventListener("click", function () {
-                    const order = header.dataset.order = -(header.dataset.order || -1);
-                    const type = header.dataset.label;
+            function redrawWithDateFilter() {
+                table.draw();
+            }
 
-                    rows.sort((rowA, rowB) => {
-                        const cellA = rowA.children[index].textContent.trim();
-                        const cellB = rowB.children[index].textContent.trim();
+            if (startDateInput) startDateInput.addEventListener("change", redrawWithDateFilter);
+            if (endDateInput) endDateInput.addEventListener("change", redrawWithDateFilter);
 
-                        if (type === "Date") {
-                            return order * (new Date(cellA) - new Date(cellB));
-                        } else if (!isNaN(cellA) && !isNaN(cellB)) {
-                            return order * (Number(cellA) - Number(cellB));
-                        } else {
-                            return order * cellA.localeCompare(cellB);
-                        }
-                    });
-
-                    table.innerHTML = "";
-                    rows.forEach(row => table.appendChild(row));
+            if (clearBtn) {
+                clearBtn.addEventListener("click", function () {
+                    if (searchInput) searchInput.value = "";
+                    if (startDateInput) startDateInput.value = "";
+                    if (endDateInput) endDateInput.value = "";
+                    table.search('').draw(); // clear global search
                 });
-            });
+            }
         });
     </script>
 
