@@ -50,11 +50,52 @@ public class PressMixBagChangeController : Controller
             while (s.Contains("--")) s = s.Replace("--", "-");
             return s;
         }
+        if (string.IsNullOrWhiteSpace(model.ProdNumber) || string.IsNullOrWhiteSpace(model.Run))
+        {
+            var openParts = await _pressMixBagChangeService.GetOpenPartsWithRunsAsync();
+            var match = openParts.FirstOrDefault(p => p.Part == model.Part);
+            if (match != null)
+            {
+                model.ProdNumber = model.ProdNumber ?? match.ProdNumber;
+                model.Run = model.Run ?? match.Run;
+                ModelState["ProdNumber"].Errors.Clear();
+                ModelState["Run"].Errors.Clear();
+            }
+        }
+        // 🔹 SERVER-SIDE MATERIALCODE FILL FROM LOT, IF MISSING
+        if (string.IsNullOrWhiteSpace(model.MaterialCode) && !string.IsNullOrWhiteSpace(model.LotNumber))
+        {
+            var lookedUp = await _pressMixBagChangeService.GetMaterialCodeByLotAsync(model.LotNumber);
+            if (!string.IsNullOrWhiteSpace(lookedUp))
+            {
+                model.MaterialCode = lookedUp;
 
+                // clear any ModelState error for MaterialCode if it was [Required]
+                if (ModelState.ContainsKey(nameof(model.MaterialCode)))
+                {
+                    ModelState[nameof(model.MaterialCode)].Errors.Clear();
+                }
+            }
+        }
         if (!ModelState.IsValid)
         {
-            return BadRequest(new { code = "INVALID", message = "Invalid form submission." });
+            var errorList = ModelState
+                .Where(kvp => kvp.Value.Errors.Count > 0)
+                .Select(kvp => new
+                {
+                    field = kvp.Key,
+                    errors = kvp.Value.Errors.Select(e => e.ErrorMessage).ToArray(),
+                    attemptedValue = kvp.Value.AttemptedValue
+                });
+
+            return BadRequest(new
+            {
+                code = "INVALID",
+                message = "Invalid form submission.",
+                details = errorList
+            });
         }
+
 
         // Pull scheduled material
         var scheduledCode = await _pressMixBagChangeService.GetScheduledMaterialCodeAsync(

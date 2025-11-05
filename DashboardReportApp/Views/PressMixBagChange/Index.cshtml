@@ -358,20 +358,44 @@
           return;
         }
 
-        // Hoganas
-        if (selectedType === "hoganas") {
-          const b = val.slice(6,13);
-          const c = val.slice(14,17);
-          const d = val.slice(17,20);
-          lot.value = b;
-          wgt.value = Math.round(parseFloat(c) * 2.20462).toFixed(2);
-          bag.value = d;
+           // Hoganas
+    if (selectedType === "hoganas") {
+      const b = val.slice(6, 13);   // lot
+      const c = val.slice(14, 17);  // kg
+      const d = val.slice(17, 20);  // bag
 
-          fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${b}`)
-            .then(r => r.text())
-            .then(code => { mat.value = code; gotoForm(); });
-          return;
-        }
+      lot.value = b;
+      wgt.value = Math.round(parseFloat(c) * 2.20462).toFixed(2);
+      bag.value = d;
+
+      fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${encodeURIComponent(b)}`)
+        .then(r => r.text())
+        .then(code => {
+          console.log("Hoganas lot lookup", b, "=>", code);
+          if (!code) {
+            Swal.fire({
+              icon: 'error',
+              title: 'No Material Code Found',
+              text: `No materialCode found in powdermix for lot ${b}.`
+            });
+            return;
+          }
+
+          mat.value = code;
+          gotoForm();
+        })
+        .catch(err => {
+          console.error("Error fetching material code for Hoganas", err);
+          Swal.fire({
+            icon: 'error',
+            title: 'Lookup Error',
+            text: 'Could not look up material code for this lot.'
+          });
+        });
+
+      return;
+    }
+
 
         // Hoeganaes (needs second scan)
         if (selectedType === "hoeganaes") {
@@ -380,24 +404,46 @@
         }
       });
 
-      // 6) SCAN #2 (Hoeganaes)
-      in2.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        const val = in2.value.trim();
+        // 6) SCAN #2 (Hoeganaes)
+    in2.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const val = in2.value.trim();
 
-        if (selectedType === "hoeganaes") {
-          const lt = tempScan1.slice(0,10);
-          const bg = tempScan1.slice(10,14);
-          lot.value = lt;
-          bag.value = bg;
-          wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
+      if (selectedType === "hoeganaes") {
+        const lt = tempScan1.slice(0, 10);   // lot
+        const bg = tempScan1.slice(10, 14);  // bag
+        lot.value = lt;
+        bag.value = bg;
+        wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
 
-          fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${lt}`)
-            .then(r => r.text())
-            .then(code => { mat.value = code; gotoForm(); });
-        }
-      });
+        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${encodeURIComponent(lt)}`)
+          .then(r => r.text())
+          .then(code => {
+            console.log("Hoeganaes lot lookup", lt, "=>", code);
+            if (!code) {
+              Swal.fire({
+                icon: 'error',
+                title: 'No Material Code Found',
+                text: `No materialCode found in powdermix for lot ${lt}.`
+              });
+              return;
+            }
+
+            mat.value = code;
+            gotoForm();
+          })
+          .catch(err => {
+            console.error("Error fetching material code for Hoeganaes", err);
+            Swal.fire({
+              icon: 'error',
+              title: 'Lookup Error',
+              text: 'Could not look up material code for this lot.'
+            });
+          });
+      }
+    });
+
 
       // 7) NAV + FORM
       document.getElementById('backToLabelsBtn').addEventListener('click', () => {
@@ -570,8 +616,20 @@
           return;
         }
 
-        // Generic error
-        await Swal.fire({ icon: 'error', title: 'Error', text: payload.message || 'An error occurred.' });
+        
+            // Generic error
+    await Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      html: `
+        <div class="text-start">
+          <div>${payload.message || 'An error occurred.'}</div>
+          <pre style="white-space:pre-wrap;font-size:12px;margin-top:8px;">
+    ${JSON.stringify(payload.details || payload, null, 2)}
+          </pre>
+        </div>`
+    });
+
       });
     })();
 </script>
@@ -586,5 +644,49 @@
         url.searchParams.set('pageSize', newSize);
         window.location.href = url.toString();
       });
+    });
+</script>
+<script>
+    function updateFields() {
+        const partSelect   = document.getElementById('partNumber');
+        const runHidden    = document.getElementById('RunNumber');
+        const compHidden   = document.getElementById('Component');
+        const prodHidden   = document.getElementById('ProdNumber');
+        const operatorName = document.getElementById('operatorName');
+        const machine      = document.getElementById('machine');
+
+        const opt = partSelect.options[partSelect.selectedIndex];
+        if (!opt || !opt.value) {
+            // Clear everything if no part selected
+            runHidden.value  = "";
+            compHidden.value = "";
+            prodHidden.value = "";
+            operatorName.value = "";
+            machine.value      = "";
+            return;
+        }
+
+        // Fill hidden fields from data-* attributes
+        runHidden.value  = opt.dataset.run        || "";
+        compHidden.value = opt.dataset.component  || "";
+        prodHidden.value = opt.dataset.prodnumber || "";
+
+        // Optionally: auto-fill operator/machine from latest run info
+        fetch(`/PressMixBagChange/GetRunInfo?part=${encodeURIComponent(opt.value)}&prod=${encodeURIComponent(prodHidden.value)}&run=${encodeURIComponent(runHidden.value)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.op)   { operatorName.value = data.op; }
+                if (data.mach) { machine.value      = data.mach; }
+            })
+            .catch(() => { /* ignore lookup errors */ });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // If a part is already selected when the modal opens (e.g., browser remembers),
+        // make sure hidden fields match.
+        const partSelect = document.getElementById('partNumber');
+        if (partSelect && partSelect.value) {
+            updateFields();
+        }
     });
 </script>
