@@ -263,11 +263,13 @@
                         <div class="col-md-4">
                             <label class="form-label">Time-Off Type</label>
                             <select name="TimeOffType" class="form-select" required>
+                                <option disabled selected value="">Select…</option>  <!-- NEW blank default -->
                                 <option>Paid Vacation</option>
                                 <option>Unpaid Time Off</option>
                                 <option>Other</option>
                             </select>
                         </div>
+
                         <!-- attribute -->
                         <div class="col-md-12">
                             <label class="form-label">Attribute <span class="text-muted">(optional)</span></label>
@@ -506,8 +508,10 @@
           });
 
           /* ─── attach form handlers *after* fpMulti exists ─── */
-          wireFormWithSpinner('mainForm',  '/Calendar/Submit');
-          wireFormWithSpinner('eventForm', '/Calendar/ScheduleEvent');
+                  /* ─── attach form handlers *after* fpMulti exists ─── */
+        wireFormWithSpinner('mainForm',  '/Calendar/Submit',        { requireMultiDates: true });
+        wireFormWithSpinner('eventForm', '/Calendar/ScheduleEvent', { eventForm: true });
+
         });
 
         /* ========== wire-up with validation ================================= */
@@ -527,16 +531,17 @@
             f.dataset.submitted = 'true';
 
             // ── A) Time-off form: must have ≥1 date in fpMulti ───────────────
-            if (requireMultiDates) {
-              const dateInput = document.getElementById('datesRequestedInput');
-              if (!window.fpMulti || !Array.isArray(fpMulti.selectedDates) || fpMulti.selectedDates.length === 0) {
-                Swal.fire('Missing dates','Please choose at least one “Dates Requested” entry.','warning');
-                dateInput?.classList.add('is-invalid');
-                f.dataset.submitted = 'false';
-                return;
-              }
-              dateInput?.classList.remove('is-invalid');
-            }
+                   if (requireMultiDates) {
+          const dateInput = document.getElementById('datesRequestedInput');
+          if (!fpMulti || !Array.isArray(fpMulti.selectedDates) || fpMulti.selectedDates.length === 0) {
+            Swal.fire('Missing dates','Please choose at least one “Dates Requested” entry.','warning');
+            dateInput?.classList.add('is-invalid');
+            f.dataset.submitted = 'false';
+            return;
+          }
+          dateInput?.classList.remove('is-invalid');
+        }
+
 
             // ── B) Event form: basic checks for single date + times ───────────
             if (eventForm) {
@@ -570,12 +575,7 @@
           });
         }
 
-        // ── Call these once, after flatpickr is created ───────────────────────
-        document.addEventListener('DOMContentLoaded', () => {
-          // (keep your existing fpMulti init above)
-          wireFormWithSpinner('mainForm',  '/Calendar/Submit',        { requireMultiDates:true });
-          wireFormWithSpinner('eventForm', '/Calendar/ScheduleEvent', { eventForm:true });
-        });
+       
 
     /* ===== event click ============================================== */
     function handleEventClick(info){

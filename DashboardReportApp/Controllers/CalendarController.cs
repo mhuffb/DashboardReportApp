@@ -184,6 +184,7 @@ http://192.168.1.9:5000/Calendar";
             var datesText = dates.Any() ? string.Join(", ", dates.Select(d => d.ToString("MM/dd/yyyy"))) : "(none)";
             var voucherLine = occ == "SEPP Voucher required" ? "\n\n⚠ SEPP Voucher required" : "";
             var attrText = string.IsNullOrWhiteSpace(rec.Attribute) ? "(none)" : rec.Attribute;
+            var explText = string.IsNullOrWhiteSpace(rec.Explanation) ? "(none)" : rec.Explanation;  // NEW
             var subject = $"Time-Off Request: {rec.LastName}, {rec.FirstName}";
             var body = $@"Time-off request has been *approved*.
 
@@ -193,10 +194,12 @@ Shift      : {rec.Shift}
 Schedule   : {rec.Schedule}
 Type       : {rec.TimeOffType}
 Attribute  : {attrText}
+Explanation: {explText}
 Occurrence : {occ}
 Dates      : {datesText}
 
 Approved by {approver} on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
+
 
             // Recipients: employee + calendar (deduped; also dedupes when OverrideAllTo collapses)
             var toList = new List<string?>();
