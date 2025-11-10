@@ -1,7 +1,6 @@
 ﻿
 
 10.22.25
-4. maintenance page paginate
 5. hold tags paginate
 6. deviation paginate
 7. process change paginate
@@ -10,5 +9,4 @@
 10/27/25 
 1. Make print tag option on assembly page
 
-
-Make maint request modal play video
+Remove react table. make html table with pagination, datatables and jquery
