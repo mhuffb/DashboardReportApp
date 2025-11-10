@@ -255,6 +255,124 @@ LIMIT 10;";
 
             return result;
         }
+        // --- ADMIN HELPERS MOVED FROM AdminHoldTagService ---
+
+        public async Task<bool> UpdateHoldRecordAsync(HoldTagModel model, IFormFile? file1, IFormFile? file2)
+        {
+            // Preserve existing filenames if no new upload
+            string fileName1 = Path.GetFileName(model.FileAddress1 ?? "");
+            string fileName2 = Path.GetFileName(model.FileAddress2 ?? "");
+
+            if (file1 is { Length: > 0 })
+                fileName1 = SaveHoldFile(file1, model.Id, "HoldTagFile1");
+
+            if (file2 is { Length: > 0 })
+                fileName2 = SaveHoldFile(file2, model.Id, "HoldTagFile2");
+
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            const string query = @"
+        UPDATE HoldRecords
+        SET 
+            Part = @Part,
+            Discrepancy = @Discrepancy,
+            Date = @Date,
+            IssuedBy = @IssuedBy,
+            Disposition = @Disposition,
+            DispositionBy = @DispositionBy,
+            ReworkInstr = @ReworkInstr,
+            ReworkInstrBy = @ReworkInstrBy,
+            Quantity = @Quantity,
+            Unit = @Unit,
+            PcsScrapped = @PcsScrapped,
+            DateCompleted = @DateCompleted,
+            FileAddress1 = @FileAddress1,
+            FileAddress2 = @FileAddress2
+        WHERE Id = @Id";
+
+            await using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Id", model.Id);
+            command.Parameters.AddWithValue("@Part", (object?)model.Part ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Discrepancy", (object?)model.Discrepancy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Date", (object?)model.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@IssuedBy", (object?)model.IssuedBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Disposition", (object?)model.Disposition ?? DBNull.Value);
+            command.Parameters.AddWithValue("@DispositionBy", (object?)model.DispositionBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ReworkInstr", (object?)model.ReworkInstr ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ReworkInstrBy", (object?)model.ReworkInstrBy ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Quantity", (object?)model.Quantity ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Unit", (object?)model.Unit ?? DBNull.Value);
+            command.Parameters.AddWithValue("@PcsScrapped", (object?)model.PcsScrapped ?? DBNull.Value);
+            command.Parameters.AddWithValue("@DateCompleted", (object?)model.DateCompleted ?? DBNull.Value);
+            command.Parameters.AddWithValue("@FileAddress1",
+                string.IsNullOrWhiteSpace(fileName1) ? (object)DBNull.Value : fileName1);
+            command.Parameters.AddWithValue("@FileAddress2",
+                string.IsNullOrWhiteSpace(fileName2) ? (object)DBNull.Value : fileName2);
+
+            var rows = await command.ExecuteNonQueryAsync();
+            return rows > 0;
+        }
+
+        // For streaming files directly (used in "Current File" links)
+        public string GetAbsolutePath(string? stored)
+        {
+            // reuse your existing upload-path resolution
+            var name = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
+            if (string.IsNullOrWhiteSpace(name)) return "";
+
+            var combined = Path.Combine(_uploadsBase, name);
+            return File.Exists(combined) ? combined : "";
+        }
+
+        // Operator lists (for the admin dropdowns in the edit modal)
+        public async Task<List<string>> GetIssuedByOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetDispositionOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators WHERE allowHoldDisp = 1";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetReworkOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators WHERE allowHoldRework = 1";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
 
     }
 }

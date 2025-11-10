@@ -1,7 +1,8 @@
-﻿using System.Threading.Tasks;
+﻿using DashboardReportApp.Controllers.Attributes;
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
@@ -25,6 +26,33 @@ namespace DashboardReportApp.Controllers
                          ?? "holdtag@sintergy.net";
             _holdTagPrinter = cfg["Printers:HoldTag"] ?? "QaholdTags";
         }
+        // GET: HoldTag/Admin  → password-protected admin view of Hold Tags
+        [PasswordProtected(Password = "5intergy")] // same attribute you used on AdminHoldTag
+        [HttpGet("Admin")]
+        public async Task<IActionResult> Admin()
+        {
+            // same data as Index, but explicitly in "admin mode"
+            var parts = await _sharedService.GetActiveProlinkParts();
+            var operators = await _sharedService.GetAllOperators();
+            var records = await _holdTagService.GetAllHoldRecordsAsync();
+
+            ViewData["Parts"] = parts ?? new List<string>();
+            ViewData["Operators"] = operators;
+
+            ViewBag.IsAdmin = true; // let the view know to show edit controls
+            ViewBag.IssuedByOperators = await _holdTagService.GetIssuedByOperatorsAsync();
+            ViewBag.DispositionOperators = await _holdTagService.GetDispositionOperatorsAsync();
+            ViewBag.ReworkOperators = await _holdTagService.GetReworkOperatorsAsync();
+
+            var model = new HoldTagIndexViewModel
+            {
+                FormModel = new HoldTagModel(),
+                Records = records
+            };
+
+            // reuse the same view as the normal HoldTag page
+            return View("Index", model);
+        }
 
 
         [HttpGet("Index")]
@@ -37,6 +65,17 @@ namespace DashboardReportApp.Controllers
             ViewData["Parts"] = parts ?? new List<string>();
             ViewData["Operators"] = operators;
 
+            // TODO: replace with your real admin detection (role, claim, etc.)
+            bool isAdmin = User.IsInRole("HoldAdmin");
+            ViewBag.IsAdmin = isAdmin;
+
+            if (isAdmin)
+            {
+                ViewBag.IssuedByOperators = await _holdTagService.GetIssuedByOperatorsAsync();
+                ViewBag.DispositionOperators = await _holdTagService.GetDispositionOperatorsAsync();
+                ViewBag.ReworkOperators = await _holdTagService.GetReworkOperatorsAsync();
+            }
+
             var model = new HoldTagIndexViewModel
             {
                 FormModel = new HoldTagModel(),
@@ -45,6 +84,7 @@ namespace DashboardReportApp.Controllers
 
             return View(model);
         }
+
         [HttpGet("ProdNumbersForPart")]
         public async Task<IActionResult> ProdNumbersForPart(string part)
         {
@@ -166,5 +206,110 @@ namespace DashboardReportApp.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+        // POST: HoldTag/UpdateRequest
+        [HttpPost("UpdateRequest")]
+        [ValidateAntiForgeryToken]
+        // you can also decorate just this action with [PasswordProtected] if you want:
+        [PasswordProtected(Password = "5intergy")] // optional: or use [Authorize(Roles = "HoldAdmin")]
+        public async Task<IActionResult> UpdateRequest(HoldTagModel model, IFormFile? FileUpload1, IFormFile? FileUpload2)
+        {
+            if (!ModelState.IsValid)
+            {
+                // log for debugging if you like
+                foreach (var state in ModelState)
+                {
+                    foreach (var error in state.Value.Errors)
+                    {
+                        Console.WriteLine($"Key: {state.Key}, Error: {error.ErrorMessage}");
+                    }
+                }
+
+                TempData["ErrorMessage"] = "Please correct the errors and try again.";
+
+                // re-hydrate the index view
+                var parts = await _sharedService.GetActiveProlinkParts();
+                var ops = await _sharedService.GetAllOperators();
+                var records = await _holdTagService.GetAllHoldRecordsAsync();
+
+                ViewData["Parts"] = parts ?? new List<string>();
+                ViewData["Operators"] = ops;
+
+                ViewBag.IsAdmin = true; // if they could reach this action, they’re admin
+                ViewBag.IssuedByOperators = await _holdTagService.GetIssuedByOperatorsAsync();
+                ViewBag.DispositionOperators = await _holdTagService.GetDispositionOperatorsAsync();
+                ViewBag.ReworkOperators = await _holdTagService.GetReworkOperatorsAsync();
+
+                var vm = new HoldTagIndexViewModel
+                {
+                    FormModel = new HoldTagModel(),
+                    Records = records
+                };
+
+                return View("Index", vm);
+            }
+
+            try
+            {
+                var ok = await _holdTagService.UpdateHoldRecordAsync(model, FileUpload1, FileUpload2);
+                TempData["SuccessMessage"] = ok
+                    ? "Record updated successfully!"
+                    : "No rows were updated. Please check the ID.";
+
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating HoldRecord: {ex.Message}");
+                TempData["ErrorMessage"] = $"An error occurred while updating: {ex.Message}";
+                return RedirectToAction("Index");
+            }
+        }
+        [HttpGet("FetchFile")]
+        public IActionResult FetchFile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, message = "No file name provided." });
+
+            var abs = _holdTagService.GetAbsolutePath(name);
+            if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
+                return Json(new { success = false, message = $"File not found: {name}" });
+
+            var url = Url.Action(nameof(StreamFile), "HoldTag", new { name }, Request.Scheme);
+            return Json(new { success = true, url });
+        }
+
+        [HttpGet("StreamFile")]
+        public IActionResult StreamFile(string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                    return NotFound();
+
+                var abs = _holdTagService.GetAbsolutePath(name);
+                if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
+                    return NotFound();
+
+                var ext = Path.GetExtension(abs).ToLowerInvariant();
+                var mime = ext switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".bmp" => "image/bmp",
+                    ".webp" => "image/webp",
+                    ".pdf" => "application/pdf",
+                    _ => "application/octet-stream"
+                };
+
+                Response.Headers.CacheControl = "public,max-age=86400";
+                return PhysicalFile(abs, mime, enableRangeProcessing: true);
+            }
+            catch (OperationCanceledException)
+            {
+                return new EmptyResult();
+            }
+        }
+
     }
 }

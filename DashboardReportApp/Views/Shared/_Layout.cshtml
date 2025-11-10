@@ -276,7 +276,15 @@
                             <li><a class="dropdown-item" asp-controller="ToolingWorkOrder" asp-action="Index"><i class="bi bi-tools"></i> Tooling Work Orders</a></li>
                             <li><a class="dropdown-item" asp-controller="ToolingInventory" asp-action="Index"><i class="bi bi-tools"></i> Tooling Inventory</a></li>
                             <li><a class="dropdown-item" asp-controller="AdminProcessChangeRequest" asp-action="Index"><i class="bi bi-repeat"></i> Process Change Requests</a></li>
-                            <li><a class="dropdown-item" asp-controller="AdminHoldTag" asp-action="Index"><i class="bi bi-bookmarks"></i> Hold Records</a></li>
+                            <li>
+                                <a class="dropdown-item"
+                                   asp-controller="HoldTag"
+                                   asp-action="Admin">
+                                    <i class="bi bi-bookmarks"></i> Hold Records
+                                </a>
+                            </li>
+
+
                             <li><a class="dropdown-item" asp-controller="MaintenanceAdmin" asp-action="AdminView"><i class="bi bi-wrench-adjustable"></i> Maintenance Requests</a></li>
                             <li><a class="dropdown-item" asp-controller="AdminDeviation" asp-action="Index"><i class="bi bi-file-earmark-text"></i> Deviation Requests</a></li>
                             <li><a class="dropdown-item" asp-controller="Calendar" asp-action="Index"><i class="bi bi-wrench-adjustable"></i> Service Memos & Event Calendar</a></li>
