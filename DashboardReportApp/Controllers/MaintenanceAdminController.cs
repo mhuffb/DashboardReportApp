@@ -3,49 +3,40 @@ using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;  // for Session
 using System.Threading.Tasks;
 
 namespace DashboardReportApp.Controllers
 {
-    [PasswordProtected(Password = "5intergy")] // Set your password here
+    [PasswordProtected(Password = "5intergy")] // Same password prompt as before
     [Route("MaintenanceAdmin")]
     public class MaintenanceAdminController : Controller
     {
-        private readonly MaintenanceAdminService _adminService;
+        private readonly MaintenanceRequestService _maintenanceService;
         private readonly PathOptions _paths;
+
         public MaintenanceAdminController(
-        MaintenanceAdminService adminService,
-        IOptions<PathOptions> pathOptions)
+         MaintenanceRequestService maintenanceService,
+         IOptions<PathOptions> pathOptions)
         {
-            _adminService = adminService;
+            _maintenanceService = maintenanceService;
             _paths = pathOptions.Value;
         }
+
+
+        // 🔹 This is now ONLY a password gate + redirect.
+        // After correct password, we set a session flag and redirect to the normal page.
         [HttpGet("AdminView")]
-        public async Task<IActionResult> AdminView()
+        public IActionResult AdminView()
         {
-            Console.WriteLine("AdminView was called");
+            // mark this session as "maintenance admin"
+            HttpContext.Session.SetInt32("IsMaintenanceAdmin", 1);
 
-            var requests = _adminService.GetAllRequests();
-            var operatorNames = _adminService.GetAllOperatorNames();
-            // NEW: Get the equipment list from the maintenance table
-            var equipmentList = _adminService.GetEquipmentListAsync();
-
-            if (requests == null)
-            {
-                Console.WriteLine("Requests are null!");
-            }
-            ViewBag.OperatorNames = operatorNames;
-            ViewData["EquipmentList"] = await _adminService.GetEquipmentListAsync();
-            return View(requests);
+            // go to the regular page
+            return RedirectToAction("Index", "MaintenanceRequest");
         }
 
-        [HttpGet("AllRequestsApi")]
-        public IActionResult GetAllRequestsApi()
-        {
-            var requests = _adminService.GetAllRequests();
-            return Ok(requests); // JSON
-        }
-
+        // 🔹 KEEP these admin-only APIs; they will be called from the Index page.
         [Route("UpdateRequest")]
         [HttpPost]
         public async Task<IActionResult> UpdateRequest(
@@ -55,6 +46,13 @@ namespace DashboardReportApp.Controllers
         {
             try
             {
+                // Optional: server-side guard (only allow if session flag is set)
+                var isAdmin = HttpContext.Session.GetInt32("IsMaintenanceAdmin") == 1;
+                if (!isAdmin)
+                {
+                    return Forbid();
+                }
+
                 Directory.CreateDirectory(_paths.MaintenanceUploads);
 
                 // FILE 1
@@ -94,19 +92,19 @@ namespace DashboardReportApp.Controllers
                 if (model.Status == "Closed")
                     model.ClosedDateTime = DateTime.Now;
 
-                _adminService.UpdateRequest(model);
+                _maintenanceService.UpdateRequestAdmin(model);
 
                 TempData["Success"] = "Request updated successfully.";
-                return RedirectToAction("AdminView");
+                return RedirectToAction("Index", "MaintenanceRequest");
             }
             catch
             {
                 TempData["Error"] = "Failed to update the request.";
-                var requests = _adminService.GetAllRequests();
-                return View("AdminView", requests);
+                return RedirectToAction("Index", "MaintenanceRequest");
             }
         }
 
+        // These two just stream files; you can leave them here
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {
@@ -138,6 +136,7 @@ namespace DashboardReportApp.Controllers
                 ".gif" => "image/gif",
                 ".bmp" => "image/bmp",
                 ".webp" => "image/webp",
+                ".mp4" or ".mov" or ".m4v" or ".webm" or ".ogg" => "video/mp4",
                 _ => "application/octet-stream"
             };
 

@@ -453,6 +453,46 @@ LIMIT 1;";
             var dept = string.IsNullOrWhiteSpace(request.Department) ? "maintenance" : request.Department;
             return new[] { $"{dept}@{_email.DefaultRecipientDomain}" };
         }
+        // in MaintenanceRequestService
+        public bool UpdateRequestAdmin(MaintenanceRequestModel model)
+        {
+            const string query = @"
+        UPDATE maintenance 
+        SET 
+            Equipment = @Equipment,
+            Requester = @Requester,
+            ReqDate = @RequestedDate,
+            Problem = @Problem,
+            ClosedDateTime = @ClosedDateTime,
+            HourMeter = @HourMeter,
+            FileAddress1 = @FileAddress1,
+            FileAddress2 = @FileAddress2,
+            Department = @Department,
+            StatusDesc = @StatusDesc, 
+            Status = @Status,
+            SafetyConcern = @SafetyConcern
+        WHERE Id = @Id";
+
+            using var connection = new MySqlConnection(_connectionString);
+            connection.Open();
+
+            using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Id", model.Id);
+            command.Parameters.AddWithValue("@Equipment", model.Equipment);
+            command.Parameters.AddWithValue("@Requester", model.Requester);
+            command.Parameters.AddWithValue("@RequestedDate", model.RequestedDate ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Problem", model.Problem);
+            command.Parameters.AddWithValue("@ClosedDateTime", model.ClosedDateTime ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@FileAddress1", model.FileAddress1 ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@FileAddress2", model.FileAddress2 ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@Department", model.Department ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@StatusDesc", model.StatusDesc);
+            command.Parameters.AddWithValue("@Status", model.Status);
+            command.Parameters.AddWithValue("@HourMeter", model.HourMeter ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@SafetyConcern", model.SafetyConcern);
+
+            return command.ExecuteNonQuery() > 0;
+        }
 
     }
 }

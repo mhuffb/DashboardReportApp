@@ -21,18 +21,27 @@ namespace DashboardReportApp.Controllers
             _paths = pathOptions.Value;
         }
 
-
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
-            // Use GetAllRequests() to return every maintenance request (open and closed)
             var requests = _maintenanceService.GetAllRequests();
 
-            // Populate Requesters and EquipmentList as before
             ViewData["Requesters"] = await _maintenanceService.GetRequestersAsync();
             ViewData["EquipmentList"] = await _maintenanceService.GetEquipmentListAsync();
+
+            // 🔹 Read admin flag from session
+            bool isAdmin = HttpContext.Session.GetInt32("IsMaintenanceAdmin") == 1;
+            ViewBag.IsAdmin = isAdmin;
+
+            // Use the same operator list for admin status-updated-by dropdown
+            if (isAdmin)
+            {
+                ViewBag.OperatorNames = await _maintenanceService.GetRequestersAsync();
+            }
+
             return View(requests);
         }
+
 
 
         [HttpPost("AddRequest")]

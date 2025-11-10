@@ -76,7 +76,6 @@ try
     builder.Services.AddScoped<QCSecondaryHoldReturnService>();
     builder.Services.AddScoped<ToolingWorkOrderService>();
     builder.Services.AddScoped<ProcessChangeRequestService>();
-    builder.Services.AddScoped<MaintenanceAdminService>();
     builder.Services.AddScoped<AdminDeviationService>();
     builder.Services.AddScoped<PressSetupService>();
     builder.Services.AddScoped<AdminHoldTagService>();

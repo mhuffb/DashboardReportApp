@@ -1,5 +1,9 @@
 ﻿@model IEnumerable<MaintenanceRequestModel>
 @using System.Text.Json;
+@{
+    var isAdmin = (ViewBag.IsAdmin as bool?) ?? false;
+    var operators = ViewBag.OperatorNames as List<string> ?? new List<string>();
+}
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
@@ -124,6 +128,9 @@
 <div class="container-fluid px-3">
     <div class="table-responsive">
         <table id="maintenanceTable" class="custom-table table-striped table-bordered shadow-sm w-100">
+            @{
+                var colCount = isAdmin ? 13 : 12;
+            }
             <thead class="table-dark">
                 <tr>
                     <th style="width:3%; text-align:center;">ID</th>
@@ -138,14 +145,18 @@
                     <th style="width:7%; text-align:center;">File 1</th>
                     <th style="width:7%; text-align:center;">Update File 1</th>
                     <th style="width:7%; text-align:center;">File 2</th>
+                    @if (isAdmin)
+                    {
+                        <th style="width:7%; text-align:center;">Actions</th>
+                    }
                 </tr>
             </thead>
+
             <tbody>
                 @if (Model != null && Model.Any())
                 {
-                    foreach (var row in Model)
+                    @foreach (var row in Model)
                     {
-                        // format equipment similar to React (if you want only "1234", then remove extra text)
                         var equipmentDisplay = row.Equipment;
                         <tr>
                             <td class="text-center">@row.Id</td>
@@ -176,7 +187,7 @@
                                 }
                             </td>
 
-                            <!-- Update FileAddress1: same as before, just no React -->
+                            <!-- Update FileAddress1 -->
                             <td class="text-center">
                                 <form action="/MaintenanceRequest/UpdateFileAddress1"
                                       method="post"
@@ -197,7 +208,7 @@
                                 </form>
                             </td>
 
-                            <!-- FileAddress2 Preview (no update) -->
+                            <!-- FileAddress2 Preview -->
                             <td class="text-center">
                                 @if (!string.IsNullOrEmpty(row.FileAddress2))
                                 {
@@ -212,20 +223,130 @@
                                     <span>No File</span>
                                 }
                             </td>
+
+                            @if (isAdmin)
+                            {
+                                <!-- REAL Actions column cell -->
+                                <td class="text-center">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-admin-edit"
+                                            data-id="@row.Id">
+                                        Edit
+                                    </button>
+                                </td>
+                            }
                         </tr>
                     }
+
                 }
                 else
                 {
                     <tr>
-                        <td colspan="12" class="text-center">No data found</td>
+                        <td colspan="@colCount" class="text-center">No data found</td>
                     </tr>
+
                 }
             </tbody>
         </table>
     </div>
 </div>
+@if (isAdmin)
+{
+    <div class="modal fade" id="adminEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="adminEditForm"
+                  class="modal-content"
+                  method="post"
+                  action="/MaintenanceAdmin/UpdateRequest"
+                  enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Maintenance Request</h5>
+                    <button type="button" class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
 
+                <div class="modal-body">
+                    <input type="hidden" name="Id" id="editId" />
+                    <input type="hidden" name="Equipment" id="editEquipment" />
+                    <input type="hidden" name="Requester" id="editRequester" />
+                    <input type="hidden" name="RequestedDate" id="editRequestedDate" />
+                    <input type="hidden" name="Problem" id="editProblem" />
+                    <input type="hidden" name="Department" id="editDepartment" />
+                    <input type="hidden" name="HourMeter" id="editHourMeter" />
+                    <input type="hidden" name="SafetyConcern" id="editSafetyConcern" />
+                    <input type="hidden" name="ClosedDateTime" id="editClosedDateTime" />
+
+                    <div class="mb-2">
+                        <label class="form-label">Current Status History</label>
+                        <textarea class="form-control"
+                              id="editStatusDesc"
+                              name="StatusDesc"
+                              readonly
+                              style="min-height:80px"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="editStatus" name="Status">
+                            <option value="Open">Open</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">New Status Note</label>
+                        <textarea class="form-control"
+                              id="editNewStatusDesc"
+                              name="NewStatusDesc"
+                              style="min-height:60px"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Status Updated By</label>
+                        <select class="form-control"
+                                id="editStatusUpdatedBy"
+                                name="StatusUpdatedBy">
+                            <option value="">-- Select Operator --</option>
+                            @foreach (var op in operators)
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">File 1 (replace / add)</label>
+                        <input type="hidden" id="editFile1String" name="FileAddress1" />
+                        <input type="file"
+                               class="form-control"
+                               name="FileAddress1"
+                               accept="image/*,application/pdf,video/*" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">File 2 (replace / add)</label>
+                        <input type="hidden" id="editFile2String" name="FileAddress2" />
+                        <input type="file"
+                               class="form-control"
+                               name="FileAddress2"
+                               accept="image/*,application/pdf,video/*" />
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
 <!-- Preview Modal (replaces React preview modal) -->
 <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -245,7 +366,22 @@
 <script type="text/javascript">
     window.equipmentList = @Html.Raw(JsonSerializer.Serialize(ViewData["EquipmentList"]));
     window.requesters = @Html.Raw(JsonSerializer.Serialize(ViewData["Requesters"]));
+
+
 </script>
+@if (isAdmin)
+{
+    <script type="text/javascript">
+        window.isAdmin = true;
+        window.maintenanceRequests = @Html.Raw(JsonSerializer.Serialize(Model));
+    </script>
+}
+else
+{
+    <script type="text/javascript">
+        window.isAdmin = false;
+    </script>
+}
 
 <!-- QR Code Generation -->
 <script>
@@ -276,28 +412,37 @@
         const equipEl = document.getElementById('equipSelect');
         const reqEl = document.getElementById('requesterSelect');
 
-        function fillSelects() {
-            try {
-                const equipmentList = Array.isArray(window.equipmentList) ? window.equipmentList.slice() : [];
-                equipmentList.sort((a, b) => {
-                    const aNum = parseInt(String(a).split(' - ')[0], 10);
-                    const bNum = parseInt(String(b).split(' - ')[0], 10);
-                    return (isNaN(aNum) || isNaN(bNum))
-                        ? String(a).localeCompare(String(b))
-                        : aNum - bNum;
-                });
-                equipEl.innerHTML = '<option value="">Select Equipment</option>' +
-                    equipmentList.map(eq => `<option>${eq}</option>`).join('');
+            function fillSelects() {
+        try {
+            const equipmentList = Array.isArray(window.equipmentList) ? window.equipmentList.slice() : [];
+            equipmentList.sort((a, b) => {
+                const aNum = parseInt(String(a).split(' - ')[0], 10);
+                const bNum = parseInt(String(b).split(' - ')[0], 10);
+                return (isNaN(aNum) || isNaN(bNum))
+                    ? String(a).localeCompare(String(b))
+                    : aNum - bNum;
+            });
 
-                const requesters = Array.isArray(window.requesters)
-                    ? window.requesters.slice().sort()
-                    : [];
-                reqEl.innerHTML = '<option value="">-- Select Requester --</option>' +
-                    requesters.map(r => `<option>${r}</option>`).join('');
-            } catch (e) {
-                console.error('fillSelects failed', e);
+            equipEl.innerHTML = '<option value="">Select Equipment</option>' +
+                equipmentList.map(eq => `<option>${eq}</option>`).join('');
+
+            const adminEquipFilter = document.getElementById('adminEquipmentFilter');
+            if (adminEquipFilter) {
+                adminEquipFilter.innerHTML =
+                    '<option value="">-- Select Equipment --</option>' +
+                    equipmentList.map(eq => `<option>${eq}</option>`).join('');
             }
+
+            const requesters = Array.isArray(window.requesters)
+                ? window.requesters.slice().sort()
+                : [];
+            reqEl.innerHTML = '<option value="">-- Select Requester --</option>' +
+                requesters.map(r => `<option>${r}</option>`).join('');
+        } catch (e) {
+            console.error('fillSelects failed', e);
         }
+    }
+
 
         modalEl?.addEventListener('shown.bs.modal', fillSelects);
 
@@ -359,17 +504,68 @@
         else document.addEventListener('DOMContentLoaded', fillSelects, { once: true });
 
         // 🔹 DataTables init (like Tooling Work Orders)
-        document.addEventListener('DOMContentLoaded', function () {
-            if (window.jQuery && $.fn.DataTable) {
-                $('#maintenanceTable').DataTable({
-                    pageLength: 25,
-                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-                    order: [[0, 'desc']]
+           document.addEventListener('DOMContentLoaded', function () {
+        if (window.jQuery && $.fn.DataTable) {
+            const table = $('#maintenanceTable').DataTable({
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                order: [[0, 'desc']]
+            });
+
+            if (window.isAdmin) {
+                const $search = $('#adminSearch');
+                if ($search.length) {
+                    $search.on('keyup change', function () {
+                        table.search(this.value).draw();
+                    });
+                }
+
+                // custom date + equipment filter
+                $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+                    if (settings.nTable.id !== 'maintenanceTable') return true;
+
+                    const reqDateStr = data[3] || ''; // Requested Date column
+                    const equipStr = data[1] || '';   // Equipment column
+
+                    const startVal = $('#adminStartDate').val();
+                    const endVal = $('#adminEndDate').val();
+                    const selectedEquip = $('#adminEquipmentFilter').val();
+
+                    // Date range
+                    if (startVal || endVal) {
+                        if (!reqDateStr) return false;
+                        const rowDate = new Date(reqDateStr);
+                        if (startVal && rowDate < new Date(startVal)) return false;
+                        if (endVal && rowDate > new Date(endVal)) return false;
+                    }
+
+                    // Equipment filter
+                    if (selectedEquip && equipStr !== selectedEquip) {
+                        return false;
+                    }
+
+                    return true;
                 });
-            } else {
-                console.warn('DataTables not found; table will be plain HTML.');
+
+                $('#adminStartDate, #adminEndDate, #adminEquipmentFilter').on('change', function () {
+                    table.draw();
+                });
+
+                $('#clearFiltersBtn').on('click', function () {
+                    $('#adminSearch').val('');
+                    $('#adminStartDate').val('');
+                    $('#adminEndDate').val('');
+                    $('#adminEquipmentFilter').val('');
+
+                    table.search('').draw();
+                    table.draw();
+                });
             }
-        });
+        } else {
+            console.warn('DataTables not found; table will be plain HTML.');
+        }
+    });
+
 
         // 🔹 File preview logic (delegated so it works with pagination)
         document.addEventListener('click', async function (e) {
@@ -380,7 +576,9 @@
             if (!fileName) return;
 
             try {
-                const resp = await fetch('/MaintenanceRequest/FetchImage?filePath=' + encodeURIComponent(fileName));
+                    const controller = window.isAdmin ? 'MaintenanceAdmin' : 'MaintenanceRequest';
+    const resp = await fetch(`/${controller}/FetchImage?filePath=` + encodeURIComponent(fileName));
+
                 if (!resp.ok) {
                     alert('Failed to fetch file.');
                     return;
@@ -468,4 +666,59 @@
             });
         });
     })();
+
+
+
+
+        // 🔹 Admin "Edit" button logic
+    if (window.isAdmin && Array.isArray(window.maintenanceRequests)) {
+        const reqMap = new Map();
+        window.maintenanceRequests.forEach(r => {
+            if (r && typeof r.Id !== 'undefined') {
+                reqMap.set(r.Id, r);
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn-admin-edit');
+            if (!btn) return;
+
+            const id = parseInt(btn.getAttribute('data-id'), 10);
+            if (!id || !reqMap.has(id)) return;
+
+            const row = reqMap.get(id);
+            populateAdminEditModal(row);
+            const modalEl = document.getElementById('adminEditModal');
+            if (!modalEl) return;
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        });
+
+        function normalizeDate(dStr) {
+            if (!dStr) return '';
+            if (dStr.indexOf('T') >= 0) return dStr.split('T')[0];
+            return dStr;
+        }
+
+        function populateAdminEditModal(row) {
+            document.getElementById('editId').value = row.Id;
+            document.getElementById('editEquipment').value = row.Equipment || '';
+            document.getElementById('editRequester').value = row.Requester || '';
+            document.getElementById('editRequestedDate').value = normalizeDate(row.RequestedDate);
+            document.getElementById('editProblem').value = row.Problem || '';
+            document.getElementById('editDepartment').value = row.Department || '';
+            document.getElementById('editHourMeter').value = row.HourMeter != null ? row.HourMeter : '';
+            document.getElementById('editSafetyConcern').value = row.SafetyConcern ? 'true' : 'false';
+            document.getElementById('editClosedDateTime').value = normalizeDate(row.ClosedDateTime);
+
+            document.getElementById('editStatus').value = row.Status || 'Open';
+            document.getElementById('editStatusDesc').value = row.StatusDesc || '';
+            document.getElementById('editNewStatusDesc').value = '';
+            document.getElementById('editStatusUpdatedBy').value = '';
+
+            document.getElementById('editFile1String').value = row.FileAddress1 || '';
+            document.getElementById('editFile2String').value = row.FileAddress2 || '';
+        }
+    }
+
 </script>
