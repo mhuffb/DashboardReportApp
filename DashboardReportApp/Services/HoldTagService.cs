@@ -17,26 +17,27 @@ namespace DashboardReportApp.Services
         private readonly string _uploadsRoot;
         private readonly string _exportsRoot;
 
-        public HoldTagService(IWebHostEnvironment environment,
-        IConfiguration configuration)
+        public HoldTagService(IWebHostEnvironment environment, IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection")
                                  ?? throw new InvalidOperationException("Missing MySQLConnection.");
 
             _environment = environment;
 
-            // Prefer config, fall back to wwwroot/uploads & wwwroot/exports
             _uploadsRoot = configuration["Paths:HoldTagUploads"]
                            ?? Path.Combine(environment.WebRootPath, "uploads");
 
             _exportsRoot = configuration["Paths:HoldTagExports"]
                            ?? Path.Combine(environment.WebRootPath, "exports");
 
+            Directory.CreateDirectory(_uploadsRoot);
+            Directory.CreateDirectory(_exportsRoot);
+
             Console.WriteLine($"[HoldTagService] HoldTagUploads root = {_uploadsRoot}");
             Console.WriteLine($"[HoldTagService] HoldTagExports root = {_exportsRoot}");
         }
 
-      
+
 
         /// <summary>
         /// Save an uploaded file into HoldTag uploads. Returns the FILENAME ONLY for DB storage.

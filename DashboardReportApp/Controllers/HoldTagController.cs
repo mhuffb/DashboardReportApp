@@ -136,32 +136,49 @@ namespace DashboardReportApp.Controllers
             {
                 record.Date = DateTime.Now;
 
-                // Save base record (no file yet)
+                string? tempName = null;
+                string? finalName = null;
+
+                // 1) If a file is uploaded, save it with a temporary unique name
+                if (file is { Length: > 0 })
+                {
+                    var ext = Path.GetExtension(file.FileName);
+                    tempName = $"HoldTagFile1_{Guid.NewGuid()}{ext}";
+                    var tempFullPath = _holdTagService.GetUploadFullPath(tempName);
+
+                    using (var stream = System.IO.File.Create(tempFullPath))
+                        await file.CopyToAsync(stream);
+
+                    // Store the TEMP filename so the INSERT includes *a* filename
+                    record.FileAddress1 = tempName;
+                }
+
+                // 2) Insert (includes FileAddress1 if present)
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
                 record.Id = newId;
 
-                // If there is an upload, save it and store only the filename in DB
-                if (file != null && file.Length > 0)
+                // 3) If we had a temp file, rename it to the final pattern and persist the final name
+                if (!string.IsNullOrWhiteSpace(tempName))
                 {
-                    var originalName = Path.GetFileName(file.FileName);
-                    var storedName = $"HoldTagFile1_{record.Id}_{DateTime.UtcNow.Ticks}{Path.GetExtension(originalName)}";
+                    var ext = Path.GetExtension(tempName);
+                    finalName = $"HoldTagFile1_{record.Id}{ext}";
 
-                    var fullPath = _holdTagService.GetUploadFullPath(storedName);
+                    var tempFullPath = _holdTagService.GetUploadFullPath(tempName);
+                    var finalFullPath = _holdTagService.GetUploadFullPath(finalName);
 
-                    Console.WriteLine($"[HoldTag] Uploading to: {fullPath}");
+                    if (System.IO.File.Exists(finalFullPath))
+                        System.IO.File.Delete(finalFullPath);
 
-                    using (var stream = System.IO.File.Create(fullPath))
-                    {
-                        await file.CopyToAsync(stream);
-                    }
+                    System.IO.File.Move(tempFullPath, finalFullPath);
 
-                    record.FileAddress1 = storedName;
+                    // Update DB to final filename
+                    await _holdTagService.UpdateFileAddress1Async(record.Id, finalName);
+                    record.FileAddress1 = finalName;
                 }
+
+                // 4) Generate PDF, print, email (unchanged)
                 var pdfPath = _holdTagService.GenerateHoldTagPdf(record);
-
-                // Resolve optional attachment (works for filename or legacy full path)
                 var attachment1Abs = _holdTagService.GetAbsolutePath(record.FileAddress1);
-
                 _sharedService.PrintFileToSpecificPrinter(_holdTagPrinter, pdfPath, record.Quantity.GetValueOrDefault(1));
 
                 string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
@@ -172,8 +189,8 @@ namespace DashboardReportApp.Controllers
                     $"Issued By: {record.IssuedBy}\n" +
                     $"Issued Date: {record.Date:MM/dd/yyyy}";
 
-                // Pass absolute path (or empty) so the emailer can attach it if present
                 _sharedService.SendEmailWithAttachment(_holdTagEmailTo, pdfPath, attachment1Abs, subject, body);
+
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
             }
@@ -183,6 +200,7 @@ namespace DashboardReportApp.Controllers
                 return RedirectToAction("Index");
             }
         }
+
 
         // HoldTagController.cs
         [HttpPost("UpdateFile")]
@@ -281,13 +299,13 @@ namespace DashboardReportApp.Controllers
                     ? "Record updated successfully!"
                     : "No rows were updated. Please check the ID.";
 
-                return RedirectToAction("Index");
+                return RedirectToAction("Admin", "HoldTag");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error updating HoldRecord: {ex.Message}");
                 TempData["ErrorMessage"] = $"An error occurred while updating: {ex.Message}";
-                return RedirectToAction("Index");
+                return RedirectToAction("Admin", "HoldTag");
             }
         }
         [HttpGet("FetchFile")]
