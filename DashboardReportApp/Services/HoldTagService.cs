@@ -13,46 +13,46 @@ namespace DashboardReportApp.Services
     public class HoldTagService
     {
         private readonly string _connectionString;
-        private readonly string _uploadsBase;
-        private readonly string _exportsBase;
+        private readonly IWebHostEnvironment _environment;
+        private readonly string _uploadsRoot;
+        private readonly string _exportsRoot;
 
-        public HoldTagService(IConfiguration configuration,
-                              IOptionsMonitor<PathOptions> pathOptions,
-                              IWebHostEnvironment env)
+        public HoldTagService(IWebHostEnvironment environment,
+        IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("MySQLConnection")
                                  ?? throw new InvalidOperationException("Missing MySQLConnection.");
 
-            var po = pathOptions.CurrentValue ?? new PathOptions();
+            _environment = environment;
 
-            _uploadsBase = ResolveBase(po.HoldTagUploads, env.ContentRootPath);
-            _exportsBase = ResolveBase(po.HoldTagExports, env.ContentRootPath);
+            // Prefer config, fall back to wwwroot/uploads & wwwroot/exports
+            _uploadsRoot = configuration["Paths:HoldTagUploads"]
+                           ?? Path.Combine(environment.WebRootPath, "uploads");
 
-            Directory.CreateDirectory(_uploadsBase);
-            Directory.CreateDirectory(_exportsBase);
+            _exportsRoot = configuration["Paths:HoldTagExports"]
+                           ?? Path.Combine(environment.WebRootPath, "exports");
+
+            Console.WriteLine($"[HoldTagService] HoldTagUploads root = {_uploadsRoot}");
+            Console.WriteLine($"[HoldTagService] HoldTagExports root = {_exportsRoot}");
         }
 
-        private static string ResolveBase(string? configured, string contentRoot)
-        {
-            if (string.IsNullOrWhiteSpace(configured))
-                throw new InvalidOperationException("Missing path in PathOptions for HoldTag.");
-
-            return Path.IsPathFullyQualified(configured)
-                ? configured
-                : Path.GetFullPath(Path.Combine(contentRoot, configured));
-        }
+      
 
         /// <summary>
         /// Save an uploaded file into HoldTag uploads. Returns the FILENAME ONLY for DB storage.
         /// </summary>
         public string SaveHoldFile(IFormFile file, int recordId, string prefix = "HoldTagFile1")
         {
+            Console.WriteLine($"[HoldTag] Uploading to: {_uploadsRoot}");
+
+
             if (file == null || file.Length == 0)
                 throw new ArgumentException("File is null or empty.", nameof(file));
 
             var ext = Path.GetExtension(file.FileName);
             var fileName = $"{prefix}_{recordId}_{DateTime.UtcNow.Ticks}{ext}";
-            var fullPath = Path.Combine(_uploadsBase, fileName);
+            var fullPath = Path.Combine(_uploadsRoot, fileName);
+            Console.WriteLine($"[HoldTag] Saving {file.FileName} as {fullPath}");
 
             using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
             file.CopyTo(fs);
@@ -66,35 +66,49 @@ namespace DashboardReportApp.Services
         /// Accepts either legacy absolute path or new filename.
         /// Returns empty string if not resolvable.
         /// </summary>
-        public string GetUploadsAbsolutePath(string? stored)
+        public string GetAbsolutePath(string? stored)
         {
-            if (string.IsNullOrWhiteSpace(stored)) return "";
+            if (string.IsNullOrWhiteSpace(stored))
+                return "";
 
-            // If legacy absolute/UNC path and it exists, use it
-            if (Path.IsPathRooted(stored) && File.Exists(stored))
-                return stored;
+            var value = stored.Trim();
 
-            // Otherwise treat as filename
-            var fileName = Path.GetFileName(stored);
-            var combined = Path.Combine(_uploadsBase, fileName);
-            return File.Exists(combined) ? combined : "";
+            // Undo the %5C from URL encoding just in case
+            value = value.Replace("%5C", "\\", StringComparison.OrdinalIgnoreCase);
+
+            // 1. Try to extract just the filename first
+            string fileName = Path.GetFileName(value);
+
+            // 2. If that failed or looks weird, but the string contains "HoldTag",
+            //    grab everything from "HoldTag..." onward, e.g.
+            //    "\SINTERGYDC2024Vol1VSPUploadsHoldTag1_431_.jpg" -> "HoldTag1_431_.jpg"
+            if (string.IsNullOrWhiteSpace(fileName) || !fileName.StartsWith("HoldTag", StringComparison.OrdinalIgnoreCase))
+            {
+                var idx = value.IndexOf("HoldTag", StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0)
+                {
+                    fileName = value.Substring(idx);
+                }
+            }
+
+            // 3. If we now have something, look for it in the uploads folder
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                var uploadsPath = Path.Combine(_uploadsRoot, fileName);
+
+                if (File.Exists(uploadsPath))
+                    return uploadsPath;
+            }
+
+            // 4. As a last resort, if the stored value is itself a rooted path and exists, use it
+            if (Path.IsPathRooted(value) && File.Exists(value))
+                return value;
+
+            // Nothing found
+            return "";
         }
 
-        /// <summary>
-        /// Throws with clear message if file cannot be found.
-        /// </summary>
-        public string GetExistingFilePath(string? stored)
-        {
-            var abs = GetUploadsAbsolutePath(stored);
-            if (!string.IsNullOrWhiteSpace(abs) && File.Exists(abs))
-                return abs;
 
-            // Also try if 'stored' itself is a path and exists (defensive)
-            if (!string.IsNullOrWhiteSpace(stored) && File.Exists(stored))
-                return stored;
-
-            throw new FileNotFoundException($"File not found for stored value: {stored}");
-        }
 
         public async Task<int> AddHoldRecordAsync(HoldTagModel record)
         {
@@ -135,7 +149,7 @@ SELECT LAST_INSERT_ID();";
 
         public string GenerateHoldTagPdf(HoldTagModel record)
         {
-            var filePath = Path.Combine(_exportsBase, $"HoldTag_{record.Id}.pdf");
+            var filePath = Path.Combine(_exportsRoot, $"HoldTag_{record.Id}.pdf");
 
             var boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
             var normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
@@ -257,9 +271,59 @@ LIMIT 10;";
         }
         // --- ADMIN HELPERS MOVED FROM AdminHoldTagService ---
 
+
+
+
+        // Operator lists (for the admin dropdowns in the edit modal)
+        public async Task<List<string>> GetIssuedByOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetDispositionOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators WHERE allowHoldDisp = 1";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
+
+        public async Task<List<string>> GetReworkOperatorsAsync()
+        {
+            var operators = new List<string>();
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            const string query = "SELECT name FROM operators WHERE allowHoldRework = 1";
+            await using var command = new MySqlCommand(query, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                    operators.Add(reader.GetString(0));
+            }
+            return operators;
+        }
         public async Task<bool> UpdateHoldRecordAsync(HoldTagModel model, IFormFile? file1, IFormFile? file2)
         {
-            // Preserve existing filenames if no new upload
             string fileName1 = Path.GetFileName(model.FileAddress1 ?? "");
             string fileName2 = Path.GetFileName(model.FileAddress2 ?? "");
 
@@ -314,64 +378,42 @@ LIMIT 10;";
             return rows > 0;
         }
 
-        // For streaming files directly (used in "Current File" links)
-        public string GetAbsolutePath(string? stored)
+        public string GetUploadFullPath(string fileName)
         {
-            // reuse your existing upload-path resolution
-            var name = string.IsNullOrWhiteSpace(stored) ? "" : Path.GetFileName(stored);
-            if (string.IsNullOrWhiteSpace(name)) return "";
-
-            var combined = Path.Combine(_uploadsBase, name);
-            return File.Exists(combined) ? combined : "";
+            return Path.Combine(_uploadsRoot, fileName);
         }
 
-        // Operator lists (for the admin dropdowns in the edit modal)
-        public async Task<List<string>> GetIssuedByOperatorsAsync()
+        public string? GetExistingFilePath(string storedName)
         {
-            var operators = new List<string>();
-            await using var connection = new MySqlConnection(_connectionString);
-            await connection.OpenAsync();
-            const string query = "SELECT name FROM operators";
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                if (!reader.IsDBNull(0))
-                    operators.Add(reader.GetString(0));
-            }
-            return operators;
+            return ResolveStoredPath(storedName);
         }
 
-        public async Task<List<string>> GetDispositionOperatorsAsync()
+
+
+
+        public string GetExportFullPath(string fileName)
         {
-            var operators = new List<string>();
-            await using var connection = new MySqlConnection(_connectionString);
-            await connection.OpenAsync();
-            const string query = "SELECT name FROM operators WHERE allowHoldDisp = 1";
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                if (!reader.IsDBNull(0))
-                    operators.Add(reader.GetString(0));
-            }
-            return operators;
+            fileName = Path.GetFileName(fileName);
+            Directory.CreateDirectory(_exportsRoot);
+            return Path.Combine(_exportsRoot, fileName);
         }
 
-        public async Task<List<string>> GetReworkOperatorsAsync()
+        private string? ResolveStoredPath(string? stored)
         {
-            var operators = new List<string>();
-            await using var connection = new MySqlConnection(_connectionString);
-            await connection.OpenAsync();
-            const string query = "SELECT name FROM operators WHERE allowHoldRework = 1";
-            await using var command = new MySqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                if (!reader.IsDBNull(0))
-                    operators.Add(reader.GetString(0));
-            }
-            return operators;
+            if (string.IsNullOrWhiteSpace(stored))
+                return null;
+
+            // 1) LEGACY: DB contains full/absolute path (C:\..., \\server\..., etc.)
+            if (Path.IsPathRooted(stored) && File.Exists(stored))
+                return stored;
+
+            // 2) NEW: DB contains just the filename
+            var fileName = Path.GetFileName(stored);
+            if (string.IsNullOrWhiteSpace(fileName))
+                return null;
+
+            var combined = Path.Combine(_uploadsRoot, fileName);
+            return File.Exists(combined) ? combined : null;
         }
 
     }

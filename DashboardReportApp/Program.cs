@@ -78,7 +78,6 @@ try
     builder.Services.AddScoped<ProcessChangeRequestService>();
     builder.Services.AddScoped<AdminDeviationService>();
     builder.Services.AddScoped<PressSetupService>();
-    builder.Services.AddScoped<AdminHoldTagService>();
     builder.Services.AddScoped<MoldingService>();
     builder.Services.AddScoped<AdminProcessChangeRequestService>();
     builder.Services.AddScoped<SharedService>();

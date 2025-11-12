@@ -127,22 +127,34 @@
                             @if (!string.IsNullOrEmpty(record.FileAddress1))
                             {
                                 <button type="button"
-                                        class="btn btn-info btn-sm fetch-image-btn"
-                                        data-file-path="@record.FileAddress1">
-                                    Preview 1
+                                        class="btn btn-info btn-sm btn-preview"
+                                        data-file="@record.FileAddress1">
+                                    <i class="bi bi-eye"></i> Preview
                                 </button>
+                            }
+                            else
+                            {
+
+                                <span>No File</span>
                             }
                         </td>
                         <td>
                             @if (!string.IsNullOrEmpty(record.FileAddress2))
                             {
                                 <button type="button"
-                                        class="btn btn-info btn-sm fetch-image-btn"
-                                        data-file-path="@record.FileAddress2">
-                                    Preview 2
+                                        class="btn btn-info btn-sm btn-preview"
+                                        data-file="@record.FileAddress2">
+                                    <i class="bi bi-eye"></i> Preview
                                 </button>
                             }
+                            else
+                            {
+
+                                <span>No File</span>
+                            }
                         </td>
+
+
                         <td>
                             @* Show Add / Update File1 ONLY for non-admins *@
                             @if (!isAdmin)
@@ -173,7 +185,8 @@
                                         data-pcsscrapped="@(record.PcsScrapped?.ToString() ?? "")"
                                         data-datecompleted="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")"
                                         data-fileaddress1="@record.FileAddress1"
-                                        data-fileaddress2="@record.FileAddress2">
+                                        data-fileaddress2="@record.FileAddress2"
+                                        data-prodnumber="@record.ProdNumber">
                                     Edit
                                 </button>
                             }
@@ -291,6 +304,10 @@
                     @Html.AntiForgeryToken()
                     <div class="modal-body">
                         <input type="hidden" name="Id" id="edit-id" />
+                        <div class="mb-3">
+                            <label for="edit-prodnumber" class="form-label">Production Number</label>
+                            <input type="text" name="ProdNumber" id="edit-prodnumber" class="form-control" />
+                        </div>
 
                         <div class="mb-3">
                             <label for="edit-part" class="form-label">Part</label>
@@ -418,21 +435,21 @@
     <input type="file" name="file" id="hiddenFileInput" />
 </form>
 
-<!-- Bootstrap Modal for File Preview -->
-<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+<!-- Somewhere near bottom of HoldTag/Index.cshtml -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="imageModalLabel">File Preview</h5>
+                <h5 class="modal-title">File Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body text-center">
-                <img id="modalImage" src="" alt="Preview" class="img-fluid" style="display:none; max-height:85vh; object-fit:contain;" />
-                <iframe id="modalFile" class="w-100" style="height:85vh; display:none;" frameborder="0"></iframe>
+            <div class="modal-body">
+                <div id="previewContainer" class="w-100"></div>
             </div>
         </div>
     </div>
 </div>
+
 
 
 @section Scripts {
@@ -635,72 +652,68 @@
         });
     </script>
 
-   
 
-    <!-- File Preview Script -->
+
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const previewButtons = document.querySelectorAll(".fetch-image-btn");
-            const modal = new bootstrap.Modal(document.getElementById("imageModal"));
-            const modalImage = document.getElementById("modalImage");
-            const modalFile = document.getElementById("modalFile");
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('.btn-preview');
+            if (!btn) return;
 
-            previewButtons.forEach(button => {
-                button.addEventListener("click", function () {
-                    const filePath = button.getAttribute("data-file-path");
-                    if (!filePath) {
-                        alert("File not found.");
-                        return;
-                    }
+            const fileName = btn.getAttribute('data-file');
+            if (!fileName) return;
 
-                    // Call the endpoint to fetch the image URL
-                    fetch(`/HoldTag/FetchImage?filePath=${encodeURIComponent(filePath)}`)
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error("Failed to fetch the file.");
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (!data.success) {
-                                alert(`Error: ${data.message}`);
-                                return;
-                            }
+            try {
+                // Hit the HoldTag FetchImage action (returns { success, url })
+                const resp = await fetch('/HoldTag/FetchImage?filePath=' + encodeURIComponent(fileName));
+                if (!resp.ok) { alert('Failed to fetch file.'); return; }
+                const data = await resp.json();
+                if (!data.success || !data.url) { alert(data.message || 'Could not retrieve file.'); return; }
 
-                            const previewUrl = data.url;
-                            // Determine file type based on the original file path extension
-                            const fileExtension = filePath.split('.').pop().toLowerCase();
+                const url = data.url;
+                const container = document.getElementById('previewContainer');
+                if (!container) return;
 
-                            // Hide both elements before showing the proper one
-                            modalImage.style.display = "none";
-                            modalFile.style.display = "none";
+                container.innerHTML = '';
+                const lower = (fileName || '').toLowerCase();
 
-                            if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(fileExtension)) {
-                                modalImage.src = previewUrl;
-                                modalImage.style.display = "block";
-                            } else if (fileExtension === "pdf") {
-                                modalFile.src = previewUrl;
-                                modalFile.style.display = "block";
-                            } else {
-                                alert("Unsupported file type.");
-                                return;
-                            }
-                            modal.show();
-                        })
-                        .catch(error => {
-                            console.error("Error fetching file:", error);
-                            alert("An error occurred while fetching the file.");
-                        });
-                });
-            });
+                const isPdf = lower.endsWith('.pdf');
+                const isVideo = lower.endsWith('.mp4') || lower.endsWith('.webm') ||
+                                lower.endsWith('.ogg') || lower.endsWith('.mov') ||
+                                lower.endsWith('.m4v');
 
-            // Reset the modal content on close
-            document.getElementById("imageModal").addEventListener("hidden.bs.modal", function () {
-                modalImage.src = "";
-                modalFile.src = "";
-            });
+                if (isPdf) {
+                    const el = document.createElement('embed');
+                    el.src = url;
+                    el.type = 'application/pdf';
+                    el.style.width = '100%';
+                    el.style.height = '600px';
+                    container.appendChild(el);
+                } else if (isVideo) {
+                    const el = document.createElement('video');
+                    el.src = url;
+                    el.controls = true;
+                    el.style.width = '100%';
+                    el.style.maxHeight = '80vh';
+                    container.appendChild(el);
+                } else {
+                    const el = document.createElement('img');
+                    el.src = url;
+                    el.alt = 'Preview';
+                    el.style.maxWidth = '100%';
+                    el.style.maxHeight = '80vh';
+                    container.appendChild(el);
+                }
+
+                new bootstrap.Modal(document.getElementById('previewModal')).show();
+            } catch (err) {
+                console.error('Error fetching file:', err);
+                alert('Error fetching file.');
+            }
         });
     </script>
+
+
+
     <script>
 document.addEventListener("DOMContentLoaded", function() {
     const quantityInput = document.getElementById("ModalQuantity");
@@ -750,6 +763,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 const dateCompleted = btn.dataset.datecompleted;
                 const fileAddress1 = btn.dataset.fileaddress1;
                 const fileAddress2 = btn.dataset.fileaddress2;
+                        const prodNumber = btn.dataset.prodnumber;
 
                 document.getElementById("edit-id").value = id;
                 document.getElementById("edit-part").value = part || "";
@@ -775,6 +789,8 @@ document.addEventListener("DOMContentLoaded", function() {
                     ? `<a href="/HoldTag/StreamFile?name=${encodeURIComponent(fileAddress2)}" target="_blank">Current File 2</a>`
                     : "No file uploaded for File 2";
 
+
+        document.getElementById("edit-prodnumber").value = prodNumber || "";
                 const modalEl = document.getElementById("editModal");
                 const modal = new bootstrap.Modal(modalEl);
                 modal.show();

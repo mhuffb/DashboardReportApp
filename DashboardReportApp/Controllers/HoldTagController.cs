@@ -58,32 +58,58 @@ namespace DashboardReportApp.Controllers
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
         {
-            var parts = await _sharedService.GetActiveProlinkParts();
-            var operators = await _sharedService.GetAllOperators();
-            var records = await _holdTagService.GetAllHoldRecordsAsync();
+            Console.WriteLine("[HoldTag.Index] Start");
+
+            List<string>? parts = null;
+            List<string>? operators = null;
+            List<HoldTagModel>? records = null;
+
+            try
+            {
+                Console.WriteLine("[HoldTag.Index] Before GetActiveProlinkParts");
+                parts = await _sharedService.GetActiveProlinkParts();
+                Console.WriteLine("[HoldTag.Index] After GetActiveProlinkParts");
+
+                Console.WriteLine("[HoldTag.Index] Before GetAllOperators");
+                operators = await _sharedService.GetAllOperators();
+                Console.WriteLine("[HoldTag.Index] After GetAllOperators");
+
+                Console.WriteLine("[HoldTag.Index] Before GetAllHoldRecordsAsync");
+                records = await _holdTagService.GetAllHoldRecordsAsync();
+                Console.WriteLine("[HoldTag.Index] After GetAllHoldRecordsAsync");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[HoldTag.Index] ERROR: " + ex);
+                // Show the error so the page at least loads
+                return Content("Error in HoldTag/Index:\n\n" + ex);
+            }
 
             ViewData["Parts"] = parts ?? new List<string>();
-            ViewData["Operators"] = operators;
+            ViewData["Operators"] = operators ?? new List<string>();
 
-            // TODO: replace with your real admin detection (role, claim, etc.)
             bool isAdmin = User.IsInRole("HoldAdmin");
             ViewBag.IsAdmin = isAdmin;
 
             if (isAdmin)
             {
+                Console.WriteLine("[HoldTag.Index] Before admin operator lists");
                 ViewBag.IssuedByOperators = await _holdTagService.GetIssuedByOperatorsAsync();
                 ViewBag.DispositionOperators = await _holdTagService.GetDispositionOperatorsAsync();
                 ViewBag.ReworkOperators = await _holdTagService.GetReworkOperatorsAsync();
+                Console.WriteLine("[HoldTag.Index] After admin operator lists");
             }
 
             var model = new HoldTagIndexViewModel
             {
                 FormModel = new HoldTagModel(),
-                Records = records
+                Records = records ?? new List<HoldTagModel>()
             };
 
+            Console.WriteLine("[HoldTag.Index] Returning view");
             return View(model);
         }
+
 
         [HttpGet("ProdNumbersForPart")]
         public async Task<IActionResult> ProdNumbersForPart(string part)
@@ -117,15 +143,24 @@ namespace DashboardReportApp.Controllers
                 // If there is an upload, save it and store only the filename in DB
                 if (file != null && file.Length > 0)
                 {
-                    var fileNameOnly = _holdTagService.SaveHoldFile(file, record.Id, "HoldTagFile1");
-                    record.FileAddress1 = fileNameOnly;
-                    await _holdTagService.UpdateFileAddress1Async(record.Id, fileNameOnly);
-                }
+                    var originalName = Path.GetFileName(file.FileName);
+                    var storedName = $"HoldTagFile1_{record.Id}_{DateTime.UtcNow.Ticks}{Path.GetExtension(originalName)}";
 
+                    var fullPath = _holdTagService.GetUploadFullPath(storedName);
+
+                    Console.WriteLine($"[HoldTag] Uploading to: {fullPath}");
+
+                    using (var stream = System.IO.File.Create(fullPath))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    record.FileAddress1 = storedName;
+                }
                 var pdfPath = _holdTagService.GenerateHoldTagPdf(record);
 
                 // Resolve optional attachment (works for filename or legacy full path)
-                var attachment1Abs = _holdTagService.GetUploadsAbsolutePath(record.FileAddress1);
+                var attachment1Abs = _holdTagService.GetAbsolutePath(record.FileAddress1);
 
                 _sharedService.PrintFileToSpecificPrinter(_holdTagPrinter, pdfPath, record.Quantity.GetValueOrDefault(1));
 
@@ -149,63 +184,54 @@ namespace DashboardReportApp.Controllers
             }
         }
 
+        // HoldTagController.cs
         [HttpPost("UpdateFile")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateFile(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)
-            {
-                TempData["ErrorMessage"] = "Please select a valid file.";
-                return RedirectToAction("Index");
-            }
+                return RedirectToAction("Index"); // or BadRequest if you prefer JSON
 
             try
             {
-                // Save and store filename only
-                var fileNameOnly = _holdTagService.SaveHoldFile(file, id, "HoldTagFile1");
-                await _holdTagService.UpdateFileAddress1Async(id, fileNameOnly);
+                // Save using fixed name, just like Maintenance does (filename-only in DB)
+                var ext = Path.GetExtension(file.FileName);
+                var fileName = $"HoldTagFile1_{id}{ext}";
+                var fullPath = _holdTagService.GetUploadFullPath(fileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+                using (var stream = System.IO.File.Create(fullPath))
+                    await file.CopyToAsync(stream);
+
+                await _holdTagService.UpdateFileAddress1Async(id, fileName);
 
                 TempData["SuccessMessage"] = "File uploaded and updated successfully.";
+                return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
                 TempData["ErrorMessage"] = $"Error updating file: {ex.Message}";
+                return RedirectToAction("Index");
             }
-
-            return RedirectToAction("Index");
         }
 
+
+        // IMPORTANT: give it the explicit template so /HoldTag/FetchImage works
         [HttpGet("FetchImage")]
         public IActionResult FetchImage(string filePath)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(filePath))
-                    return Json(new { success = false, message = "No file path provided." });
+            var fileName = Path.GetFileName(filePath ?? "");
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Json(new { success = false, message = "No file provided." });
 
-                // Resolve filename or legacy full path to an actual existing path
-                var abs = _holdTagService.GetExistingFilePath(filePath);
-
-                var fileName = Path.GetFileName(abs);
-                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
-                var destinationPath = Path.Combine(destinationDir, fileName);
-
-                if (!Directory.Exists(destinationDir))
-                    Directory.CreateDirectory(destinationDir);
-
-                if (System.IO.File.Exists(destinationPath))
-                    System.IO.File.Delete(destinationPath);
-
-                System.IO.File.Copy(abs, destinationPath, overwrite: true);
-
-                var relativePath = $"/Uploads/{fileName}";
-                return Json(new { success = true, url = relativePath });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] FetchImage exception: {ex}");
-                return StatusCode(500, new { success = false, message = ex.Message });
-            }
+            // You already have StreamFile; reuse it (like Maintenance's Preview)
+            var url = Url.Action(nameof(StreamFile), "HoldTag", new { name = fileName }, Request.Scheme);
+            return Json(new { success = true, url });
         }
+
+
+
+
         // POST: HoldTag/UpdateRequest
         [HttpPost("UpdateRequest")]
         [ValidateAntiForgeryToken]
@@ -286,7 +312,7 @@ namespace DashboardReportApp.Controllers
                 if (string.IsNullOrWhiteSpace(name))
                     return NotFound();
 
-                var abs = _holdTagService.GetAbsolutePath(name);
+                var abs = _holdTagService.GetExistingFilePath(name);
                 if (string.IsNullOrEmpty(abs) || !System.IO.File.Exists(abs))
                     return NotFound();
 
@@ -310,6 +336,7 @@ namespace DashboardReportApp.Controllers
                 return new EmptyResult();
             }
         }
+
 
     }
 }
