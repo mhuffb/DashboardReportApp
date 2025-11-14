@@ -23,15 +23,16 @@ namespace DashboardReportApp.Services
         private readonly string _uploadFolder;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly PrinterOptions _printing;
-
+        private readonly string _sumatraExePath;
         public SharedService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor, IOptions<PrinterOptions> printingOptions)
         {
-            _uploadFolder = @"\\SINTERGYDC2024\Vol1\VSP\Uploads";
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
             _connectionStringSQLExpress = configuration.GetConnectionString("SQLExpressConnection");
             _connectionStringSinTSQL = configuration.GetConnectionString("SqlServerConnectionsinTSQL");
             _httpContextAccessor = httpContextAccessor;
             _printing = printingOptions.Value;
+            _sumatraExePath = configuration["Printing:SumatraExePath"]
+                      ?? @"C:\Users\OFFICE_01\AppData\Local\SumatraPDF\SumatraPDF.exe"; // optional fallback
         }
 
         public SharedService()
@@ -40,34 +41,7 @@ namespace DashboardReportApp.Services
 
        
 
-        public string SaveFileToUploads(IFormFile file, string prefix, int id)
-        {
-            //Prefixes HoldTagFile1, HoldTagFile2, 
-            if (file == null || file.Length == 0)
-            {
-                throw new ArgumentException("File is null or empty.", nameof(file));
-            }
-
-            // Ensure the upload folder exists
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-            }
-
-            // Create a unique filename: "HoldTagFile_637622183523457159.pdf", etc.
-            var extension = Path.GetExtension(file.FileName);
-            //var uniqueName = "_" + DateTime.Now.Ticks + extension;
-            var finalPath = Path.Combine(_uploadFolder, prefix + "_" + id + extension);
-
-            // Copy the file to disk
-            using (var stream = new FileStream(finalPath, FileMode.Create))
-            {
-                file.CopyTo(stream);
-            }
-
-            // Return the path so we can save it in record.FileAddress1
-            return finalPath;
-        }
+       
         public void SendEmailWithAttachment2(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
         {
         }
@@ -623,9 +597,8 @@ ORDER BY p.measure_date DESC
             }
 
             /* --- silent SumatraPDF print --- */
-            string sumatra = @"C:\Tools\SumatraPDF\SumatraPDF.exe";
-            if (!File.Exists(sumatra))
-                throw new FileNotFoundException("SumatraPDF executable not found.", sumatra);
+            if (!File.Exists(_sumatraExePath))
+                throw new FileNotFoundException("SumatraPDF executable not found.", _sumatraExePath);
 
             string copyArg = copies > 1 ? $" -print-settings \"copies={copies}\"" : "";
             string args = $"-print-to \"{printerName}\"{copyArg} \"{pdfPath}\"";
@@ -634,7 +607,7 @@ ORDER BY p.measure_date DESC
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = sumatra,
+                    FileName = _sumatraExePath,
                     Arguments = args,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,

@@ -24,6 +24,9 @@
         public int Pcs { get; set; }
         public decimal ElapsedTime { get; set; }
         public decimal CycleTime { get; set; }
+        public string LotNumber { get; set; }
+        public string MaterialCode { get; set; }
+
     }
 
     public class OpenSetups

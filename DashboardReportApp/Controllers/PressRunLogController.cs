@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using static DashboardReportApp.Services.PressRunLogService;
+using MySql.Data.MySqlClient;
+using System.Data;
 
 namespace DashboardReportApp.Controllers
 {
@@ -30,8 +32,12 @@ namespace DashboardReportApp.Controllers
             ViewData["OpenParts"] = await _pressRunLogService.GetOpenSetups();
             ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync();
 
+            // 🔹 New: all runs for DataTables HTML table
+            ViewData["AllRuns"] = await _pressRunLogService.GetAllRunsAsync();
+
             return View();
         }
+
 
 
         // ============== LOGIN ==============
@@ -57,34 +63,29 @@ namespace DashboardReportApp.Controllers
                           Request.Headers["Accept"].ToString().Contains("application/json");
 
             if (isAjax)
-            {
                 return Json(new { ok = true, message = res.Message });
-            }
 
             TempData["Toast"] = res.Message;
             return RedirectToAction("Index");
         }
 
-
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart)
         {
+            model.PcsStart = pcsStart;
+
             StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart);
 
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
                           Request.Headers["Accept"].ToString().Contains("application/json");
 
             if (isAjax)
-            {
                 return Json(new { ok = true, message = res.Message });
-            }
 
             TempData["Toast"] = res.Message;
             return RedirectToAction("Index");
         }
-
 
 
         // ============== LOGOUT ==============

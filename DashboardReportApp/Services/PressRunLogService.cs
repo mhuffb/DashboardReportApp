@@ -16,6 +16,7 @@ using iText.Kernel.Geom;
 using Microsoft.Extensions.Configuration;
 using iText.Layout.Element;
 using iText.Layout.Borders;
+using System.IO;
 
 namespace DashboardReportApp.Services
 {
@@ -24,13 +25,18 @@ namespace DashboardReportApp.Services
         private readonly string _connectionStringMySQL;
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
+        private readonly string _exportsFolder;
 
         public PressRunLogService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _sharedService = sharedService;
             _moldingService = moldingService;
+
+            _exportsFolder = config["Paths:PressRunExports"]
+                             ?? @"\\SINTERGYDC2024\Vol1\VSP\Exports";
         }
+
 
         #region Public CRUD Methods
 
@@ -43,7 +49,36 @@ namespace DashboardReportApp.Services
             public string Message { get; set; }   // “Logged in and started skid 1” …
         }
 
-       
+        public async Task<(string LotNumber, string MaterialCode)?> GetCurrentMixForMachineAsync(string machine)
+        {
+            if (string.IsNullOrWhiteSpace(machine))
+                return null;
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+    SELECT LotNumber, MaterialCode
+    FROM pressmixbagchange
+    WHERE Machine = @machine
+    ORDER BY id DESC  
+    LIMIT 1;
+";
+
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@machine", machine);
+
+            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+
+            if (!await reader.ReadAsync())
+                return null;
+
+            var lot = reader["LotNumber"]?.ToString() ?? string.Empty;
+            var mat = reader["MaterialCode"]?.ToString() ?? string.Empty;
+
+            return (lot, mat);
+        }
 
         /// <summary>Returned by HandleStartSkidAsync so the UI can tell the user what happened.</summary>
         public class StartSkidResult
@@ -60,6 +95,13 @@ namespace DashboardReportApp.Services
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
+
+            // OPTION 2: get mix for this machine (last bag change on this press)
+            var mixByMachine = await GetCurrentMixForMachineAsync(model.Machine);
+            string mixLot = mixByMachine?.LotNumber;
+            string mixCode = mixByMachine?.MaterialCode;
+
+
 
             // 1) Highest skid so far
             int currentSkidNumber = 0;
@@ -93,11 +135,12 @@ namespace DashboardReportApp.Services
             // 3) Insert the next skid
             int newSkidNumber = (currentSkidNumber == 0) ? 1 : currentSkidNumber + 1;
             const string insertSql = @"
-        INSERT INTO pressrun
-              (run, part, component, startDateTime, operator,
-               machine, prodNumber, skidNumber, pcsStart)
-        VALUES (@run, @part, @component, NOW(), @operator,
-                @machine, @prod, @skid, @pcsStart);";
+    INSERT INTO pressrun
+          (run, part, component, startDateTime, operator,
+           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
+    VALUES (@run, @part, @component, NOW(), @operator,
+            @machine, @prod, @skid, @pcsStart, @lotNumber, @materialCode);";
+
             using (var ins = new MySqlCommand(insertSql, conn))
             {
                 ins.Parameters.AddWithValue("@run", model.Run);
@@ -108,6 +151,8 @@ namespace DashboardReportApp.Services
                 ins.Parameters.AddWithValue("@prod", model.ProdNumber);
                 ins.Parameters.AddWithValue("@skid", newSkidNumber);
                 ins.Parameters.AddWithValue("@pcsStart", pcsStart);
+                ins.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
+                ins.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
                 await ins.ExecuteNonQueryAsync();
             }
 
@@ -125,15 +170,23 @@ namespace DashboardReportApp.Services
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
 
+            // OPTION 2: get mix by machine (last bag change for this press)
+            var mixByMachine = await GetCurrentMixForMachineAsync(m.Machine);
+            string mixLot = mixByMachine?.LotNumber;
+            string mixCode = mixByMachine?.MaterialCode;
+
             // 🔐 Auto-logout any open main run on this machine
             int pcsEndForPrev = m.PcsStart ?? 0; // use the current device count you read in the modal
             var auto = await AutoLogoutIfMachineOccupiedAsync(conn, (MySqlTransaction)tx, m.Machine, pcsEndForPrev, m.Operator);
 
             // Always create the main run record (Skid 0)
             const string insertMain = @"
-        INSERT INTO pressrun
-              (operator, part, component, machine, prodNumber, run, startDateTime, skidNumber)
-        VALUES (@operator, @part, @component, @machine, @prod, @run, @start, 0);";
+    INSERT INTO pressrun
+          (operator, part, component, machine, prodNumber, run,
+           startDateTime, skidNumber, lotNumber, materialCode)
+    VALUES (@operator, @part, @component, @machine, @prod, @run,
+            @start, 0, @lotNumber, @materialCode);";
+
             using (var cmd = new MySqlCommand(insertMain, conn, (MySqlTransaction)tx))
             {
                 cmd.Parameters.AddWithValue("@operator", m.Operator);
@@ -143,6 +196,8 @@ namespace DashboardReportApp.Services
                 cmd.Parameters.AddWithValue("@prod", m.ProdNumber);
                 cmd.Parameters.AddWithValue("@run", m.Run);
                 cmd.Parameters.AddWithValue("@start", m.StartDateTime);
+                cmd.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -177,11 +232,12 @@ namespace DashboardReportApp.Services
                 result.Message = $"Logged in and started skid {newSkid}.";
 
                 const string insertSkid = @"
-            INSERT INTO pressrun
-                  (run, part, component, startDateTime, operator,
-                   machine, prodNumber, skidNumber, pcsStart)
-            VALUES (@run, @part, @component, NOW(), @operator,
-                    @machine, @prodNumber, @skid, @pcsStart);";
+    INSERT INTO pressrun
+          (run, part, component, startDateTime, operator,
+           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
+    VALUES (@run, @part, @component, NOW(), @operator,
+            @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode);";
+
                 using var newSkidCmd = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 newSkidCmd.Parameters.AddWithValue("@run", m.Run);
                 newSkidCmd.Parameters.AddWithValue("@part", m.Part);
@@ -191,6 +247,9 @@ namespace DashboardReportApp.Services
                 newSkidCmd.Parameters.AddWithValue("@prodNumber", m.ProdNumber);
                 newSkidCmd.Parameters.AddWithValue("@skid", newSkid);
                 newSkidCmd.Parameters.AddWithValue("@pcsStart", m.PcsStart);
+                newSkidCmd.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
+                newSkidCmd.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
+
                 await newSkidCmd.ExecuteNonQueryAsync();
             }
             else
@@ -200,11 +259,12 @@ namespace DashboardReportApp.Services
                 result.Message = $"Logged in to existing skid {openSkidNumber}.";
 
                 const string insertSkid = @"
-            INSERT INTO pressrun
-                  (run, part, component, startDateTime, operator,
-                   machine, prodNumber, skidNumber, pcsStart)
-            VALUES (@run, @part, @component, NOW(), @operator,
-                    @machine, @prodNumber, @skid, @pcsStart);";
+    INSERT INTO pressrun
+          (run, part, component, startDateTime, operator,
+           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
+    VALUES (@run, @part, @component, NOW(), @operator,
+            @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode);";
+
                 using var insert = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 insert.Parameters.AddWithValue("@run", m.Run);
                 insert.Parameters.AddWithValue("@part", m.Part);
@@ -214,6 +274,10 @@ namespace DashboardReportApp.Services
                 insert.Parameters.AddWithValue("@prodNumber", m.ProdNumber);
                 insert.Parameters.AddWithValue("@skid", openSkidNumber);
                 insert.Parameters.AddWithValue("@pcsStart", m.PcsStart);
+                insert.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
+                insert.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
+
+
                 await insert.ExecuteNonQueryAsync();
             }
 
@@ -239,25 +303,7 @@ namespace DashboardReportApp.Services
 
 
 
-        private static async Task InsertSkidRowAsync(MySqlConnection conn,
-                                              PressRunLogModel m, int skidNo)
-        {
-            const string ins = @"
-        INSERT INTO pressrun (run, part, component, startDateTime, operator,
-                              machine, prodNumber, skidNumber, pcsStart, open)
-        VALUES (@run,@part,@component,NOW(),@operator,
-                @machine,@prod,@skid,@pcsStart,1);";   // open = 1 → current active line
-            using var cmd = new MySqlCommand(ins, conn);
-            cmd.Parameters.AddWithValue("@run", m.Run);
-            cmd.Parameters.AddWithValue("@part", m.Part);
-            cmd.Parameters.AddWithValue("@component", m.Component);
-            cmd.Parameters.AddWithValue("@operator", m.Operator);
-            cmd.Parameters.AddWithValue("@machine", m.Machine);
-            cmd.Parameters.AddWithValue("@prod", m.ProdNumber);
-            cmd.Parameters.AddWithValue("@skid", skidNo);
-            cmd.Parameters.AddWithValue("@pcsStart", m.PcsStart ?? 0);
-            await cmd.ExecuteNonQueryAsync();
-        }
+      
 
 
         public async Task<string> GetMachineForRunAsync(int runId)
@@ -404,7 +450,9 @@ LIMIT 1";
             Console.WriteLine("Part: " + part);
 
             List<string> operations = _sharedService.GetOrderOfOps(part);
-            string filePath = @"\\SINTERGYDC2024\Vol1\VSP\Exports\RouterTag_" + model.Id + ".pdf";
+            Directory.CreateDirectory(_exportsFolder); // ensure it exists
+            string filePath = System.IO.Path.Combine(_exportsFolder, $"RouterTag_{model.Id}.pdf");
+
 
             PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
             PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
@@ -628,34 +676,17 @@ LIMIT 1";
         {
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
+       lotNumber, materialCode
 FROM pressrun
 WHERE run = @run
   AND skidNumber = @skidNumber
 ORDER BY id DESC
 LIMIT 1";
+
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@run", run);
             cmd.Parameters.AddWithValue("@skidNumber", skidNumber);
-
-            using var rdr = await cmd.ExecuteReaderAsync();
-            if (await rdr.ReadAsync())
-            {
-                return ParseRunFromReader(rdr);
-            }
-            return null;
-        }
-
-        private async Task<PressRunLogModel> GetPressRunRecordByIdAsync(MySqlConnection conn, int id)
-        {
-            const string sql = @"
-SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
-FROM pressrun
-WHERE id = @id
-LIMIT 1";
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@id", id);
 
             using var rdr = await cmd.ExecuteReaderAsync();
             if (await rdr.ReadAsync())
@@ -689,7 +720,9 @@ LIMIT 1";
                 PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd")) ? (int?)null : rdr.GetInt32("pcsEnd"),
                 Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap")) ? (int?)null : rdr.GetInt32("scrap"),
                 Notes = rdr["notes"]?.ToString(),
-                SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber")) ? 0 : rdr.GetInt32("skidNumber")
+                SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber")) ? 0 : rdr.GetInt32("skidNumber"),
+                LotNumber = rdr.IsDBNull(TryOrdinal(rdr, "lotNumber")) ? null : rdr["lotNumber"]?.ToString(),
+                MaterialCode = rdr.IsDBNull(TryOrdinal(rdr, "materialCode")) ? null : rdr["materialCode"]?.ToString()
             };
             return model;
         }
@@ -758,9 +791,11 @@ ORDER BY part, run";
             var list = new List<PressRunLogModel>();
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
+       lotNumber, materialCode
 FROM pressrun
 WHERE endDateTime IS NULL";
+
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -773,14 +808,7 @@ WHERE endDateTime IS NULL";
             return list;
         }
 
-        public async Task<List<PressRunLogModel>> GetAllRunsAsync()
-        {
-            // In your original code, it calls the MoldingService to get them. 
-            // If you want to see them from MySQL directly, you can do so here. 
-            // For consistency, let's do exactly what your original code says:
-            var list = _moldingService.GetPressRuns();
-            return list;
-        }
+       
         public class PagedResult<T>
         {
             public IReadOnlyList<T> Rows { get; init; } = Array.Empty<T>();
@@ -939,6 +967,46 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
             }
 
             return (true, prevOperator, prevRun);
+        }
+        private async Task<(string lotNumber, string materialCode)>
+    
+        public async Task<List<PressRunLogModel>> GetAllRunsAsync()
+        {
+            var list = new List<PressRunLogModel>();
+
+            const string sql = @"
+        SELECT 
+            id,
+            timestamp,
+            prodNumber,
+            run,
+            part,
+            component,
+            startDateTime,
+            endDateTime,
+            operator,
+            machine,
+            pcsStart,
+            pcsEnd,
+            scrap,
+            notes,
+            skidNumber,
+            lotNumber,
+            materialCode
+        FROM pressrun
+        ORDER BY startDateTime DESC;";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
+            {
+                list.Add(ParseRunFromReader(rdr));
+            }
+
+            return list;
         }
 
         #endregion

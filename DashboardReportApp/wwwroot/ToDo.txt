@@ -1,7 +1,6 @@
 ﻿
 
 10.22.25
-5. hold tags paginate
 6. deviation paginate
 7. process change paginate
 
@@ -10,3 +9,10 @@
 1. Make print tag option on assembly page
 
 Remove react table. make html table with pagination, datatables and jquery
+
+
+Holdtag-add component
+1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
+2. On holdtag display the mix lot and mix code from pressrun
+3. Seperate quantity of holdtags and quantity of on hold
+4. In sinterrun populate the part and component. right now component is not populating
