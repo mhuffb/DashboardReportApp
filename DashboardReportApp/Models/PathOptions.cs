@@ -35,8 +35,20 @@ namespace DashboardReportApp.Models
 
     public sealed class PrinterOptions
     {
-        // Add more named printers later as needed
+        // Named logical printers
         public string Maintenance { get; set; } = "Maintenance";
+        public string HoldTag { get; set; } = "HoldTag";
+
+        /// <summary>
+        /// Fallback printer if no hostname mapping is found.
+        /// </summary>
+        public string Default { get; set; } = "Microsoft Print to PDF";
+
+        /// <summary>
+        /// Hostname -> printer name mappings (from appsettings: Printers:HostMappings).
+        /// </summary>
+        public Dictionary<string, string> HostMappings { get; set; } = new();
+
         /// <summary>
         /// Full path to SumatraPDF.exe
         /// e.g., C:\Program Files\SumatraPDF\SumatraPDF.exe
@@ -48,4 +60,5 @@ namespace DashboardReportApp.Models
         /// </summary>
         public bool ValidateOnStart { get; set; } = true;
     }
+
 }

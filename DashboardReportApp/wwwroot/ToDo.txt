@@ -12,7 +12,9 @@ Remove react table. make html table with pagination, datatables and jquery
 
 
 Holdtag-add component
-1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
+x1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
 2. On holdtag display the mix lot and mix code from pressrun
 3. Seperate quantity of holdtags and quantity of on hold
 4. In sinterrun populate the part and component. right now component is not populating
+5. show lot number and materialcode in molding dashboard and does it have to be react?
+

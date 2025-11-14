@@ -5,6 +5,7 @@ using iText.Layout.Element;
 using iText.StyledXmlParser.Jsoup.Select;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using MySql.Data.MySqlClient;
 using Mysqlx.Crud;
 using System.Data;
@@ -24,6 +25,8 @@ namespace DashboardReportApp.Services
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly PrinterOptions _printing;
         private readonly string _sumatraExePath;
+
+        private readonly string _clientHostLogPath;
         public SharedService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor, IOptions<PrinterOptions> printingOptions)
         {
             _connectionStringMySQL = configuration.GetConnectionString("MySQLConnection");
@@ -33,6 +36,8 @@ namespace DashboardReportApp.Services
             _printing = printingOptions.Value;
             _sumatraExePath = configuration["Printing:SumatraExePath"]
                       ?? @"C:\Users\OFFICE_01\AppData\Local\SumatraPDF\SumatraPDF.exe"; // optional fallback
+            _clientHostLogPath = configuration["Paths:ClientHostLog"]
+                     ?? @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
         }
 
         public SharedService()
@@ -489,14 +494,11 @@ ORDER BY p.measure_date DESC
                 // Prepare the log message. Adjust the text if needed.
                 string textToWrite = $"{DateTime.Now}: User name is {clientHostName} Ip is {clientIp}";
 
-                // Define the shared file path
-                string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
-
                 try
                 {
-                    // Append the text to the file (creates the file if it doesn't exist)
-                    System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
+                    System.IO.File.AppendAllText(_clientHostLogPath, textToWrite + Environment.NewLine);
                 }
+
                 catch (Exception ex)
                 {
                     // Consider proper logging or error handling here
@@ -518,26 +520,34 @@ ORDER BY p.measure_date DESC
 
         private string GetPrinterForUser(string userName)
         {
-            // Example mapping of users (or locations) to printers
-            var userPrinterMappings = new Dictionary<string, string>
-    {
-        { @"Office01.sintergyinc.local", "Microsoft Print to PDF" },
-        { @"mold02", "Mold02" },
-        { @"MOLD03", "Mold03" },
-        { @"MOLD04-PC", "Mold004" },
-        { @"DESKTOP-R8A5IFJ", "Microsoft Print to PDF" },
-        // Add additional mappings as needed
-    };
+            // No host? Just use default
+            if (string.IsNullOrWhiteSpace(userName))
+                return _printing.Default ?? "Microsoft Print to PDF";
 
-            // Try to get the printer name from the dictionary
-            if (userPrinterMappings.TryGetValue(userName, out string printerName))
+            // Exact key match (case-sensitive)
+            if (_printing.HostMappings != null &&
+                _printing.HostMappings.TryGetValue(userName, out var printerFromExact))
             {
-                return printerName;
+                return printerFromExact;
             }
 
-            // Fallback option if not found
-            return "Microsoft Print to PDF";
+            // Case-insensitive fallback
+            if (_printing.HostMappings != null)
+            {
+                foreach (var kvp in _printing.HostMappings)
+                {
+                    if (kvp.Key.Equals(userName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return kvp.Value;
+                    }
+                }
+            }
+
+            // Final fallback
+            return _printing.Default ?? "Microsoft Print to PDF";
         }
+
+
         public void PrintFileToSpecificPrinter(string printerName, string filePath, int copies = 1)
         {
             if (string.IsNullOrWhiteSpace(_printing.SumatraExePath) || !File.Exists(_printing.SumatraExePath))

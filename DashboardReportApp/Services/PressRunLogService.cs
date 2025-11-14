@@ -968,7 +968,6 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
 
             return (true, prevOperator, prevRun);
         }
-        private async Task<(string lotNumber, string materialCode)>
     
         public async Task<List<PressRunLogModel>> GetAllRunsAsync()
         {
