@@ -179,6 +179,15 @@
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm" data-action="edit-workorder" data-id="@item.Id">Edit</button>
                                 <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Items</button>
+                                @* PREVIEW: only show if there is an attachment filename *@
+                                @if (!string.IsNullOrWhiteSpace(item.AttachmentFileName))
+                                {
+                                    <button class="btn btn-info btn-sm"
+                                            data-action="preview-attachment"
+                                            data-group="@item.GroupID">
+                                        Preview
+                                    </button>
+                                }
 
                                 @{
                                     bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
@@ -300,7 +309,7 @@
           loadModal('@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder")');
         });
 
-        document.addEventListener('click', (e) => {
+               document.addEventListener('click', (e) => {
           const btn = e.target.closest('button');
           if (!btn) return;
 
@@ -313,7 +322,13 @@
             const groupId = btn.dataset.group;
             loadModal('@Url.Action("ToolItemsModal", "ToolingWorkOrder")' + '?groupID=' + groupId);
           }
+
+          if (btn.dataset.action === 'preview-attachment') {
+            const groupId = btn.dataset.group;
+            loadModal('@Url.Action("AttachmentPreviewModal", "ToolingWorkOrder")' + '?groupID=' + groupId);
+          }
         });
+
 
 
 

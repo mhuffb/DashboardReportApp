@@ -26,6 +26,8 @@ namespace DashboardReportApp.Models
         public DateTime? DateReceived { get; set; }       // header received date
         public DateTime? PoRequestedAt { get; set; }
         public string? Received_CompletedBy { get; set; }
+        public string? AttachmentFileName { get; set; }
+
     }
 
 
@@ -84,4 +86,11 @@ namespace DashboardReportApp.Models
         [Required(ErrorMessage = "Received/Completed By is required.")]
         public string Received_CompletedBy { get; set; } = string.Empty;
     }
+    public class ToolingAttachmentPreviewVM
+    {
+        public int GroupID { get; set; }
+        public string? FileUrl { get; set; }
+        public string? FileName { get; set; }
+    }
+
 }

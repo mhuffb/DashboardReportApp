@@ -3,6 +3,9 @@ using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Http;
+using System.IO;
 
 namespace DashboardReportApp.Controllers
 {
@@ -85,8 +88,15 @@ namespace DashboardReportApp.Controllers
                 model = _service.GetToolingWorkOrdersById(id.Value);
                 if (model == null) return NotFound();
             }
-
+            // NEW: for Ref PO dropdown
+            var toolingWorkOrders = _service.GetToolingWorkOrders();
+            ViewBag.ToolingInProgress = toolingWorkOrders
+                .Where(h => !h.DateReceived.HasValue)
+                .ToList();
+            //  populate lists AND ToolingInProgress for the modal
             PopulateHeaderLists(model);
+            var all = _service.GetToolingWorkOrders();
+            ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
             return PartialView("_ToolingWorkOrderEditModal", model);
         }
 
@@ -95,12 +105,24 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult SaveToolingWorkOrder(ToolingHistoryModel model)
+        public IActionResult SaveToolingWorkOrder(
+     ToolingHistoryModel model,
+     IFormFile? attachment)
         {
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = 400;
+
+                var toolingWorkOrders = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = toolingWorkOrders
+                    .Where(h => !h.DateReceived.HasValue)
+                    .ToList();
+
                 PopulateHeaderLists(model);
+
+                var all = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
+
                 return IsAjax()
                     ? PartialView("_ToolingWorkOrderEditModal", model)
                     : View("EditToolingWorkOrder", model);
@@ -108,8 +130,25 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                if (model.Id == 0) _service.AddToolingWorkOrder(model);
-                else _service.UpdateToolingWorkOrder(model);
+                // 1) Insert or update header first
+                if (model.Id == 0)
+                {
+                    _service.AddToolingWorkOrder(model);   // now sets model.Id
+                }
+                else
+                {
+                    _service.UpdateToolingWorkOrder(model);
+                }
+
+                // 2) If there is a file, save it and update header with filename
+                if (attachment != null && attachment.Length > 0)
+                {
+                    var newFileName = SaveToolingAttachmentFile(model.Id, attachment);
+                    model.AttachmentFileName = newFileName;
+
+                    // persist filename
+                    _service.UpdateToolingWorkOrder(model);
+                }
 
                 if (IsAjax())
                     return Json(new { ok = true, message = $"Work order for Group {model.GroupID} saved." });
@@ -122,6 +161,10 @@ namespace DashboardReportApp.Controllers
                 ModelState.AddModelError("", ex.Message);
                 Response.StatusCode = 400;
                 PopulateHeaderLists(model);
+
+                var all = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
+
                 return IsAjax()
                     ? PartialView("_ToolingWorkOrderEditModal", model)
                     : View("EditToolingWorkOrder", model);
@@ -305,6 +348,8 @@ Open in Dashboard: {link}
                 return Problem("Tooling:SaveFolder not configured.");
 
             var path = _service.SavePackingSlipPdf(groupID, saveFolder);
+
+            PrintPackingSlip(path);
 
             if (email)
             {
@@ -625,6 +670,98 @@ Open in Dashboard: {link}
             if (!string.IsNullOrWhiteSpace(ensureToolItem) && set.Add(ensureToolItem)) merged.Add(ensureToolItem);
             ViewBag.ToolItemList = merged;
         }
+        private void PrintPackingSlip(string pdfPath)
+        {
+            var exePath = _cfg["Printing:SumatraExePath"];
+            var printer = _cfg["Printers:ToolingPackingSlip"];
+
+            if (string.IsNullOrWhiteSpace(exePath) || string.IsNullOrWhiteSpace(printer))
+                return; // silently skip if not configured
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = $"-print-to \"{printer}\" -silent \"{pdfPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            try
+            {
+                Process.Start(psi);
+            }
+            catch
+            {
+                // optional: log if you have logging wired up
+            }
+        }
+
+
+        [HttpGet]
+        public IActionResult AttachmentPreviewModal(int groupID)
+        {
+            var header = _service.GetHeaderByGroupID(groupID);
+            if (header == null)
+                return NotFound($"No work order found for group {groupID}.");
+
+            var vm = new ToolingAttachmentPreviewVM
+            {
+                GroupID = groupID
+            };
+
+            if (string.IsNullOrWhiteSpace(header.AttachmentFileName))
+            {
+                vm.FileUrl = null;
+                vm.FileName = null;
+            }
+            else
+            {
+                // MUST match the physical path: wwwroot\uploads\tooling\...
+                vm.FileName = header.AttachmentFileName;
+                vm.FileUrl = $"/uploads/{header.AttachmentFileName}";
+            }
+
+            return PartialView("_ToolingAttachmentModal", vm);
+        }
+
+        private static string SanitizeFileNameLocal(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return string.Empty;
+
+            foreach (var bad in Path.GetInvalidFileNameChars())
+                name = name.Replace(bad, '_');
+
+            return name;
+        }
+
+        private string? SaveToolingAttachmentFile(int headerId, IFormFile file)
+        {
+            if (file == null || file.Length == 0) return null;
+
+            var root = _cfg["Paths:ToolingWorkOrderUploads"];
+            if (string.IsNullOrWhiteSpace(root))
+                throw new Exception("Paths:ToolingWorkOrderUploads not configured.");
+
+            Directory.CreateDirectory(root);
+
+            var ext = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(ext))
+                ext = ".bin";
+
+            var fileName = $"toolworkorderFile1_{headerId}{ext}";
+            fileName = SanitizeFileNameLocal(fileName);
+
+            var fullPath = Path.Combine(root, fileName);
+
+            using (var fs = new FileStream(fullPath, FileMode.Create))
+            {
+                file.CopyTo(fs);
+            }
+
+            return fileName;
+        }
+
 
     }
 }

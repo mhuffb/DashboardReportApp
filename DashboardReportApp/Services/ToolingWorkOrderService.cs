@@ -20,11 +20,13 @@ namespace DashboardReportApp.Services
             var list = new List<ToolingHistoryModel>();
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, AccountingCode, InitiatedBy, DateReceived,              
-       Received_CompletedBy                                        
+       Cost, AccountingCode, InitiatedBy, DateReceived,
+       Received_CompletedBy,
+       AttachmentFileName        
 FROM tooling_workorder_header
 ORDER BY Id DESC;
 ";
+
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -47,7 +49,9 @@ ORDER BY Id DESC;
                     InitiatedBy = r["InitiatedBy"]?.ToString(),
                     DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
                     PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
-                    Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()  
+                    Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
+                    AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
+
 
                 });
             }
@@ -70,12 +74,13 @@ ORDER BY Id DESC;
             const string sql = @"
 SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
        Cost, AccountingCode, InitiatedBy, DateReceived,
-       Received_CompletedBy                         
+       Received_CompletedBy,
+       AttachmentFileName        
 FROM tooling_workorder_header
 WHERE Id = @Id
 LIMIT 1;
-
 ";
+
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -99,7 +104,8 @@ LIMIT 1;
                 InitiatedBy = r["InitiatedBy"]?.ToString(),
                 PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                 DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
-                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()   // + NEW
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(), 
+                AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
 
             };
         }
@@ -177,6 +183,8 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.ExecuteNonQuery();
+
+
         }
         public void AddToolingWorkOrder(ToolingHistoryModel m)
         {
@@ -207,10 +215,12 @@ WHERE Id=@Id;";
             const string sql = @"
 INSERT INTO tooling_workorder_header
  (GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
-   AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy)     -- + NEW
+   AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy,
+   AttachmentFileName)    
 VALUES
  (@GroupID, @Part, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
-   @AccountingCode, @InitiatedBy, @DateReceived, @Received_CompletedBy);";
+   @AccountingCode, @InitiatedBy, @DateReceived, @Received_CompletedBy,
+   @AttachmentFileName);";
 
 
 
@@ -227,8 +237,14 @@ VALUES
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? "Emery, J" : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AttachmentFileName", (object?)m.AttachmentFileName ?? DBNull.Value);
+
             cmd.ExecuteNonQuery();
+
+
+
+            m.Id = (int)cmd.LastInsertedId;
         }
 
 
@@ -239,7 +255,8 @@ UPDATE tooling_workorder_header SET
   Part=@Part, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
   DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost, InitiatedBy=@InitiatedBy,
   DateReceived=@DateReceived,
-  Received_CompletedBy=@Received_CompletedBy          
+  Received_CompletedBy=@Received_CompletedBy,
+  AttachmentFileName=@AttachmentFileName         
 WHERE Id=@Id;";
 
 
@@ -257,7 +274,9 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? (object)DBNull.Value : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AttachmentFileName", (object?)m.AttachmentFileName ?? DBNull.Value);
+
             cmd.ExecuteNonQuery();
         }
 
@@ -316,11 +335,13 @@ ORDER BY i.Id ASC;
             const string sql = @"
 SELECT
     Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
-    AccountingCode, Cost, InitiatedBy, DateReceived,              
-    Received_CompletedBy                                          
+    AccountingCode, Cost, InitiatedBy, DateReceived,
+    Received_CompletedBy,
+    AttachmentFileName            
 FROM tooling_workorder_header
 WHERE GroupID = @GroupID
 LIMIT 1;";
+
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
@@ -343,7 +364,9 @@ LIMIT 1;";
                 Cost = r["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(r["Cost"]) : null,
                 InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null,
                 DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),        
-                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
+                AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
+
             };
         }
 

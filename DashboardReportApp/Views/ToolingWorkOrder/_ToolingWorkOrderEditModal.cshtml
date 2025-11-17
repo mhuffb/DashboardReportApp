@@ -1,19 +1,40 @@
 ﻿@model DashboardReportApp.Models.ToolingHistoryModel
+@using System.Text.Json;
 @{
     var reasons = (List<string>)(ViewBag.ReasonList ?? new List<string>());
     var vendors = (List<string>)(ViewBag.VendorList ?? new List<string>());
     var people = (List<string>)(ViewBag.InitiatedList ?? new List<string>());
+
+    var inProgress = ViewBag.ToolingInProgress as List<DashboardReportApp.Models.ToolingHistoryModel>
+                     ?? new List<DashboardReportApp.Models.ToolingHistoryModel>();
+
+    // Serialize minimal info we need client-side: part + po + groupID
+    var inProgressJson = JsonSerializer.Serialize(
+        inProgress
+            .Where(x => !string.IsNullOrWhiteSpace(x.Part))
+            .Select(x => new
+            {
+                part = x.Part,
+                po = x.PO,
+                groupID = x.GroupID
+            })
+    );
 }
+
 <div class="modal-header">
     <h5 class="modal-title">Tooling Work Order — @Model.GroupID</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
-<form id="toolWorkOrderForm" asp-action="SaveToolingWorkOrder" method="post">
+<form id="toolWorkOrderForm"
+      asp-action="SaveToolingWorkOrder"
+      method="post"
+      enctype="multipart/form-data">
+    <!-- IMPORTANT for file uploads later -->
     @Html.AntiForgeryToken()
     @Html.HiddenFor(m => m.Id)
     @Html.HiddenFor(m => m.GroupID)
-
+    @Html.HiddenFor(m => m.AttachmentFileName)
     <div class="modal-body">
         @Html.ValidationSummary(true, "", new { @class = "text-danger" })
 
@@ -28,21 +49,29 @@
             <div class="col-md-3">
                 <label class="form-label">Reason</label>
                 @Html.DropDownListFor(m => m.Reason,
-                new SelectList(reasons, Model?.Reason),
-                                "-- Select Reason --",
-                                new { @class = "form-select" })
+                    new SelectList(reasons, Model?.Reason),
+                    "-- Select Reason --",
+                    new { @class = "form-select", id = "Reason" })
                 @Html.ValidationMessageFor(m => m.Reason, "", new { @class = "text-danger small" })
             </div>
 
-            <!-- Vendor -->
+            <!-- Vendor: free-text with suggestions -->
             <div class="col-md-3">
                 <label class="form-label">Vendor</label>
-                @Html.DropDownListFor(m => m.ToolVendor,
-                                new SelectList(vendors, Model?.ToolVendor),
-                                "-- Select Vendor --",
-                                new { @class = "form-select" })
+                <input asp-for="ToolVendor"
+                       class="form-control"
+                       list="vendorList"
+                       autocomplete="off" />
+
+                <datalist id="vendorList">
+                    @foreach (var v in vendors)
+                    {
+                        <option value="@v"></option>
+                    }
+                </datalist>
                 @Html.ValidationMessageFor(m => m.ToolVendor, "", new { @class = "text-danger small" })
             </div>
+
 
            
 
@@ -62,9 +91,20 @@
 
             <div class="col-md-3">
                 <label class="form-label">PO #</label>
-                @Html.TextBoxFor(m => m.PO, new { @class = "form-control" })
+                @Html.TextBoxFor(m => m.PO, new { @class = "form-control", autocomplete = "off", id = "PO" })
             </div>
 
+
+            <!-- Reference PO for Fitting/Setting -->
+            <div class="col-md-3" id="refPoContainer" style="display:none;">
+                <label class="form-label">Reference PO (open WOs for this part)</label>
+                <select id="refPoSelect" class="form-select">
+                    <option value="">-- Select PO --</option>
+                </select>
+                <small class="text-muted">
+                    Only shows POs from open work orders with the same part.
+                </small>
+            </div>
             <!-- Initiated By -->
             <div class="col-md-3">
                 <label class="form-label">Initiated By</label>
@@ -81,6 +121,22 @@
             </div>
 
            
+            <div class="col-12">
+                <label class="form-label">Attachment (picture or video)</label>
+                <input type="file"
+                       name="attachment"
+                       class="form-control"
+                       accept="image/*,video/*" />
+                <small class="text-muted">
+                    Uploading a new file will replace the previous attachment for this work order.
+                </small>
+                @if (!string.IsNullOrWhiteSpace(Model.AttachmentFileName))
+                {
+                    <div class="mt-2 small text-muted">
+                        Current file: @Model.AttachmentFileName
+                    </div>
+                }
+            </div>
 
            
         </div>
@@ -91,3 +147,67 @@
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
     </div>
 </form>
+<script>
+    (function () {
+        // Data from ViewBag.ToolingInProgress
+        const toolingInProgress = @Html.Raw(inProgressJson);
+
+        const reasonEl     = document.getElementById('Reason');
+        const partEl       = document.querySelector('input[name="Part"]');
+        const poEl         = document.getElementById('PO');          // <-- here
+        const refContainer = document.getElementById('refPoContainer');
+        const refSelect    = document.getElementById('refPoSelect');
+
+        if (!reasonEl || !partEl || !refContainer || !refSelect) return;
+
+        function refreshRefPo() {
+            const reasonRaw = (reasonEl.value || '').trim().toLowerCase();
+            const part      = (partEl.value || '').trim();
+
+            // Only show for Fitting/Setting + non-empty Part
+            if (!part || reasonRaw !== 'Fitting/Setting') {
+                refContainer.style.display = 'none';
+                refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+                return;
+            }
+
+            // Filter in-progress list for same part and non-empty PO
+            const matches = toolingInProgress.filter(x =>
+                x.part && x.part.trim().toLowerCase() === part.toLowerCase() &&
+                x.po && x.po.trim() !== ''
+            );
+
+            if (!matches.length) {
+                refContainer.style.display = 'none';
+                refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+                return;
+            }
+
+            // We have matches: show container and build options
+            refContainer.style.display = '';
+            refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+
+            matches.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.po;                                  // value = plain PO
+                opt.textContent = `Ref: ${m.po} (Group ${m.groupID})`;
+                refSelect.appendChild(opt);
+            });
+        }
+
+        // When reason or part changes, rebuild list
+        reasonEl.addEventListener('change', refreshRefPo);
+        partEl.addEventListener('change', refreshRefPo);
+        partEl.addEventListener('blur', refreshRefPo);
+
+        // When user picks a ref PO, copy just the PO into the PO box
+        refSelect.addEventListener('change', function () {
+            if (poEl && this.value) {
+                poEl.value = this.value;  // plain PO, no "Ref:"
+            }
+        });
+
+        // Initial state when modal opens
+        refreshRefPo();
+    })();
+</script>
