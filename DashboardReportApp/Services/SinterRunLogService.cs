@@ -27,9 +27,26 @@ public class SinterRunLogService
         var allRuns = new List<SinterRunSkid>();
 
         string query = @"
-            SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
-            FROM sintertime 
-                 ORDER BY id DESC";
+    SELECT id,
+           timestamp,
+           operator,
+           prodNumber,
+           run,
+           part,
+           component,
+           lotNumber,
+           materialCode,
+           oven,
+           process,
+           startDateTime,
+           endDateTime,
+           notes,
+           open,
+           skidNumber,
+           pcs
+    FROM sintertime
+    ORDER BY id DESC";
+
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
@@ -58,6 +75,9 @@ public class SinterRunLogService
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
+                Component = reader["component"]?.ToString(),
+                LotNumber = reader["lotNumber"]?.ToString(),
+                MaterialCode = reader["materialCode"]?.ToString(),
                 Machine = reader["oven"]?.ToString(),
                 Process = reader["process"]?.ToString(),
                 StartDateTime = startDateTime,
@@ -67,6 +87,7 @@ public class SinterRunLogService
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0
             });
+
         }
 
         return allRuns;
@@ -165,10 +186,13 @@ public class SinterRunLogService
         // Build our insert statement
         // We'll keep pcs in the columns, because we DO want the first row to have it.
         string insertQuery = @"
-        INSERT INTO sinterrun
-            (prodNumber, run, part, startDateTime, operator, oven, process, notes, skidNumber, pcs)
-        VALUES
-            (@prodNumber, @run, @part, @startDateTime, @operator, @oven, @process, @notes, @skidNumber, @pcs)";
+    INSERT INTO sinterrun
+        (prodNumber, run, part, component, lotNumber, materialCode, startDateTime, operator, oven, process, notes, skidNumber, pcs)
+    VALUES
+        (@prodNumber, @run, @part, @component, @lotNumber, @materialCode, @startDateTime, @operator, @oven, @process, @notes, @skidNumber, @pcs)";
+
+
+
 
         using (var connection = new MySqlConnection(_connectionStringMySQL))
         {
@@ -211,6 +235,17 @@ public class SinterRunLogService
                 insertCommand.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
                 insertCommand.Parameters.AddWithValue("@run", string.IsNullOrWhiteSpace(model.Run) ? (object)DBNull.Value : model.Run);
                 insertCommand.Parameters.AddWithValue("@part", model.Part.ToUpper());
+
+                insertCommand.Parameters.AddWithValue("@component", string.IsNullOrWhiteSpace(model.Component)
+                                                            ? (object)DBNull.Value
+                                                            : model.Component);
+                insertCommand.Parameters.AddWithValue("@lotNumber",
+      string.IsNullOrWhiteSpace(model.LotNumber) ? (object)DBNull.Value : model.LotNumber);
+
+                insertCommand.Parameters.AddWithValue("@materialCode",
+                    string.IsNullOrWhiteSpace(model.MaterialCode) ? (object)DBNull.Value : model.MaterialCode);
+
+
                 insertCommand.Parameters.AddWithValue("@startDateTime", DateTime.Now);
                 insertCommand.Parameters.AddWithValue("@operator", model.Operator);
                 insertCommand.Parameters.AddWithValue("@oven", model.Machine);
@@ -456,31 +491,35 @@ public class SinterRunLogService
 
         string query = @"
 (
-    SELECT 
-        MIN(id) AS id,
-        MIN(timestamp) AS timestamp,
-        prodNumber,
-        GROUP_CONCAT(DISTINCT run) AS run,
-        GROUP_CONCAT(DISTINCT part) AS part,
-        GROUP_CONCAT(DISTINCT component) AS component,
-        MAX(endDateTime) AS endDateTime,
-        GROUP_CONCAT(DISTINCT operator) AS operator,
-        GROUP_CONCAT(DISTINCT machine) AS machine,
-        MIN(pcsStart) AS pcsStart,
-        MAX(pcsEnd) AS pcsEnd,
-        '' AS notes,
-        skidNumber,
-        MIN(startDateTime) AS startDateTime
-    FROM (
-        SELECT * FROM pressrun
-        WHERE open = 1 
-          AND skidNumber > 0
-          AND (
-              component IS NULL
-              OR (component NOT LIKE '%SL%' AND component NOT LIKE '%C%')
-          )
-    ) AS filtered_pressrun
-    GROUP BY prodNumber, skidNumber
+   SELECT 
+    MIN(id) AS id,
+    MIN(timestamp) AS timestamp,
+    prodNumber,
+    GROUP_CONCAT(DISTINCT run) AS run,
+    GROUP_CONCAT(DISTINCT part) AS part,
+    GROUP_CONCAT(DISTINCT component) AS component,
+    MAX(endDateTime) AS endDateTime,
+    GROUP_CONCAT(DISTINCT operator) AS operator,
+    GROUP_CONCAT(DISTINCT machine) AS machine,
+    MIN(pcsStart) AS pcsStart,
+    MAX(pcsEnd) AS pcsEnd,
+    '' AS notes,
+    skidNumber,
+    MIN(startDateTime) AS startDateTime,
+    MIN(lotNumber)    AS lotNumber,
+    MIN(materialCode) AS materialCode
+FROM (
+    SELECT * FROM pressrun
+    WHERE open = 1 
+      AND skidNumber > 0
+      AND (
+          component IS NULL
+          OR (component NOT LIKE '%SL%' AND component NOT LIKE '%C%')
+      )
+) AS filtered_pressrun
+GROUP BY prodNumber, skidNumber
+
+
 )
 
 UNION ALL
@@ -500,11 +539,14 @@ UNION ALL
         MAX(pcs) AS pcsEnd,
         '' AS notes,
         skidNumber,
-        MAX(endDateTime) AS startDateTime
+        MAX(endDateTime) AS startDateTime,
+        '' AS lotNumber,
+        '' AS materialCode
     FROM assembly
     WHERE open = 1
     GROUP BY prodNumber, skidNumber
 )
+
 
 ORDER BY part, skidNumber;
 ";
@@ -532,7 +574,8 @@ ORDER BY part, skidNumber;
 
             // Retrieve the part value
             string part = reader["part"]?.ToString() ?? "N/A";
-
+            string lotNumber = reader["lotNumber"]?.ToString() ?? "";
+            string materialCode = reader["materialCode"]?.ToString() ?? "";
             openGreenSkids.Add(new PressRunLogModel
             {
                 Id = reader.GetInt32("id"),
@@ -553,7 +596,9 @@ ORDER BY part, skidNumber;
                 PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd"))
                                ? 0
                                : Convert.ToInt32(reader["pcsEnd"]),
-                Notes = reader["notes"]?.ToString() ?? ""
+                Notes = reader["notes"]?.ToString() ?? "",
+                LotNumber = lotNumber,
+                MaterialCode = materialCode
             });
         }
 
@@ -597,11 +642,29 @@ ORDER BY part, skidNumber;
         int offset = Math.Max(0, (page - 1)) * Math.Max(1, pageSize);
 
         string sql = $@"
-        SELECT id, timestamp, operator, prodNumber, run, part, oven, process, startDateTime, endDateTime, notes, open, skidNumber, pcs
-        FROM sintertime
-        /**where**/
-        ORDER BY {sort} {dir}
-        LIMIT @take OFFSET @skip";
+    SELECT id,
+           timestamp,
+           operator,
+           prodNumber,
+           run,
+           part,
+           component,
+           lotNumber,
+           materialCode,
+           oven,
+           process,
+           startDateTime,
+           endDateTime,
+           notes,
+           open,
+           skidNumber,
+           pcs
+    FROM sintertime
+    /**where**/
+    ORDER BY {sort} {dir}
+    LIMIT @take OFFSET @skip";
+
+
 
         var where = new List<string>();
         var parms = new List<MySqlParameter>
@@ -629,20 +692,31 @@ ORDER BY part, skidNumber;
             items.Add(new SinterRunSkid
             {
                 Id = reader.GetInt32("id"),
-                Timestamp = !reader.IsDBNull("timestamp") ? reader.GetDateTime("timestamp") : DateTime.MinValue,
-                Operator = reader["operator"]?.ToString(),
+                Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp"))
+                       ? DateTime.MinValue
+                       : reader.GetDateTime("timestamp"),
+                Operator = reader["operator"] as string,
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
-                Machine = reader["oven"]?.ToString(),
-                Process = reader["process"]?.ToString(),
-                StartDateTime = !reader.IsDBNull("startDateTime") ? reader.GetDateTime("startDateTime") : DateTime.MinValue,
-                EndDateTime = reader.IsDBNull("endDateTime") ? null : reader.GetDateTime("endDateTime"),
-                Notes = reader["notes"]?.ToString(),
+                Component = reader["component"] as string,
+                LotNumber = reader["lotNumber"] as string,      // 👈 NEW
+                MaterialCode = reader["materialCode"] as string, // 👈 NEW
+                Machine = reader["oven"] as string,
+                Process = reader["process"] as string,
+                StartDateTime = reader.IsDBNull(reader.GetOrdinal("startDateTime"))
+                           ? DateTime.MinValue
+                           : reader.GetDateTime("startDateTime"),
+                EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
+                           ? (DateTime?)null
+                           : reader.GetDateTime("endDateTime"),
+                Notes = reader["notes"] as string,
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
-                Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
+                Pcs = reader["pcs"] != DBNull.Value ? reader.GetInt32("pcs") : 0
             });
+
+
         }
         return items;
     }
@@ -652,11 +726,28 @@ ORDER BY part, skidNumber;
     {
         var list = new List<SinterRunSkid>();
         string sql = @"
-        SELECT id, timestamp, operator, prodNumber, run, part, oven, process,
-               startDateTime, endDateTime, notes, open, skidNumber, pcs
-        FROM sintertime
-        WHERE endDateTime IS NULL
-        ORDER BY id DESC";
+    SELECT id,
+           timestamp,
+           operator,
+           prodNumber,
+           run,
+           part,
+           component,
+           lotNumber,
+           materialCode,
+           oven,
+           process,
+           startDateTime,
+           endDateTime,
+           notes,
+           open,
+           skidNumber,
+           pcs
+    FROM sintertime
+    WHERE endDateTime IS NULL
+    ORDER BY id DESC";
+
+
 
         await using var conn = new MySqlConnection(_connectionStringMySQL);
         await conn.OpenAsync();
@@ -672,6 +763,9 @@ ORDER BY part, skidNumber;
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
+                Component = reader["component"]?.ToString(),
+                LotNumber = reader["lotNumber"]?.ToString(),
+                MaterialCode = reader["materialCode"]?.ToString(),
                 Machine = reader["oven"]?.ToString(),
                 Process = reader["process"]?.ToString(),
                 StartDateTime = !reader.IsDBNull("startDateTime") ? reader.GetDateTime("startDateTime") : DateTime.MinValue,
@@ -681,6 +775,7 @@ ORDER BY part, skidNumber;
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
             });
+
         }
         return list;
     }

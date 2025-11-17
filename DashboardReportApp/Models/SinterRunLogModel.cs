@@ -17,6 +17,8 @@
         public sbyte? Open { get; set; }
         public int SkidNumber { get; set; }
         public int Pcs { get; set; }
+        public string LotNumber { get; set; }
+        public string MaterialCode { get; set; }
     }
 
     public class SinterRunLogViewModel
