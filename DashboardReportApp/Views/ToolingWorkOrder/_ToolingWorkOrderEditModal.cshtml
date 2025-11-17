@@ -146,68 +146,8 @@
         <button type="submit" class="btn btn-primary">Save</button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
     </div>
+
 </form>
-<script>
-    (function () {
-        // Data from ViewBag.ToolingInProgress
-        const toolingInProgress = @Html.Raw(inProgressJson);
-
-        const reasonEl     = document.getElementById('Reason');
-        const partEl       = document.querySelector('input[name="Part"]');
-        const poEl         = document.getElementById('PO');          // <-- here
-        const refContainer = document.getElementById('refPoContainer');
-        const refSelect    = document.getElementById('refPoSelect');
-
-        if (!reasonEl || !partEl || !refContainer || !refSelect) return;
-
-        function refreshRefPo() {
-            const reasonRaw = (reasonEl.value || '').trim().toLowerCase();
-            const part      = (partEl.value || '').trim();
-
-            // Only show for Fitting/Setting + non-empty Part
-            if (!part || reasonRaw !== 'Fitting/Setting') {
-                refContainer.style.display = 'none';
-                refSelect.innerHTML = '<option value="">-- Select PO --</option>';
-                return;
-            }
-
-            // Filter in-progress list for same part and non-empty PO
-            const matches = toolingInProgress.filter(x =>
-                x.part && x.part.trim().toLowerCase() === part.toLowerCase() &&
-                x.po && x.po.trim() !== ''
-            );
-
-            if (!matches.length) {
-                refContainer.style.display = 'none';
-                refSelect.innerHTML = '<option value="">-- Select PO --</option>';
-                return;
-            }
-
-            // We have matches: show container and build options
-            refContainer.style.display = '';
-            refSelect.innerHTML = '<option value="">-- Select PO --</option>';
-
-            matches.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.po;                                  // value = plain PO
-                opt.textContent = `Ref: ${m.po} (Group ${m.groupID})`;
-                refSelect.appendChild(opt);
-            });
-        }
-
-        // When reason or part changes, rebuild list
-        reasonEl.addEventListener('change', refreshRefPo);
-        partEl.addEventListener('change', refreshRefPo);
-        partEl.addEventListener('blur', refreshRefPo);
-
-        // When user picks a ref PO, copy just the PO into the PO box
-        refSelect.addEventListener('change', function () {
-            if (poEl && this.value) {
-                poEl.value = this.value;  // plain PO, no "Ref:"
-            }
-        });
-
-        // Initial state when modal opens
-        refreshRefPo();
-    })();
+<script type="application/json" id="toolingInProgressJson">
+    @Html.Raw(inProgressJson)
 </script>

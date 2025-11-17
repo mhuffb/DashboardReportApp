@@ -284,22 +284,104 @@
         const modalEl = document.getElementById('appModal');
         const modal   = new bootstrap.Modal(modalEl);
 
-                        async function loadModal(url) {
+                              async function loadModal(url) {
           try {
             const res = await fetch(url, {
               credentials: 'same-origin',
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }   // tell server it's AJAX
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            const html = await res.text();                         // read ONCE
+            const html = await res.text();
             if (!res.ok) {
               await alertErr('Failed to load', html.slice(0, 600) || res.statusText);
               return;
             }
             modalEl.querySelector('.modal-content').innerHTML = html;
             modal.show();
+
+            // 🔹 After modal content is injected, wire up Ref PO behavior
+            setupRefPoSection();
+
           } catch (err) {
             await alertErr('Network error', err?.message || 'Unexpected error');
           }
+        }
+
+                function setupRefPoSection() {
+          const modalRoot = document.getElementById('appModal');
+          if (!modalRoot) return;
+
+          // Grab elements *inside* the modal
+          const reasonEl     = modalRoot.querySelector('#Reason');
+          const partEl       = modalRoot.querySelector('input[name="Part"]');
+          const poEl         = modalRoot.querySelector('#PO');
+          const refContainer = modalRoot.querySelector('#refPoContainer');
+          const refSelect    = modalRoot.querySelector('#refPoSelect');
+          const dataEl       = modalRoot.querySelector('#toolingInProgressJson');
+
+          if (!reasonEl || !partEl || !refContainer || !refSelect || !dataEl) {
+            // Not the tooling work order modal, just bail
+            return;
+          }
+
+          let toolingInProgress = [];
+          try {
+            const jsonText = dataEl.textContent || '[]';
+            toolingInProgress = JSON.parse(jsonText);
+          } catch (e) {
+            console.error('Failed to parse toolingInProgressJson', e);
+            toolingInProgress = [];
+          }
+
+          function refreshRefPo() {
+            const rawReason = (reasonEl.value || '').trim();
+            const part      = (partEl.value || '').trim();
+
+            // 🔴 Only show when reason is exactly "Fitting/Setting" and Part is non-empty
+            if (!part || rawReason.toLowerCase() !== 'fitting/setting') {
+              refContainer.style.display = 'none';
+              refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+              return;
+            }
+
+            // Filter in-progress list for same part and non-empty PO
+            const matches = (toolingInProgress || []).filter(x =>
+              x.part &&
+              x.part.trim().toLowerCase() === part.toLowerCase() &&
+              x.po &&
+              x.po.trim() !== ''
+            );
+
+            if (!matches.length) {
+              refContainer.style.display = 'none';
+              refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+              return;
+            }
+
+            // We have matches: show container and build options
+            refContainer.style.display = '';
+            refSelect.innerHTML = '<option value="">-- Select PO --</option>';
+
+            matches.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.po;  // value = plain PO
+              opt.textContent = `Ref: ${m.po} (Group ${m.groupID})`;
+              refSelect.appendChild(opt);
+            });
+          }
+
+          // Avoid double-binding if modal reopened
+          reasonEl.onchange = refreshRefPo;
+          partEl.onchange   = refreshRefPo;
+          partEl.onblur     = refreshRefPo;
+
+          refSelect.onchange = function () {
+            if (poEl && this.value) {
+              poEl.value = this.value; // plain PO, no "Ref:"
+            }
+          };
+
+          // Initial state when modal opens
+          refreshRefPo();
         }
 
 
