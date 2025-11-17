@@ -374,11 +374,12 @@
           partEl.onchange   = refreshRefPo;
           partEl.onblur     = refreshRefPo;
 
-          refSelect.onchange = function () {
-            if (poEl && this.value) {
-              poEl.value = this.value; // plain PO, no "Ref:"
-            }
-          };
+                  refSelect.onchange = function () {
+          if (poEl && this.value) {
+            poEl.value = `Ref: ${this.value}`;   // <-- put "Ref: " into the PO box
+          }
+        };
+
 
           // Initial state when modal opens
           refreshRefPo();

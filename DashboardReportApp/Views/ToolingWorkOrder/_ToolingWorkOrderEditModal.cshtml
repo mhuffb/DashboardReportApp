@@ -88,13 +88,6 @@
                        value="@(Model.DateDue?.ToString("yyyy-MM-dd") ?? "")" />
                 @Html.ValidationMessageFor(m => m.DateDue, "", new { @class = "text-danger small" })
             </div>
-
-            <div class="col-md-3">
-                <label class="form-label">PO #</label>
-                @Html.TextBoxFor(m => m.PO, new { @class = "form-control", autocomplete = "off", id = "PO" })
-            </div>
-
-
             <!-- Reference PO for Fitting/Setting -->
             <div class="col-md-3" id="refPoContainer" style="display:none;">
                 <label class="form-label">Reference PO (open WOs for this part)</label>
@@ -105,6 +98,13 @@
                     Only shows POs from open work orders with the same part.
                 </small>
             </div>
+            <div class="col-md-3">
+                <label class="form-label">PO #</label>
+                @Html.TextBoxFor(m => m.PO, new { @class = "form-control", autocomplete = "off", id = "PO" })
+            </div>
+
+
+           
             <!-- Initiated By -->
             <div class="col-md-3">
                 <label class="form-label">Initiated By</label>
