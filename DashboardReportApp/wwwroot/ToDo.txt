@@ -1,7 +1,6 @@
 ﻿
 
 10.22.25
-5. hold tags paginate
 6. deviation paginate
 7. process change paginate
 
@@ -10,3 +9,31 @@
 1. Make print tag option on assembly page
 
 Remove react table. make html table with pagination, datatables and jquery
+<table id="maintenanceTable" class="table table-striped table-bordered">
+
+
+1. pressmixbagchange
+
+Holdtag-add component
+x1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
+
+x2. In sinterrun populate the part and component. right now component is not populating
+xIn sinterrun get the lotnumber and materialcode from pressrun
+In assembly get the lotnumber and materialcode from pressrun
+3. On holdtag display the mix lot and mix code from pressrun
+4. Seperate quantity of holdtags and quantity of on hold
+5. show lot number and materialcode in molding dashboard and does it have to be react?
+
+
+schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
+
+tooling
+make type in vendor and add to list
+make available the default when marking complete
+email charlie and print packing slip when create packing slip is clicked
+if fitting/setting choose reference po from open pos for that part
+allow attaching pictures/videos in new tool work order modal and show preview button in all tool work orders table that when clicked shows the pictures / video in a modal
+add po to all tool work orders table
+ap@sintergy.net group for request po
+
+
