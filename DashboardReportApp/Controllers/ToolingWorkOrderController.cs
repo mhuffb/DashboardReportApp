@@ -527,7 +527,7 @@ Open in Dashboard: {link}
 
             
 
-            var defaults = new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" }; // ← your defaults
+            var defaults = new List<string> { "Shuckers, C", "Emery, J",  "Klebecha, B" }; // ← your defaults
             var db = _service.GetDistinctReceivers();
 
             var merged = Merge(defaults, db, header?.Received_CompletedBy);

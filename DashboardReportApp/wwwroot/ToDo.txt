@@ -28,14 +28,15 @@ In assembly get the lotnumber and materialcode from pressrun
 schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
 
 tooling work order
-make it so you can type in vendor and add to list to choose from.
-print packing slip when create packing slip is clicked and configure the printer in appsettings.json.
-if fitting/setting choose reference po from open pos for that part.
-allow attaching pictures/videos in new tool work order modal and show preview button in all tool work orders table that when clicked shows the pictures / video in a modal.
-add po to all tool work orders table.
+xmake it so you can type in vendor and add to list to choose from.
+xprint packing slip when create packing slip is clicked and configure the printer in appsettings.json.
+xif fitting/setting choose reference po from open pos for that part.
+xallow attaching pictures/videos in new tool work order modal and show preview button in all tool work orders table that when clicked shows the pictures / video in a modal.
 
-ap@sintergy.net group for request po
+
+xap@sintergy.net group for request po
 
 
 tooling inv
 make available the default when marking complete
+make tool number required
