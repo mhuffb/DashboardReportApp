@@ -4,10 +4,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DashboardReportApp.Models
 {
-    public class ToolingHistoryModel
+    public class ToolingWorkOrderModel
     {
         public int Id { get; set; }
-        public int GroupID { get; set; }
         [Required]
         public string Part { get; set; }
         public string? PO { get; set; }
@@ -37,12 +36,13 @@ namespace DashboardReportApp.Models
     {
         public int Id { get; set; }
         [Required]
-        public int GroupID { get; set; }                 // NOTE: GroupID (not GroupId) to match your controller
+        public int HeaderId { get; set; }                
         [Required]
         public string Action { get; set; }
         [Required]
         public string ToolItem { get; set; }
-        public string? ToolNumber { get; set; }
+        [Required]
+        public string ToolNumber { get; set; }
         public string? ToolDesc { get; set; }
         public string? Revision { get; set; }
         [Display(Name = "Qty")]
@@ -65,7 +65,7 @@ namespace DashboardReportApp.Models
     // Matches how your controller currently uses it (GroupID, ToolItems, NewToolItem)
     public sealed class GroupDetailsViewModel
     {
-        public int GroupID { get; set; }
+        public int HeaderId { get; set; }
         public string? GroupName { get; set; }
 
         // MUST be ToolItemViewModel to match _service.GetToolItemsByGroupID(...)
@@ -77,7 +77,7 @@ namespace DashboardReportApp.Models
     public class CompleteWorkOrderVM
     {
         [Required]
-        public int GroupID { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [DataType(DataType.Date)]
@@ -88,7 +88,7 @@ namespace DashboardReportApp.Models
     }
     public class ToolingAttachmentPreviewVM
     {
-        public int GroupID { get; set; }
+        public int Id { get; set; }
         public string? FileUrl { get; set; }
         public string? FileName { get; set; }
     }

@@ -38,5 +38,4 @@ xap@sintergy.net group for request po
 
 
 tooling inv
-make available the default when marking complete
 make tool number required

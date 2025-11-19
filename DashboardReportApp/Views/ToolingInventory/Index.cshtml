@@ -37,25 +37,25 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingInProgress)
+                    @foreach (DashboardReportApp.Models.ToolingWorkOrderModel item in ViewBag.ToolingInProgress)
                     {
-                        var rowId = $"row-items-{item.GroupID}";
+                        var rowId = $"row-items-{item.Id}";
                         var reason = (item.Reason ?? string.Empty).Trim();
                         var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
 
-                        <tr data-group="@item.GroupID">
+                        <tr data-group="@item.Id">
                             <td>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary"
                                         data-action="toggle-items"
-                                        data-group="@item.GroupID"
+                                        data-group="@item.Id"
                                         aria-expanded="false"
                                         aria-controls="@rowId"
                                         title="Show tool items">
                                     <i class="bi bi-caret-right-fill"></i>
                                 </button>
                             </td>
-                            <td>@item.GroupID</td>
+                            <td>@item.Id</td>
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
@@ -66,13 +66,13 @@
                                 <div class="btn-group btn-group-sm">
 
                                     <a class="btn btn-primary btn-sm"
-                                       href="@Url.Action("EditToolingWorkOrderModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       href="@Url.Action("EditToolingWorkOrderModalByGroup", "ToolingWorkOrder", new { Id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Edit Tool Work Order
                                     </a>
 
                                     <a class="btn btn-secondary btn-sm"
-                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingWorkOrder", new { Id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Add/Edit Tool Items
                                     </a>
@@ -95,13 +95,13 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
                                        target="_blank" rel="noopener">
                                         Create Packing Slip
                                     </a>
                                 }
                                 <a class="btn btn-success btn-sm"
-                                   href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                   href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { Id = item.Id })"
                                    data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                     Complete Work Order
                                 </a>
@@ -113,7 +113,7 @@
                         <tr id="@rowId" class="d-none">
                             <td></td>
                             <td colspan="8">
-                                <div class="p-2 border rounded bg-light" data-items-container="@item.GroupID">
+                                <div class="p-2 border rounded bg-light" data-items-container="@item.Id">
                                     <div class="text-muted">Loading...</div>
                                 </div>
                             </td>

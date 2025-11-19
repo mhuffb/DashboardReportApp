@@ -1,4 +1,4 @@
-﻿@model DashboardReportApp.Models.ToolingHistoryModel
+﻿@model DashboardReportApp.Models.ToolingWorkOrderModel
 @inject IConfiguration Config
 
 <div class="container-fluid px-3">
@@ -29,7 +29,7 @@
             <thead class="table-dark">
                 <tr>
                     <th style="width:48px;"></th>  <!-- expand -->
-                    <th>Group</th>
+                    <th>Id</th>
                     <th>Assembly #</th>
                     <th>Reason</th>
                     <th>Vendor</th>
@@ -42,22 +42,22 @@
             <tbody>
                 @if (ViewBag.ToolingInProgress != null)
                 {
-                    foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingInProgress)
+                    foreach (DashboardReportApp.Models.ToolingWorkOrderModel item in ViewBag.ToolingInProgress)
                     {
-                        var rowId = $"row-items-{item.GroupID}";
-                        <tr data-group="@item.GroupID">
+                        var rowId = $"row-items-{item.Id}";
+                        <tr data-group="@item.Id">
                             <td>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary"
                                         data-action="toggle-items"
-                                        data-group="@item.GroupID"
+                                        data-group="@item.Id"
                                         aria-expanded="false"
                                         aria-controls="@rowId"
                                         title="Show tool items">
                                     <i class="bi bi-caret-right-fill"></i>
                                 </button>
                             </td>
-                            <td>@item.GroupID</td>
+                            <td>@item.Id</td>
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
@@ -66,7 +66,7 @@
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm" data-action="edit-workorder" data-id="@item.Id">Edit Tool Work Order</button>
-                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Add/Edit Tool Items</button>
+                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.Id">Add/Edit Tool Items</button>
 
                                 @{
                                     bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
@@ -109,7 +109,7 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
                                        target="_blank" rel="noopener">
                                         Create Packing Slip
                                     </a>
@@ -119,7 +119,7 @@
                         <tr id="@rowId" class="d-none">
                             <td></td>
                             <td colspan="8">
-                                <div class="p-2 border rounded bg-light" data-items-container="@item.GroupID">
+                                <div class="p-2 border rounded bg-light" data-items-container="@item.Id">
                                     <div class="text-muted">Loading...</div>
                                 </div>
                             </td>
@@ -136,7 +136,7 @@
         <table class="table table-striped table-bordered shadow-sm w-100" id="tblAll">
             <thead class="table-dark">
                 <tr>
-                    <th>Group</th>
+                    <th>Id</th>
                     <th>Assembly #</th>
                     <th>Reason</th>
                     <th>Vendor</th>
@@ -162,13 +162,13 @@
             <tbody>
                 @if (ViewBag.ToolingAll != null)
                 {
-                    foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingAll)
+                    foreach (DashboardReportApp.Models.ToolingWorkOrderModel item in ViewBag.ToolingAll)
                     {
                         var reason = (item.Reason ?? string.Empty).Trim();
                         var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
 
                         <tr>
-                            <td>@item.GroupID</td>
+                            <td>@item.Id</td>
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
@@ -178,16 +178,17 @@
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <button class="btn btn-primary btn-sm" data-action="edit-workorder" data-id="@item.Id">Edit</button>
-                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.GroupID">Items</button>
+                                <button class="btn btn-secondary btn-sm" data-action="tool-items" data-group="@item.Id">Items</button>
                                 @* PREVIEW: only show if there is an attachment filename *@
                                 @if (!string.IsNullOrWhiteSpace(item.AttachmentFileName))
                                 {
                                     <button class="btn btn-info btn-sm"
                                             data-action="preview-attachment"
-                                            data-group="@item.GroupID">
+                                            data-id="@item.Id">
                                         Preview
                                     </button>
                                 }
+
 
                                 @{
                                     bool hasPo = !string.IsNullOrWhiteSpace(item.PO);
@@ -226,7 +227,7 @@
                                 @if (showPackingSlip)
                                 {
                                     <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
                                        target="_blank" rel="noopener">
                                         Packing Slip
                                     </a>
@@ -361,12 +362,13 @@
             refContainer.style.display = '';
             refSelect.innerHTML = '<option value="">-- Select PO --</option>';
 
-            matches.forEach(m => {
-              const opt = document.createElement('option');
-              opt.value = m.po;  // value = plain PO
-              opt.textContent = `Ref: ${m.po} (Group ${m.groupID})`;
-              refSelect.appendChild(opt);
-            });
+                   matches.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.po;
+          opt.textContent = `Ref: ${m.po} (Id ${m.id ?? m.groupID ?? ''})`;
+          refSelect.appendChild(opt);
+        });
+
           }
 
           // Avoid double-binding if modal reopened
@@ -401,15 +403,16 @@
             loadModal('@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder")' + '?id=' + id);
           }
 
-          if (btn.dataset.action === 'tool-items') {
-            const groupId = btn.dataset.group;
-            loadModal('@Url.Action("ToolItemsModal", "ToolingWorkOrder")' + '?groupID=' + groupId);
-          }
+                 if (btn.dataset.action === 'tool-items') {
+          const groupId = btn.dataset.group;
+          loadModal('@Url.Action("ToolItemsModal", "ToolingWorkOrder")' + '?id=' + groupId);
+        }
 
-          if (btn.dataset.action === 'preview-attachment') {
-            const groupId = btn.dataset.group;
-            loadModal('@Url.Action("AttachmentPreviewModal", "ToolingWorkOrder")' + '?groupID=' + groupId);
-          }
+               if (btn.dataset.action === 'preview-attachment') {
+          const id = btn.dataset.id;
+          loadModal('@Url.Action("AttachmentPreviewModal", "ToolingWorkOrder")' + '?id=' + id);
+        }
+
         });
 
 
@@ -662,12 +665,13 @@
 
           // Prefer data attrs; fallback to hidden inputs in the modal form
           const id = row?.dataset?.itemId || row.querySelector('input[name$=".Id"]')?.value;
-          const groupID = row?.dataset?.groupId
-                       || row.querySelector('input[name$=".GroupID"]')?.value
-                       || document.querySelector('#saveAllForm input[name="GroupID"]')?.value;
+         const headerId = row?.dataset?.headerId
+               || row.querySelector('input[name$=".HeaderId"]')?.value
+               || document.querySelector('#saveAllForm input[name="HeaderId"]')?.value;
 
-          if (!id || !groupID) {
-            await Swal.fire({ icon: 'error', title: 'Missing info', text: 'Could not determine item/group to delete.' });
+
+          if (!id) {
+            await Swal.fire({ icon: 'error', title: 'Missing info', text: 'Could not determine item to delete.' });
             return;
           }
 

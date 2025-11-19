@@ -1,12 +1,12 @@
-﻿@model DashboardReportApp.Models.ToolingHistoryModel
+﻿@model DashboardReportApp.Models.ToolingWorkOrderModel
 @using System.Text.Json;
 @{
     var reasons = (List<string>)(ViewBag.ReasonList ?? new List<string>());
     var vendors = (List<string>)(ViewBag.VendorList ?? new List<string>());
     var people = (List<string>)(ViewBag.InitiatedList ?? new List<string>());
 
-    var inProgress = ViewBag.ToolingInProgress as List<DashboardReportApp.Models.ToolingHistoryModel>
-                     ?? new List<DashboardReportApp.Models.ToolingHistoryModel>();
+    var inProgress = ViewBag.ToolingInProgress as List<DashboardReportApp.Models.ToolingWorkOrderModel>
+                     ?? new List<DashboardReportApp.Models.ToolingWorkOrderModel>();
 
     // Serialize minimal info we need client-side: part + po + groupID
     var inProgressJson = JsonSerializer.Serialize(
@@ -16,13 +16,13 @@
             {
                 part = x.Part,
                 po = x.PO,
-                groupID = x.GroupID
+                id = x.Id
             })
     );
 }
 
 <div class="modal-header">
-    <h5 class="modal-title">Tooling Work Order — @Model.GroupID</h5>
+    <h5 class="modal-title">Tooling Work Order — @Model.Id</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
@@ -33,7 +33,7 @@
     <!-- IMPORTANT for file uploads later -->
     @Html.AntiForgeryToken()
     @Html.HiddenFor(m => m.Id)
-    @Html.HiddenFor(m => m.GroupID)
+    @Html.HiddenFor(m => m.Id)
     @Html.HiddenFor(m => m.AttachmentFileName)
     <div class="modal-body">
         @Html.ValidationSummary(true, "", new { @class = "text-danger" })

@@ -24,7 +24,8 @@ else
             <tbody>
                 @foreach (var it in Model)
                 {
-                    <tr data-item-id="@it.Id" data-group-id="@it.GroupID">
+                    <tr data-item-id="@it.Id" data-header-id="@it.HeaderId">
+
                         <td>@it.Action</td>
                         <td>@it.ToolItem</td>
                         <td>@it.ToolNumber</td>

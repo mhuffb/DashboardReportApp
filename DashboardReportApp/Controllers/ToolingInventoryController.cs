@@ -26,7 +26,7 @@ namespace DashboardReportApp.Controllers
 
             var inProgress = _history.GetToolingWorkOrders()
                 .Where(h => !h.DateReceived.HasValue)
-                .OrderByDescending(h => h.GroupID)
+                .OrderByDescending(h => h.Id)
                 .ToList();
             ViewBag.ToolingInProgress = inProgress;
 

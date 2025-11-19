@@ -38,8 +38,9 @@
 
 <div class="modal-header">
     <h5 class="modal-title">
-        Tool Items for Group @Model.GroupID@(!string.IsNullOrWhiteSpace(Model.GroupName) ? $" — {Model.GroupName}" : "")
+        Tool Items for Work Order @Model.HeaderId@(!string.IsNullOrWhiteSpace(Model.GroupName) ? $" — {Model.GroupName}" : "")
     </h5>
+
     <div id="toolItemsHeaderBar" class="ms-auto d-flex gap-2"></div>
 </div>
 
@@ -55,7 +56,7 @@
     <!-- Add New Tool Item (NO Date Received here) -->
     <form id="addItemForm" asp-action="AddToolItemAjax" method="post" class="mb-2" autocomplete="off">
         @Html.AntiForgeryToken()
-        <input type="hidden" name="GroupID" value="@Model.GroupID" />
+        <input type="hidden" name="HeaderId" value="@Model.HeaderId" />
 
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -115,7 +116,7 @@
     <!-- Save All Tool Items (NO Recv Date column) -->
     <form id="saveAllForm" asp-action="SaveAllToolItemsAjax" method="post">
         @Html.AntiForgeryToken()
-        <input type="hidden" name="GroupID" value="@Model.GroupID" />
+        <input type="hidden" name="HeaderId" value="@Model.HeaderId" />
 
         <div class="table-responsive mt-3">
             <table class="table table-striped table-bordered shadow-sm" style="min-width: 1100px;">
@@ -138,9 +139,10 @@
                         for (var i = 0; i < Model.ToolItems.Count; i++)
                         {
                             var tool = Model.ToolItems[i];
-                            <tr data-item-id="@tool.Id" data-group-id="@Model.GroupID">
+                            <tr data-item-id="@tool.Id" data-header-id="@Model.HeaderId">
                                 <input type="hidden" name="ToolItems[@i].Id" value="@tool.Id" />
-                                <input type="hidden" name="ToolItems[@i].GroupID" value="@tool.GroupID" />
+                                <input type="hidden" name="ToolItems[@i].HeaderId" value="@Model.HeaderId" />
+
 
                                 <td>
                                     <select name="ToolItems[@i].Action" class="form-select">
