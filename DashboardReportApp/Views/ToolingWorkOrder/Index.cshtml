@@ -148,7 +148,7 @@
                 </tr>
                 <!-- Per-column filter inputs -->
                 <tr class="bg-light">
-                    <th><input class="form-control form-control-sm" placeholder="Search group" /></th>
+                    <th><input class="form-control form-control-sm" placeholder="Search id" /></th>
                     <th><input class="form-control form-control-sm" placeholder="Search assembly" /></th>
                     <th><input class="form-control form-control-sm" placeholder="Search reason" /></th>
                     <th><input class="form-control form-control-sm" placeholder="Search vendor" /></th>
@@ -460,15 +460,36 @@
               }
 
               // Tool items (add / save-all): always return HTML partial to rehydrate modal on success/validation
-              if (ct.includes('text/html')) {
-                const html = await res.text();
-                document.querySelector('#appModal .modal-content').innerHTML = html;
-                if (res.ok) {
-                  if (form.id === 'addItemForm') await alertSuc('Added', 'Tool item added.');
-                  if (form.id === 'saveAllForm') await alertSuc('Saved', 'All tool items saved.');
-                }
-                return;
-              }
+                    // Tool items (add / save-all): always return HTML partial to rehydrate modal on success/validation
+        if (ct.includes('text/html')) {
+          const html = await res.text();
+          document.querySelector('#appModal .modal-content').innerHTML = html;
+
+          if (res.ok) {
+            if (form.id === 'addItemForm') {
+              await alertSuc('Added', 'Tool item added.');
+            }
+            if (form.id === 'saveAllForm') {
+              await alertSuc('Saved', 'All tool items saved.');
+            }
+          } else {
+            // 🔴 Validation failure case (status 400 from AddToolItemAjax / SaveAllToolItemsAjax)
+            if (form.id === 'addItemForm') {
+              await alertErr(
+                'Not added',
+                'Tool item could not be added. Tool # is required before adding a new tool item.'
+              );
+            } else if (form.id === 'saveAllForm') {
+              await alertErr(
+                'Not saved',
+                'Tool items could not be saved. Please fix the highlighted validation errors.'
+              );
+            }
+          }
+
+          return;
+        }
+
 
               // Fallbacks
               if (!res.ok) {
@@ -597,7 +618,7 @@
           if (container.dataset.loaded === '1') return;
 
           try {
-            const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?groupID=' + encodeURIComponent(group);
+            const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?id=' + encodeURIComponent(group);
             const res = await fetch(url, { credentials: 'same-origin' });
             const html = await res.text();
             container.innerHTML = html;
@@ -659,27 +680,23 @@
           window._toolItemsDeleteWired = true;
         }
 
-        // Global delete handler with SweetAlert
-        window.deleteToolItem = async function(buttonEl) {
+               window.deleteToolItem = async function (buttonEl) {
           const row = buttonEl.closest('tr');
 
-          // Prefer data attrs; fallback to hidden inputs in the modal form
           const id = row?.dataset?.itemId || row.querySelector('input[name$=".Id"]')?.value;
-         const headerId = row?.dataset?.headerId
-               || row.querySelector('input[name$=".HeaderId"]')?.value
-               || document.querySelector('#saveAllForm input[name="HeaderId"]')?.value;
+          const headerId =
+            row?.dataset?.headerId ||
+            row.querySelector('input[name$=".HeaderId"]')?.value ||
+            document.querySelector('#saveAllForm input[name="HeaderId"]')?.value;
 
-
-          if (!id) {
+          if (!id || !headerId) {
             await Swal.fire({ icon: 'error', title: 'Missing info', text: 'Could not determine item to delete.' });
             return;
           }
 
-          // SweetAlert confirm
           const ok = await confirmDelete();
           if (!ok) return;
 
-          // Show loading while deleting
           Swal.fire({
             title: 'Deleting…',
             allowOutsideClick: false,
@@ -694,12 +711,11 @@
           const form = new FormData();
           form.append('__RequestVerificationToken', token);
           form.append('id', id);
-          form.append('groupID', groupID);
+          form.append('headerId', headerId);   // 🔹 match controller parameter
 
           const inModal = !!row.closest('#appModal');
 
           try {
-            // 1) Delete
             const res = await fetch('/ToolingWorkOrder/DeleteToolItemAjax', {
               method: 'POST',
               headers: { 'RequestVerificationToken': token },
@@ -710,32 +726,33 @@
             const payload = await res.text();
 
             if (!res.ok) {
-              Swal.fire({ icon: 'error', title: 'Delete failed', html: `<pre style="text-align:left;white-space:pre-wrap">${(payload || res.statusText).slice(0,600)}</pre>` });
+              Swal.fire({
+                icon: 'error',
+                title: 'Delete failed',
+                html: `<pre style="text-align:left;white-space:pre-wrap">${(payload || res.statusText).slice(0, 600)}</pre>`
+              });
               return;
             }
 
-            // 2) Refresh UI
             if (inModal) {
-              // Refresh the entire modal so all indices & validations stay correct
-              const url = '/ToolingWorkOrder/ToolItemsModal?groupID=' + encodeURIComponent(groupID);
-              const r2 = await fetch(url, { credentials: 'same-origin' });
-              const html2 = await r2.text();
-              const modalContent = document.querySelector('#appModal .modal-content');
-              if (modalContent) modalContent.innerHTML = html2;
+              // Refresh entire modal if you want, or:
+              const inlineContainer =
+                row.closest('[data-items-container]') ||
+                document.querySelector(`[data-items-container="${headerId}"]`);
+              if (inlineContainer) inlineContainer.innerHTML = payload;
             } else {
-              // Inline expando: payload is the updated _ToolItemsInlineTable
-              const inlineContainer = row.closest('[data-items-container]')
-                                   || document.querySelector(`[data-items-container="${groupID}"]`);
+              const inlineContainer =
+                row.closest('[data-items-container]') ||
+                document.querySelector(`[data-items-container="${headerId}"]`);
               if (inlineContainer) inlineContainer.innerHTML = payload;
             }
 
-            // 3) Success toast
             Swal.fire({ icon: 'success', title: 'Deleted', timer: 1200, showConfirmButton: false });
-
           } catch (e) {
             Swal.fire({ icon: 'error', title: 'Network error', text: e?.message || 'Unexpected error' });
           }
         };
+
     </script>
 
 

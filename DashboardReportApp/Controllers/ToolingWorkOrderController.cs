@@ -200,6 +200,8 @@ namespace DashboardReportApp.Controllers
         {
             if (!ModelState.IsValid)
             {
+                // ⬇️ NEW: tell the client this is a validation failure
+                Response.StatusCode = 400;
                 var vmBad = new GroupDetailsViewModel
                 {
                     HeaderId = model.HeaderId,
@@ -573,6 +575,18 @@ Open in Dashboard: {link}
             }
 
             var items = _service.GetToolItemsByHeaderId(vm.Id) ?? new List<ToolItemViewModel>();
+
+            // 🚫 NEW: do not allow completion with no tool items
+            if (items.Count == 0)
+            {
+                Response.StatusCode = 400;
+                return Json(new
+                {
+                    ok = false,
+                    error = "You must add at least one tool item before completing this work order."
+                });
+            }
+
             var makeNew = 0; var makeNewExists = 0;
             var markedUnavailable = 0;
             var details = new List<string>();
