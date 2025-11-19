@@ -3,6 +3,7 @@ using MySql.Data.MySqlClient;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using System.Globalization;
 
 namespace DashboardReportApp.Services
 {
@@ -27,7 +28,6 @@ FROM tooling_workorder_header
 ORDER BY Id DESC;
 ";
 
-
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
@@ -50,15 +50,25 @@ ORDER BY Id DESC;
                     PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                     Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
                     AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
-
-
                 });
             }
+
+            // 🔹 Backfill cost from items if header.Cost is null
+            foreach (var wo in list)
+            {
+                if (!wo.Cost.HasValue)
+                {
+                    var total = GetTotalItemCostForHeader(wo.Id);
+                    if (total.HasValue && total.Value > 0)
+                        wo.Cost = total;
+                }
+            }
+
             return list;
         }
 
 
-       
+
 
 
         public ToolingWorkOrderModel? GetToolingWorkOrdersById(int id)
@@ -73,7 +83,6 @@ WHERE Id = @Id
 LIMIT 1;
 ";
 
-
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
@@ -81,7 +90,7 @@ LIMIT 1;
             using var r = cmd.ExecuteReader();
             if (!r.Read()) return null;
 
-            return new ToolingWorkOrderModel
+            var m = new ToolingWorkOrderModel
             {
                 Id = Convert.ToInt32(r["Id"]),
                 Part = r["Part"]?.ToString(),
@@ -95,12 +104,20 @@ LIMIT 1;
                 InitiatedBy = r["InitiatedBy"]?.ToString(),
                 PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                 DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
-                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(), 
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
                 AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
-
             };
+
+            if (!m.Cost.HasValue)
+            {
+                var total = GetTotalItemCostForHeader(m.Id);
+                if (total.HasValue && total.Value > 0)
+                    m.Cost = total;
+            }
+
+            return m;
         }
-      
+
         public void MarkPoRequested(int id)
         {
             const string sql = @"
@@ -311,12 +328,10 @@ LIMIT 1;";
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Id", id);
 
-
-
             using var r = cmd.ExecuteReader();
             if (!r.Read()) return null;
 
-            return new ToolingWorkOrderModel
+            var m = new ToolingWorkOrderModel
             {
                 Id = Convert.ToInt32(r["Id"]),
                 Part = r["Part"]?.ToString(),
@@ -328,12 +343,21 @@ LIMIT 1;";
                 AccountingCode = r["AccountingCode"] != DBNull.Value ? (int?)Convert.ToInt32(r["AccountingCode"]) : null,
                 Cost = r["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(r["Cost"]) : null,
                 InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null,
-                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),        
+                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
                 Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
                 AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
-
             };
+
+            if (!m.Cost.HasValue)
+            {
+                var total = GetTotalItemCostForHeader(m.Id);
+                if (total.HasValue && total.Value > 0)
+                    m.Cost = total;
+            }
+
+            return m;
         }
+
 
         // === Packing Slip (QuestPDF) helpers ===
 
@@ -359,12 +383,22 @@ LIMIT 1;";
         {
             QuestPDF.Settings.License = LicenseType.Community;
 
+            items ??= new List<ToolItemViewModel>();
+
+            // 🔹 Sum of item costs
+            var itemsTotal = items.Sum(it => it.Cost ?? 0m);
+
+            // 🔹 Effective header cost: header.Cost if present, otherwise item total (if > 0)
+            decimal? effectiveCost = header.Cost;
+            if (!effectiveCost.HasValue && itemsTotal > 0)
+                effectiveCost = itemsTotal;
+
             // 🔹 Optional logo from wwwroot\img\SintergyLogo.bmp
             byte[]? logoBytes = null;
             try
             {
                 var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var logoPath = Path.Combine(webRoot, "img", "SintergyLogo.bmp");  // your logo
+                var logoPath = Path.Combine(webRoot, "img", "SintergyLogo.bmp");
 
                 if (File.Exists(logoPath))
                     logoBytes = File.ReadAllBytes(logoPath);
@@ -493,9 +527,12 @@ LIMIT 1;";
                                    Line("Vendor", header.ToolVendor ?? "-");
                                    Line("PO #", header.PO ?? "-");
                                    Line("Initiated By", header.InitiatedBy ?? "-");
-                                   Line("Date Initiated", header.DateInitiated.ToString("MM-dd-yyyy"));
-                                   Line("Due Date", header.DateDue?.ToString("MM-dd-yyyy") ?? "-");
-                                   Line("Estimated Cost", header.Cost?.ToString("C") ?? "-");
+                                   Line("Date Initiated", header.DateInitiated.ToString("MM/dd/yyyy"));
+                                   Line("Due Date", header.DateDue?.ToString("MM/dd/yyyy") ?? "-");
+                                   // 🔹 Use effectiveCost here
+                                   Line("Estimated Cost",
+                                     effectiveCost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "-");
+
                                });
                            });
 
@@ -547,7 +584,7 @@ LIMIT 1;";
                                 HeaderCell("Cost");
                             });
 
-                            if (items != null && items.Any())
+                            if (items.Any())
                             {
                                 var index = 1;
                                 var rowIndex = 0;
@@ -579,6 +616,39 @@ LIMIT 1;";
 
                                     index++;
                                     rowIndex++;
+                                }
+
+                                // 🔹 Total row (uses effectiveCost so it matches header)
+                                if (effectiveCost.HasValue)
+                                {
+                                    // first 6 empty cells with a top border
+                                    for (int i = 0; i < 6; i++)
+                                    {
+                                        t.Cell()
+                                         .BorderTop(1)
+                                         .BorderColor(Colors.Grey.Medium)
+                                         .PaddingVertical(3)
+                                         .PaddingHorizontal(2);
+                                    }
+
+                                    // "Total" label
+                                    t.Cell()
+                                     .BorderTop(1)
+                                     .BorderColor(Colors.Grey.Medium)
+                                     .PaddingVertical(3)
+                                     .PaddingHorizontal(2)
+                                     .AlignRight()
+                                     .Text(x => x.Span("Total").SemiBold());
+
+                                    t.Cell()
+ .BorderTop(1)
+ .BorderColor(Colors.Grey.Medium)
+ .PaddingVertical(3)
+ .PaddingHorizontal(2)
+ .Text(x => x.Span(
+     effectiveCost.Value.ToString("C", CultureInfo.GetCultureInfo("en-US"))
+ ).SemiBold());
+
                                 }
                             }
                             else
@@ -734,6 +804,25 @@ LIMIT 1;";
             using var r = cmd.ExecuteReader();
             while (r.Read()) list.Add(r.GetString(0));
             return list;
+        }
+        public decimal? GetTotalItemCostForHeader(int headerId)
+        {
+            const string sql = @"
+        SELECT SUM(COALESCE(Cost, 0))
+        FROM tooling_workorder_item
+        WHERE HeaderId = @HeaderId;
+    ";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@HeaderId", headerId);
+
+            var result = cmd.ExecuteScalar();
+            if (result == null || result == DBNull.Value)
+                return null;
+
+            return Convert.ToDecimal(result);
         }
 
     }

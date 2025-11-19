@@ -275,7 +275,6 @@ namespace DashboardReportApp.Controllers
 
 
 
-        // --------- PO request (no textbox; uses config default) ----------
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult RequestPoNumber(int id)
@@ -285,8 +284,11 @@ namespace DashboardReportApp.Controllers
                 var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
-                // ⬇️ Put it here
-                var items = _service.GetToolItemsByHeaderId(record.Id); // now reads tooling_WorkOrder_item
+                var items = _service.GetToolItemsByHeaderId(record.Id);
+
+                // 🔹 If header cost is null, sum item costs instead
+                var itemsTotal = items.Sum(it => it.Cost ?? 0m);
+                var effectiveCost = record.Cost ?? (itemsTotal > 0 ? itemsTotal : (decimal?)null);
 
                 var subject = $"PO Request: Group {record.Id} / {record.Part}";
                 var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
@@ -298,14 +300,14 @@ Reason: {record.Reason}
 Vendor: {record.ToolVendor}
 Part: {record.Part}
 Due: {record.DateDue:MM-dd-yyyy}
-Estimated Cost: {(record.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}
+Estimated Cost: {(effectiveCost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}
 Items:
 {string.Join("\n",
-    items.Select(it =>
-        $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
-        $"Cost={(it.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}"
-    )
-)}
+            items.Select(it =>
+                $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
+                $"Cost={(it.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}"
+            )
+        )}
 Open in Dashboard: {link}
 ";
 
