@@ -38,4 +38,8 @@ xap@sintergy.net group for request po
 
 
 tooling inv
-make tool number required
+xmake tool number required
+
+for the create packing slip button show if packing slip was created. make it say either packing slip needs created or packing slip created on <date>. for complete work order button i want it to 
+say receive tools instead. I always want the tooling to be marked available if receiving the tools. i need another button that says send out tools that will mark it unavailable. make it say tools sent: <date> if already sent
+

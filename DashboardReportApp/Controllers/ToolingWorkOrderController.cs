@@ -151,9 +151,9 @@ namespace DashboardReportApp.Controllers
                 }
 
                 if (IsAjax())
-                    return Json(new { ok = true, message = $"Work order for Group {model.Id} saved." });
+                    return Json(new { ok = true, message = $"Tool Work Order {model.Id} saved." });
 
-                TempData["Success"] = $"Work order for Group {model.Id} saved.";
+                TempData["Success"] = $"Tool Work Order {model.Id} saved.";
                 return RedirectToAction("Index", "ToolingInventory");
             }
             catch (Exception ex)
@@ -286,33 +286,55 @@ namespace DashboardReportApp.Controllers
                 var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
-                var items = _service.GetToolItemsByHeaderId(record.Id);
+                var items = _service.GetToolItemsByHeaderId(record.Id) ?? new List<ToolItemViewModel>();
 
-                // 🔹 If header cost is null, sum item costs instead
+                var us = CultureInfo.GetCultureInfo("en-US");
+
+                // sum of all item costs
                 var itemsTotal = items.Sum(it => it.Cost ?? 0m);
-                var effectiveCost = record.Cost ?? (itemsTotal > 0 ? itemsTotal : (decimal?)null);
 
-                var subject = $"PO Request: Group {record.Id} / {record.Part}";
+                // header-level estimate (if user typed it)
+                var headerCost = record.Cost;
+
+                // 🔹 Total Cost = header cost if present, otherwise item total (if > 0)
+                var totalCost = headerCost ?? (itemsTotal > 0 ? itemsTotal : (decimal?)null);
+
+                string Fmt(decimal? v) => v.HasValue
+                    ? v.Value.ToString("C", us)
+                    : "n/a";
+
+                var subject = $"PO Request – Tool Work Order {record.Id} – {record.Part}";
                 var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
+
+                var dateInitiated = record.DateInitiated.ToString("MM-dd-yyyy");
+                var dateDue = record.DateDue?.ToString("MM-dd-yyyy") ?? "n/a";
+
                 var body = $@"
-PO Request (Tooling Work Order)
-----------------------------
-Tool Work Order Id: {record.Id}
+PO has been requested for a Tool Work Order. 
+
+Tool Work Order: {record.Id}
+Assembly #: {record.Part}
 Reason: {record.Reason}
 Vendor: {record.ToolVendor}
-Part: {record.Part}
-Due: {record.DateDue:MM-dd-yyyy}
-Estimated Cost: {(effectiveCost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}
-Items:
-{string.Join("\n",
-            items.Select(it =>
-                $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
-                $"Cost={(it.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}"
-            )
-        )}
-Open in Dashboard: {link}
-";
+Requested By: {record.InitiatedBy}
+Date Initiated: {dateInitiated}
+Date Due: {dateDue}
 
+LINE ITEMS
+----------
+{(items.Count == 0
+            ? "No tool items have been entered yet."
+            : string.Join("\n",
+                items.Select(it =>
+                    $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | Cost={Fmt(it.Cost)}"
+                )
+              )
+        )}
+
+Total Cost: {Fmt(totalCost)}
+Open in Dashboard:
+{link}
+".Trim();
 
                 var to = string.IsNullOrWhiteSpace(_cfg["Tooling:PoRequestTo"])
                     ? "tooling@sintergy.local"
@@ -325,6 +347,7 @@ Open in Dashboard: {link}
                     subject: subject,
                     body: body
                 );
+
                 _service.MarkPoRequested(id);
 
                 return Json(new { ok = true });
@@ -335,6 +358,7 @@ Open in Dashboard: {link}
                 return Json(new { ok = false, error = ex.Message });
             }
         }
+
 
 
         [HttpGet]
@@ -571,7 +595,7 @@ Open in Dashboard: {link}
             if (header == null)
             {
                 Response.StatusCode = 404;
-                return Json(new { ok = false, error = $"No header for group {vm.Id}." });
+                return Json(new { ok = false, error = $"No header for Tool Work Order {vm.Id}." });
             }
 
             var items = _service.GetToolItemsByHeaderId(vm.Id) ?? new List<ToolItemViewModel>();
@@ -583,7 +607,7 @@ Open in Dashboard: {link}
                 return Json(new
                 {
                     ok = false,
-                    error = "You must add at least one tool item before completing this work order."
+                    error = "You must add at least one Tool Item before completing this Tool Work Order."
                 });
             }
 
@@ -661,7 +685,7 @@ Open in Dashboard: {link}
             return Json(new
             {
                 ok = true,
-                title = $"Completed Group {vm.Id}",
+                title = $"Completed Tool Work Order {vm.Id}",
                 html,
                 // message kept for logging/debug if you want:
                 // message = $"Completed Tool Work Order {vm.GroupID}..."

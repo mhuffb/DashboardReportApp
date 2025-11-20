@@ -26,7 +26,7 @@
                 <thead class="table-dark">
                     <tr>
                         <th style="width:48px;"></th>  <!-- expand -->
-                        <th>Group</th>
+                        <th>Work Order</th>
                         <th>Assembly #</th>
                         <th>Reason</th>
                         <th>Vendor</th>
@@ -66,16 +66,17 @@
                                 <div class="btn-group btn-group-sm">
 
                                     <a class="btn btn-primary btn-sm"
-                                       href="@Url.Action("EditToolingWorkOrderModalByGroup", "ToolingWorkOrder", new { Id = item.Id })"
+                                       href="@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder", new { id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Edit Tool Work Order
                                     </a>
 
                                     <a class="btn btn-secondary btn-sm"
-                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingWorkOrder", new { Id = item.Id })"
+                                       href="@Url.Action("ToolItemsModal", "ToolingWorkOrder", new { id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Add/Edit Tool Items
                                     </a>
+
 
                                 </div>
 
@@ -499,7 +500,8 @@
           if (container.dataset.loaded === '1') return;
 
           try {
-                const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?groupID=' + encodeURIComponent(group);
+                    const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?id=' + encodeURIComponent(group);
+
                        const res = await fetch(url, {
               credentials: 'same-origin',
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
