@@ -245,6 +245,30 @@ WHERE Id=@Id;";
 
             await UpdateAsync(existing);
         }
+        // in ToolingInventoryService
+        public Task MarkAvailableAsync(string asm, string toolItem, string toolNumber)
+        {
+            const string sql = @"
+        UPDATE tooling_inventory
+        SET Status = @status,
+            UnavailableReason = NULL,
+            DateUnavailable = NULL,
+            EstimatedAvailableDate = NULL
+        WHERE AssemblyNumber = @asm
+          AND ToolItem = @toolItem
+          AND ToolNumber = @toolNumber;";
 
+            // assuming ToolStatus.Available = 1 – adjust if needed
+            using var conn = new MySqlConnection(_conn);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@status", (int)ToolStatus.Available);
+            cmd.Parameters.AddWithValue("@asm", asm);
+            cmd.Parameters.AddWithValue("@toolItem", toolItem);
+            cmd.Parameters.AddWithValue("@toolNumber", toolNumber);
+            cmd.ExecuteNonQuery();
+
+            return Task.CompletedTask;
+        }
     }
 }

@@ -41,7 +41,11 @@
                     {
                         var rowId = $"row-items-{item.Id}";
                         var reason = (item.Reason ?? string.Empty).Trim();
-                        var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+                        var isNewCustomerPurchase = reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+
+                        var showPackingSlip = !isNewCustomerPurchase;
+                        var showSendOutTools = !isNewCustomerPurchase;
+
 
                         <tr data-group="@item.Id">
                             <td>
@@ -64,7 +68,6 @@
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <div class="btn-group btn-group-sm">
-
                                     <a class="btn btn-primary btn-sm"
                                        href="@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder", new { id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
@@ -76,10 +79,9 @@
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Add/Edit Tool Items
                                     </a>
-
-
                                 </div>
 
+                                <!-- PO request button stays the same -->
                                 <form asp-action="RequestPoNumber" asp-controller="ToolingWorkOrder" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
@@ -93,22 +95,60 @@
                                     <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
                                 </form>
 
+                                @* Packing slip status *@
                                 @if (showPackingSlip)
                                 {
-                                    <a class="btn btn-outline-primary btn-sm"
+                                    var psDate = item.PackingSlipCreatedAt;
+                                    var psText = psDate.HasValue
+                                    ? $"Packing slip created on {psDate.Value.ToShortDateString()}"
+                                    : "Packing slip needs created";
+                                    var psClass = psDate.HasValue ? "btn btn-outline-success btn-sm" : "btn btn-outline-primary btn-sm";
+
+                                    <a class="@psClass"
                                        href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
                                        target="_blank" rel="noopener">
-                                        Create Packing Slip
+                                        @psText
                                     </a>
                                 }
-                                <a class="btn btn-success btn-sm"
-                                   href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { Id = item.Id })"
-                                   data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
-                                    Complete Work Order
-                                </a>
 
+                                @* Send out tools / status *@
+                                @if (item.DateSent.HasValue)
+                                {
+                                    <button class="btn btn-outline-secondary btn-sm" disabled>
+                                        Tools sent: @item.DateSent.Value.ToShortDateString()
+                                    </button>
+                                }
+                                else
+                                {
+                                    @if (showSendOutTools)
+                                    {
+                                        <a class="btn btn-outline-danger btn-sm"
+                                           href="@Url.Action("SendOutTools", "ToolingWorkOrder", new { Id = item.Id })"
+                                           data-bs-toggle="modal"
+                                           data-bs-target="#toolingWorkOrderModal">
+                                            Send Out Tools
+                                        </a>
+                                    }
 
+                                }
+
+                                @* Receive tools (complete work order) *@
+                                @if (item.DateReceived.HasValue)
+                                {
+                                    <button class="btn btn-success btn-sm" disabled>
+                                        Tools received: @item.DateReceived.Value.ToShortDateString()
+                                    </button>
+                                }
+                                else
+                                {
+                                    <a class="btn btn-success btn-sm"
+                                       href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { Id = item.Id })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
+                                        Receive Tools
+                                    </a>
+                                }
                             </td>
+
                         </tr>
                         <!-- Collapsible items row -->
                         <tr id="@rowId" class="d-none">
@@ -550,6 +590,60 @@
               } finally {
                 if (btn) btn.disabled = prevDisabled ?? false;
               }
+            });
+        </script>
+        <script>
+            document.addEventListener('submit', async (e) => {
+                const form = e.target.closest('.tool-status-form');
+                if (!form) return;
+
+                e.preventDefault();
+
+                const btn = form.querySelector('button[type="submit"]');
+                const prevDisabled = btn?.disabled;
+                const prevHtml     = btn?.innerHTML;
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Working...'; }
+
+                try {
+                    const res = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'RequestVerificationToken': getPageAntiforgeryToken()
+                        },
+                        body: new FormData(form),
+                        credentials: 'same-origin'
+                    });
+
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok || !payload.ok) {
+                        await Swal.fire({
+                            icon: 'error',
+                            title: 'Update failed',
+                            text: payload.error || 'Unknown error'
+                        });
+                        return;
+                    }
+
+                    await Swal.fire({
+                        icon: 'success',
+                        title: payload.title || 'Updated',
+                        html: payload.html || ''
+                    });
+
+                    location.reload();
+                } catch (err) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Network error',
+                        text: err?.message || 'Unexpected error'
+                    });
+                } finally {
+                    if (btn) {
+                        btn.disabled = prevDisabled ?? false;
+                        btn.innerHTML = prevHtml ?? 'Send out tools';
+                    }
+                }
             });
         </script>
 

@@ -370,7 +370,11 @@ Open in Dashboard:
 
             var path = _service.SavePackingSlipPdf(Id, saveFolder);
 
+            // 🔹 Track when packing slip was created
+            _service.MarkPackingSlipCreated(Id, DateTime.Now);
+
             PrintPackingSlip(path);
+
 
             if (email)
             {
@@ -600,7 +604,6 @@ Open in Dashboard: {link}
 
             var items = _service.GetToolItemsByHeaderId(vm.Id) ?? new List<ToolItemViewModel>();
 
-            // 🚫 NEW: do not allow completion with no tool items
             if (items.Count == 0)
             {
                 Response.StatusCode = 400;
@@ -612,17 +615,11 @@ Open in Dashboard: {link}
             }
 
             var makeNew = 0; var makeNewExists = 0;
-            var markedUnavailable = 0;
+            var markedAvailable = 0;
             var details = new List<string>();
 
-            // normalize helpers
             static string N(string? s) => (s ?? string.Empty).Trim();
-            var asm = N(header.Part);                         // Assembly #
-            var dateInit = header.DateInitiated;              // Date Initiated
-            DateTime? eta = header.DateDue;                   // Date Due (ETA)
-
-            var unavailableActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "Tinalox Coat", "Metalife Coat", "Reface", "Fitting" };
+            var asm = N(header.Part);
 
             foreach (var it in items)
             {
@@ -631,9 +628,9 @@ Open in Dashboard: {link}
                 var toolNum = N(it.ToolNumber);
 
                 if (string.IsNullOrWhiteSpace(toolItem) || string.IsNullOrWhiteSpace(toolNum) || string.IsNullOrWhiteSpace(asm))
-                    continue; // skip incomplete keys
+                    continue;
 
-                // --- MAKE NEW: Add to inventory if missing ---
+                // MAKE NEW: Add to inventory if missing
                 if (action.Equals("Make New", StringComparison.OrdinalIgnoreCase))
                 {
                     var exists = await _inv.FindByKeyAsync(asm, toolItem, toolNum);
@@ -648,49 +645,78 @@ Open in Dashboard: {link}
                         makeNewExists++;
                         details.Add($"Already in inventory: {asm} | {toolItem} | {toolNum}");
                     }
-                    continue;
                 }
 
-                // --- COAT/REPAIR/FITTING: mark unavailable ---
-                if (unavailableActions.Contains(action))
-                {
-                    await _inv.MarkUnavailableAsync(
-                        asm, toolItem, toolNum,
-                        reason: action,
-                        dateUnavailable: dateInit,
-                        eta: eta);
-                    markedUnavailable++;
-                    details.Add($"Marked unavailable ({action}): {asm} | {toolItem} | {toolNum}");
-                }
+                // 🔹 ALWAYS mark tools AVAILABLE when receiving them
+                await _inv.MarkAvailableAsync(asm, toolItem, toolNum);
+                markedAvailable++;
+                details.Add($"Marked available: {asm} | {toolItem} | {toolNum}");
             }
 
-            // mark the WO complete
             _service.MarkWorkOrderComplete(vm.Id, vm.DateReceived, vm.Received_CompletedBy);
 
-            // Build a compact summary for SweetAlert
             var parts = new List<string>();
             if (makeNew > 0) parts.Add($"<li><strong>Added to inventory</strong>: {makeNew}</li>");
             if (makeNewExists > 0) parts.Add($"<li><strong>Already in inventory</strong>: {makeNewExists}</li>");
-            if (markedUnavailable > 0) parts.Add($"<li><strong>Marked unavailable</strong>: {markedUnavailable}</li>");
+            if (markedAvailable > 0) parts.Add($"<li><strong>Marked available</strong>: {markedAvailable}</li>");
 
             var html = parts.Count > 0
                 ? $"<ul class='mb-0'>{string.Join("", parts)}</ul>"
                 : "<span>No inventory changes recorded.</span>";
 
-            // Optional: keep a tiny preview instead of the full list
-            // var preview = details.Take(5).ToList();
-            // if (details.Count > 5) preview.Add($"…and {details.Count - 5} more.");
-            // var html = $"<ul class='mb-0'>{string.Join("", preview.Select(p => $"<li>{System.Net.WebUtility.HtmlEncode(p)}</li>"))}</ul>";
-
             return Json(new
             {
                 ok = true,
-                title = $"Completed Tool Work Order {vm.Id}",
-                html,
-                // message kept for logging/debug if you want:
-                // message = $"Completed Tool Work Order {vm.GroupID}..."
+                title = $"Received Tools for Work Order {vm.Id}",
+                html
             });
+        }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendOutTools(int id)
+        {
+            try
+            {
+                var header = _service.GetHeaderById(id);
+                if (header == null)
+                    return NotFound();
+
+                var items = _service.GetToolItemsByHeaderId(id) ?? new List<ToolItemViewModel>();
+
+                static string N(string? s) => (s ?? string.Empty).Trim();
+                var asm = N(header.Part);
+                var dateInit = header.DateInitiated;
+                DateTime? eta = header.DateDue;
+
+                foreach (var it in items)
+                {
+                    var toolItem = N(it.ToolItem);
+                    var toolNum = N(it.ToolNumber);
+
+                    if (string.IsNullOrWhiteSpace(toolItem) || string.IsNullOrWhiteSpace(toolNum) || string.IsNullOrWhiteSpace(asm))
+                        continue;
+
+                    await _inv.MarkUnavailableAsync(
+                        asm,
+                        toolItem,
+                        toolNum,
+                        reason: header.Reason ?? "Sent Out",
+                        dateUnavailable: dateInit,
+                        eta: eta
+                    );
+                }
+
+                _service.MarkToolsSent(id, DateTime.Now);
+
+                TempData["Success"] = $"Tools sent for Tool Work Order {id}.";
+                return RedirectToAction("Index", "ToolingInventory");
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Failed to send tools: {ex.Message}";
+                return RedirectToAction("Index", "ToolingInventory");
+            }
         }
 
         // ToolingWorkOrderController

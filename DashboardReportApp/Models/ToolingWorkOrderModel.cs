@@ -26,6 +26,8 @@ namespace DashboardReportApp.Models
         public DateTime? PoRequestedAt { get; set; }
         public string? Received_CompletedBy { get; set; }
         public string? AttachmentFileName { get; set; }
+        public DateTime? PackingSlipCreatedAt { get; set; }
+        public DateTime? DateSent { get; set; }          // when tools were sent out
 
     }
 

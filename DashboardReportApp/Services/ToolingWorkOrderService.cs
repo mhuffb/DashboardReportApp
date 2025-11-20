@@ -23,10 +23,13 @@ namespace DashboardReportApp.Services
 SELECT Id, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
        Cost, AccountingCode, InitiatedBy, DateReceived,
        Received_CompletedBy,
-       AttachmentFileName        
+       AttachmentFileName,
+       PackingSlipCreatedAt,
+       DateSent
 FROM tooling_workorder_header
 ORDER BY Id DESC;
 ";
+
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -49,7 +52,10 @@ ORDER BY Id DESC;
                     DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
                     PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                     Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
-                    AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
+                    AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString(),
+                    PackingSlipCreatedAt = r["PackingSlipCreatedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PackingSlipCreatedAt"]),
+                    DateSent = r["DateSent"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateSent"]),
+
                 });
             }
 
@@ -824,6 +830,36 @@ LIMIT 1;";
 
             return Convert.ToDecimal(result);
         }
+        public void MarkPackingSlipCreated(int id, DateTime createdAt)
+        {
+            const string sql = @"
+        UPDATE tooling_workorder_header
+        SET PackingSlipCreatedAt = @createdAt
+        WHERE Id = @Id;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@createdAt", createdAt);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void MarkToolsSent(int id, DateTime sentAt)
+        {
+            const string sql = @"
+        UPDATE tooling_workorder_header
+        SET DateSent = @sentAt
+        WHERE Id = @Id;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@sentAt", sentAt);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.ExecuteNonQuery();
+        }
+      
 
     }
 }
