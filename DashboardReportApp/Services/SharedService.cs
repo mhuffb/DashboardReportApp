@@ -491,6 +491,7 @@ ORDER BY p.measure_date DESC
 
         public void PrintFileToClosestPrinter(string pdfPath, int copies)
         {
+
             var context = _httpContextAccessor.HttpContext;
             string clientHostName = "Unknown";
             if (context != null)
@@ -551,7 +552,7 @@ ORDER BY p.measure_date DESC
         { @"mold02", "Mold02" },
         { @"MOLD03", "Mold03" },
         { @"MOLD04-PC", "Mold004" },
-        { @"DESKTOP-R8A5IFJ", "Microsoft Print to PDF" },
+        { @"DESKTOP-R8A5IFJ", "Mold02" },
         // Add additional mappings as needed
     };
 
@@ -566,22 +567,31 @@ ORDER BY p.measure_date DESC
         }
         public void PrintFileToSpecificPrinter(string printerName, string filePath, int copies = 1)
         {
+            if (string.IsNullOrWhiteSpace(printerName))
+                throw new ArgumentException("Printer name is required.", nameof(printerName));
+
+            var installedPrinters = PrinterSettings.InstalledPrinters.Cast<string>().ToList();
+
+            if (!installedPrinters.Any(p =>
+                    p.Equals(printerName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var list = string.Join(", ", installedPrinters);
+                throw new InvalidOperationException(
+                    $"Printer '{printerName}' is not installed or visible to this account. Installed printers: {list}");
+            }
+
             if (string.IsNullOrWhiteSpace(_printing.SumatraExePath) || !File.Exists(_printing.SumatraExePath))
                 throw new FileNotFoundException(
                     "SumatraPDF.exe not found. Install SumatraPDF or set Printing:SumatraExePath in appsettings.json.",
                     _printing.SumatraExePath ?? "<unset>");
-
-            if (string.IsNullOrWhiteSpace(printerName))
-                throw new ArgumentException("Printer name is required.", nameof(printerName));
 
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
                 throw new FileNotFoundException("File to print not found.", filePath);
 
             if (copies < 1) copies = 1;
 
-            // Sumatra accepts -print-to, and will respect copies via -print-settings "copies=N"
-            // (If your driver ignores that, we can loop N times instead.)
-            string args = $"-silent -exit-on-print -print-to \"{printerName}\" -print-settings \"copies={copies}\" \"{filePath}\"";
+            string args =
+                $"-silent -exit-on-print -print-to \"{printerName}\" -print-settings \"copies={copies}\" \"{filePath}\"";
 
             var psi = new ProcessStartInfo
             {
@@ -592,15 +602,64 @@ ORDER BY p.measure_date DESC
                 WindowStyle = ProcessWindowStyle.Hidden
             };
 
-            using var proc = Process.Start(psi);
-            if (proc == null)
+            string logPath = @"\\SINTERGYDC2024\vol1\vsp\sumatra-print-log.txt";
+
+            // 🔹 Log a CMD-ready line you can paste directly into Command Prompt
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+
+                string cmdLine = $"\"{psi.FileName}\" {psi.Arguments}";
+                File.AppendAllText(
+                    logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} CMD={cmdLine}{Environment.NewLine}"
+                );
+            }
+            catch
+            {
+                // ignore logging errors so printing can still attempt to run
+            }
+
+            using var proc = new Process { StartInfo = psi };
+
+            if (!proc.Start())
                 throw new InvalidOperationException("Failed to start SumatraPDF printing process.");
 
-            // Optional: wait for completion & error check
-            proc.WaitForExit(15_000); // 15s timeout; adjust if needed
-            if (proc.ExitCode != 0)
-                throw new InvalidOperationException($"SumatraPDF exited with code {proc.ExitCode} while printing.");
+            bool exited = proc.WaitForExit(30000); // 30 seconds
+
+            if (!exited)
+            {
+                try { proc.Kill(); } catch { /* ignore */ }
+
+                try
+                {
+                    File.AppendAllText(
+                        logPath,
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} TIMEOUT printer=\"{printerName}\" file=\"{filePath}\"{Environment.NewLine}"
+                    );
+                }
+                catch { }
+
+                throw new TimeoutException($"Print process did not finish within 30 seconds. See log at {logPath}.");
+            }
+
+            int exitCode = proc.ExitCode;
+
+            try
+            {
+                File.AppendAllText(
+                    logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} EXIT code={exitCode} printer=\"{printerName}\" file=\"{filePath}\"{Environment.NewLine}"
+                );
+            }
+            catch { }
+
+            if (exitCode != 0)
+                throw new InvalidOperationException(
+                    $"SumatraPDF exited with code {exitCode} while printing. See log at {logPath}.");
         }
+
+
         public void PrintPlainText(string printerName, string text, int copies = 1)
         {
             if (copies < 1) throw new ArgumentException("Copies must be ≥1.", nameof(copies));

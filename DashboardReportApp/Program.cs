@@ -102,12 +102,18 @@ try
 
     var app = builder.Build();
 
-    // Configure the HTTP request pipeline
-    if (!app.Environment.IsDevelopment())
+    if (app.Environment.IsDevelopment())
     {
-        app.UseExceptionHandler("/Home/Error");
+        app.UseDeveloperExceptionPage();
+    }
+    else
+    {
+        // TEMP for debugging in prod (NOT for long-term use)
+        app.UseDeveloperExceptionPage(); // <- forces detailed errors
+                                         // app.UseExceptionHandler("/Home/Error");
         app.UseHsts();
     }
+
     // inside Program.cs (after builder.Services... and BEFORE app.Run())
     var ci = new CultureInfo("en-GB");          // start from a close culture
     ci.DateTimeFormat.ShortDatePattern = "MM-dd-yyyy";
