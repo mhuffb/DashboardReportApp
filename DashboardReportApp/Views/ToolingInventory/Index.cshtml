@@ -102,14 +102,19 @@
                                     var psText = psDate.HasValue
                                     ? $"Packing slip created on {psDate.Value.ToShortDateString()}"
                                     : "Packing slip needs created";
-                                    var psClass = psDate.HasValue ? "btn btn-outline-success btn-sm" : "btn btn-outline-primary btn-sm";
+                                    var psClass = psDate.HasValue
+                                    ? "btn btn-outline-success btn-sm"
+                                    : "btn btn-outline-primary btn-sm";
 
-                                    <a class="@psClass"
+                                    <a class="@psClass btn-packing-slip"
                                        href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
-                                       target="_blank" rel="noopener">
+                                       target="_blank"
+                                       rel="noopener"
+                                       data-id="@item.Id">
                                         @psText
                                     </a>
                                 }
+
 
                                 @if (showSendOutTools)
                                 {
@@ -953,6 +958,16 @@
 
               window._invInlineDeleteWired = true;
             }
+        </script>
+        <script>
+            $(document).on('click', '.btn-packing-slip', function () {
+                // Let the browser open the PDF in a new tab because of href + target="_blank"
+                // Also schedule a refresh of this page so the date column updates
+
+                setTimeout(function () {
+                    window.location.reload();
+                }, 3000); // 3 seconds is usually enough for the DB update & file creation
+            });
         </script>
 
 

@@ -368,14 +368,16 @@ Open in Dashboard:
             if (string.IsNullOrWhiteSpace(saveFolder))
                 return Problem("Tooling:SaveFolder not configured.");
 
+            // 1) Create & save PDF
             var path = _service.SavePackingSlipPdf(Id, saveFolder);
 
-            // 🔹 Track when packing slip was created
+            // 2) Mark timestamp in DB
             _service.MarkPackingSlipCreated(Id, DateTime.Now);
 
+            // 3) Print
             PrintPackingSlip(path);
 
-
+            // 4) Optional email
             if (email)
             {
                 var to = _cfg["Tooling:PackingSlipEmailTo"];
@@ -392,9 +394,11 @@ Open in Dashboard:
                 }
             }
 
+            // 5) Return PDF so browser can view/download
             var fileName = System.IO.Path.GetFileName(path);
             return PhysicalFile(path, "application/pdf", fileName, enableRangeProcessing: true);
         }
+
 
         [HttpGet]
         public IActionResult ItemsTable(int id)
