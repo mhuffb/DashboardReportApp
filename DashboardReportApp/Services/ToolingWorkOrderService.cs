@@ -3,6 +3,7 @@ using MySql.Data.MySqlClient;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using System.Globalization;
 
 namespace DashboardReportApp.Services
 {
@@ -15,16 +16,20 @@ namespace DashboardReportApp.Services
             _connectionString = configuration.GetConnectionString("MySQLConnection");
         }
 
-        public List<ToolingHistoryModel> GetToolingWorkOrders()
+        public List<ToolingWorkOrderModel> GetToolingWorkOrders()
         {
-            var list = new List<ToolingHistoryModel>();
+            var list = new List<ToolingWorkOrderModel>();
             const string sql = @"
-SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
-       Cost, AccountingCode, InitiatedBy, DateReceived,              
-       Received_CompletedBy                                        
+SELECT Id, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
+       Cost, AccountingCode, InitiatedBy, DateReceived,
+       Received_CompletedBy,
+       AttachmentFileName,
+       PackingSlipCreatedAt,
+       DateSent
 FROM tooling_workorder_header
 ORDER BY Id DESC;
 ";
+
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
@@ -32,10 +37,9 @@ ORDER BY Id DESC;
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
-                list.Add(new ToolingHistoryModel
+                list.Add(new ToolingWorkOrderModel
                 {
                     Id = Convert.ToInt32(r["Id"]),
-                    GroupID = Convert.ToInt32(r["GroupID"]),
                     Part = r["Part"]?.ToString(),
                     PO = r["PO"]?.ToString(),
                     Reason = r["Reason"]?.ToString(),
@@ -47,34 +51,42 @@ ORDER BY Id DESC;
                     InitiatedBy = r["InitiatedBy"]?.ToString(),
                     DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
                     PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
-                    Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()  
+                    Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
+                    AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString(),
+                    PackingSlipCreatedAt = r["PackingSlipCreatedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PackingSlipCreatedAt"]),
+                    DateSent = r["DateSent"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateSent"]),
 
                 });
             }
+
+            // 🔹 Backfill cost from items if header.Cost is null
+            foreach (var wo in list)
+            {
+                if (!wo.Cost.HasValue)
+                {
+                    var total = GetTotalItemCostForHeader(wo.Id);
+                    if (total.HasValue && total.Value > 0)
+                        wo.Cost = total;
+                }
+            }
+
             return list;
         }
 
 
-        public int GetNextGroupID()
-        {
-            const string sql = "SELECT IFNULL(MAX(GroupID), 0) + 1 FROM tooling_workorder_header;";
-            using var conn = new MySqlConnection(_connectionString);
-            conn.Open();
-            using var cmd = new MySqlCommand(sql, conn);
-            return Convert.ToInt32(cmd.ExecuteScalar());
-        }
 
 
-        public ToolingHistoryModel? GetToolingWorkOrdersById(int id)
+
+        public ToolingWorkOrderModel? GetToolingWorkOrdersById(int id)
         {
             const string sql = @"
-SELECT Id, GroupID, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
+SELECT Id, Part, PO, PoRequestedAt, Reason, ToolVendor, DateInitiated, DateDue,
        Cost, AccountingCode, InitiatedBy, DateReceived,
-       Received_CompletedBy                         
+       Received_CompletedBy,
+       AttachmentFileName        
 FROM tooling_workorder_header
 WHERE Id = @Id
 LIMIT 1;
-
 ";
 
             using var conn = new MySqlConnection(_connectionString);
@@ -84,10 +96,9 @@ LIMIT 1;
             using var r = cmd.ExecuteReader();
             if (!r.Read()) return null;
 
-            return new ToolingHistoryModel
+            var m = new ToolingWorkOrderModel
             {
                 Id = Convert.ToInt32(r["Id"]),
-                GroupID = Convert.ToInt32(r["GroupID"]),
                 Part = r["Part"]?.ToString(),
                 PO = r["PO"]?.ToString(),
                 Reason = r["Reason"]?.ToString(),
@@ -99,19 +110,20 @@ LIMIT 1;
                 InitiatedBy = r["InitiatedBy"]?.ToString(),
                 PoRequestedAt = r["PoRequestedAt"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["PoRequestedAt"]),
                 DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
-                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()   // + NEW
-
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
+                AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
             };
+
+            if (!m.Cost.HasValue)
+            {
+                var total = GetTotalItemCostForHeader(m.Id);
+                if (total.HasValue && total.Value > 0)
+                    m.Cost = total;
+            }
+
+            return m;
         }
-        private int GetHeaderIdByGroup(MySqlConnection conn, MySqlTransaction? tx, int groupId)
-        {
-            const string sql = "SELECT Id FROM tooling_workorder_header WHERE GroupID=@G LIMIT 1;";
-            using var cmd = new MySqlCommand(sql, conn, tx);
-            cmd.Parameters.AddWithValue("@G", groupId);
-            var o = cmd.ExecuteScalar();
-            if (o == null || o == DBNull.Value) throw new Exception($"No header found for GroupID {groupId}.");
-            return Convert.ToInt32(o);
-        }
+
         public void MarkPoRequested(int id)
         {
             const string sql = @"
@@ -131,19 +143,14 @@ WHERE Id = @Id;";
         {
             const string sql = @"
 INSERT INTO tooling_workorder_item
- (HeaderId, GroupID, Action, ToolItem, ToolNumber, ToolDesc, Revision, Quantity, Cost, ToolWorkHours
-  )
+ (HeaderId, Action, ToolItem, ToolNumber, ToolDesc, Revision, Quantity, Cost, ToolWorkHours)
 VALUES
- (@HeaderId, @GroupID, @Action, @ToolItem, @ToolNumber, @ToolDesc, @Revision, @Quantity, @Cost, @ToolWorkHours);";
+ (@HeaderId, @Action, @ToolItem, @ToolNumber, @ToolDesc, @Revision, @Quantity, @Cost, @ToolWorkHours);";
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
-            using var tx = conn.BeginTransaction();
-            var headerId = GetHeaderIdByGroup(conn, tx, m.GroupID);
-
-            using var cmd = new MySqlCommand(sql, conn, tx);
-            cmd.Parameters.AddWithValue("@HeaderId", headerId);
-            cmd.Parameters.AddWithValue("@GroupID", m.GroupID);
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@HeaderId", m.HeaderId);
             cmd.Parameters.AddWithValue("@Action", (object?)m.Action ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolItem", (object?)m.ToolItem ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolNumber", (object?)m.ToolNumber ?? DBNull.Value);
@@ -153,8 +160,8 @@ VALUES
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.ExecuteNonQuery();
-            tx.Commit();
         }
+
 
         public void UpdateToolItem(ToolItemViewModel m)
         {
@@ -177,26 +184,29 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@Cost", (object?)m.Cost ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ToolWorkHours", (object?)m.ToolWorkHours ?? DBNull.Value);
             cmd.ExecuteNonQuery();
+
+
         }
-        public void AddToolingWorkOrder(ToolingHistoryModel m)
+        public void AddToolingWorkOrder(ToolingWorkOrderModel m)
         {
             using var conn = new MySqlConnection(_connectionString);
+
             conn.Open();
+            const string sql = @"
+INSERT INTO tooling_workorder_header
+ (Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
+   AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy,
+   AttachmentFileName)    
+VALUES
+ (@Part, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
+   @AccountingCode, @InitiatedBy, @DateReceived, @Received_CompletedBy,
+   @AttachmentFileName);";
 
-            // ensure unique GroupID
-            using (var check = new MySqlCommand(
-                "SELECT COUNT(*) FROM tooling_workorder_header WHERE GroupID=@G;", conn))
-            {
-                check.Parameters.AddWithValue("@G", m.GroupID);
-                var exists = Convert.ToInt32(check.ExecuteScalar()) > 0;
-                if (exists)
-                {
-                    using var maxCmd = new MySqlCommand("SELECT IFNULL(MAX(GroupID),0)+1 FROM tooling_workorder_header;", conn);
-                    m.GroupID = Convert.ToInt32(maxCmd.ExecuteScalar());
-                }
-            }
+            using var cmd = new MySqlCommand(sql, conn);
 
-            int? accountingCode = m.Reason switch
+          
+
+            int ? accountingCode = m.Reason switch
             {
                 "New" => 5030,
                 "Repair" => 5045,
@@ -204,18 +214,7 @@ WHERE Id=@Id;";
                 _ => null
             };
 
-            const string sql = @"
-INSERT INTO tooling_workorder_header
- (GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue, Cost,
-   AccountingCode, InitiatedBy, DateReceived, Received_CompletedBy)     -- + NEW
-VALUES
- (@GroupID, @Part, @PO, @Reason, @ToolVendor, @DateInitiated, @DateDue, @Cost,
-   @AccountingCode, @InitiatedBy, @DateReceived, @Received_CompletedBy);";
-
-
-
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@GroupID", m.GroupID);
+        
             cmd.Parameters.AddWithValue("@Part", (object?)m.Part ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PO", (object?)m.PO ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Reason", (object?)m.Reason ?? DBNull.Value);
@@ -227,19 +226,26 @@ VALUES
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? "Emery, J" : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AttachmentFileName", (object?)m.AttachmentFileName ?? DBNull.Value);
+
             cmd.ExecuteNonQuery();
+
+
+
+            m.Id = (int)cmd.LastInsertedId;
         }
 
 
-        public void UpdateToolingWorkOrder(ToolingHistoryModel m)
+        public void UpdateToolingWorkOrder(ToolingWorkOrderModel m)
         {
             const string sql = @"
 UPDATE tooling_workorder_header SET
   Part=@Part, PO=@PO, Reason=@Reason, ToolVendor=@ToolVendor,
   DateInitiated=@DateInitiated, DateDue=@DateDue, Cost=@Cost, InitiatedBy=@InitiatedBy,
   DateReceived=@DateReceived,
-  Received_CompletedBy=@Received_CompletedBy          
+  Received_CompletedBy=@Received_CompletedBy,
+  AttachmentFileName=@AttachmentFileName         
 WHERE Id=@Id;";
 
 
@@ -257,7 +263,9 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@InitiatedBy", string.IsNullOrWhiteSpace(m.InitiatedBy) ? (object)DBNull.Value : m.InitiatedBy);
 
             cmd.Parameters.AddWithValue("@DateReceived", (object?)m.DateReceived ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value); 
+            cmd.Parameters.AddWithValue("@Received_CompletedBy", (object?)m.Received_CompletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AttachmentFileName", (object?)m.AttachmentFileName ?? DBNull.Value);
+
             cmd.ExecuteNonQuery();
         }
 
@@ -265,38 +273,36 @@ WHERE Id=@Id;";
 
 
 
-        public List<ToolItemViewModel> GetToolItemsByGroupID(int groupID)
+        public List<ToolItemViewModel> GetToolItemsByHeaderId(int headerId)
         {
             var list = new List<ToolItemViewModel>();
             const string sql = @"
-SELECT i.Id, i.GroupID, i.Action, i.ToolItem, i.ToolNumber, i.ToolDesc, i.Revision,
+SELECT i.Id, i.HeaderId, i.Action, i.ToolItem, i.ToolNumber, i.ToolDesc, i.Revision,
        i.Quantity, i.Cost, i.ToolWorkHours
 FROM tooling_workorder_item i
-WHERE i.GroupID = @GroupID
+WHERE i.HeaderId = @HeaderId
 ORDER BY i.Id ASC;
 ";
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@GroupID", groupID);
+            cmd.Parameters.AddWithValue("@HeaderId", headerId);
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
                 list.Add(new ToolItemViewModel
                 {
                     Id = Convert.ToInt32(r["Id"]),
-                    GroupID = Convert.ToInt32(r["GroupID"]),
+                    HeaderId = Convert.ToInt32(r["HeaderId"]),
                     Action = r["Action"]?.ToString(),
                     ToolItem = r["ToolItem"]?.ToString(),
                     ToolNumber = r["ToolNumber"]?.ToString(),
                     ToolDesc = r["ToolDesc"]?.ToString(),
                     Revision = r["Revision"]?.ToString(),
                     Quantity = r["Quantity"] == DBNull.Value ? 0 : Convert.ToInt32(r["Quantity"]),
-
                     Cost = r["Cost"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(r["Cost"]),
                     ToolWorkHours = r["ToolWorkHours"] == DBNull.Value ? null : (int?)Convert.ToInt32(r["ToolWorkHours"])
-                   
                 });
             }
             return list;
@@ -304,35 +310,36 @@ ORDER BY i.Id ASC;
 
 
 
-      
-     
 
-       
-       
-      
 
-        public ToolingHistoryModel? GetHeaderByGroupID(int groupID)
+
+
+
+
+
+        public ToolingWorkOrderModel? GetHeaderById(int id)
         {
             const string sql = @"
 SELECT
-    Id, GroupID, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
-    AccountingCode, Cost, InitiatedBy, DateReceived,              
-    Received_CompletedBy                                          
+    Id, Part, PO, Reason, ToolVendor, DateInitiated, DateDue,
+    AccountingCode, Cost, InitiatedBy, DateReceived,
+    Received_CompletedBy,
+    AttachmentFileName            
 FROM tooling_workorder_header
-WHERE GroupID = @GroupID
+WHERE Id = @Id
 LIMIT 1;";
+
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@GroupID", groupID);
+            cmd.Parameters.AddWithValue("@Id", id);
 
             using var r = cmd.ExecuteReader();
             if (!r.Read()) return null;
 
-            return new ToolingHistoryModel
+            var m = new ToolingWorkOrderModel
             {
                 Id = Convert.ToInt32(r["Id"]),
-                GroupID = Convert.ToInt32(r["GroupID"]),
                 Part = r["Part"]?.ToString(),
                 PO = r["PO"]?.ToString(),
                 Reason = r["Reason"]?.ToString(),
@@ -342,24 +349,35 @@ LIMIT 1;";
                 AccountingCode = r["AccountingCode"] != DBNull.Value ? (int?)Convert.ToInt32(r["AccountingCode"]) : null,
                 Cost = r["Cost"] != DBNull.Value ? (decimal?)Convert.ToDecimal(r["Cost"]) : null,
                 InitiatedBy = r["InitiatedBy"] != DBNull.Value ? r["InitiatedBy"]?.ToString() : null,
-                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),        
-                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString()
+                DateReceived = r["DateReceived"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(r["DateReceived"]),
+                Received_CompletedBy = r["Received_CompletedBy"] == DBNull.Value ? null : r["Received_CompletedBy"]?.ToString(),
+                AttachmentFileName = r["AttachmentFileName"] == DBNull.Value ? null : r["AttachmentFileName"]?.ToString()
             };
+
+            if (!m.Cost.HasValue)
+            {
+                var total = GetTotalItemCostForHeader(m.Id);
+                if (total.HasValue && total.Value > 0)
+                    m.Cost = total;
+            }
+
+            return m;
         }
+
 
         // === Packing Slip (QuestPDF) helpers ===
 
-        public string SavePackingSlipPdf(int groupID, string saveFolder)
+        public string SavePackingSlipPdf(int Id, string saveFolder)
         {
             if (string.IsNullOrWhiteSpace(saveFolder))
                 throw new Exception("Save folder not provided.");
 
-            var header = GetHeaderByGroupID(groupID)
-                         ?? throw new Exception($"No header found for GroupID {groupID}.");
-            var items = GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+            var header = GetHeaderById(Id)
+                         ?? throw new Exception($"No header found for Tool Work Order {Id}.");
+            var items = GetToolItemsByHeaderId(Id) ?? new List<ToolItemViewModel>();
 
             Directory.CreateDirectory(saveFolder);
-            var fileName = $"PackingSlip_G{header.GroupID}_{DateTime.Now:yyyyMMddHHmmss}.pdf";
+            var fileName = $"PackingSlip_G{header.Id}_{DateTime.Now:yyyyMMddHHmmss}.pdf";
             var fullPath = Path.Combine(saveFolder, SanitizeFileName(fileName));
 
             var bytes = BuildPackingSlipPdfBytes(header, items);
@@ -367,106 +385,290 @@ LIMIT 1;";
             return fullPath;
         }
 
-        public byte[] BuildPackingSlipPdfBytes(ToolingHistoryModel header, List<ToolItemViewModel> items)
+        public byte[] BuildPackingSlipPdfBytes(ToolingWorkOrderModel header, List<ToolItemViewModel> items)
         {
             QuestPDF.Settings.License = LicenseType.Community;
 
-            var docBytes = Document.Create(container =>
+            items ??= new List<ToolItemViewModel>();
+
+            // 🔹 Sum of item costs
+            var itemsTotal = items.Sum(it => it.Cost ?? 0m);
+
+            // 🔹 Effective header cost: header.Cost if present, otherwise item total (if > 0)
+            decimal? effectiveCost = header.Cost;
+            if (!effectiveCost.HasValue && itemsTotal > 0)
+                effectiveCost = itemsTotal;
+
+            // 🔹 Optional logo from wwwroot\img\SintergyLogo.bmp
+            byte[]? logoBytes = null;
+            try
+            {
+                var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                var logoPath = Path.Combine(webRoot, "img", "SintergyLogo.bmp");
+
+                if (File.Exists(logoPath))
+                    logoBytes = File.ReadAllBytes(logoPath);
+            }
+            catch
+            {
+                // ignore logo load failures – slip still renders
+            }
+
+            var pdfBytes = Document.Create(container =>
             {
                 container.Page(page =>
                 {
                     page.Margin(36);
                     page.Size(PageSizes.A4);
-                    page.DefaultTextStyle(x => x.FontSize(11));
+                    page.DefaultTextStyle(x => x.FontSize(10));
 
-                    page.Header().Row(r =>
+                    // ===== HEADER =====
+                    page.Header().Row(row =>
                     {
-                        r.RelativeItem().Column(c =>
+                        if (logoBytes != null)
                         {
-                            c.Item().Text("SINTERGY, INC.").SemiBold().FontSize(16);
-                            c.Item().Text("Tooling Packing Slip").FontSize(13);
-                        });
-                        r.ConstantItem(200).AlignRight().Column(c =>
+                            // logo on the left
+                            row.ConstantItem(80).Image(logoBytes);
+
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Text(t =>
+                                {
+                                    t.Span("SINTERGY, INC.")
+                                     .FontSize(16)
+                                     .SemiBold()
+                                     .FontColor(Colors.Blue.Medium);
+                                });
+
+                                col.Item().Text(t =>
+                                {
+                                    t.Span("Tooling Packing Slip")
+                                     .FontSize(12)
+                                     .SemiBold();
+                                });
+                            });
+                        }
+                        else
                         {
-                            c.Item().Text($"Date: {DateTime.Now:MM-dd-yyyy}");
-                            c.Item().Text($"Group: {header.GroupID}");
+                            // no logo – just text
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Text(t =>
+                                {
+                                    t.Span("SINTERGY, INC.")
+                                     .FontSize(16)
+                                     .SemiBold()
+                                     .FontColor(Colors.Blue.Medium);
+                                });
+
+                                col.Item().Text(t =>
+                                {
+                                    t.Span("Tooling Packing Slip")
+                                     .FontSize(12)
+                                     .SemiBold();
+                                });
+                            });
+
+                            row.ConstantItem(80); // spacer to keep layout similar
+                        }
+
+                        // Right side: date + WO
+                        row.ConstantItem(200).AlignRight().Column(col =>
+                        {
+                            col.Item().Text(t =>
+                            {
+                                t.Span($"Date: {DateTime.Now:MM-dd-yyyy}");
+                            });
+
+                            col.Item().Text(t =>
+                            {
+                                t.Span($"Tool Work Order: {header.Id}")
+                                 .SemiBold();
+                            });
                         });
                     });
 
-                    page.Content().Column(col =>
+                    // ===== BODY =====
+                    page.Content().PaddingVertical(10).Column(col =>
                     {
-                        col.Item().PaddingBottom(10).Table(t =>
+                        // -- Header info card --
+                        col.Item()
+                           .Border(1)
+                           .BorderColor(Colors.Grey.Lighten1)
+                           .Background(Colors.Grey.Lighten4)
+                           .Padding(10)
+                           .Column(info =>
+                           {
+                               info.Item().Text(t =>
+                               {
+                                   t.Span("Work Order Details")
+                                    .SemiBold()
+                                    .FontSize(12);
+                               });
+
+                               info.Item().PaddingTop(4).Table(t =>
+                               {
+                                   t.ColumnsDefinition(c =>
+                                   {
+                                       c.RelativeColumn();
+                                       c.RelativeColumn();
+                                   });
+
+                                   void Line(string label, string value)
+                                   {
+                                       t.Cell().PaddingBottom(4).Column(c2 =>
+                                       {
+                                           c2.Item().Text(x =>
+                                           {
+                                               x.Span(label)
+                                                .SemiBold()
+                                                .FontColor(Colors.Grey.Darken2);
+                                           });
+                                           c2.Item().Text(value ?? string.Empty);
+                                       });
+                                   }
+
+                                   Line("Assembly #", header.Part ?? "-");
+                                   Line("Reason", header.Reason ?? "-");
+                                   Line("Vendor", header.ToolVendor ?? "-");
+                                   Line("PO #", header.PO ?? "-");
+                                   Line("Initiated By", header.InitiatedBy ?? "-");
+                                   Line("Date Initiated", header.DateInitiated.ToString("MM/dd/yyyy"));
+                                   Line("Due Date", header.DateDue?.ToString("MM/dd/yyyy") ?? "-");
+                                   // 🔹 Use effectiveCost here
+                                   Line("Estimated Cost",
+                                     effectiveCost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "-");
+
+                               });
+                           });
+
+                        // -- Items title --
+                        col.Item().PaddingTop(12).Text(t =>
                         {
-                            // 3 equal columns, each showing a label on top and value underneath
-                            t.ColumnsDefinition(c =>
-                            {
-                                c.RelativeColumn();
-                                c.RelativeColumn();
-                                c.RelativeColumn();
-                            });
-
-                            void AddCell(string label, string value)
-                            {
-                                t.Cell().Column(c =>
-                                {
-                                    c.Item().Text(label).SemiBold();
-                                    c.Item().Text(value);
-                                });
-                            }
-
-                            AddCell("Part (Assembly #)", header.Part ?? "-");
-                            AddCell("Reason", header.Reason ?? "-");
-                            AddCell("Vendor", header.ToolVendor ?? "-");
-
-                            AddCell("PO", header.PO ?? "-");
-                            AddCell("Initiated By", header.InitiatedBy ?? "-");
-                            AddCell("Date Initiated", header.DateInitiated.ToString("MM-dd-yyyy"));
-
-                            AddCell("Due", header.DateDue?.ToString("MM-dd-yyyy") ?? "-");
-                            AddCell("Est. Cost", header.Cost?.ToString("C") ?? "-");
+                            t.Span("Items")
+                             .SemiBold()
+                             .FontSize(12);
                         });
 
-
-                        col.Item().PaddingVertical(6).Text("Items").SemiBold().FontSize(12);
-
+                        // -- Items table --
                         col.Item().Table(t =>
                         {
                             t.ColumnsDefinition(c =>
                             {
-                                c.ConstantColumn(28);
-                                c.RelativeColumn(1.3f);
-                                c.RelativeColumn(1.8f);
-                                c.RelativeColumn(1.2f);
-                                c.RelativeColumn(3);
-                                c.RelativeColumn(0.8f);
-                                c.ConstantColumn(42);
+                                c.ConstantColumn(24);      // #
+                                c.RelativeColumn(1.2f);    // Action
+                                c.RelativeColumn(1.6f);    // Item
+                                c.RelativeColumn(1.1f);    // Tool #
+                                c.RelativeColumn(2.5f);    // Desc
+                                c.RelativeColumn(0.8f);    // Rev
+                                c.ConstantColumn(40);      // Qty
+                                c.ConstantColumn(60);      // Cost
                             });
 
+                            // header row
                             t.Header(h =>
                             {
-                                h.Cell().Text("#").SemiBold();
-                                h.Cell().Text("Action").SemiBold();
-                                h.Cell().Text("Tool Item").SemiBold();
-                                h.Cell().Text("Tool #").SemiBold();
-                                h.Cell().Text("Description").SemiBold();
-                                h.Cell().Text("Rev").SemiBold();
-                                h.Cell().Text("Qty").SemiBold();
-                                h.Cell().BorderBottom(1).BorderColor(Colors.Grey.Medium);
+                                void HeaderCell(string text)
+                                {
+                                    h.Cell()
+                                     .Element(e => e
+                                        .Background(Colors.Grey.Lighten3)
+                                        .BorderBottom(1)
+                                        .BorderColor(Colors.Grey.Medium)
+                                        .PaddingVertical(3)
+                                        .PaddingHorizontal(2))
+                                     .Text(x => x.Span(text).SemiBold());
+                                }
+
+                                HeaderCell("#");
+                                HeaderCell("Action");
+                                HeaderCell("Tool Item");
+                                HeaderCell("Tool #");
+                                HeaderCell("Description");
+                                HeaderCell("Rev");
+                                HeaderCell("Qty");
+                                HeaderCell("Cost");
                             });
 
-                            var i = 1;
-                            foreach (var it in items)
+                            if (items.Any())
                             {
-                                t.Cell().Text((i++).ToString());
-                                t.Cell().Text(it.Action ?? "");
-                                t.Cell().Text(it.ToolItem ?? "");
-                                t.Cell().Text(it.ToolNumber ?? "");
-                                t.Cell().Text(it.ToolDesc ?? "");
-                                t.Cell().Text(it.Revision ?? "");
-                                t.Cell().Text(it.Quantity == 0 ? "" : it.Quantity.ToString());
+                                var index = 1;
+                                var rowIndex = 0;
+
+                                foreach (var it in items)
+                                {
+                                    bool isEven = rowIndex % 2 == 0;
+
+                                    void Cell(string? text)
+                                    {
+                                        t.Cell()
+                                         .Element(e =>
+                                         {
+                                             if (isEven)
+                                                 e = e.Background(Colors.Grey.Lighten5);
+                                             return e.PaddingVertical(2).PaddingHorizontal(2);
+                                         })
+                                         .Text(x => x.Span(text ?? string.Empty));
+                                    }
+
+                                    Cell(index.ToString());
+                                    Cell(it.Action);
+                                    Cell(it.ToolItem);
+                                    Cell(it.ToolNumber);
+                                    Cell(it.ToolDesc);
+                                    Cell(it.Revision);
+                                    Cell(it.Quantity == 0 ? "" : it.Quantity.ToString());
+                                    Cell(it.Cost.HasValue ? it.Cost.Value.ToString("0.00") : "");
+
+                                    index++;
+                                    rowIndex++;
+                                }
+
+                                // 🔹 Total row (uses effectiveCost so it matches header)
+                                if (effectiveCost.HasValue)
+                                {
+                                    // first 6 empty cells with a top border
+                                    for (int i = 0; i < 6; i++)
+                                    {
+                                        t.Cell()
+                                         .BorderTop(1)
+                                         .BorderColor(Colors.Grey.Medium)
+                                         .PaddingVertical(3)
+                                         .PaddingHorizontal(2);
+                                    }
+
+                                    // "Total" label
+                                    t.Cell()
+                                     .BorderTop(1)
+                                     .BorderColor(Colors.Grey.Medium)
+                                     .PaddingVertical(3)
+                                     .PaddingHorizontal(2)
+                                     .AlignRight()
+                                     .Text(x => x.Span("Total").SemiBold());
+
+                                    t.Cell()
+ .BorderTop(1)
+ .BorderColor(Colors.Grey.Medium)
+ .PaddingVertical(3)
+ .PaddingHorizontal(2)
+ .Text(x => x.Span(
+     effectiveCost.Value.ToString("C", CultureInfo.GetCultureInfo("en-US"))
+ ).SemiBold());
+
+                                }
+                            }
+                            else
+                            {
+                                t.Cell().ColumnSpan(8)
+                                    .PaddingVertical(6)
+                                    .AlignCenter()
+                                    .Text(x => x.Span("No items listed on this work order.")
+                                                .Italic()
+                                                .FontColor(Colors.Grey.Darken1));
                             }
                         });
 
+                        // -- Signature area --
                         col.Item().PaddingTop(16).Row(r =>
                         {
                             r.RelativeItem().Column(c =>
@@ -474,6 +676,7 @@ LIMIT 1;";
                                 c.Item().Text("Packed By: _________________________");
                                 c.Item().Text("Date: _____________________________");
                             });
+
                             r.RelativeItem().Column(c =>
                             {
                                 c.Item().Text("Received By: _______________________");
@@ -482,12 +685,23 @@ LIMIT 1;";
                         });
                     });
 
-                    page.Footer().AlignCenter().Text($"Packing Slip • Group {header.GroupID} • {header.Part ?? "-"}");
+                    // ===== FOOTER =====
+                    page.Footer().AlignCenter().Text(txt =>
+                    {
+                        txt.Span($"Packing Slip • Tool Work Order {header.Id}");
+
+                        if (!string.IsNullOrWhiteSpace(header.Part))
+                        {
+                            txt.Span(" • ");
+                            txt.Span(header.Part);
+                        }
+                    });
                 });
             }).GeneratePdf();
 
-            return docBytes;
+            return pdfBytes;
         }
+
 
         private static string SanitizeFileName(string name)
         {
@@ -561,23 +775,23 @@ LIMIT 1;";
             return list;
         }
 
-        // Choose by GroupID because your UI acts on Group
-        public void MarkWorkOrderCompleteByGroup(int groupID, DateTime dateReceived, string receivedBy)
+        public void MarkWorkOrderComplete(int id, DateTime dateReceived, string receivedBy)
         {
             const string sql = @"
         UPDATE tooling_workorder_header
         SET DateReceived=@dateReceived,
             Received_CompletedBy=@receivedBy
-        WHERE GroupID=@gid;";
+        WHERE Id=@id;";
 
             using var conn = new MySqlConnection(_connectionString);
             conn.Open();
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@dateReceived", dateReceived);
-            cmd.Parameters.AddWithValue("@receivedBy", receivedBy?.Trim());
-            cmd.Parameters.AddWithValue("@gid", groupID);
+            cmd.Parameters.AddWithValue("@receivedBy", receivedBy);
+            cmd.Parameters.AddWithValue("@id", id);
             cmd.ExecuteNonQuery();
         }
+
         // Services/ToolingWorkOrderService.cs
         public List<string> GetDistinctToolItemNames()
         {
@@ -597,6 +811,55 @@ LIMIT 1;";
             while (r.Read()) list.Add(r.GetString(0));
             return list;
         }
+        public decimal? GetTotalItemCostForHeader(int headerId)
+        {
+            const string sql = @"
+        SELECT SUM(COALESCE(Cost, 0))
+        FROM tooling_workorder_item
+        WHERE HeaderId = @HeaderId;
+    ";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@HeaderId", headerId);
+
+            var result = cmd.ExecuteScalar();
+            if (result == null || result == DBNull.Value)
+                return null;
+
+            return Convert.ToDecimal(result);
+        }
+        public void MarkPackingSlipCreated(int id, DateTime createdAt)
+        {
+            const string sql = @"
+        UPDATE tooling_workorder_header
+        SET PackingSlipCreatedAt = @createdAt
+        WHERE Id = @Id;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@createdAt", createdAt);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void MarkToolsSent(int id, DateTime sentAt)
+        {
+            const string sql = @"
+        UPDATE tooling_workorder_header
+        SET DateSent = @sentAt
+        WHERE Id = @Id;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@sentAt", sentAt);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.ExecuteNonQuery();
+        }
+      
 
     }
 }

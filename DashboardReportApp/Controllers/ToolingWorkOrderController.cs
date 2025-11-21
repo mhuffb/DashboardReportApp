@@ -3,6 +3,9 @@ using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Http;
+using System.IO;
 
 namespace DashboardReportApp.Controllers
 {
@@ -26,14 +29,11 @@ namespace DashboardReportApp.Controllers
             _inv = inv;                       // ← add
         }
 
-       
+
 
         public IActionResult Index()
         {
-            var nextGroupId = _service.GetNextGroupID();
-            ViewBag.NextGroupID = nextGroupId;
-
-            var toolingWorkOrder = new ToolingHistoryModel
+            var toolingWorkOrder = new ToolingWorkOrderModel
             {
                 DateInitiated = DateTime.Today,
                 DateDue = DateTime.Today,
@@ -44,15 +44,18 @@ namespace DashboardReportApp.Controllers
             ViewBag.ToolingWorkOrders = toolingWorkOrders;
 
             ViewBag.ToolingAll = toolingWorkOrders;
-            ViewBag.ToolingInProgress = toolingWorkOrders.Where(h => !h.DateReceived.HasValue).ToList();
+            ViewBag.ToolingInProgress = toolingWorkOrders
+                .Where(h => !h.DateReceived.HasValue)
+                .ToList();
 
             PopulateHeaderLists(toolingWorkOrder);
             return View(toolingWorkOrder);
         }
 
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Index(ToolingHistoryModel toolingWorkOrder)
+        public IActionResult Index(ToolingWorkOrderModel toolingWorkOrder)
         {
             if (ModelState.IsValid)
             {
@@ -65,18 +68,17 @@ namespace DashboardReportApp.Controllers
             PopulateHeaderLists(toolingWorkOrder);
             return View(toolingWorkOrder);
         }
-
         [HttpGet]
         public IActionResult EditToolingWorkOrderModal(int? id)
         {
-            ToolingHistoryModel model;
+            ToolingWorkOrderModel model;
             if (id is null || id == 0)
             {
-                model = new ToolingHistoryModel
+                model = new ToolingWorkOrderModel
                 {
                     DateInitiated = DateTime.Today,
                     DateDue = null,
-                    GroupID = _service.GetNextGroupID(),
+                    // Id stays 0 so AddToolingWorkOrder will INSERT and let DB auto-assign
                     InitiatedBy = "Emery, J"
                 };
             }
@@ -86,21 +88,41 @@ namespace DashboardReportApp.Controllers
                 if (model == null) return NotFound();
             }
 
+            var toolingWorkOrders = _service.GetToolingWorkOrders();
+            ViewBag.ToolingInProgress = toolingWorkOrders
+                .Where(h => !h.DateReceived.HasValue)
+                .ToList();
+
             PopulateHeaderLists(model);
+            var all = _service.GetToolingWorkOrders();
+            ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
             return PartialView("_ToolingWorkOrderEditModal", model);
         }
+
 
         private bool IsAjax() =>
       string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult SaveToolingWorkOrder(ToolingHistoryModel model)
+        public IActionResult SaveToolingWorkOrder(
+     ToolingWorkOrderModel model,
+     IFormFile? attachment)
         {
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = 400;
+
+                var toolingWorkOrders = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = toolingWorkOrders
+                    .Where(h => !h.DateReceived.HasValue)
+                    .ToList();
+
                 PopulateHeaderLists(model);
+
+                var all = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
+
                 return IsAjax()
                     ? PartialView("_ToolingWorkOrderEditModal", model)
                     : View("EditToolingWorkOrder", model);
@@ -108,13 +130,30 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                if (model.Id == 0) _service.AddToolingWorkOrder(model);
-                else _service.UpdateToolingWorkOrder(model);
+                // 1) Insert or update header first
+                if (model.Id == 0)
+                {
+                    _service.AddToolingWorkOrder(model);   // now sets model.Id
+                }
+                else
+                {
+                    _service.UpdateToolingWorkOrder(model);
+                }
+
+                // 2) If there is a file, save it and update header with filename
+                if (attachment != null && attachment.Length > 0)
+                {
+                    var newFileName = SaveToolingAttachmentFile(model.Id, attachment);
+                    model.AttachmentFileName = newFileName;
+
+                    // persist filename
+                    _service.UpdateToolingWorkOrder(model);
+                }
 
                 if (IsAjax())
-                    return Json(new { ok = true, message = $"Work order for Group {model.GroupID} saved." });
+                    return Json(new { ok = true, message = $"Tool Work Order {model.Id} saved." });
 
-                TempData["Success"] = $"Work order for Group {model.GroupID} saved.";
+                TempData["Success"] = $"Tool Work Order {model.Id} saved.";
                 return RedirectToAction("Index", "ToolingInventory");
             }
             catch (Exception ex)
@@ -122,6 +161,10 @@ namespace DashboardReportApp.Controllers
                 ModelState.AddModelError("", ex.Message);
                 Response.StatusCode = 400;
                 PopulateHeaderLists(model);
+
+                var all = _service.GetToolingWorkOrders();
+                ViewBag.ToolingInProgress = all.Where(h => !h.DateReceived.HasValue).ToList();
+
                 return IsAjax()
                     ? PartialView("_ToolingWorkOrderEditModal", model)
                     : View("EditToolingWorkOrder", model);
@@ -132,22 +175,20 @@ namespace DashboardReportApp.Controllers
 
 
         [HttpGet]
-        public IActionResult ToolItemsModal(int groupID)
+        public IActionResult ToolItemsModal(int id)   // header Id
         {
-            var groupRecords = _service.GetToolItemsByGroupID(groupID); // List<ToolItemViewModel>
-
-            // get header to read the Part (assembly #)
-            var header = _service.GetHeaderByGroupID(groupID); 
+            var items = _service.GetToolItemsByHeaderId(id);
+            var header = _service.GetHeaderById(id);
 
             var model = new GroupDetailsViewModel
             {
-                GroupID = groupID,
-                GroupName = header?.Part,                 // <-- put Part here
-                ToolItems = groupRecords,
+                HeaderId = id,
+                GroupName = header?.Part,
+                ToolItems = items,
                 NewToolItem = new ToolItemViewModel
                 {
-                    GroupID = groupID,
-                    Quantity = 1   // <-- default qty
+                    HeaderId = id,
+                    Quantity = 1
                 }
             };
             PopulateItemLists(model.NewToolItem.ToolItem);
@@ -155,17 +196,16 @@ namespace DashboardReportApp.Controllers
         }
 
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
         public IActionResult AddToolItemAjax(ToolItemViewModel model)
         {
             if (!ModelState.IsValid)
             {
+                // ⬇️ NEW: tell the client this is a validation failure
                 Response.StatusCode = 400;
                 var vmBad = new GroupDetailsViewModel
                 {
-                    GroupID = model.GroupID,
-                    ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
+                    HeaderId = model.HeaderId,
+                    ToolItems = _service.GetToolItemsByHeaderId(model.HeaderId),
                     NewToolItem = model
                 };
                 PopulateItemLists(model.ToolItem);
@@ -175,22 +215,23 @@ namespace DashboardReportApp.Controllers
             _service.AddToolItem(model);
             var vm = new GroupDetailsViewModel
             {
-                GroupID = model.GroupID,
-                ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
-                NewToolItem = new ToolItemViewModel { GroupID = model.GroupID }
+                HeaderId = model.HeaderId,
+                ToolItems = _service.GetToolItemsByHeaderId(model.HeaderId),
+                NewToolItem = new ToolItemViewModel { HeaderId = model.HeaderId }
             };
             PopulateItemLists();
             return PartialView("_ToolItemsModal", vm);
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+
         public IActionResult SaveAllToolItemsAjax(GroupDetailsViewModel model)
         {
-            if (model == null || model.GroupID <= 0)
+            if (model == null || model.HeaderId <= 0)
             {
                 Response.StatusCode = 400;
-                return IsAjax() ? Content("Invalid group.") : RedirectToAction("Index", "ToolingInventory");
+                return IsAjax()
+                    ? Content("Invalid work order.")
+                    : RedirectToAction("Index", "ToolingInventory");
             }
 
             if (model.ToolItems != null)
@@ -202,7 +243,7 @@ namespace DashboardReportApp.Controllers
                         var vm = new ToolItemViewModel
                         {
                             Id = item.Id,
-                            GroupID = item.GroupID,
+                            HeaderId = model.HeaderId,
                             Action = item.Action,
                             ToolItem = item.ToolItem,
                             ToolNumber = item.ToolNumber,
@@ -217,15 +258,14 @@ namespace DashboardReportApp.Controllers
                 }
             }
 
-            // AJAX => return refreshed modal body; Non-AJAX => redirect
             if (IsAjax())
             {
                 var refreshed = new GroupDetailsViewModel
                 {
-                    GroupID = model.GroupID,
-                    GroupName = _service.GetHeaderByGroupID(model.GroupID)?.Part,
-                    ToolItems = _service.GetToolItemsByGroupID(model.GroupID),
-                    NewToolItem = new ToolItemViewModel { GroupID = model.GroupID, Quantity = 1 }
+                    HeaderId = model.HeaderId,
+                    GroupName = _service.GetHeaderById(model.HeaderId)?.Part,
+                    ToolItems = _service.GetToolItemsByHeaderId(model.HeaderId),
+                    NewToolItem = new ToolItemViewModel { HeaderId = model.HeaderId, Quantity = 1 }
                 };
                 PopulateItemLists();
                 return PartialView("_ToolItemsModal", refreshed);
@@ -237,8 +277,6 @@ namespace DashboardReportApp.Controllers
 
 
 
-
-        // --------- PO request (no textbox; uses config default) ----------
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult RequestPoNumber(int id)
@@ -248,30 +286,55 @@ namespace DashboardReportApp.Controllers
                 var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
-                // ⬇️ Put it here
-                var items = _service.GetToolItemsByGroupID(record.GroupID); // now reads tooling_WorkOrder_item
+                var items = _service.GetToolItemsByHeaderId(record.Id) ?? new List<ToolItemViewModel>();
 
-                var subject = $"PO Request: Group {record.GroupID} / {record.Part}";
+                var us = CultureInfo.GetCultureInfo("en-US");
+
+                // sum of all item costs
+                var itemsTotal = items.Sum(it => it.Cost ?? 0m);
+
+                // header-level estimate (if user typed it)
+                var headerCost = record.Cost;
+
+                // 🔹 Total Cost = header cost if present, otherwise item total (if > 0)
+                var totalCost = headerCost ?? (itemsTotal > 0 ? itemsTotal : (decimal?)null);
+
+                string Fmt(decimal? v) => v.HasValue
+                    ? v.Value.ToString("C", us)
+                    : "n/a";
+
+                var subject = $"PO Request – Tool Work Order {record.Id} – {record.Part}";
                 var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
+
+                var dateInitiated = record.DateInitiated.ToString("MM-dd-yyyy");
+                var dateDue = record.DateDue?.ToString("MM-dd-yyyy") ?? "n/a";
+
                 var body = $@"
-PO Request (Tooling Work Order)
-----------------------------
-GroupID: {record.GroupID}
+PO has been requested for a Tool Work Order. 
+
+Tool Work Order: {record.Id}
+Assembly #: {record.Part}
 Reason: {record.Reason}
 Vendor: {record.ToolVendor}
-Part: {record.Part}
-Due: {record.DateDue:MM-dd-yyyy}
-Estimated Cost: {(record.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}
-Items:
-{string.Join("\n",
-    items.Select(it =>
-        $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | " +
-        $"Cost={(it.Cost?.ToString("C", CultureInfo.GetCultureInfo("en-US")) ?? "n/a")}"
-    )
-)}
-Open in Dashboard: {link}
-";
+Requested By: {record.InitiatedBy}
+Date Initiated: {dateInitiated}
+Date Due: {dateDue}
 
+LINE ITEMS
+----------
+{(items.Count == 0
+            ? "No tool items have been entered yet."
+            : string.Join("\n",
+                items.Select(it =>
+                    $"- {it.Action} | {it.ToolItem} | {it.ToolNumber} | {it.ToolDesc} | Qty={it.Quantity} | Cost={Fmt(it.Cost)}"
+                )
+              )
+        )}
+
+Total Cost: {Fmt(totalCost)}
+Open in Dashboard:
+{link}
+".Trim();
 
                 var to = string.IsNullOrWhiteSpace(_cfg["Tooling:PoRequestTo"])
                     ? "tooling@sintergy.local"
@@ -284,6 +347,7 @@ Open in Dashboard: {link}
                     subject: subject,
                     body: body
                 );
+
                 _service.MarkPoRequested(id);
 
                 return Json(new { ok = true });
@@ -296,42 +360,53 @@ Open in Dashboard: {link}
         }
 
 
-        // GET /ToolingWorkOrder/GeneratePackingSlip?groupID=123
+
         [HttpGet]
-        public IActionResult GeneratePackingSlip(int groupID, bool email = true)
+        public IActionResult GeneratePackingSlip(int Id, bool email = true)
         {
             var saveFolder = _cfg["Tooling:SaveFolder"];
             if (string.IsNullOrWhiteSpace(saveFolder))
                 return Problem("Tooling:SaveFolder not configured.");
 
-            var path = _service.SavePackingSlipPdf(groupID, saveFolder);
+            // 1) Create & save PDF
+            var path = _service.SavePackingSlipPdf(Id, saveFolder);
 
+            // 2) Mark timestamp in DB
+            _service.MarkPackingSlipCreated(Id, DateTime.Now);
+
+            // 3) Print
+            PrintPackingSlip(path);
+
+            // 4) Optional email
             if (email)
             {
                 var to = _cfg["Tooling:PackingSlipEmailTo"];
                 if (!string.IsNullOrWhiteSpace(to))
                 {
-                    var header = _service.GetHeaderByGroupID(groupID);
+                    var header = _service.GetHeaderById(Id);
                     _shared.SendEmailWithAttachment(
                         receiverEmail: to,
                         attachmentPath: path,
                         attachmentPath2: null,
-                        subject: $"Packing Slip – Group {header?.GroupID} – {header?.Part}",
-                        body: $"Attached is the packing slip for Group {header?.GroupID} ({header?.Part})."
+                        subject: $"Packing Slip – Tool Work Order {header?.Id} – {header?.Part}",
+                        body: $"Attached is the packing slip for Tool Work Order {header?.Id} {header?.Part}."
                     );
                 }
             }
 
+            // 5) Return PDF so browser can view/download
             var fileName = System.IO.Path.GetFileName(path);
             return PhysicalFile(path, "application/pdf", fileName, enableRangeProcessing: true);
         }
+
+
         [HttpGet]
-        public IActionResult ItemsTable(int groupID)
+        public IActionResult ItemsTable(int id)
         {
-            var items = _service.GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+            var items = _service.GetToolItemsByHeaderId(id) ?? new List<ToolItemViewModel>();
             return PartialView("_ToolItemsInlineTable", items);
         }
-        private void PopulateHeaderLists(ToolingHistoryModel? current = null)
+        private void PopulateHeaderLists(ToolingWorkOrderModel? current = null)
         {
             // Sensible defaults (front-load the common ones)
             var defaultReasons = new List<string> { "New Customer Purchase (5030)", "Repair at Sintergy Cost (5045)", "Breakage Due to Negligence (5040)", "Fitting/Setting" };
@@ -376,7 +451,7 @@ Open in Dashboard: {link}
         {
             // Find a WorkOrder row for this group (pick most recent if multiple)
             var hx = _service.GetToolingWorkOrders()
-                         .Where(h => h.GroupID == groupID)
+                         .Where(h => h.Id == groupID)
                          .OrderByDescending(h => h.DateInitiated)
                          .FirstOrDefault();
 
@@ -398,14 +473,14 @@ Open in Dashboard: {link}
         // ToolingWorkOrderController.cs
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteToolItemAjax(int id, int groupID)
+        public IActionResult DeleteToolItemAjax(int id, int headerId)
         {
             try
             {
                 _service.DeleteToolItem(id);
 
                 // Re-render just the items table for this group
-                var items = _service.GetToolItemsByGroupID(groupID) ?? new List<ToolItemViewModel>();
+                var items = _service.GetToolItemsByHeaderId(headerId) ?? new List<ToolItemViewModel>();
                 return PartialView("_ToolItemsInlineTable", items);
             }
             catch (Exception ex)
@@ -425,15 +500,15 @@ Open in Dashboard: {link}
                 var record = _service.GetToolingWorkOrdersById(id);
                 if (record == null) return NotFound();
 
-                var items = _service.GetToolItemsByGroupID(record.GroupID);
+                var items = _service.GetToolItemsByHeaderId(record.Id);
 
-                var subject = $"Work Order Request: Group {record.GroupID} / {record.Part}";
+                var subject = $"Work Order Request: Group {record.Id} / {record.Part}";
                 var link = Url.Action("Index", "ToolingWorkOrder", null, Request.Scheme);
 
                 var body = $@"
 WORK ORDER REQUEST (Internal Toolroom)
 -------------------------------------
-GroupID: {record.GroupID}
+Tool Work Order: {record.Id}
 Part: {record.Part}
 Reason: {record.Reason}
 Requested By: {record.InitiatedBy}
@@ -475,14 +550,14 @@ Open in Dashboard: {link}
         // Controllers/ToolingWorkOrderController.cs  (additions)
 
         [HttpGet]
-        public IActionResult CompleteWorkOrderModal(int groupID)
+        public IActionResult CompleteWorkOrderModal(int Id)
         {
-            var header = _service.GetHeaderByGroupID(groupID);
-            if (header == null) return NotFound($"No work order found for group {groupID}.");
+            var header = _service.GetHeaderById(Id);
+            if (header == null) return NotFound($"No work order found for group {Id}.");
 
             
 
-            var defaults = new List<string> { "Emery, J", "Shuckers, C", "Klebecha, B" }; // ← your defaults
+            var defaults = new List<string> { "Shuckers, C", "Emery, J",  "Klebecha, B" }; // ← your defaults
             var db = _service.GetDistinctReceivers();
 
             var merged = Merge(defaults, db, header?.Received_CompletedBy);
@@ -490,7 +565,7 @@ Open in Dashboard: {link}
 
             var vm = new CompleteWorkOrderVM
             {
-                GroupID = groupID,
+                Id = Id,
                 DateReceived = header?.DateReceived ?? DateTime.Today,
                 Received_CompletedBy = header?.Received_CompletedBy ?? string.Empty
             };
@@ -524,26 +599,31 @@ Open in Dashboard: {link}
                 return PartialView("_CompleteWorkOrderModal", vm);
             }
 
-            var header = _service.GetHeaderByGroupID(vm.GroupID);
+            var header = _service.GetHeaderById(vm.Id);
             if (header == null)
             {
                 Response.StatusCode = 404;
-                return Json(new { ok = false, error = $"No header for group {vm.GroupID}." });
+                return Json(new { ok = false, error = $"No header for Tool Work Order {vm.Id}." });
             }
 
-            var items = _service.GetToolItemsByGroupID(vm.GroupID) ?? new List<ToolItemViewModel>();
+            var items = _service.GetToolItemsByHeaderId(vm.Id) ?? new List<ToolItemViewModel>();
+
+            if (items.Count == 0)
+            {
+                Response.StatusCode = 400;
+                return Json(new
+                {
+                    ok = false,
+                    error = "You must add at least one Tool Item before completing this Tool Work Order."
+                });
+            }
+
             var makeNew = 0; var makeNewExists = 0;
-            var markedUnavailable = 0;
+            var markedAvailable = 0;
             var details = new List<string>();
 
-            // normalize helpers
             static string N(string? s) => (s ?? string.Empty).Trim();
-            var asm = N(header.Part);                         // Assembly #
-            var dateInit = header.DateInitiated;              // Date Initiated
-            DateTime? eta = header.DateDue;                   // Date Due (ETA)
-
-            var unavailableActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "Tinalox Coat", "Metalife Coat", "Reface", "Fitting" };
+            var asm = N(header.Part);
 
             foreach (var it in items)
             {
@@ -552,9 +632,9 @@ Open in Dashboard: {link}
                 var toolNum = N(it.ToolNumber);
 
                 if (string.IsNullOrWhiteSpace(toolItem) || string.IsNullOrWhiteSpace(toolNum) || string.IsNullOrWhiteSpace(asm))
-                    continue; // skip incomplete keys
+                    continue;
 
-                // --- MAKE NEW: Add to inventory if missing ---
+                // MAKE NEW: Add to inventory if missing
                 if (action.Equals("Make New", StringComparison.OrdinalIgnoreCase))
                 {
                     var exists = await _inv.FindByKeyAsync(asm, toolItem, toolNum);
@@ -569,49 +649,98 @@ Open in Dashboard: {link}
                         makeNewExists++;
                         details.Add($"Already in inventory: {asm} | {toolItem} | {toolNum}");
                     }
-                    continue;
                 }
 
-                // --- COAT/REPAIR/FITTING: mark unavailable ---
-                if (unavailableActions.Contains(action))
-                {
-                    await _inv.MarkUnavailableAsync(
-                        asm, toolItem, toolNum,
-                        reason: action,
-                        dateUnavailable: dateInit,
-                        eta: eta);
-                    markedUnavailable++;
-                    details.Add($"Marked unavailable ({action}): {asm} | {toolItem} | {toolNum}");
-                }
+                // 🔹 ALWAYS mark tools AVAILABLE when receiving them
+                await _inv.MarkAvailableAsync(asm, toolItem, toolNum);
+                markedAvailable++;
+                details.Add($"Marked available: {asm} | {toolItem} | {toolNum}");
             }
 
-            // mark the WO complete
-            _service.MarkWorkOrderCompleteByGroup(vm.GroupID, vm.DateReceived, vm.Received_CompletedBy);
+            _service.MarkWorkOrderComplete(vm.Id, vm.DateReceived, vm.Received_CompletedBy);
 
-            // Build a compact summary for SweetAlert
             var parts = new List<string>();
             if (makeNew > 0) parts.Add($"<li><strong>Added to inventory</strong>: {makeNew}</li>");
             if (makeNewExists > 0) parts.Add($"<li><strong>Already in inventory</strong>: {makeNewExists}</li>");
-            if (markedUnavailable > 0) parts.Add($"<li><strong>Marked unavailable</strong>: {markedUnavailable}</li>");
+            if (markedAvailable > 0) parts.Add($"<li><strong>Marked available</strong>: {markedAvailable}</li>");
 
             var html = parts.Count > 0
                 ? $"<ul class='mb-0'>{string.Join("", parts)}</ul>"
                 : "<span>No inventory changes recorded.</span>";
 
-            // Optional: keep a tiny preview instead of the full list
-            // var preview = details.Take(5).ToList();
-            // if (details.Count > 5) preview.Add($"…and {details.Count - 5} more.");
-            // var html = $"<ul class='mb-0'>{string.Join("", preview.Select(p => $"<li>{System.Net.WebUtility.HtmlEncode(p)}</li>"))}</ul>";
-
             return Json(new
             {
                 ok = true,
-                title = $"Completed Group {vm.GroupID}",
-                html,
-                // message kept for logging/debug if you want:
-                // message = $"Completed Tool Work Order {vm.GroupID}..."
+                title = $"Received Tools for Work Order {vm.Id}",
+                html
             });
+        }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendOutTools(int id)
+        {
+            try
+            {
+                var header = _service.GetHeaderById(id);
+                if (header == null)
+                {
+                    Response.StatusCode = 404;
+                    return Json(new { ok = false, error = $"No header for Tool Work Order {id}." });
+                }
+
+                var items = _service.GetToolItemsByHeaderId(id) ?? new List<ToolItemViewModel>();
+
+                static string N(string? s) => (s ?? string.Empty).Trim();
+
+                var asm = N(header.Part);
+                var eta = header.DateDue;
+                var reasonFromHeader = N(header.Reason);
+                var vendor = N(header.ToolVendor);   // 🔹 actual vendor/location
+
+                int markedUnavailable = 0;
+
+                foreach (var it in items)
+                {
+                    var itemName = N(it.ToolItem);
+                    var toolNum = N(it.ToolNumber);
+
+                    if (string.IsNullOrWhiteSpace(asm) ||
+                        string.IsNullOrWhiteSpace(itemName) ||
+                        string.IsNullOrWhiteSpace(toolNum))
+                        continue;
+
+                    var reason = !string.IsNullOrWhiteSpace(reasonFromHeader)
+                        ? reasonFromHeader
+                        : N(it.Action);
+
+                    await _inv.MarkUnavailableAsync(
+                        asm,
+                        itemName,
+                        toolNum,
+                        reason: reason,
+                        dateUnavailable: DateTime.Today,
+                        eta: eta,
+                        location: vendor    // 🔹 now goes to Location column
+                    );
+
+                    markedUnavailable++;
+                }
+
+                _service.MarkToolsSent(id, DateTime.Today);
+
+                return Json(new
+                {
+                    ok = true,
+                    title = $"Tools sent for Tool Work Order {id}",
+                    html = $"<p>Marked {markedUnavailable} tool item(s) unavailable and set Date Sent to {DateTime.Today:MM-dd-yyyy}.</p>"
+                });
+            }
+            catch (Exception ex)
+            {
+                Response.StatusCode = 500;
+                return Json(new { ok = false, error = ex.Message });
+            }
         }
 
         // ToolingWorkOrderController
@@ -625,6 +754,98 @@ Open in Dashboard: {link}
             if (!string.IsNullOrWhiteSpace(ensureToolItem) && set.Add(ensureToolItem)) merged.Add(ensureToolItem);
             ViewBag.ToolItemList = merged;
         }
+        private void PrintPackingSlip(string pdfPath)
+        {
+            var exePath = _cfg["Printing:SumatraExePath"];
+            var printer = _cfg["Printers:ToolingPackingSlip"];
+
+            if (string.IsNullOrWhiteSpace(exePath) || string.IsNullOrWhiteSpace(printer))
+                return; // silently skip if not configured
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = $"-print-to \"{printer}\" -silent \"{pdfPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            try
+            {
+                Process.Start(psi);
+            }
+            catch
+            {
+                // optional: log if you have logging wired up
+            }
+        }
+
+
+        [HttpGet]
+        public IActionResult AttachmentPreviewModal(int id)
+        {
+            var header = _service.GetHeaderById(id);
+            if (header == null)
+                return NotFound($"No work order found for Tool Work Order {id}.");
+
+            var vm = new ToolingAttachmentPreviewVM
+            {
+                Id = id
+            };
+
+            if (string.IsNullOrWhiteSpace(header.AttachmentFileName))
+            {
+                vm.FileUrl = null;
+                vm.FileName = null;
+            }
+            else
+            {
+                vm.FileName = header.AttachmentFileName;
+                vm.FileUrl = $"/uploads/{header.AttachmentFileName}";
+            }
+
+            return PartialView("_ToolingAttachmentModal", vm);
+        }
+
+
+        private static string SanitizeFileNameLocal(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return string.Empty;
+
+            foreach (var bad in Path.GetInvalidFileNameChars())
+                name = name.Replace(bad, '_');
+
+            return name;
+        }
+
+        private string? SaveToolingAttachmentFile(int headerId, IFormFile file)
+        {
+            if (file == null || file.Length == 0) return null;
+
+            var root = _cfg["Paths:ToolingWorkOrderUploads"];
+            if (string.IsNullOrWhiteSpace(root))
+                throw new Exception("Paths:ToolingWorkOrderUploads not configured.");
+
+            Directory.CreateDirectory(root);
+
+            var ext = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(ext))
+                ext = ".bin";
+
+            var fileName = $"toolworkorderFile1_{headerId}{ext}";
+            fileName = SanitizeFileNameLocal(fileName);
+
+            var fullPath = Path.Combine(root, fileName);
+
+            using (var fs = new FileStream(fullPath, FileMode.Create))
+            {
+                file.CopyTo(fs);
+            }
+
+            return fileName;
+        }
+
 
     }
 }

@@ -550,9 +550,12 @@ ORDER BY p.measure_date DESC
     {
         { @"Office01.sintergyinc.local", "Microsoft Print to PDF" },
         { @"mold02", "Mold02" },
+        { @"MOLD02.sintergyinc.local", "Mold02" },
         { @"MOLD03", "Mold03" },
+        { @"MOLD03.sintergyinc.local", "Mold03" },
         { @"MOLD04-PC", "Mold004" },
-        { @"DESKTOP-R8A5IFJ", "Mold02" },
+        { @"MOLD04-PC.sintergyinc.local", "Mold004" },
+        { @"DESKTOP-R8A5IFJ", "Microsoft Print to PDF" },
         // Add additional mappings as needed
     };
 

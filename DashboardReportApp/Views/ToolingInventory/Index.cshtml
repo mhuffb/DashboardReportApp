@@ -26,7 +26,7 @@
                 <thead class="table-dark">
                     <tr>
                         <th style="width:48px;"></th>  <!-- expand -->
-                        <th>Group</th>
+                        <th>Work Order</th>
                         <th>Assembly #</th>
                         <th>Reason</th>
                         <th>Vendor</th>
@@ -37,25 +37,29 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (DashboardReportApp.Models.ToolingHistoryModel item in ViewBag.ToolingInProgress)
+                    @foreach (DashboardReportApp.Models.ToolingWorkOrderModel item in ViewBag.ToolingInProgress)
                     {
-                        var rowId = $"row-items-{item.GroupID}";
+                        var rowId = $"row-items-{item.Id}";
                         var reason = (item.Reason ?? string.Empty).Trim();
-                        var showPackingSlip = !reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
+                        var isNewCustomerPurchase = reason.Equals("New Customer Purchase (5030)", StringComparison.OrdinalIgnoreCase);
 
-                        <tr data-group="@item.GroupID">
+                        var showPackingSlip = !isNewCustomerPurchase;
+                        var showSendOutTools = !isNewCustomerPurchase;
+
+
+                        <tr data-group="@item.Id">
                             <td>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary"
                                         data-action="toggle-items"
-                                        data-group="@item.GroupID"
+                                        data-group="@item.Id"
                                         aria-expanded="false"
                                         aria-controls="@rowId"
                                         title="Show tool items">
                                     <i class="bi bi-caret-right-fill"></i>
                                 </button>
                             </td>
-                            <td>@item.GroupID</td>
+                            <td>@item.Id</td>
                             <td>@item.Part</td>
                             <td>@item.Reason</td>
                             <td>@item.ToolVendor</td>
@@ -64,21 +68,20 @@
                             <td>@(item.Cost?.ToString("0.00"))</td>
                             <td class="d-flex flex-wrap gap-2">
                                 <div class="btn-group btn-group-sm">
-
                                     <a class="btn btn-primary btn-sm"
-                                       href="@Url.Action("EditToolingWorkOrderModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       href="@Url.Action("EditToolingWorkOrderModal", "ToolingWorkOrder", new { id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Edit Tool Work Order
                                     </a>
 
                                     <a class="btn btn-secondary btn-sm"
-                                       href="@Url.Action("ToolItemsModalByGroup", "ToolingWorkOrder", new { groupID = item.GroupID })"
+                                       href="@Url.Action("ToolItemsModal", "ToolingWorkOrder", new { id = item.Id })"
                                        data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
                                         Add/Edit Tool Items
                                     </a>
-
                                 </div>
 
+                                <!-- PO request button stays the same -->
                                 <form asp-action="RequestPoNumber" asp-controller="ToolingWorkOrder" method="post" class="request-po-form d-inline-block">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@item.Id" />
@@ -92,28 +95,62 @@
                                     <button type="submit" class="@btnClass" @disabledAttr>@btnText</button>
                                 </form>
 
+                                @* Packing slip status *@
                                 @if (showPackingSlip)
                                 {
-                                    <a class="btn btn-outline-primary btn-sm"
-                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { groupID = item.GroupID, email = true })"
-                                       target="_blank" rel="noopener">
-                                        Create Packing Slip
+                                    var psDate = item.PackingSlipCreatedAt;
+                                    var psText = psDate.HasValue
+                                    ? $"Packing slip created on {psDate.Value.ToShortDateString()}"
+                                    : "Packing slip needs created";
+                                    var psClass = psDate.HasValue
+                                    ? "btn btn-outline-success btn-sm"
+                                    : "btn btn-outline-primary btn-sm";
+
+                                    <a class="@psClass btn-packing-slip"
+                                       href="@Url.Action("GeneratePackingSlip", "ToolingWorkOrder", new { Id = item.Id, email = true })"
+                                       target="_blank"
+                                       rel="noopener"
+                                       data-id="@item.Id">
+                                        @psText
                                     </a>
                                 }
-                                <a class="btn btn-success btn-sm"
-                                   href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { groupID = item.GroupID })"
-                                   data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
-                                    Complete Work Order
-                                </a>
 
 
+                                @if (showSendOutTools)
+                                {
+                                    <button type="button"
+                                            class="btn btn-outline-danger btn-sm"
+                                            data-action="send-out-tools"
+                                            data-id="@item.Id">
+                                        @(item.DateSent.HasValue
+                                                                    ? $"Tools sent: {item.DateSent:MM-dd-yyyy}"
+                                                                    : "Send out tools")
+                        </button>
+                                                }
+
+                                @* Receive tools (complete work order) *@
+                                @if (item.DateReceived.HasValue)
+                                {
+                                    <button class="btn btn-success btn-sm" disabled>
+                                        Tools received: @item.DateReceived.Value.ToShortDateString()
+                                    </button>
+                                }
+                                else
+                                {
+                                    <a class="btn btn-success btn-sm"
+                                       href="@Url.Action("CompleteWorkOrderModal", "ToolingWorkOrder", new { Id = item.Id })"
+                                       data-bs-toggle="modal" data-bs-target="#toolingWorkOrderModal">
+                                        Receive Tools
+                                    </a>
+                                }
                             </td>
+
                         </tr>
                         <!-- Collapsible items row -->
                         <tr id="@rowId" class="d-none">
                             <td></td>
                             <td colspan="8">
-                                <div class="p-2 border rounded bg-light" data-items-container="@item.GroupID">
+                                <div class="p-2 border rounded bg-light" data-items-container="@item.Id">
                                     <div class="text-muted">Loading...</div>
                                 </div>
                             </td>
@@ -499,7 +536,8 @@
           if (container.dataset.loaded === '1') return;
 
           try {
-                const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?groupID=' + encodeURIComponent(group);
+                    const url = '@Url.Action("ItemsTable", "ToolingWorkOrder")' + '?id=' + encodeURIComponent(group);
+
                        const res = await fetch(url, {
               credentials: 'same-origin',
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -550,6 +588,97 @@
               }
             });
         </script>
+        <script>
+            document.addEventListener('click', async (e) => {
+                const btn = e.target.closest('button[data-action="send-out-tools"]');
+                if (!btn) return;
+
+                e.preventDefault();
+
+                const id = btn.dataset.id;
+                if (!id) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Missing Id',
+                        text: 'Could not determine Tool Work Order Id.'
+                    });
+                    return;
+                }
+
+                const token = getPageAntiforgeryToken();
+                if (!token) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Token error',
+                        text: 'Anti-forgery token not found on page.'
+                    });
+                    return;
+                }
+
+                const prevDisabled = btn.disabled;
+                const prevHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = 'Working...';
+
+                try {
+                    const fd = new FormData();
+                    fd.append('__RequestVerificationToken', token);
+                    fd.append('id', id);
+
+                    const res = await fetch('/ToolingWorkOrder/SendOutTools', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'RequestVerificationToken': token
+                        },
+                        body: fd,
+                        credentials: 'same-origin'
+                    });
+
+                    const raw = await res.text();
+                    let data = null;
+                    try {
+                        data = raw ? JSON.parse(raw) : null;
+                    } catch {
+                        data = null; // not JSON
+                    }
+
+                    if (!res.ok || !data || data.ok !== true) {
+                        // Prefer server message if we have JSON with error
+                        const serverError = data && data.error
+                            ? data.error
+                            : raw?.slice(0, 600) || `HTTP ${res.status}`;
+
+                        await Swal.fire({
+                            icon: 'error',
+                            title: 'Send out failed',
+                            html: `<pre style="text-align:left;white-space:pre-wrap">${serverError}</pre>`
+                        });
+                        return;
+                    }
+
+                    await Swal.fire({
+                        icon: 'success',
+                        title: data.title || 'Tools sent',
+                        html: data.html || ''
+                    });
+
+                    // reload to refresh DateSent + button text + status
+                    location.reload();
+                } catch (err) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Network error',
+                        text: err?.message || 'Unexpected error'
+                    });
+                } finally {
+                    btn.disabled = prevDisabled;
+                    btn.innerHTML = prevHtml;
+                }
+            });
+        </script>
+
+
 
         <script>
             (function () {
@@ -829,6 +958,16 @@
 
               window._invInlineDeleteWired = true;
             }
+        </script>
+        <script>
+            $(document).on('click', '.btn-packing-slip', function () {
+                // Let the browser open the PDF in a new tab because of href + target="_blank"
+                // Also schedule a refresh of this page so the date column updates
+
+                setTimeout(function () {
+                    window.location.reload();
+                }, 3000); // 3 seconds is usually enough for the DB update & file creation
+            });
         </script>
 
 

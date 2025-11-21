@@ -1,0 +1,47 @@
+﻿@model DashboardReportApp.Models.ToolingAttachmentPreviewVM
+
+<div class="modal-header">
+    <h5 class="modal-title">Attachment — Work Order @Model.Id</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    @if (string.IsNullOrWhiteSpace(Model.FileUrl))
+    {
+        <p class="text-danger mb-0">No attachment found for this work order.</p>
+    }
+    else
+    {
+        <p class="small text-muted">
+            File: @Model.FileName<br />
+            URL: @Model.FileUrl
+        </p>
+
+        
+            var lower = (Model.FileUrl ?? "").ToLowerInvariant();
+        
+
+        @if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png") || lower.EndsWith(".gif") || lower.EndsWith(".webp"))
+        {
+            <img src="@Model.FileUrl" class="img-fluid rounded border" alt="Attachment image" />
+        }
+        else if (lower.EndsWith(".mp4") || lower.EndsWith(".mov") || lower.EndsWith(".webm") || lower.EndsWith(".m4v"))
+        {
+            <video src="@Model.FileUrl"
+                   controls
+                   class="w-100 rounded border">
+                Your browser does not support the video tag.
+            </video>
+        }
+        else
+        {
+            <a href="@Model.FileUrl" target="_blank" class="btn btn-outline-secondary">
+                Open attachment (@Model.FileName)
+            </a>
+        }
+    }
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>

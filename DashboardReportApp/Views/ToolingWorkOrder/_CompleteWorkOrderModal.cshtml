@@ -5,7 +5,7 @@
 }
 
 <div class="modal-header">
-    <h5 class="modal-title">Complete Work Order — @Model.GroupID</h5>
+    <h5 class="modal-title">Complete Work Order — @Model.Id</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
@@ -14,7 +14,7 @@
       asp-controller="ToolingWorkOrder"
       method="post">
     @Html.AntiForgeryToken()
-    @Html.HiddenFor(m => m.GroupID)
+    @Html.HiddenFor(m => m.Id)
 
     <div class="modal-body">
         @Html.ValidationSummary(true, "", new { @class = "text-danger" })
