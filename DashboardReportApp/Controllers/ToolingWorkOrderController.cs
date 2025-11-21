@@ -680,42 +680,62 @@ Open in Dashboard: {link}
             {
                 var header = _service.GetHeaderById(id);
                 if (header == null)
-                    return NotFound();
+                {
+                    Response.StatusCode = 404;
+                    return Json(new { ok = false, error = $"No header for Tool Work Order {id}." });
+                }
 
                 var items = _service.GetToolItemsByHeaderId(id) ?? new List<ToolItemViewModel>();
 
                 static string N(string? s) => (s ?? string.Empty).Trim();
+
                 var asm = N(header.Part);
-                var dateInit = header.DateInitiated;
-                DateTime? eta = header.DateDue;
+                var eta = header.DateDue;
+                var reasonFromHeader = N(header.Reason);
+                var vendor = N(header.ToolVendor);   // 🔹 actual vendor/location
+
+                int markedUnavailable = 0;
 
                 foreach (var it in items)
                 {
-                    var toolItem = N(it.ToolItem);
+                    var itemName = N(it.ToolItem);
                     var toolNum = N(it.ToolNumber);
 
-                    if (string.IsNullOrWhiteSpace(toolItem) || string.IsNullOrWhiteSpace(toolNum) || string.IsNullOrWhiteSpace(asm))
+                    if (string.IsNullOrWhiteSpace(asm) ||
+                        string.IsNullOrWhiteSpace(itemName) ||
+                        string.IsNullOrWhiteSpace(toolNum))
                         continue;
+
+                    var reason = !string.IsNullOrWhiteSpace(reasonFromHeader)
+                        ? reasonFromHeader
+                        : N(it.Action);
 
                     await _inv.MarkUnavailableAsync(
                         asm,
-                        toolItem,
+                        itemName,
                         toolNum,
-                        reason: header.Reason ?? "Sent Out",
-                        dateUnavailable: dateInit,
-                        eta: eta
+                        reason: reason,
+                        dateUnavailable: DateTime.Today,
+                        eta: eta,
+                        location: vendor    // 🔹 now goes to Location column
                     );
+
+                    markedUnavailable++;
                 }
 
-                _service.MarkToolsSent(id, DateTime.Now);
+                _service.MarkToolsSent(id, DateTime.Today);
 
-                TempData["Success"] = $"Tools sent for Tool Work Order {id}.";
-                return RedirectToAction("Index", "ToolingInventory");
+                return Json(new
+                {
+                    ok = true,
+                    title = $"Tools sent for Tool Work Order {id}",
+                    html = $"<p>Marked {markedUnavailable} tool item(s) unavailable and set Date Sent to {DateTime.Today:MM-dd-yyyy}.</p>"
+                });
             }
             catch (Exception ex)
             {
-                TempData["Error"] = $"Failed to send tools: {ex.Message}";
-                return RedirectToAction("Index", "ToolingInventory");
+                Response.StatusCode = 500;
+                return Json(new { ok = false, error = ex.Message });
             }
         }
 

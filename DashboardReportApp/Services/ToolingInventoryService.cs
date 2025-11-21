@@ -227,48 +227,123 @@ WHERE Id=@Id;";
         }
 
         public async Task MarkUnavailableAsync(
-            string assembly, string toolItem, string toolNumber,
-            string reason, DateTime dateUnavailable, DateTime? eta)
+     string asm,
+     string toolItem,
+     string toolNumber,
+     string reason,
+     DateTime? dateUnavailable,
+     DateTime? eta,
+     string? location)
         {
-            // ensure a row exists; if not, create it
-            var existing = await FindByKeyAsync(assembly, toolItem, toolNumber);
-            if (existing == null)
-            {
-                var id = await CreateBasicAsync(assembly, toolItem, toolNumber);
-                existing = await GetByIdAsync(id);
-            }
-
-            existing!.Status = ToolStatus.Unavailable;
-            existing.UnavailableReason = reason;
-            existing.DateUnavailable = dateUnavailable;
-            existing.EstimatedAvailableDate = eta;
-
-            await UpdateAsync(existing);
-        }
-        // in ToolingInventoryService
-        public Task MarkAvailableAsync(string asm, string toolItem, string toolNumber)
-        {
-            const string sql = @"
-        UPDATE tooling_inventory
-        SET Status = @status,
-            UnavailableReason = NULL,
-            DateUnavailable = NULL,
-            EstimatedAvailableDate = NULL
-        WHERE AssemblyNumber = @asm
-          AND ToolItem = @toolItem
-          AND ToolNumber = @toolNumber;";
-
-            // assuming ToolStatus.Available = 1 – adjust if needed
             using var conn = new MySqlConnection(_conn);
-            conn.Open();
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@status", (int)ToolStatus.Available);
+            await conn.OpenAsync();
+
+            using var tx = await conn.BeginTransactionAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = (MySqlTransaction)tx;
+
+            // Use vendor if supplied, otherwise fallback
+            var loc = string.IsNullOrWhiteSpace(location) ? "Customer" : location;
+
+            // 🔹 First, try to UPDATE existing record
+            cmd.CommandText = @"
+UPDATE tooling_inventory
+SET
+    Status = 'Unavailable',
+    `Condition` = COALESCE(`Condition`, 'NeedsWork'),
+    UnavailableReason = @reason,
+    DateUnavailable = @dateUnavailable,
+    EstimatedAvailableDate = @eta,
+    Location = @loc
+WHERE AssemblyNumber = @asm
+  AND ToolItem       = @toolItem
+  AND ToolNumber     = @toolNumber;
+";
+
+            cmd.Parameters.Clear();
             cmd.Parameters.AddWithValue("@asm", asm);
             cmd.Parameters.AddWithValue("@toolItem", toolItem);
             cmd.Parameters.AddWithValue("@toolNumber", toolNumber);
-            cmd.ExecuteNonQuery();
+            cmd.Parameters.AddWithValue("@reason",
+                string.IsNullOrWhiteSpace(reason) ? "Sent out to customer" : reason);
+            cmd.Parameters.AddWithValue("@dateUnavailable",
+                (object?)dateUnavailable?.Date ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@eta",
+                (object?)eta?.Date ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@loc", loc);
 
-            return Task.CompletedTask;
+            var rows = await cmd.ExecuteNonQueryAsync();
+
+            // 🔹 If nothing was updated, INSERT a new row
+            if (rows == 0)
+            {
+                cmd.CommandText = @"
+INSERT INTO tooling_inventory
+    (AssemblyNumber, ToolNumber, Location, ToolItem, `Condition`, `Status`,
+     UnavailableReason, DateUnavailable, EstimatedAvailableDate)
+VALUES
+    (@asm, @toolNumber, @loc, @toolItem,
+     'NeedsWork', 'Unavailable',
+     @reason, @dateUnavailable, @eta);
+";
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
         }
+
+
+        public async Task MarkAvailableAsync(string asm, string toolItem, string toolNumber)
+        {
+            using var conn = new MySqlConnection(_conn);
+            await conn.OpenAsync();
+
+            using var tx = await conn.BeginTransactionAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = (MySqlTransaction)tx;
+
+            // 🔹 Try to UPDATE existing record
+            cmd.CommandText = @"
+UPDATE tooling_inventory
+SET
+    `Status` = 'Available',
+    `Condition` = COALESCE(`Condition`, 'ReadyForProduction'),
+    UnavailableReason = NULL,
+    DateUnavailable = NULL,
+    EstimatedAvailableDate = NULL,
+    Location = 'Toolroom'
+WHERE AssemblyNumber = @asm
+  AND ToolItem       = @toolItem
+  AND ToolNumber     = @toolNumber;
+";
+
+            cmd.Parameters.Clear();
+            cmd.Parameters.AddWithValue("@asm", asm);
+            cmd.Parameters.AddWithValue("@toolItem", toolItem);
+            cmd.Parameters.AddWithValue("@toolNumber", toolNumber);
+
+            var rows = await cmd.ExecuteNonQueryAsync();
+
+            // 🔹 If nothing was updated, INSERT a fresh Available record
+            if (rows == 0)
+            {
+                cmd.CommandText = @"
+INSERT INTO tooling_inventory
+    (AssemblyNumber, ToolNumber, Location, ToolItem, `Condition`, `Status`,
+     UnavailableReason, DateUnavailable, EstimatedAvailableDate)
+VALUES
+    (@asm, @toolNumber, 'Toolroom', @toolItem,
+     'ReadyForProduction', 'Available',
+     NULL, NULL, NULL);
+";
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+        }
+
+
     }
 }

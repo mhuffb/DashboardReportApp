@@ -111,26 +111,17 @@
                                     </a>
                                 }
 
-                                @* Send out tools / status *@
-                                @if (item.DateSent.HasValue)
+                                @if (showSendOutTools)
                                 {
-                                    <button class="btn btn-outline-secondary btn-sm" disabled>
-                                        Tools sent: @item.DateSent.Value.ToShortDateString()
-                                    </button>
-                                }
-                                else
-                                {
-                                    @if (showSendOutTools)
-                                    {
-                                        <a class="btn btn-outline-danger btn-sm"
-                                           href="@Url.Action("SendOutTools", "ToolingWorkOrder", new { Id = item.Id })"
-                                           data-bs-toggle="modal"
-                                           data-bs-target="#toolingWorkOrderModal">
-                                            Send Out Tools
-                                        </a>
-                                    }
-
-                                }
+                                    <button type="button"
+                                            class="btn btn-outline-danger btn-sm"
+                                            data-action="send-out-tools"
+                                            data-id="@item.Id">
+                                        @(item.DateSent.HasValue
+                                                                    ? $"Tools sent: {item.DateSent:MM-dd-yyyy}"
+                                                                    : "Send out tools")
+                        </button>
+                                                }
 
                                 @* Receive tools (complete work order) *@
                                 @if (item.DateReceived.HasValue)
@@ -593,44 +584,81 @@
             });
         </script>
         <script>
-            document.addEventListener('submit', async (e) => {
-                const form = e.target.closest('.tool-status-form');
-                if (!form) return;
+            document.addEventListener('click', async (e) => {
+                const btn = e.target.closest('button[data-action="send-out-tools"]');
+                if (!btn) return;
 
                 e.preventDefault();
 
-                const btn = form.querySelector('button[type="submit"]');
-                const prevDisabled = btn?.disabled;
-                const prevHtml     = btn?.innerHTML;
-                if (btn) { btn.disabled = true; btn.innerHTML = 'Working...'; }
+                const id = btn.dataset.id;
+                if (!id) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Missing Id',
+                        text: 'Could not determine Tool Work Order Id.'
+                    });
+                    return;
+                }
+
+                const token = getPageAntiforgeryToken();
+                if (!token) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Token error',
+                        text: 'Anti-forgery token not found on page.'
+                    });
+                    return;
+                }
+
+                const prevDisabled = btn.disabled;
+                const prevHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = 'Working...';
 
                 try {
-                    const res = await fetch(form.action, {
+                    const fd = new FormData();
+                    fd.append('__RequestVerificationToken', token);
+                    fd.append('id', id);
+
+                    const res = await fetch('/ToolingWorkOrder/SendOutTools', {
                         method: 'POST',
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
-                            'RequestVerificationToken': getPageAntiforgeryToken()
+                            'RequestVerificationToken': token
                         },
-                        body: new FormData(form),
+                        body: fd,
                         credentials: 'same-origin'
                     });
 
-                    const payload = await res.json().catch(() => ({}));
-                    if (!res.ok || !payload.ok) {
+                    const raw = await res.text();
+                    let data = null;
+                    try {
+                        data = raw ? JSON.parse(raw) : null;
+                    } catch {
+                        data = null; // not JSON
+                    }
+
+                    if (!res.ok || !data || data.ok !== true) {
+                        // Prefer server message if we have JSON with error
+                        const serverError = data && data.error
+                            ? data.error
+                            : raw?.slice(0, 600) || `HTTP ${res.status}`;
+
                         await Swal.fire({
                             icon: 'error',
-                            title: 'Update failed',
-                            text: payload.error || 'Unknown error'
+                            title: 'Send out failed',
+                            html: `<pre style="text-align:left;white-space:pre-wrap">${serverError}</pre>`
                         });
                         return;
                     }
 
                     await Swal.fire({
                         icon: 'success',
-                        title: payload.title || 'Updated',
-                        html: payload.html || ''
+                        title: data.title || 'Tools sent',
+                        html: data.html || ''
                     });
 
+                    // reload to refresh DateSent + button text + status
                     location.reload();
                 } catch (err) {
                     await Swal.fire({
@@ -639,13 +667,13 @@
                         text: err?.message || 'Unexpected error'
                     });
                 } finally {
-                    if (btn) {
-                        btn.disabled = prevDisabled ?? false;
-                        btn.innerHTML = prevHtml ?? 'Send out tools';
-                    }
+                    btn.disabled = prevDisabled;
+                    btn.innerHTML = prevHtml;
                 }
             });
         </script>
+
+
 
         <script>
             (function () {
