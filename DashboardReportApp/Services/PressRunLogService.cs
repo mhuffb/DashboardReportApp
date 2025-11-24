@@ -17,6 +17,8 @@ using Microsoft.Extensions.Configuration;
 using iText.Layout.Element;
 using iText.Layout.Borders;
 using System.IO;
+using iText.Barcodes;
+using iText.Kernel.Colors; // only needed if you use the overload with colors
 
 namespace DashboardReportApp.Services
 {
@@ -472,6 +474,64 @@ LIMIT 1";
 
                
                 document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
+
+                // ===== BARCODE BLOCK: Prod Number & Run =====
+                if (!string.IsNullOrWhiteSpace(model.ProdNumber) || !string.IsNullOrWhiteSpace(model.Run))
+                {
+                    var barcodeTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 3 }))
+                        .UseAllAvailableWidth()
+                        .SetMarginBottom(10);
+
+                    // ---- Production Number Barcode ----
+                    if (!string.IsNullOrWhiteSpace(model.ProdNumber))
+                    {
+                        var prodCode = new Barcode128(pdf);
+                        prodCode.SetCode(model.ProdNumber);
+                        prodCode.SetCodeType(Barcode128.CODE128);
+
+                        // simple form XObject (no colors needed)
+                        var prodImg = new Image(prodCode.CreateFormXObject(pdf))
+                            .SetHeight(40);
+
+                        barcodeTable.AddCell(
+                            new Cell()
+                                .Add(new Paragraph("Prod #: " + model.ProdNumber)
+                                    .SetFont(normalFont)
+                                    .SetFontSize(10))
+                                .SetBorder(Border.NO_BORDER));
+
+                        barcodeTable.AddCell(
+                            new Cell()
+                                .Add(prodImg)
+                                .SetBorder(Border.NO_BORDER));
+                    }
+
+                    // ---- Run Number Barcode ----
+                    if (!string.IsNullOrWhiteSpace(model.Run))
+                    {
+                        var runCode = new Barcode128(pdf);
+                        runCode.SetCode(model.Run);
+                        runCode.SetCodeType(Barcode128.CODE128);
+
+                        var runImg = new Image(runCode.CreateFormXObject(pdf))
+                            .SetHeight(40);
+
+                        barcodeTable.AddCell(
+                            new Cell()
+                                .Add(new Paragraph("Run: " + model.Run)
+                                    .SetFont(normalFont)
+                                    .SetFontSize(10))
+                                .SetBorder(Border.NO_BORDER));
+
+                        barcodeTable.AddCell(
+                            new Cell()
+                                .Add(runImg)
+                                .SetBorder(Border.NO_BORDER));
+                    }
+
+                    document.Add(barcodeTable);
+                }
+
 
                 string formattedStart = model.StartDateTime == default ? "" : model.StartDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
                 string formattedEnd = model.EndDateTime == null ? "" : model.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");

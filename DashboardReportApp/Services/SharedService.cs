@@ -470,6 +470,7 @@ ORDER BY p.measure_date DESC
 
         public void PrintFileToClosestPrinter(string pdfPath, int copies)
         {
+
             var context = _httpContextAccessor.HttpContext;
             string clientHostName = "Unknown";
             if (context != null)
@@ -477,7 +478,7 @@ ORDER BY p.measure_date DESC
                 string clientIp = context.Connection.RemoteIpAddress?.ToString();
 
                 // Reverse DNS (optional, and may be slow if DNS is not set up or unresponsive)
-                
+
                 try
                 {
                     if (!string.IsNullOrEmpty(clientIp))
@@ -494,11 +495,14 @@ ORDER BY p.measure_date DESC
                 // Prepare the log message. Adjust the text if needed.
                 string textToWrite = $"{DateTime.Now}: User name is {clientHostName} Ip is {clientIp}";
 
+                // Define the shared file path
+                string filePath = @"\\Sintergydc2024\vol1\vsp\testcomputername.txt";
+
                 try
                 {
-                    System.IO.File.AppendAllText(_clientHostLogPath, textToWrite + Environment.NewLine);
+                    // Append the text to the file (creates the file if it doesn't exist)
+                    System.IO.File.AppendAllText(filePath, textToWrite + Environment.NewLine);
                 }
-
                 catch (Exception ex)
                 {
                     // Consider proper logging or error handling here
@@ -515,7 +519,7 @@ ORDER BY p.measure_date DESC
             string printerName = GetPrinterForUser(clientHostName);
 
             PrintFileToSpecificPrinter(printerName, pdfPath, copies);
-           
+
         }
 
         private string GetPrinterForUser(string userName)

@@ -495,19 +495,19 @@ public class SinterRunLogService
     MIN(id) AS id,
     MIN(timestamp) AS timestamp,
     prodNumber,
-    GROUP_CONCAT(DISTINCT run) AS run,
-    GROUP_CONCAT(DISTINCT part) AS part,
+    GROUP_CONCAT(DISTINCT run)       AS run,
+    GROUP_CONCAT(DISTINCT part)      AS part,
     GROUP_CONCAT(DISTINCT component) AS component,
     MAX(endDateTime) AS endDateTime,
-    GROUP_CONCAT(DISTINCT operator) AS operator,
-    GROUP_CONCAT(DISTINCT machine) AS machine,
+    GROUP_CONCAT(DISTINCT operator)  AS operator,
+    GROUP_CONCAT(DISTINCT machine)   AS machine,
     MIN(pcsStart) AS pcsStart,
-    MAX(pcsEnd) AS pcsEnd,
+    MAX(pcsEnd)   AS pcsEnd,
     '' AS notes,
     skidNumber,
     MIN(startDateTime) AS startDateTime,
-    MIN(lotNumber)    AS lotNumber,
-    MIN(materialCode) AS materialCode
+    GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumber,
+    GROUP_CONCAT(DISTINCT materialCode) AS materialCode
 FROM (
     SELECT * FROM pressrun
     WHERE open = 1 
@@ -518,42 +518,38 @@ FROM (
       )
 ) AS filtered_pressrun
 GROUP BY prodNumber, skidNumber
-
-
 )
 
 UNION ALL
 
 (
     SELECT 
-        MIN(id) AS id,
-        MIN(timestamp) AS timestamp,
-        prodNumber,
-        '' AS run,
-        GROUP_CONCAT(DISTINCT part) AS part,
-        '' AS component,
-        MAX(endDateTime) AS endDateTime,
-        GROUP_CONCAT(DISTINCT operator) AS operator,
-        '' AS machine,
-        0 AS pcsStart,
-        MAX(pcs) AS pcsEnd,
-        '' AS notes,
-        skidNumber,
-        MAX(endDateTime) AS startDateTime,
-        '' AS lotNumber,
-        '' AS materialCode
-    FROM assembly
-    WHERE open = 1
-    GROUP BY prodNumber, skidNumber
+        MIN(a.id) AS id,
+        MIN(a.timestamp) AS timestamp,
+        a.prodNumber,
+        COALESCE(GROUP_CONCAT(DISTINCT pr.run), '')         AS run,
+        GROUP_CONCAT(DISTINCT a.part)                       AS part,
+        COALESCE(GROUP_CONCAT(DISTINCT pr.component), '')   AS component,
+        MAX(a.endDateTime)                                  AS endDateTime,
+        GROUP_CONCAT(DISTINCT a.operator)                   AS operator,
+        COALESCE(GROUP_CONCAT(DISTINCT pr.machine), '')     AS machine,
+        0                                                   AS pcsStart,
+        MAX(a.pcs)                                          AS pcsEnd,
+        ''                                                  AS notes,
+        a.skidNumber,
+        MAX(a.endDateTime)                                  AS startDateTime,
+        COALESCE(GROUP_CONCAT(DISTINCT pr.lotNumber), '')   AS lotNumber,
+        COALESCE(GROUP_CONCAT(DISTINCT pr.materialCode), '') AS materialCode
+    FROM assembly a
+    LEFT JOIN pressrun pr
+      ON pr.prodNumber = a.prodNumber
+     AND pr.part       = a.part
+    WHERE a.open = 1
+    GROUP BY a.prodNumber, a.skidNumber
 )
-
 
 ORDER BY part, skidNumber;
 ";
-
-
-
-
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
@@ -562,28 +558,18 @@ ORDER BY part, skidNumber;
 
         while (await reader.ReadAsync())
         {
-            // Retrieve the component value (from pressrun records; assembly rows will have empty string)
-            string component = reader["component"]?.ToString() ?? "N/A";
-
-            // If the component contains "C" (case-insensitive), skip this record.
-            // (This condition will typically apply only to pressrun rows.)
-            if (!string.IsNullOrEmpty(component) && component.IndexOf("C", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                continue;
-            }
-
-            // Retrieve the part value
             string part = reader["part"]?.ToString() ?? "N/A";
             string lotNumber = reader["lotNumber"]?.ToString() ?? "";
             string materialCode = reader["materialCode"]?.ToString() ?? "";
+
             openGreenSkids.Add(new PressRunLogModel
             {
                 Id = reader.GetInt32("id"),
                 Timestamp = reader.GetDateTime("timestamp"),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
-                Run = reader["run"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "",
                 Part = part,
-                Component = component,
+                Component = reader["component"]?.ToString() ?? "",
                 EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
                                ? (DateTime?)null
                                : reader.GetDateTime("endDateTime"),
@@ -604,6 +590,7 @@ ORDER BY part, skidNumber;
 
         return openGreenSkids;
     }
+
     // Services/SinterRunLogService.cs  (additions)
 
     public async Task<int> GetRunsCountAsync(string? search = null)
@@ -631,9 +618,8 @@ ORDER BY part, skidNumber;
     }
 
     public async Task<List<SinterRunSkid>> GetRunsPageAsync(
-        int page, int pageSize, string? sort = "id", string? dir = "DESC", string? search = null)
+     int page, int pageSize, string? sort = "id", string? dir = "DESC", string? search = null)
     {
-        // Whitelist sort columns to avoid SQL injection
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     { "id","timestamp","prodNumber","run","part","oven","startDateTime","endDateTime","operator","skidNumber","pcs" };
         if (string.IsNullOrWhiteSpace(sort) || !allowed.Contains(sort)) sort = "id";
@@ -642,29 +628,41 @@ ORDER BY part, skidNumber;
         int offset = Math.Max(0, (page - 1)) * Math.Max(1, pageSize);
 
         string sql = $@"
-    SELECT id,
-           timestamp,
-           operator,
-           prodNumber,
-           run,
-           part,
-           component,
-           lotNumber,
-           materialCode,
-           oven,
-           process,
-           startDateTime,
-           endDateTime,
-           notes,
-           open,
-           skidNumber,
-           pcs
-    FROM sintertime
+    SELECT 
+        st.id,
+        st.timestamp,
+        st.operator,
+        st.prodNumber,
+        COALESCE(st.run, prAgg.runs)          AS run,
+        st.part,
+        COALESCE(st.component,    prAgg.components)    AS component,
+        COALESCE(st.lotNumber,    prAgg.lotNumbers)    AS lotNumber,
+        COALESCE(st.materialCode, prAgg.materialCodes) AS materialCode,
+        st.oven,
+        st.process,
+        st.startDateTime,
+        st.endDateTime,
+        st.notes,
+        st.open,
+        st.skidNumber,
+        st.pcs
+    FROM sintertime st
+    LEFT JOIN (
+        SELECT 
+            prodNumber,
+            part,
+            GROUP_CONCAT(DISTINCT run)          AS runs,
+            GROUP_CONCAT(DISTINCT component)    AS components,
+            GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumbers,
+            GROUP_CONCAT(DISTINCT materialCode) AS materialCodes
+        FROM pressrun
+        GROUP BY prodNumber, part
+    ) prAgg
+      ON prAgg.prodNumber = st.prodNumber
+     AND prAgg.part       = st.part
     /**where**/
     ORDER BY {sort} {dir}
     LIMIT @take OFFSET @skip";
-
-
 
         var where = new List<string>();
         var parms = new List<MySqlParameter>
@@ -675,7 +673,7 @@ ORDER BY part, skidNumber;
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            where.Add("(prodNumber LIKE @q OR run LIKE @q OR part LIKE @q OR oven LIKE @q OR operator LIKE @q)");
+            where.Add("(st.prodNumber LIKE @q OR COALESCE(st.run, prAgg.runs) LIKE @q OR st.part LIKE @q OR st.oven LIKE @q OR st.operator LIKE @q)");
             parms.Add(new MySqlParameter("@q", $"%{search}%"));
         }
         if (where.Count > 0) sql = sql.Replace("/**where**/", "WHERE " + string.Join(" AND ", where));
@@ -693,61 +691,74 @@ ORDER BY part, skidNumber;
             {
                 Id = reader.GetInt32("id"),
                 Timestamp = reader.IsDBNull(reader.GetOrdinal("timestamp"))
-                       ? DateTime.MinValue
-                       : reader.GetDateTime("timestamp"),
-                Operator = reader["operator"] as string,
+                           ? DateTime.MinValue
+                           : reader.GetDateTime("timestamp"),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
                 Part = reader["part"]?.ToString() ?? "N/A",
-                Component = reader["component"] as string,
-                LotNumber = reader["lotNumber"] as string,      // 👈 NEW
-                MaterialCode = reader["materialCode"] as string, // 👈 NEW
-                Machine = reader["oven"] as string,
-                Process = reader["process"] as string,
+                Machine = reader["oven"]?.ToString(),
+                Component = reader["component"]?.ToString(),
+                LotNumber = reader["lotNumber"]?.ToString(),
+                MaterialCode = reader["materialCode"]?.ToString(),
+                Process = reader["process"]?.ToString(),
+                Operator = reader["operator"]?.ToString(),
                 StartDateTime = reader.IsDBNull(reader.GetOrdinal("startDateTime"))
-                           ? DateTime.MinValue
-                           : reader.GetDateTime("startDateTime"),
+                               ? DateTime.MinValue
+                               : reader.GetDateTime("startDateTime"),
                 EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                           ? (DateTime?)null
-                           : reader.GetDateTime("endDateTime"),
+                               ? (DateTime?)null
+                               : reader.GetDateTime("endDateTime"),
                 Notes = reader["notes"] as string,
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = reader["pcs"] != DBNull.Value ? reader.GetInt32("pcs") : 0
             });
-
-
         }
+
         return items;
     }
+
 
     // Explicit open sinter runs (don't rely on paged list)
     public async Task<List<SinterRunSkid>> GetOpenSinterRunsAsync()
     {
         var list = new List<SinterRunSkid>();
+
         string sql = @"
-    SELECT id,
-           timestamp,
-           operator,
-           prodNumber,
-           run,
-           part,
-           component,
-           lotNumber,
-           materialCode,
-           oven,
-           process,
-           startDateTime,
-           endDateTime,
-           notes,
-           open,
-           skidNumber,
-           pcs
-    FROM sintertime
-    WHERE endDateTime IS NULL
-    ORDER BY id DESC";
-
-
+    SELECT 
+        st.id,
+        st.timestamp,
+        st.operator,
+        st.prodNumber,
+        COALESCE(st.run, prAgg.runs)          AS run,
+        st.part,
+        COALESCE(st.component, prAgg.components)    AS component,
+        COALESCE(st.lotNumber, prAgg.lotNumbers)    AS lotNumber,
+        COALESCE(st.materialCode, prAgg.materialCodes) AS materialCode,
+        st.oven,
+        st.process,
+        st.startDateTime,
+        st.endDateTime,
+        st.notes,
+        st.open,
+        st.skidNumber,
+        st.pcs
+    FROM sintertime st
+    LEFT JOIN (
+        SELECT 
+            prodNumber,
+            part,
+            GROUP_CONCAT(DISTINCT run)          AS runs,
+            GROUP_CONCAT(DISTINCT component)    AS components,
+            GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumbers,
+            GROUP_CONCAT(DISTINCT materialCode) AS materialCodes
+        FROM pressrun
+        GROUP BY prodNumber, part
+    ) prAgg
+      ON prAgg.prodNumber = st.prodNumber
+     AND prAgg.part       = st.part
+    WHERE st.endDateTime IS NULL
+    ORDER BY st.id DESC";
 
         await using var conn = new MySqlConnection(_connectionStringMySQL);
         await conn.OpenAsync();
@@ -769,15 +780,16 @@ ORDER BY part, skidNumber;
                 Machine = reader["oven"]?.ToString(),
                 Process = reader["process"]?.ToString(),
                 StartDateTime = !reader.IsDBNull("startDateTime") ? reader.GetDateTime("startDateTime") : DateTime.MinValue,
-                EndDateTime = null,
+                EndDateTime = reader.IsDBNull("endDateTime") ? (DateTime?)null : reader.GetDateTime("endDateTime"),
                 Notes = reader["notes"]?.ToString(),
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
             });
-
         }
+
         return list;
     }
+
 
 }
