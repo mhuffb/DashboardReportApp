@@ -308,7 +308,7 @@ VALUES
 UPDATE tooling_inventory
 SET
     `Status` = 'Available',
-    `Condition` = COALESCE(`Condition`, 'ReadyForProduction'),
+    `Condition` = 'ReadyForProduction',
     UnavailableReason = NULL,
     DateUnavailable = NULL,
     EstimatedAvailableDate = NULL,

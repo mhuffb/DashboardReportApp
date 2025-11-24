@@ -7,6 +7,8 @@
 
 10/27/25 
 1. Make print tag option on assembly page
+2. Add preview hold tag button on holdtag page
+3. schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
 
 Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
@@ -25,21 +27,8 @@ In assembly get the lotnumber and materialcode from pressrun
 5. show lot number and materialcode in molding dashboard and does it have to be react?
 
 
-schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
-
-tooling work order
-xmake it so you can type in vendor and add to list to choose from.
-xprint packing slip when create packing slip is clicked and configure the printer in appsettings.json.
-xif fitting/setting choose reference po from open pos for that part.
-xallow attaching pictures/videos in new tool work order modal and show preview button in all tool work orders table that when clicked shows the pictures / video in a modal.
-
-
-xap@sintergy.net group for request po
-
 
 tooling inv
-xmake tool number required
-
-for the create packing slip button show if packing slip was created. make it say either packing slip needs created or packing slip created on <date>. for complete work order button i want it to 
-say receive tools instead. I always want the tooling to be marked available if receiving the tools. i need another button that says send out tools that will mark it unavailable. make it say tools sent: <date> if already sent
-
+make the ability to attach images/videos in the add for assembly modal and edit tooling inventory modal. 
+if tooling is marked as questionable, email tooling mananger asking to review and make a decision. if tooling is okay tell manager to update condition to ReadyForProduction. 
+If not okay tell them to create a new tool work order to fix the tooling. make a way to view the image by adding a preview button next to the edit button in tooling inventory table. 
