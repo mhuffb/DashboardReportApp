@@ -25,7 +25,7 @@ In assembly get the lotnumber and materialcode from pressrun
 3. On holdtag display the mix lot and mix code from pressrun
 4. Seperate quantity of holdtags and quantity of on hold
 5. show lot number and materialcode in molding dashboard and does it have to be react?
-
+6. Add production # and run # barcodes to tracer tag
 
 
 tooling inv
