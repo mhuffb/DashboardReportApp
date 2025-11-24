@@ -475,73 +475,83 @@ LIMIT 1";
                
                 document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
 
-                // ===== BARCODE BLOCK: Prod Number & Run =====
-                if (!string.IsNullOrWhiteSpace(model.ProdNumber) || !string.IsNullOrWhiteSpace(model.Run))
-                {
-                    var barcodeTable = new Table(UnitValue.CreatePercentArray(new float[] { 1, 3 }))
-                        .UseAllAvailableWidth()
-                        .SetMarginBottom(10);
-
-                    // ---- Production Number Barcode ----
-                    if (!string.IsNullOrWhiteSpace(model.ProdNumber))
-                    {
-                        var prodCode = new Barcode128(pdf);
-                        prodCode.SetCode(model.ProdNumber);
-                        prodCode.SetCodeType(Barcode128.CODE128);
-
-                        // simple form XObject (no colors needed)
-                        var prodImg = new Image(prodCode.CreateFormXObject(pdf))
-                            .SetHeight(40);
-
-                        barcodeTable.AddCell(
-                            new Cell()
-                                .Add(new Paragraph("Prod #: " + model.ProdNumber)
-                                    .SetFont(normalFont)
-                                    .SetFontSize(10))
-                                .SetBorder(Border.NO_BORDER));
-
-                        barcodeTable.AddCell(
-                            new Cell()
-                                .Add(prodImg)
-                                .SetBorder(Border.NO_BORDER));
-                    }
-
-                    // ---- Run Number Barcode ----
-                    if (!string.IsNullOrWhiteSpace(model.Run))
-                    {
-                        var runCode = new Barcode128(pdf);
-                        runCode.SetCode(model.Run);
-                        runCode.SetCodeType(Barcode128.CODE128);
-
-                        var runImg = new Image(runCode.CreateFormXObject(pdf))
-                            .SetHeight(40);
-
-                        barcodeTable.AddCell(
-                            new Cell()
-                                .Add(new Paragraph("Run: " + model.Run)
-                                    .SetFont(normalFont)
-                                    .SetFontSize(10))
-                                .SetBorder(Border.NO_BORDER));
-
-                        barcodeTable.AddCell(
-                            new Cell()
-                                .Add(runImg)
-                                .SetBorder(Border.NO_BORDER));
-                    }
-
-                    document.Add(barcodeTable);
-                }
-
-
                 string formattedStart = model.StartDateTime == default ? "" : model.StartDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
                 string formattedEnd = model.EndDateTime == null ? "" : model.EndDateTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
                 string id = model.Id.ToString();
 
-                document.Add(new Paragraph("Order of Operations:")
+                // ----- Order of Ops header with inline barcodes -----
+
+                // Create barcodes
+                var prodBarcode = new Barcode128(pdf);
+                prodBarcode.SetCode(model.ProdNumber ?? "");
+                prodBarcode.SetCodeType(Barcode128.CODE128);
+                Image prodBarcodeImg = new Image(prodBarcode.CreateFormXObject(pdf));
+
+                var runBarcode = new Barcode128(pdf);
+                runBarcode.SetCode(model.Run ?? "");
+                runBarcode.SetCodeType(Barcode128.CODE128);
+                Image runBarcodeImg = new Image(runBarcode.CreateFormXObject(pdf));
+
+                // Make them smaller
+                float barcodeScale = 0.6f;   // try 0.5 or 0.4 if you want even smaller
+
+                prodBarcodeImg.SetAutoScale(false);
+                prodBarcodeImg.Scale(barcodeScale, barcodeScale);
+                prodBarcodeImg.SetHorizontalAlignment(HorizontalAlignment.CENTER);
+
+                runBarcodeImg.SetAutoScale(false);
+                runBarcodeImg.Scale(barcodeScale, barcodeScale);
+                runBarcodeImg.SetHorizontalAlignment(HorizontalAlignment.CENTER);
+
+                // 3-column table: Prod barcode (left) / title (center) / Run barcode (right)
+                var headerTable1 = new Table(UnitValue.CreatePercentArray(new float[] { 2, 3, 2 }))
+                    .UseAllAvailableWidth()
+                    .SetMarginBottom(10);
+
+                // LEFT: Prod # label directly above barcode, centered
+                var leftCell = new Cell()
+                    .SetBorder(Border.NO_BORDER)
+                    .SetTextAlignment(TextAlignment.CENTER);
+
+                leftCell.Add(new Paragraph($"Prod #: {model.ProdNumber}")
+                    .SetFont(normalFont)
+                    .SetFontSize(10)
+                    .SetTextAlignment(TextAlignment.CENTER));
+
+                leftCell.Add(prodBarcodeImg);
+                headerTable1.AddCell(leftCell);
+
+                // CENTER: "Order of Operations:"
+                var middleCell = new Cell()
+                    .SetBorder(Border.NO_BORDER)
+                    .SetTextAlignment(TextAlignment.CENTER)
+                    .SetVerticalAlignment(VerticalAlignment.MIDDLE);
+
+                middleCell.Add(new Paragraph("Order of Operations:")
                     .SetFont(boldFont)
                     .SetFontSize(14)
-                    .SetTextAlignment(TextAlignment.CENTER)
-                    .SetMarginBottom(2));
+                    .SetTextAlignment(TextAlignment.CENTER));
+
+                headerTable1.AddCell(middleCell);
+
+                // RIGHT: Run label directly above barcode, centered
+                var rightCell = new Cell()
+                    .SetBorder(Border.NO_BORDER)
+                    .SetTextAlignment(TextAlignment.CENTER);
+
+                rightCell.Add(new Paragraph($"Run: {model.Run}")
+                    .SetFont(normalFont)
+                    .SetFontSize(10)
+                    .SetTextAlignment(TextAlignment.CENTER));
+
+                rightCell.Add(runBarcodeImg);
+                headerTable1.AddCell(rightCell);
+
+                // Add the whole header block
+                document.Add(headerTable1);
+
+
+
 
                 foreach (var op in operations)
                 {
@@ -610,26 +620,46 @@ LIMIT 1";
                         string qcc_file_desc = await _sharedService.GetMostCurrentProlinkPart(part);
                         DateTime? endDt = model.EndDateTime ?? DateTime.Now;
 
-                        DataTable partFactorDetails = await _sharedService.GetLatestPartFactorDetailsAsync(qcc_file_desc, null, null);
+                      
+
+                        // --- Part factor details (lot & mix) ---
+                        string pfMixLotLabel = "Mix Lot #";
+                        string pfMixLotValue = null;
+                        string pfMixNoLabel = "Mix No";
+                        string pfMixNoValue = null;
+
+                        DataTable partFactorDetails = await _sharedService
+                            .GetLatestPartFactorDetailsAsync(qcc_file_desc, null, null);
 
                         if (partFactorDetails != null && partFactorDetails.Rows.Count >= 4)
                         {
+                            // Row 2: Mix Lot #   | <value>
+                            // Row 3: Mix No      | <value>
+                            DataRow lotRow = partFactorDetails.Rows[2];
+                            DataRow mixRow = partFactorDetails.Rows[3];
+
+                            pfMixLotLabel = lotRow[0]?.ToString() ?? "Mix Lot #";
+                            pfMixLotValue = lotRow[1]?.ToString() ?? "";
+
+                            pfMixNoLabel = mixRow[0]?.ToString() ?? "Mix No";
+                            pfMixNoValue = mixRow[1]?.ToString() ?? "";
+
+                            // Optional: keep your little 4-cell header table if you like
                             Table headerTable3 = new Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }))
                                 .UseAllAvailableWidth()
                                 .SetMarginBottom(10)
                                 .SetBorder(Border.NO_BORDER);
 
-                            for (int rowIndex = 2; rowIndex <= 3; rowIndex++)
-                            {
-                                DataRow row = partFactorDetails.Rows[rowIndex];
-                                string mixLot = row[0].ToString();
-                                string mixNumber = row[1].ToString();
+                            headerTable3.AddCell(new Cell().Add(new Paragraph(pfMixLotLabel)
+                                .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
+                            headerTable3.AddCell(new Cell().Add(new Paragraph(pfMixLotValue)
+                                .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
 
-                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixLot)
-                                    .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
-                                headerTable3.AddCell(new Cell().Add(new Paragraph(mixNumber)
-                                    .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
-                            }
+                            headerTable3.AddCell(new Cell().Add(new Paragraph(pfMixNoLabel)
+                                .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
+                            headerTable3.AddCell(new Cell().Add(new Paragraph(pfMixNoValue)
+                                .SetFont(normalFont).SetFontSize(12)).SetBorder(Border.NO_BORDER));
+
                             document.Add(headerTable3);
                         }
                         else
@@ -638,13 +668,81 @@ LIMIT 1";
                                 .SetFont(normalFont).SetMarginBottom(10));
                         }
 
+
                         DataTable statistics = await _sharedService.GetStatisticsAsync(qcc_file_desc, model.StartDateTime);
-                        document.Add(new Paragraph("Statistics:")
+
+                        // Fallbacks if part-factor data is missing
+                        string lotForBarcode = !string.IsNullOrWhiteSpace(pfMixLotValue)
+                            ? pfMixLotValue
+                            : (string.IsNullOrWhiteSpace(model.LotNumber) ? "" : model.LotNumber);
+
+                        string mixForBarcode = !string.IsNullOrWhiteSpace(pfMixNoValue)
+                            ? pfMixNoValue
+                            : (string.IsNullOrWhiteSpace(model.MaterialCode) ? "" : model.MaterialCode);
+
+                        // Build barcodes only if we actually have values
+                        Image lotBarcodeImg = null;
+                        Image mixBarcodeImg = null;
+
+                        if (!string.IsNullOrWhiteSpace(lotForBarcode))
+                        {
+                            var lotBarcode = new Barcode128(pdf);
+                            lotBarcode.SetCode(lotForBarcode);
+                            lotBarcode.SetCodeType(Barcode128.CODE128);
+                            lotBarcodeImg = new Image(lotBarcode.CreateFormXObject(pdf))
+                                .ScaleToFit(90, 25)
+                                .SetHorizontalAlignment(HorizontalAlignment.CENTER);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(mixForBarcode))
+                        {
+                            var mixBarcode = new Barcode128(pdf);
+                            mixBarcode.SetCode(mixForBarcode);
+                            mixBarcode.SetCodeType(Barcode128.CODE128);
+                            mixBarcodeImg = new Image(mixBarcode.CreateFormXObject(pdf))
+                                .ScaleToFit(90, 25)
+                                .SetHorizontalAlignment(HorizontalAlignment.CENTER);
+                        }
+
+                        // 3-column “Statistics” header row with barcodes inline
+                        var statsHeader = new Table(UnitValue.CreatePercentArray(new float[] { 2, 3, 2 }))
+                            .UseAllAvailableWidth()
+                            .SetMarginTop(10)
+                            .SetMarginBottom(10);
+
+                        // LEFT: Lot (label + value) over barcode
+                        var statsLeft = new Cell().SetBorder(Border.NO_BORDER)
+                                                  .SetTextAlignment(TextAlignment.CENTER);
+                        statsLeft.Add(new Paragraph($"{pfMixLotLabel}: {lotForBarcode}")
+                            .SetFont(normalFont).SetFontSize(10)
+                            .SetTextAlignment(TextAlignment.CENTER));
+                        if (lotBarcodeImg != null)
+                            statsLeft.Add(lotBarcodeImg);
+                        statsHeader.AddCell(statsLeft);
+
+                        // MIDDLE: “Statistics:”
+                        var statsMiddle = new Cell().SetBorder(Border.NO_BORDER)
+                                                    .SetTextAlignment(TextAlignment.CENTER)
+                                                    .SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                        statsMiddle.Add(new Paragraph("Statistics:")
                             .SetFont(boldFont)
                             .SetFontSize(14)
-                            .SetTextAlignment(TextAlignment.CENTER)
-                            .SetMarginTop(10)
-                            .SetMarginBottom(10));
+                            .SetTextAlignment(TextAlignment.CENTER));
+                        statsHeader.AddCell(statsMiddle);
+
+                        // RIGHT: Mix (label + value) over barcode
+                        var statsRight = new Cell().SetBorder(Border.NO_BORDER)
+                                                   .SetTextAlignment(TextAlignment.CENTER);
+                        statsRight.Add(new Paragraph($"{pfMixNoLabel}: {mixForBarcode}")
+                            .SetFont(normalFont).SetFontSize(10)
+                            .SetTextAlignment(TextAlignment.CENTER));
+                        if (mixBarcodeImg != null)
+                            statsRight.Add(mixBarcodeImg);
+                        statsHeader.AddCell(statsRight);
+
+                        document.Add(statsHeader);
+
+
 
                         if (statistics != null && statistics.Rows.Count > 0)
                         {
