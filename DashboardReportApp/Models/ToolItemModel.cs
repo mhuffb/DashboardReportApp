@@ -22,6 +22,13 @@ namespace DashboardReportApp.Models
         public string? UnavailableReason { get; set; }
         public DateTime? DateUnavailable { get; set; }
         public DateTime? EstimatedAvailableDate { get; set; }
-       
+        // Models/ToolItemModel.cs
+
+        public string? FileAttachment1 { get; set; }
+
+        // This is the uploaded file from the Add/Edit modal
+        public IFormFile? FileAttachment1Upload { get; set; }
+
+
     }
 }

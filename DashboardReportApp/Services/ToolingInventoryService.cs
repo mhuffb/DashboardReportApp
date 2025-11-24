@@ -58,19 +58,24 @@ namespace DashboardReportApp.Services
 
         private const string SelectCols = @"
 SELECT Id, AssemblyNumber, ToolNumber, Location, ToolItem,
-       `Condition`, `Status`, UnavailableReason, DateUnavailable, EstimatedAvailableDate
+       `Condition`, `Status`, UnavailableReason, DateUnavailable, EstimatedAvailableDate,
+       FileAttachment1
 FROM tooling_inventory";
+
 
         public async Task<int> CreateAsync(ToolItemModel m)
         {
             const string sql = @"
 INSERT INTO tooling_inventory
 (AssemblyNumber, ToolNumber, Location, ToolItem, `Condition`, `Status`,
- UnavailableReason, DateUnavailable, EstimatedAvailableDate)
+ UnavailableReason, DateUnavailable, EstimatedAvailableDate,
+ FileAttachment1)
 VALUES
 (@AssemblyNumber, @ToolNumber, @Location, @ToolItem, @Condition, @Status,
- @UnavailableReason, @DateUnavailable, @EstimatedAvailableDate);
+ @UnavailableReason, @DateUnavailable, @EstimatedAvailableDate,
+ @FileAttachment1);
 SELECT LAST_INSERT_ID();";
+
 
             await using var conn = new MySqlConnection(_conn);
             await conn.OpenAsync();
@@ -94,8 +99,10 @@ UPDATE tooling_inventory SET
  `Status`=@Status,
  UnavailableReason=@UnavailableReason,
  DateUnavailable=@DateUnavailable,
- EstimatedAvailableDate=@EstimatedAvailableDate
+ EstimatedAvailableDate=@EstimatedAvailableDate,
+ FileAttachment1=@FileAttachment1
 WHERE Id=@Id;";
+
 
             await using var conn = new MySqlConnection(_conn);
             await conn.OpenAsync();
@@ -121,6 +128,8 @@ WHERE Id=@Id;";
             cmd.Parameters.AddWithValue("@UnavailableReason", (object?)m.UnavailableReason ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DateUnavailable", (object?)m.DateUnavailable ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@EstimatedAvailableDate", (object?)m.EstimatedAvailableDate ?? DBNull.Value);
+
+            cmd.Parameters.AddWithValue("@FileAttachment1", (object?)m.FileAttachment1 ?? DBNull.Value);
         }
 
         private static ToolItemModel Map(MySqlDataReader r)
@@ -144,7 +153,7 @@ WHERE Id=@Id;";
             return new ToolItemModel
             {
                 Id = r.GetInt32("Id"),
-                AssemblyNumber = r.GetString("AssemblyNumber"), 
+                AssemblyNumber = r.GetString("AssemblyNumber"),
                 ToolNumber = r.GetString("ToolNumber"),
                 ToolItem = r.GetString("ToolItem"),
 
@@ -154,7 +163,9 @@ WHERE Id=@Id;";
 
                 UnavailableReason = S(r, "UnavailableReason"),
                 DateUnavailable = r["DateUnavailable"] == DBNull.Value ? null : r.GetDateTime("DateUnavailable"),
-                EstimatedAvailableDate = r["EstimatedAvailableDate"] == DBNull.Value ? null : r.GetDateTime("EstimatedAvailableDate")
+                EstimatedAvailableDate = r["EstimatedAvailableDate"] == DBNull.Value ? null : r.GetDateTime("EstimatedAvailableDate"),
+
+                FileAttachment1 = S(r, "FileAttachment1")
             };
         }
 

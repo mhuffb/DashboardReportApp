@@ -1,0 +1,66 @@
+﻿@model DashboardReportApp.Models.ToolItemModel
+@using System.IO
+
+<div class="container-fluid">
+    <h5 class="mb-3">
+        Tool Preview – @Model.AssemblyNumber @Model.ToolItem @Model.ToolNumber
+    </h5>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card bg-dark text-warning border-warning">
+                <div class="card-body">
+                    <div><strong>Assembly #:</strong> @Model.AssemblyNumber</div>
+                    <div><strong>Tool #:</strong> @Model.ToolNumber</div>
+                    <div><strong>Item:</strong> @Model.ToolItem</div>
+                    <div><strong>Condition:</strong> @Model.Condition</div>
+                    <div><strong>Status:</strong> @Model.Status</div>
+                    <div><strong>Location:</strong> @Model.Location</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            @if (!string.IsNullOrWhiteSpace(Model.FileAttachment1))
+            {
+                var ext = System.IO.Path.GetExtension(Model.FileAttachment1 ?? string.Empty)
+                ?.ToLowerInvariant() ?? "";
+
+
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" }.Contains(ext))
+                {
+                    <div class="mb-3">
+                        <h6>Image</h6>
+                        <img src="@Model.FileAttachment1"
+                             alt="Tool attachment"
+                             class="img-fluid border border-warning rounded" />
+                    </div>
+                }
+                else if (new[] { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm" }.Contains(ext))
+                {
+                    <div class="mb-3">
+                        <h6>Video</h6>
+                        <video src="@Model.FileAttachment1"
+                               class="w-100 border border-warning rounded"
+                               controls>
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        Attachment type not recognized as image or video.
+                        <a href="@Model.FileAttachment1" target="_blank" rel="noopener">Open file</a>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    No attachment file is associated with this tool.
+                </div>
+            }
+        </div>
+    </div>
+</div>

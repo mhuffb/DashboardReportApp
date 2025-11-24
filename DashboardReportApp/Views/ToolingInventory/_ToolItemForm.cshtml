@@ -6,8 +6,13 @@
     var toolItemList = ViewBag.ToolItemList as List<string> ?? new List<string>();
 }
 
-<form id="toolItemForm" method="post" asp-action="@action" asp-controller="ToolingInventory">
+<form id="toolItemForm"
+      asp-action="@(isEdit ? "Edit" : "Create")"
+      asp-controller="ToolingInventory"
+      method="post"
+      enctype="multipart/form-data">
     @Html.AntiForgeryToken()
+    @Html.HiddenFor(m => m.Id)
     @if (isEdit)
     {
         <input type="hidden" asp-for="Id" />
@@ -43,9 +48,18 @@
     <div class="row g-3">
         <div class="col-md-4">
             <label class="form-label" for="Condition">Condition</label>
+           
             <select class="form-select" asp-for="Condition" asp-items="Html.GetEnumSelectList<ToolCondition>()">
                 <option value="">(none)</option>
             </select>
+            @if (ViewBag.QuestionableNotifyTo != null)
+            {
+                <div class="form-text text-warning small mt-1">
+                    If <strong>Condition</strong> is changed to <strong>Questionable</strong>,
+                    an email notification will be sent to @ViewBag.QuestionableNotifyTo.
+                </div>
+            }
+
         </div>
         <div class="col-md-4">
             <label class="form-label" for="Status">Status</label>
@@ -75,7 +89,24 @@
             </div>
         </div>
     </div>
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <label asp-for="FileAttachment1Upload" class="form-label">
+                Image / Video Attachment (optional)
+            </label>
+            <input asp-for="FileAttachment1Upload"
+                   type="file"
+                   class="form-control"
+                   accept="image/*,video/*" />
 
+            @if (!string.IsNullOrWhiteSpace(Model.FileAttachment1))
+            {
+                <div class="mt-1 small text-muted">
+                    Current file: <a href="@Model.FileAttachment1" target="_blank" rel="noopener">@Model.FileAttachment1</a>
+                </div>
+            }
+        </div>
+    </div>
     <div class="d-flex gap-2 mt-4">
         @if (!isEdit)
         {
@@ -88,6 +119,7 @@
         }
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
     </div>
+
 </form>
 
 @section Scripts {

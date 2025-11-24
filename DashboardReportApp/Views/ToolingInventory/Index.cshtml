@@ -224,9 +224,21 @@
                                 </div>
                             }
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary js-edit" data-id="@t.Id">Edit</button>
+                        <td class="d-flex gap-1">
+                            @if (!string.IsNullOrWhiteSpace(t.FileAttachment1))
+                            {
+                                <button class="btn btn-sm btn-outline-info js-preview"
+                                        data-id="@t.Id">
+                                    Preview
+                                </button>
+                            }
+
+                            <button class="btn btn-sm btn-secondary js-edit" data-id="@t.Id">
+                                Edit
+                            </button>
                         </td>
+
+
                     </tr>
                 }
             </tbody>
@@ -312,6 +324,36 @@
               modal.show();
             });
           });
+
+                      // Open PREVIEW
+            document.querySelectorAll('.js-preview').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                if (btn.disabled) return;
+
+                const id = btn.dataset.id;
+                const modalEl = document.getElementById('toolModal');
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                const body = document.getElementById('toolModalBody');
+                const title = document.getElementById('toolModalTitle');
+
+                title.textContent = 'Tool Preview';
+
+                const url = '@Url.Action("Preview", "ToolingInventory")?id=' + encodeURIComponent(id);
+
+                const r = await fetch(url, {
+                  credentials: 'same-origin',
+                  headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                if (!r.ok) {
+                  console.error('Preview load failed', r.status);
+                  return;
+                }
+
+                body.innerHTML = await r.text();
+                modal.show();
+              });
+            });
 
           async function loadPartial(url) {
                         const r = await fetch(url, {
@@ -795,8 +837,18 @@
                 render();
               });
 
-              // initial render
-              render();
+                       // initial render
+            render();
+
+            // If we have an initial search (from ?asm=...), prefill and filter
+            const initialSearch = '@(ViewBag.InitialSearch ?? string.Empty)';
+            if (initialSearch && searchInput) {
+              searchInput.value = initialSearch;
+              applyFilter();
+            }
+
+            // If rows are added dynamically in the future, call applyFilter() again.
+
 
               // If rows are added dynamically in the future, call applyFilter() again.
             })();
