@@ -42,14 +42,35 @@ namespace DashboardReportApp.Services
 
         #region Public CRUD Methods
 
-        // ========== LOGIN ==========
-        /// <summary>Result returned by HandleLoginAsync so the UI knows what happened.</summary>
         public class LoginResult
         {
-            public int SkidNumber { get; set; }   // 1‑based
-            public bool NewSkid { get; set; }   // true = we created a new skid
-            public string Message { get; set; }   // “Logged in and started skid 1” …
+            public int SkidNumber { get; set; }      // 1-based
+            public bool NewSkid { get; set; }        // true = created a new skid
+            public string Message { get; set; } = "";
+
+            // 🔹 Override-related info
+            public bool RequiresOverride { get; set; }      // true => supervisor PIN needed
+            public bool OverrideUsed { get; set; }          // true => override applied (new or prior)
+            public string? Supervisor { get; set; }         // name from supervisors table
+            public string Code { get; set; } = "OK";        // "OK", "MATERIAL_MISMATCH", "BAD_PIN"
+            public string? ScheduledMaterial { get; set; }  // scheduled materialCode
+            public string? ScannedMaterial { get; set; }    // current mix materialCode
         }
+
+        public class StartSkidResult
+        {
+            public int SkidNumber { get; set; }      // skid that just started
+            public string Message { get; set; } = "";
+
+            // 🔹 Override-related info
+            public bool RequiresOverride { get; set; }
+            public bool OverrideUsed { get; set; }
+            public string? Supervisor { get; set; }
+            public string Code { get; set; } = "OK";        // "OK", "MATERIAL_MISMATCH", "BAD_PIN"
+            public string? ScheduledMaterial { get; set; }
+            public string? ScannedMaterial { get; set; }
+        }
+
 
         public async Task<(string LotNumber, string MaterialCode)?> GetCurrentMixForMachineAsync(string machine)
         {
@@ -82,27 +103,83 @@ namespace DashboardReportApp.Services
             return (lot, mat);
         }
 
-        /// <summary>Returned by HandleStartSkidAsync so the UI can tell the user what happened.</summary>
-        public class StartSkidResult
-        {
-            public int SkidNumber { get; set; }   // the skid that just started
-            public string Message { get; set; }   // e.g. "Started skid 4."
-        }
+
 
         // ========== START SKID ==========
         // ======================= START SKID (unchanged logic) ==================
-        public async Task<StartSkidResult> HandleStartSkidAsync(PressRunLogModel model, int pcsStart)
+        public async Task<StartSkidResult> HandleStartSkidAsync(PressRunLogModel model, int pcsStart, string? overridePin = null)
         {
             var result = new StartSkidResult();
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
-            // OPTION 2: get mix for this machine (last bag change on this press)
+            // Current mix for this machine
             var mixByMachine = await GetCurrentMixForMachineAsync(model.Machine);
             string mixLot = mixByMachine?.LotNumber;
             string mixCode = mixByMachine?.MaterialCode;
 
+            // Scheduled material
+            var scheduledCode = await GetScheduledMaterialCodeAsync(conn, model.Part ?? "", model.ProdNumber ?? "", model.Run ?? "");
+            var normSched = NormalizeMaterial(scheduledCode);
+            var normScan = NormalizeMaterial(mixCode);
+
+            bool mismatch = !string.IsNullOrEmpty(normSched)
+                            && !string.IsNullOrEmpty(normScan)
+                            && !normSched.Equals(normScan, StringComparison.Ordinal);
+
+            result.ScheduledMaterial = scheduledCode;
+            result.ScannedMaterial = mixCode;
+
+            bool isOverride = false;
+            string? overrideBy = null;
+            DateTime? overrideAt = null;
+            if (mismatch)
+            {
+                // 🔹 Check for any prior override in *either* table for this part/prod/run
+                var (hasOverride, existingSup) = await HasExistingOverrideAsync(
+                    model.Part ?? "",
+                    model.ProdNumber ?? "",
+                    model.Run ?? ""
+                );
+
+                if (hasOverride)
+                {
+                    // ✅ Already overridden previously, reuse it
+                    isOverride = true;
+                    overrideBy = existingSup;
+                    overrideAt = DateTime.Now;
+                    result.OverrideUsed = true;
+                    result.Supervisor = existingSup;
+                    result.Code = "PRIOR_OVERRIDE";
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(overridePin))
+                    {
+                        result.RequiresOverride = true;
+                        result.Code = "MATERIAL_MISMATCH";
+                        result.Message = $"Material {mixCode ?? "(none)"} does not match scheduled {scheduledCode}. Supervisor override required.";
+                        return result;
+                    }
+
+                    var (okPin, supName) = await VerifySupervisorPinAsync(overridePin);
+                    if (!okPin)
+                    {
+                        result.RequiresOverride = true;
+                        result.Code = "BAD_PIN";
+                        result.Message = "Invalid supervisor PIN.";
+                        return result;
+                    }
+
+                    isOverride = true;
+                    overrideBy = supName;
+                    overrideAt = DateTime.Now;
+                    result.OverrideUsed = true;
+                    result.Supervisor = supName;
+                    result.Code = "OK";
+                }
+            }
 
 
             // 1) Highest skid so far
@@ -137,11 +214,13 @@ namespace DashboardReportApp.Services
             // 3) Insert the next skid
             int newSkidNumber = (currentSkidNumber == 0) ? 1 : currentSkidNumber + 1;
             const string insertSql = @"
-    INSERT INTO pressrun
-          (run, part, component, startDateTime, operator,
-           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
-    VALUES (@run, @part, @component, NOW(), @operator,
-            @machine, @prod, @skid, @pcsStart, @lotNumber, @materialCode);";
+        INSERT INTO pressrun
+              (run, part, component, startDateTime, operator,
+               machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode,
+               isOverride, overrideBy, overrideAt)
+        VALUES (@run, @part, @component, NOW(), @operator,
+                @machine, @prod, @skid, @pcsStart, @lotNumber, @materialCode,
+                @isOverride, @overrideBy, @overrideAt);";
 
             using (var ins = new MySqlCommand(insertSql, conn))
             {
@@ -155,16 +234,33 @@ namespace DashboardReportApp.Services
                 ins.Parameters.AddWithValue("@pcsStart", pcsStart);
                 ins.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
                 ins.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
+                ins.Parameters.AddWithValue("@isOverride", isOverride);
+                ins.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
+                ins.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
                 await ins.ExecuteNonQueryAsync();
             }
 
             result.SkidNumber = newSkidNumber;
-            result.Message = $"Started skid {newSkidNumber}.";
+            result.Message = $"Started skid {newSkidNumber}.";
+
+            if (mismatch && result.OverrideUsed)
+            {
+                if (result.Code == "PRIOR_OVERRIDE")
+                {
+                    result.Message += $" (Material mismatch allowed by prior override from {result.Supervisor}).";
+                }
+                else
+                {
+                    result.Message += $" (Material mismatch overridden by {result.Supervisor}).";
+                }
+            }
+
             return result;
         }
 
+
         // =======================  LOGIN  =======================
-        public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m)
+        public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m, string? overridePin = null)
         {
             var result = new LoginResult();
 
@@ -172,22 +268,91 @@ namespace DashboardReportApp.Services
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
 
-            // OPTION 2: get mix by machine (last bag change for this press)
+            // Current mix on this press
             var mixByMachine = await GetCurrentMixForMachineAsync(m.Machine);
             string mixLot = mixByMachine?.LotNumber;
             string mixCode = mixByMachine?.MaterialCode;
 
+            // 🔹 Scheduled material for this part/prod/run
+            var scheduledCode = await GetScheduledMaterialCodeAsync(conn, m.Part ?? "", m.ProdNumber ?? "", m.Run ?? "");
+            var normSched = NormalizeMaterial(scheduledCode);
+            var normScan = NormalizeMaterial(mixCode);
+
+            bool mismatch = !string.IsNullOrEmpty(normSched)
+                            && !string.IsNullOrEmpty(normScan)
+                            && !normSched.Equals(normScan, StringComparison.Ordinal);
+
+            result.ScheduledMaterial = scheduledCode;
+            result.ScannedMaterial = mixCode;
+
+            bool isOverride = false;
+            string? overrideBy = null;
+            DateTime? overrideAt = null;
+
+            if (mismatch)
+            {
+                // 🔹 First: check if *any* prior override exists for this part/prod/run
+                var (hasOverride, existingSup) = await HasExistingOverrideAsync(
+                    m.Part ?? "",
+                    m.ProdNumber ?? "",
+                    m.Run ?? ""
+                );
+
+                if (hasOverride)
+                {
+                    // ✅ Already overridden somewhere (mixbagchange or pressrun), no new PIN
+                    isOverride = true;
+                    overrideBy = existingSup;
+                    overrideAt = DateTime.Now; // or keep null if you want to preserve original timestamp
+                    result.OverrideUsed = true;
+                    result.Supervisor = existingSup;
+                    result.Code = "PRIOR_OVERRIDE";
+                }
+                else
+                {
+                    // ❌ No prior override, so we need a PIN
+                    if (string.IsNullOrWhiteSpace(overridePin))
+                    {
+                        await tx.RollbackAsync();
+                        result.RequiresOverride = true;
+                        result.Code = "MATERIAL_MISMATCH";
+                        result.Message = $"Material {mixCode ?? "(none)"} does not match scheduled {scheduledCode}. Supervisor override required.";
+                        return result;
+                    }
+
+                    var (okPin, supName) = await VerifySupervisorPinAsync(overridePin);
+                    if (!okPin)
+                    {
+                        await tx.RollbackAsync();
+                        result.RequiresOverride = true;
+                        result.Code = "BAD_PIN";
+                        result.Message = "Invalid supervisor PIN.";
+                        return result;
+                    }
+
+                    isOverride = true;
+                    overrideBy = supName;
+                    overrideAt = DateTime.Now;
+                    result.OverrideUsed = true;
+                    result.Supervisor = supName;
+                    result.Code = "OK";
+                }
+            }
+
+
             // 🔐 Auto-logout any open main run on this machine
-            int pcsEndForPrev = m.PcsStart ?? 0; // use the current device count you read in the modal
+            int pcsEndForPrev = m.PcsStart ?? 0;
             var auto = await AutoLogoutIfMachineOccupiedAsync(conn, (MySqlTransaction)tx, m.Machine, pcsEndForPrev, m.Operator);
 
             // Always create the main run record (Skid 0)
             const string insertMain = @"
-    INSERT INTO pressrun
-          (operator, part, component, machine, prodNumber, run,
-           startDateTime, skidNumber, lotNumber, materialCode)
-    VALUES (@operator, @part, @component, @machine, @prod, @run,
-            @start, 0, @lotNumber, @materialCode);";
+        INSERT INTO pressrun
+              (operator, part, component, machine, prodNumber, run,
+               startDateTime, skidNumber, lotNumber, materialCode,
+               isOverride, overrideBy, overrideAt)
+        VALUES (@operator, @part, @component, @machine, @prod, @run,
+                @start, 0, @lotNumber, @materialCode,
+                @isOverride, @overrideBy, @overrideAt);";
 
             using (var cmd = new MySqlCommand(insertMain, conn, (MySqlTransaction)tx))
             {
@@ -200,15 +365,19 @@ namespace DashboardReportApp.Services
                 cmd.Parameters.AddWithValue("@start", m.StartDateTime);
                 cmd.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@isOverride", isOverride);
+                cmd.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Look at all skids for this run (same logic as before, but inside the tx)
+            // Skid logic (same as you had, but add override fields on insert)
             const string checkSkids = @"
         SELECT skidNumber, open
         FROM pressrun
         WHERE run = @run AND skidNumber > 0
         ORDER BY skidNumber;";
+
             var openSkidNumber = 0;
             var allClosed = true;
             var maxSkid = 0;
@@ -220,11 +389,20 @@ namespace DashboardReportApp.Services
                 while (await rdr.ReadAsync())
                 {
                     int skid = rdr.IsDBNull("skidNumber") ? 0 : rdr.GetInt32("skidNumber");
-                    bool isOpen = !rdr.IsDBNull("open") && rdr.GetBoolean("open");
+                    bool isOpenSkid = !rdr.IsDBNull("open") && rdr.GetBoolean("open");
                     if (skid > maxSkid) maxSkid = skid;
-                    if (isOpen) { openSkidNumber = skid; allClosed = false; }
+                    if (isOpenSkid) { openSkidNumber = skid; allClosed = false; }
                 }
             }
+
+            const string insertSkid = @"
+        INSERT INTO pressrun
+              (run, part, component, startDateTime, operator,
+               machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode,
+               isOverride, overrideBy, overrideAt)
+        VALUES (@run, @part, @component, NOW(), @operator,
+                @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode,
+                @isOverride, @overrideBy, @overrideAt);";
 
             if (allClosed)
             {
@@ -232,13 +410,6 @@ namespace DashboardReportApp.Services
                 result.SkidNumber = newSkid;
                 result.NewSkid = true;
                 result.Message = $"Logged in and started skid {newSkid}.";
-
-                const string insertSkid = @"
-    INSERT INTO pressrun
-          (run, part, component, startDateTime, operator,
-           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
-    VALUES (@run, @part, @component, NOW(), @operator,
-            @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode);";
 
                 using var newSkidCmd = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 newSkidCmd.Parameters.AddWithValue("@run", m.Run);
@@ -251,7 +422,9 @@ namespace DashboardReportApp.Services
                 newSkidCmd.Parameters.AddWithValue("@pcsStart", m.PcsStart);
                 newSkidCmd.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
                 newSkidCmd.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
-
+                newSkidCmd.Parameters.AddWithValue("@isOverride", isOverride);
+                newSkidCmd.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
+                newSkidCmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
                 await newSkidCmd.ExecuteNonQueryAsync();
             }
             else
@@ -259,13 +432,6 @@ namespace DashboardReportApp.Services
                 result.SkidNumber = openSkidNumber;
                 result.NewSkid = false;
                 result.Message = $"Logged in to existing skid {openSkidNumber}.";
-
-                const string insertSkid = @"
-    INSERT INTO pressrun
-          (run, part, component, startDateTime, operator,
-           machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode)
-    VALUES (@run, @part, @component, NOW(), @operator,
-            @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode);";
 
                 using var insert = new MySqlCommand(insertSkid, conn, (MySqlTransaction)tx);
                 insert.Parameters.AddWithValue("@run", m.Run);
@@ -278,12 +444,12 @@ namespace DashboardReportApp.Services
                 insert.Parameters.AddWithValue("@pcsStart", m.PcsStart);
                 insert.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
                 insert.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
-
-
+                insert.Parameters.AddWithValue("@isOverride", isOverride);
+                insert.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
+                insert.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync();
             }
 
-            // If we auto-logged someone out, append to the message
             if (auto.closed)
             {
                 var who = string.IsNullOrWhiteSpace(auto.prevOperator) ? "previous operator" : auto.prevOperator;
@@ -292,7 +458,7 @@ namespace DashboardReportApp.Services
 
             await tx.CommitAsync();
 
-            // Print tag for the just-started/continued skid (same as your original)
+            // Print tag (unchanged)
             var latestRecord = await GetPressRunRecordAsync(conn, m.Run, result.SkidNumber);
             if (latestRecord != null)
             {
@@ -300,12 +466,25 @@ namespace DashboardReportApp.Services
                 _sharedService.PrintFileToClosestPrinter(pdfFilePath, 1);
             }
 
+            // If there was a mismatch and we used override, append to message
+            if (mismatch && result.OverrideUsed)
+            {
+                if (result.Code == "PRIOR_OVERRIDE")
+                {
+                    result.Message += $" (Material mismatch allowed by prior override from {result.Supervisor}).";
+                }
+                else
+                {
+                    result.Message += $" (Material mismatch overridden by {result.Supervisor}).";
+                }
+            }
+
             return result;
         }
 
 
 
-      
+
 
 
         public async Task<string> GetMachineForRunAsync(int runId)
@@ -835,12 +1014,13 @@ LIMIT 1";
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
-       lotNumber, materialCode
+       lotNumber, materialCode, isOverride, overrideBy, overrideAt
 FROM pressrun
 WHERE run = @run
   AND skidNumber = @skidNumber
 ORDER BY id DESC
 LIMIT 1";
+
 
             using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@run", run);
@@ -862,6 +1042,12 @@ LIMIT 1";
         private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
         {
             var tsOrd = TryOrdinal(rdr, "timestamp");
+            var lotOrd = TryOrdinal(rdr, "lotNumber");
+            var matOrd = TryOrdinal(rdr, "materialCode");
+            var isOvOrd = TryOrdinal(rdr, "isOverride");
+            var ovByOrd = TryOrdinal(rdr, "overrideBy");
+            var ovAtOrd = TryOrdinal(rdr, "overrideAt");
+
             var model = new PressRunLogModel
             {
                 Id = rdr.GetInt32("id"),
@@ -879,10 +1065,118 @@ LIMIT 1";
                 Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap")) ? (int?)null : rdr.GetInt32("scrap"),
                 Notes = rdr["notes"]?.ToString(),
                 SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber")) ? 0 : rdr.GetInt32("skidNumber"),
-                LotNumber = rdr.IsDBNull(TryOrdinal(rdr, "lotNumber")) ? null : rdr["lotNumber"]?.ToString(),
-                MaterialCode = rdr.IsDBNull(TryOrdinal(rdr, "materialCode")) ? null : rdr["materialCode"]?.ToString()
+                LotNumber = lotOrd >= 0 && !rdr.IsDBNull(lotOrd) ? rdr["lotNumber"]?.ToString() : null,
+                MaterialCode = matOrd >= 0 && !rdr.IsDBNull(matOrd) ? rdr["materialCode"]?.ToString() : null,
+
+                // 🔹 new override fields
+                IsOverride = isOvOrd >= 0 && !rdr.IsDBNull(isOvOrd) && Convert.ToBoolean(rdr["isOverride"]),
+                OverrideBy = ovByOrd >= 0 && !rdr.IsDBNull(ovByOrd) ? rdr["overrideBy"]?.ToString() : null,
+                OverrideAt = ovAtOrd >= 0 && !rdr.IsDBNull(ovAtOrd) ? rdr.GetDateTime(ovAtOrd) : (DateTime?)null
             };
             return model;
+        }
+
+        // ---------- Material helpers & override checks ----------
+
+        private static string NormalizeMaterial(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            s = s.Trim().ToUpperInvariant();
+            s = s.Replace(" ", "");
+            while (s.Contains("--"))
+                s = s.Replace("--", "-");
+            return s;
+        }
+
+        /// <summary>
+        /// Get scheduled materialCode for this part/prod/run from schedule.
+        /// </summary>
+        private async Task<string?> GetScheduledMaterialCodeAsync(
+            MySqlConnection conn,
+            string part,
+            string prodNumber,
+            string run)
+        {
+            const string sql = @"
+        SELECT materialCode
+        FROM schedule
+        WHERE part = @part
+          AND prodNumber = @prod
+          AND run = @run
+        ORDER BY id DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part ?? "");
+            cmd.Parameters.AddWithValue("@prod", prodNumber ?? "");
+            cmd.Parameters.AddWithValue("@run", run ?? "");
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString();
+        }
+
+        /// <summary>
+        /// Check if there is a prior override in pressmixbagchange for the same
+        /// part/prod/run/materialCode.
+        /// </summary>
+        private async Task<(bool hasOverride, string? supervisor, DateTime? at)>
+            GetExistingMixOverrideAsync(
+                MySqlConnection conn,
+                string part,
+                string prodNumber,
+                string run,
+                string? materialCode)
+        {
+            if (string.IsNullOrWhiteSpace(materialCode))
+                return (false, null, null);
+
+            const string sql = @"
+        SELECT overrideBy, overrideAt
+        FROM pressmixbagchange
+        WHERE part = @part
+          AND prodNumber = @prod
+          AND run = @run
+          AND isOverride = 1
+          AND materialCode = @mat
+        ORDER BY overrideAt DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part ?? "");
+            cmd.Parameters.AddWithValue("@prod", prodNumber ?? "");
+            cmd.Parameters.AddWithValue("@run", run ?? "");
+            cmd.Parameters.AddWithValue("@mat", materialCode ?? "");
+
+            await using var rdr = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (!await rdr.ReadAsync())
+                return (false, null, null);
+
+            var sup = rdr["overrideBy"]?.ToString();
+            DateTime? at = rdr.IsDBNull(rdr.GetOrdinal("overrideAt"))
+                ? (DateTime?)null
+                : rdr.GetDateTime("overrideAt");
+
+            return (true, sup, at);
+        }
+
+        /// <summary>
+        /// Uses the same supervisors PIN logic as PressMixBagChangeService.
+        /// </summary>
+        private async Task<(bool ok, string? name)> VerifySupervisorPinAsync(string pin)
+        {
+            if (string.IsNullOrWhiteSpace(pin))
+                return (false, null);
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"SELECT name FROM supervisors WHERE pin = @pin LIMIT 1;";
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@pin", pin);
+
+            var result = await cmd.ExecuteScalarAsync();
+            if (result == null) return (false, null);
+            return (true, result.ToString());
         }
 
 
@@ -950,7 +1244,7 @@ ORDER BY part, run";
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
-       lotNumber, materialCode
+       lotNumber, materialCode, isOverride, overrideBy, overrideAt
 FROM pressrun
 WHERE endDateTime IS NULL";
 
@@ -1132,26 +1426,30 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
             var list = new List<PressRunLogModel>();
 
             const string sql = @"
-        SELECT 
-            id,
-            timestamp,
-            prodNumber,
-            run,
-            part,
-            component,
-            startDateTime,
-            endDateTime,
-            operator,
-            machine,
-            pcsStart,
-            pcsEnd,
-            scrap,
-            notes,
-            skidNumber,
-            lotNumber,
-            materialCode
-        FROM pressrun
-        ORDER BY startDateTime DESC;";
+    SELECT 
+        id,
+        timestamp,
+        prodNumber,
+        run,
+        part,
+        component,
+        startDateTime,
+        endDateTime,
+        operator,
+        machine,
+        pcsStart,
+        pcsEnd,
+        scrap,
+        notes,
+        skidNumber,
+        lotNumber,
+        materialCode,
+        isOverride,
+        overrideBy,
+        overrideAt
+    FROM pressrun
+    ORDER BY startDateTime DESC;";
+
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -1167,5 +1465,55 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
         }
 
         #endregion
+
+        public async Task<(bool hasOverride, string supervisorName)> HasExistingOverrideAsync(
+    string part,
+    string prodNumber,
+    string run)
+        {
+            static string S(object? o) => o?.ToString() ?? "";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+        SELECT overrideBy, overrideAt
+        FROM (
+            SELECT overrideBy, overrideAt
+            FROM pressmixbagchange
+            WHERE part = @part
+              AND prodNumber = @prod
+              AND run = @run
+              AND isOverride = 1
+
+            UNION ALL
+
+            SELECT overrideBy, overrideAt
+            FROM pressrun
+            WHERE part = @part
+              AND prodNumber = @prod
+              AND run = @run
+              AND isOverride = 1
+        ) x
+        WHERE overrideBy IS NOT NULL AND overrideBy <> ''
+        ORDER BY overrideAt DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part ?? "");
+            cmd.Parameters.AddWithValue("@prod", prodNumber ?? "");
+            cmd.Parameters.AddWithValue("@run", run ?? "");
+
+            await using var rdr = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (await rdr.ReadAsync())
+            {
+                var sup = S(rdr["overrideBy"]);
+                if (!string.IsNullOrWhiteSpace(sup))
+                    return (true, sup);
+            }
+
+            return (false, "");
+        }
+
     }
 }

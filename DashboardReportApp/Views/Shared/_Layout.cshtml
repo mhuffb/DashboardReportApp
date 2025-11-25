@@ -116,62 +116,7 @@
                 window.addEventListener('beforeunload', () => {
         if (window.__submittingForm) showSpinner();
                 });
-            /* --------------- press-run device counter forms --------------- */
-            function wireCountAndAjax(formId,cntId,chkId,machId){
-                const f=document.getElementById(formId); if(!f) return;
-                f.addEventListener('submit', async ev=>{
-                    if(f.dataset.submitted==='true'){ ev.preventDefault(); return; }
-                    ev.preventDefault(); f.dataset.submitted='true';
-
-                    /* optional device push */
-                    try{
-                        const cnt=document.getElementById(cntId);
-                        const chk=document.getElementById(chkId);
-                        const mach=document.getElementById(machId).value;
-                        const ip=(window.deviceIPs||{})[mach];
-                        const orig=cnt?.dataset.originalCount ?? '';
-                        if(chk?.checked && cnt && ip && cnt.value.trim()!==orig){
-                            await fetch(`http://${ip}/update`,{
-                                method:'POST',
-                                headers:{'Content-Type':'application/x-www-form-urlencoded'},
-                                body:`count_value=${encodeURIComponent(cnt.value)}`
-                            });
-                        }
-                    }catch(e){ console.warn('Device push failed:',e); }
-
-                    /* main AJAX submit */
-                    try{
-                        const fd=new FormData(f);
-                        const tok=f.querySelector('input[name="__RequestVerificationToken"]')?.value;
-                        const resp=await fetchWithSpinner(f.action,{
-                            method:f.method,
-                            headers:{
-                                'Accept':'application/json',
-                                'X-Requested-With':'XMLHttpRequest',
-                                ...(tok?{RequestVerificationToken:tok}: {})
-                            },
-                            body:fd
-                        });
-                        const json=await resp.json();
-                        if(json.ok){
-                            await Swal.fire({icon:'success',title:json.message||'Done',timer:3000,showConfirmButton:false});
-                            location.reload();
-                        }else throw new Error(json.message||'Request failed');
-                    }catch(err){
-                        Swal.fire('Error',err.message||'Network error','error');
-                    }finally{
-                        f.dataset.submitted='false';
-                    }
-                });
-            }
-
-            /* wire forms only if they exist on the current view */
-            document.addEventListener('DOMContentLoaded',()=>{
-                wireCountAndAjax('loginForm','loginPcsStart','loginSetCountDevice','loginMachineHidden');
-                wireCountAndAjax('logoutForm','logoutDeviceCountDisplay','logoutSetCountDevice','logoutMachineHidden');
-                wireCountAndAjax('startSkidForm','startSkidPcsStart','startSkidSetCountDevice','startSkidMachineHidden');
-                wireCountAndAjax('endRunForm','endRunFinalCount','endRunSetCountDevice','endRunMachineHidden');
-            });
+           
         })();
     </script>
 

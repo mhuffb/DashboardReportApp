@@ -52,40 +52,138 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart)
+        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart, string? overridePin = null)
         {
-            model.PcsStart = pcsStart;
-            model.StartDateTime = DateTime.Now;
-
-            LoginResult res = await _pressRunLogService.HandleLoginAsync(model);
-
+            // Detect whether this is the Ajax flow (our hookOverrideForm) or a normal post
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
-                          Request.Headers["Accept"].ToString().Contains("application/json");
+                          Request.Headers["Accept"].ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase);
 
-            if (isAjax)
-                return Json(new { ok = true, message = res.Message });
+            try
+            {
+                model.PcsStart = pcsStart;
+                model.StartDateTime = DateTime.Now;
 
-            TempData["Toast"] = res.Message;
-            return RedirectToAction("Index");
+                LoginResult res = await _pressRunLogService.HandleLoginAsync(model, overridePin);
+
+                // 🔸 Supervisor override / material mismatch case
+                if (res.RequiresOverride)
+                {
+                    if (isAjax)
+                    {
+                        // 400 → our JS sees this and pops the PIN SweetAlert
+                        return StatusCode(400, new
+                        {
+                            ok = false,
+                            code = string.IsNullOrWhiteSpace(res.Code) ? "SUPERVISOR_REQUIRED" : res.Code,
+                            message = res.Message,
+                            scheduled = res.ScheduledMaterial,
+                            scanned = res.ScannedMaterial
+                        });
+                    }
+
+                    TempData["Error"] = res.Message;
+                    return RedirectToAction("Index");
+                }
+
+                // ✅ Success
+                if (isAjax)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        message = string.IsNullOrWhiteSpace(res.Message)
+                                    ? $"Logged in to run {model.Run} on machine {model.Machine}."
+                                    : res.Message
+                    });
+                }
+
+                TempData["Toast"] = res.Message;
+                return RedirectToAction("Index");
+            }
+            catch (Exception)
+            {
+                // IMPORTANT: do NOT leak ex.Message back to JS
+                if (isAjax)
+                {
+                    return StatusCode(500, new
+                    {
+                        ok = false,
+                        code = "SERVER_ERROR",
+                        message = "An unexpected error occurred while logging in."
+                    });
+                }
+
+                TempData["Error"] = "An unexpected error occurred while logging in.";
+                return RedirectToAction("Index");
+            }
         }
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart)
+        public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart, string? overridePin = null)
         {
-            model.PcsStart = pcsStart;
-
-            StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart);
-
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
-                          Request.Headers["Accept"].ToString().Contains("application/json");
+                          Request.Headers["Accept"].ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase);
 
-            if (isAjax)
-                return Json(new { ok = true, message = res.Message });
+            try
+            {
+                model.PcsStart = pcsStart;
 
-            TempData["Toast"] = res.Message;
-            return RedirectToAction("Index");
+                StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart, overridePin);
+
+                // 🔸 Supervisor override / material mismatch case
+                if (res.RequiresOverride)
+                {
+                    if (isAjax)
+                    {
+                        return StatusCode(400, new
+                        {
+                            ok = false,
+                            code = string.IsNullOrWhiteSpace(res.Code) ? "SUPERVISOR_REQUIRED" : res.Code,
+                            message = res.Message,
+                            scheduled = res.ScheduledMaterial,
+                            scanned = res.ScannedMaterial
+                        });
+                    }
+
+                    TempData["Error"] = res.Message;
+                    return RedirectToAction("Index");
+                }
+
+                // ✅ Success
+                if (isAjax)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        message = string.IsNullOrWhiteSpace(res.Message)
+                                    ? $"Started new skid for run {model.Run} on machine {model.Machine} at {pcsStart} pcs."
+                                    : res.Message
+                    });
+                }
+
+                TempData["Toast"] = res.Message;
+                return RedirectToAction("Index");
+            }
+            catch (Exception)
+            {
+                if (isAjax)
+                {
+                    return StatusCode(500, new
+                    {
+                        ok = false,
+                        code = "SERVER_ERROR",
+                        message = "An unexpected error occurred while starting a skid."
+                    });
+                }
+
+                TempData["Error"] = "An unexpected error occurred while starting a skid.";
+                return RedirectToAction("Index");
+            }
         }
+
 
 
         // ============== LOGOUT ==============

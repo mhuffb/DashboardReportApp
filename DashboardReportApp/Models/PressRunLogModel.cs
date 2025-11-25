@@ -26,6 +26,10 @@
         public decimal CycleTime { get; set; }
         public string LotNumber { get; set; }
         public string MaterialCode { get; set; }
+        public bool IsOverride { get; set; }
+        public string? OverrideBy { get; set; }
+        public DateTime? OverrideAt { get; set; }
+
 
     }
 
