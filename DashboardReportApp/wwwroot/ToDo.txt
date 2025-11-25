@@ -6,8 +6,6 @@
 
 
 10/27/25 
-1. Make print tag option on assembly page
-2. Add preview hold tag button on holdtag page
 3. schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
 
 Remove react table. make html table with pagination, datatables and jquery
