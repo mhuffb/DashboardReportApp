@@ -3,6 +3,7 @@ using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using static DashboardReportApp.Services.HoldTagService;
 
 namespace DashboardReportApp.Controllers
 {
@@ -177,19 +178,61 @@ namespace DashboardReportApp.Controllers
                 }
 
                 // 4) Generate PDF, print, email (unchanged)
+                // 4) Generate PDF, print, email
                 var pdfPath = _holdTagService.GenerateHoldTagPdf(record);
                 var attachment1Abs = _holdTagService.GetAbsolutePath(record.FileAddress1);
+
+                // how many copies to print = how many hold tags
                 _sharedService.PrintFileToSpecificPrinter(_holdTagPrinter, pdfPath, record.Quantity.GetValueOrDefault(1));
 
-                string subject = $"{record.Part} Placed on Hold By: {record.IssuedBy}";
-                string body =
-                    $"Discrepancy: {record.Discrepancy}\n" +
-                    $"Production Number: {record.ProdNumber ?? "N/A"}\n" +
-                    $"Quantity: {record.Quantity} {record.Unit}\n" +
-                    $"Issued By: {record.IssuedBy}\n" +
-                    $"Issued Date: {record.Date:MM/dd/yyyy}";
+                // Build nicer subject + body
+                string prodNumber = string.IsNullOrWhiteSpace(record.ProdNumber) ? "N/A" : record.ProdNumber;
+                string runNumber = string.IsNullOrWhiteSpace(record.RunNumber) ? "N/A" : record.RunNumber;
+                string part = string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part;
+                string component = string.IsNullOrWhiteSpace(record.Component) ? "N/A" : record.Component;
+                string lotNumber = string.IsNullOrWhiteSpace(record.LotNumber) ? "N/A" : record.LotNumber;
+                string materialCode = string.IsNullOrWhiteSpace(record.MaterialCode) ? "N/A" : record.MaterialCode;
+                string discrepancy = string.IsNullOrWhiteSpace(record.Discrepancy) ? "N/A" : record.Discrepancy;
+                string issuedBy = string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy;
+                string issuedDate = record.Date.HasValue ? record.Date.Value.ToString("MM/dd/yyyy") : "N/A";
 
+                string unitDisplay = string.IsNullOrWhiteSpace(record.Unit) ? "" : record.Unit + "(s)";
+                string qtyTagsText = record.Quantity.HasValue ? record.Quantity.Value.ToString() : "N/A";
+                string qtyOnHoldText = record.QuantityOnHold.HasValue
+                    ? $"{record.QuantityOnHold.Value} {unitDisplay}"
+                    : "N/A";
+
+                string indexUrl = Url.Action("Index", "HoldTag", null, Request.Scheme);
+
+                // SUBJECT: includes part + prod + run
+                string subject = $"HOLD TAG: {part} | Prod {prodNumber} | Run {runNumber}";
+
+                // BODY: nicely formatted summary
+                string body = $@"
+Parts have been placed on Hold.
+
+Part:        {part}
+Component:   {component}
+Production:  {prodNumber}
+Run:         {runNumber}
+Lot #:       {lotNumber}
+Material:    {materialCode}
+Qty On Hold: {qtyOnHoldText}
+
+Discrepancy
+{discrepancy}
+
+Issued
+By:   {issuedBy}
+Date: {issuedDate}
+
+Links
+Hold Tag Page: {indexUrl}
+";
+
+                // send email with the hold tag PDF and optional uploaded attachment
                 _sharedService.SendEmailWithAttachment(_holdTagEmailTo, pdfPath, attachment1Abs, subject, body);
+
 
                 TempData["SuccessMessage"] = "Hold record submitted and email sent successfully!";
                 return RedirectToAction("Index");
@@ -355,6 +398,43 @@ namespace DashboardReportApp.Controllers
             }
         }
 
+        [HttpGet("ScanLookup")]
+        public async Task<IActionResult> ScanLookup(string mode, string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return Json(new { success = false, message = "No code provided." });
+
+            mode = (mode ?? "").ToLowerInvariant();
+            HoldScanResult? result = null;
+
+            if (mode == "prod")
+            {
+                result = await _holdTagService.LookupByProdAsync(code.Trim());
+            }
+            else if (mode == "run")
+            {
+                result = await _holdTagService.LookupByRunAsync(code.Trim());
+            }
+            else
+            {
+                return Json(new { success = false, message = "Invalid mode. Use 'prod' or 'run'." });
+            }
+
+            if (result == null)
+                return Json(new { success = false, message = $"No records found for {mode} '{code}'." });
+
+            return Json(new
+            {
+                success = true,
+                source = result.Source,
+                part = result.Part,
+                component = result.Component,
+                prodNumber = result.ProdNumber,
+                runNumber = result.RunNumber,
+                lotNumber = result.LotNumber,
+                materialCode = result.MaterialCode
+            });
+        }
 
     }
 }
