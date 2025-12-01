@@ -987,13 +987,17 @@ LIMIT 1";
                     Canvas header = new Canvas(new PdfCanvas(page), pageSize)
                                         .SetFont(boldFont)
                                         .SetFontSize(tagFontSize);
+
+                    float topHeaderOffset = 40f; // tweak this until it looks perfect
+
                     header.ShowTextAligned(
                         part + "  Skid # " + model.SkidNumber,
                         pageSize.GetWidth() / 2,
-                        pageSize.GetTop() - 20,
+                        pageSize.GetTop() - topHeaderOffset,
                         TextAlignment.CENTER,
-                        (float)Math.PI);      // 180° rotation
+                        (float)Math.PI);
                     header.Close();
+
                 }
 
 
