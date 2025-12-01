@@ -5,21 +5,13 @@
 7. process change paginate
 
 
+10/27/25 
+3. schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
+
 Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
 
 
-
-Holdtag-add component
-x1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
-
-x2. In sinterrun populate the part and component. right now component is not populating
-xIn sinterrun get the lotnumber and materialcode from pressrun
-xIn assembly get the lotnumber and materialcode from pressrun
-x3. On holdtag display the mix lot and mix code from pressrun
-x4. Seperate quantity of holdtags and quantity of on hold
-
-
 5. show lot number and materialcode in molding dashboard and does it have to be react?
+6. Add production # and run # barcodes to tracer tag
 
-schedule make search and filter. make graphic showing presses and whats scheduled. include part, component, materialcode, quantity, prodNumber, run
