@@ -12,20 +12,6 @@ Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
 
 
-
-Holdtag-add component
-x1. In pressrun on insert new record lookup the mix lot and mix code and store in press run
-
-x2. In sinterrun populate the part and component. right now component is not populating
-xIn sinterrun get the lotnumber and materialcode from pressrun
-In assembly get the lotnumber and materialcode from pressrun
-3. On holdtag display the mix lot and mix code from pressrun
-4. Seperate quantity of holdtags and quantity of on hold
 5. show lot number and materialcode in molding dashboard and does it have to be react?
 6. Add production # and run # barcodes to tracer tag
 
-
-tooling inv
-make the ability to attach images/videos in the add for assembly modal and edit tooling inventory modal. 
-if tooling is marked as questionable, email tooling mananger asking to review and make a decision. if tooling is okay tell manager to update condition to ReadyForProduction. 
-If not okay tell them to create a new tool work order to fix the tooling. make a way to view the image by adding a preview button next to the edit button in tooling inventory table. 
