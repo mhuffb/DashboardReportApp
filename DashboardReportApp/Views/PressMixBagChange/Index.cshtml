@@ -509,129 +509,183 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    (() => {
-      const form = document.getElementById('bagChangeForm');
-      const modalEl = document.getElementById('bagChangeModal');
+        (() => {
+          const form = document.getElementById('bagChangeForm');
+          const modalEl = document.getElementById('bagChangeModal');
 
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+          // 🔹 Shared PIN prompt with blank, non-autofilled input
+          async function promptOverridePin() {
+            const result = await Swal.fire({
+              icon: 'warning',
+              title: 'Enter Supervisor PIN',
+              html: `<p class="text-start mb-1">Supervisor / material override required.</p>`,
+              input: 'text',
+              inputLabel: 'Override PIN',
+              inputPlaceholder: 'Enter override PIN',
+              inputValue: '',
+              inputAttributes: {
+                maxlength: 10,
+                autocapitalize: 'off',
+                autocorrect: 'off',
+                autocomplete: 'off',
+                name: 'override_' + Date.now(),   // 👈 defeat browser autofill
+                inputmode: 'numeric'
+              },
+              showCancelButton: true,
+              confirmButtonText: 'Authorize',
+              cancelButtonText: 'Cancel',
+              allowOutsideClick: false,
+              didOpen: () => {
+                const input = Swal.getInput();
+                if (input) {
+                  // belt & suspenders: ensure it starts blank
+                  input.value = '';
+                  input.setAttribute('autocomplete', 'off');
+                  input.focus();
+                  setTimeout(() => {
+                    if (input.value !== '') input.value = '';
+                  }, 50);
+                }
+              }
+            });
 
-        const fd = new FormData(form);
-
-        // Post to AJAX endpoint instead of full submit
-        let res = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd });
-        if (res.ok) {
-          await Swal.fire({ icon: 'success', title: 'Saved', text: 'Mix Bag Change successfully logged!' });
-          // close modal and refresh list (you can also live-append)
-          bootstrap.Modal.getInstance(modalEl)?.hide();
-          location.reload(); // or re-fetch table data if you have a function
-          return;
-        }
-
-        // Not OK -> inspect reason
-        let payload;
-        try { payload = await res.json(); } catch { payload = { code: 'UNKNOWN', message: 'Error' }; }
-
-        if (payload.code === 'MATERIAL_MISMATCH') {
-          // Offer override
-          const { value: doOverride } = await Swal.fire({
-            icon: 'warning',
-            title: 'Material Mismatch',
-            html: `
-              <div class="text-start">
-                <div><strong>Scheduled:</strong> ${payload.scheduled || '(none)'}</div>
-                <div><strong>Scanned:</strong> ${payload.scanned || '(none)'}</div>
-                <div class="mt-2">This does not match the schedule. A supervisor can override.</div>
-              </div>`,
-            showCancelButton: true,
-            confirmButtonText: 'Supervisor Override',
-            cancelButtonText: 'Cancel'
-          });
-
-          if (!doOverride) return;
-
-          const { value: pin } = await Swal.fire({
-            title: 'Enter Supervisor PIN',
-            input: 'password',
-            inputAttributes: { autocapitalize: 'off', autocomplete: 'off' },
-            inputPlaceholder: 'PIN',
-            showCancelButton: true,
-            confirmButtonText: 'Authorize'
-          });
-
-          if (!pin) return;
-
-          const fd2 = new FormData(form);
-          fd2.append('overridePin', pin);
-
-          const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
-          if (res2.ok) {
-            const okPayload = await res2.json();
-            await Swal.fire({ icon: 'success', title: 'Override Applied', text: 'Record saved with supervisor authorization.' });
-            bootstrap.Modal.getInstance(modalEl)?.hide();
-            location.reload();
-            return;
-          } else {
-            const p2 = await res2.json().catch(() => ({}));
-            if (p2.code === 'BAD_PIN') {
-              await Swal.fire({ icon: 'error', title: 'Invalid PIN', text: p2.message || 'Authorization failed.' });
-            } else {
-              await Swal.fire({ icon: 'error', title: 'Error', text: p2.message || 'Could not save with override.' });
+            if (!result.isConfirmed || !result.value) {
+              return null; // cancelled or empty
             }
+            return result.value;
           }
-          return;
-        }
 
-        if (payload.code === 'NO_SCHEDULE_ROW') {
-          // No row case, also allow override
-          const { value: doOverride } = await Swal.fire({
-            icon: 'warning',
-            title: 'No Schedule Row',
-            text: payload.message || 'No schedule row found. A supervisor can override.',
-            showCancelButton: true,
-            confirmButtonText: 'Supervisor Override',
-            cancelButtonText: 'Cancel'
-          });
-          if (!doOverride) return;
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-          const { value: pin } = await Swal.fire({
-            title: 'Enter Supervisor PIN',
-            input: 'password',
-            showCancelButton: true,
-            confirmButtonText: 'Authorize'
-          });
-          if (!pin) return;
+            const fd = new FormData(form);
 
-          const fd2 = new FormData(form);
-          fd2.append('overridePin', pin);
-          const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
-          if (res2.ok) {
-            await Swal.fire({ icon: 'success', title: 'Override Applied', text: 'Record saved with supervisor authorization.' });
-            bootstrap.Modal.getInstance(modalEl)?.hide();
-            location.reload();
-          } else {
-            const p2 = await res2.json().catch(() => ({}));
-            await Swal.fire({ icon: 'error', title: 'Error', text: p2.message || 'Could not save with override.' });
-          }
-          return;
-        }
+            // Post to AJAX endpoint instead of full submit
+            let res = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd });
+            if (res.ok) {
+              await Swal.fire({
+                icon: 'success',
+                title: 'Saved',
+                text: 'Mix Bag Change successfully logged!'
+              });
+              // close modal and refresh list
+              bootstrap.Modal.getInstance(modalEl)?.hide();
+              location.reload();
+              return;
+            }
 
-        
+            // Not OK -> inspect reason
+            let payload;
+            try { payload = await res.json(); }
+            catch { payload = { code: 'UNKNOWN', message: 'Error' }; }
+
+            if (payload.code === 'MATERIAL_MISMATCH') {
+              // Offer override
+              const { value: doOverride } = await Swal.fire({
+                icon: 'warning',
+                title: 'Material Mismatch',
+                html: `
+                  <div class="text-start">
+                    <div><strong>Scheduled:</strong> ${payload.scheduled || '(none)'}</div>
+                    <div><strong>Scanned:</strong> ${payload.scanned || '(none)'}</div>
+                    <div class="mt-2">This does not match the schedule. A supervisor can override.</div>
+                  </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Supervisor Override',
+                cancelButtonText: 'Cancel'
+              });
+
+              if (!doOverride) return;
+
+              const pin = await promptOverridePin();
+              if (!pin) return;
+
+              const fd2 = new FormData(form);
+              fd2.append('overridePin', pin);
+
+              const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
+              if (res2.ok) {
+                const okPayload = await res2.json().catch(() => ({}));
+                await Swal.fire({
+                  icon: 'success',
+                  title: 'Override Applied',
+                  text: okPayload.message || 'Record saved with supervisor authorization.'
+                });
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+                location.reload();
+                return;
+              } else {
+                const p2 = await res2.json().catch(() => ({}));
+                if (p2.code === 'BAD_PIN') {
+                  await Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid PIN',
+                    text: p2.message || 'Authorization failed.'
+                  });
+                } else {
+                  await Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: p2.message || 'Could not save with override.'
+                  });
+                }
+              }
+              return;
+            }
+
+            if (payload.code === 'NO_SCHEDULE_ROW') {
+              // No row case, also allow override
+              const { value: doOverride } = await Swal.fire({
+                icon: 'warning',
+                title: 'No Schedule Row',
+                text: payload.message || 'No schedule row found. A supervisor can override.',
+                showCancelButton: true,
+                confirmButtonText: 'Supervisor Override',
+                cancelButtonText: 'Cancel'
+              });
+              if (!doOverride) return;
+
+              const pin = await promptOverridePin();
+              if (!pin) return;
+
+              const fd2 = new FormData(form);
+              fd2.append('overridePin', pin);
+              const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
+              if (res2.ok) {
+                const okPayload = await res2.json().catch(() => ({}));
+                await Swal.fire({
+                  icon: 'success',
+                  title: 'Override Applied',
+                  text: okPayload.message || 'Record saved with supervisor authorization.'
+                });
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+                location.reload();
+              } else {
+                const p2 = await res2.json().catch(() => ({}));
+                await Swal.fire({
+                  icon: 'error',
+                  title: 'Error',
+                  text: p2.message || 'Could not save with override.'
+                });
+              }
+              return;
+            }
+
             // Generic error
-    await Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      html: `
-        <div class="text-start">
-          <div>${payload.message || 'An error occurred.'}</div>
-          <pre style="white-space:pre-wrap;font-size:12px;margin-top:8px;">
+            await Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              html: `
+                <div class="text-start">
+                  <div>${payload.message || 'An error occurred.'}</div>
+                  <pre style="white-space:pre-wrap;font-size:12px;margin-top:8px;">
     ${JSON.stringify(payload.details || payload, null, 2)}
-          </pre>
-        </div>`
-    });
+                  </pre>
+                </div>`
+            });
 
-      });
-    })();
+          });
+        })();
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {

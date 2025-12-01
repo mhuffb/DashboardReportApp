@@ -396,6 +396,54 @@
 
             return result;
         }
+        public async Task<(bool hasOverride, string supervisorName)> HasExistingOverrideAsync(
+    string part,
+    string prodNumber,
+    string run)
+        {
+            static string S(object? o) => o?.ToString() ?? "";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+        SELECT overrideBy, overrideAt
+        FROM (
+            SELECT overrideBy, overrideAt
+            FROM pressmixbagchange
+            WHERE part = @part
+              AND prodNumber = @prod
+              AND run = @run
+              AND isOverride = 1
+
+            UNION ALL
+
+            SELECT overrideBy, overrideAt
+            FROM pressrun
+            WHERE part = @part
+              AND prodNumber = @prod
+              AND run = @run
+              AND isOverride = 1
+        ) x
+        WHERE overrideBy IS NOT NULL AND overrideBy <> ''
+        ORDER BY overrideAt DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@part", part ?? "");
+            cmd.Parameters.AddWithValue("@prod", prodNumber ?? "");
+            cmd.Parameters.AddWithValue("@run", run ?? "");
+
+            await using var rdr = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (await rdr.ReadAsync())
+            {
+                var sup = S(rdr["overrideBy"]);
+                if (!string.IsNullOrWhiteSpace(sup))
+                    return (true, sup);
+            }
+
+            return (false, "");
+        }
 
     }
 }

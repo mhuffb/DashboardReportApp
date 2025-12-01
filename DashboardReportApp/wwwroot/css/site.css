@@ -219,3 +219,41 @@ form {
         background-color: goldenrod !important;
         color: black !important;
     }
+
+
+    /* DataTables chrome: Show entries, Search, info text, pagination */
+.dataTables_wrapper .dataTables_length label,
+.dataTables_wrapper .dataTables_filter label,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate,
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    color: goldenrod !important;
+}
+
+/* Select + Search input */
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_filter input {
+    background-color: #000 !important;
+    color: goldenrod !important;
+    border: 1px solid goldenrod !important;
+}
+
+/* Pagination buttons */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    background-color: #000 !important;
+    border: 1px solid goldenrod !important;
+}
+
+/* Current page + hover state */
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+    background-color: goldenrod !important;
+    color: #000 !important;
+    border-color: goldenrod !important;
+}
+
+/* Hover on other buttons */
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background-color: #333 !important;
+    color: goldenrod !important;
+}

@@ -107,10 +107,21 @@ public class PressMixBagChangeController : Controller
         var allowInsert = false;
         var supervisorName = "";
 
+        // 🔹 Check for existing override in *either* table
+        var (hasOverride, existingSup) = await _pressMixBagChangeService.HasExistingOverrideAsync(
+            model.Part ?? "", model.ProdNumber ?? "", model.Run ?? ""
+        );
+
         if (string.IsNullOrEmpty(normSched))
         {
             // No schedule row found
-            if (!string.IsNullOrEmpty(overridePin))
+            if (hasOverride)
+            {
+                // ✅ Already overridden earlier, don't ask again
+                allowInsert = true;
+                supervisorName = existingSup;
+            }
+            else if (!string.IsNullOrEmpty(overridePin))
             {
                 var (ok, supName) = await _pressMixBagChangeService.VerifySupervisorPinAsync(overridePin);
                 if (!ok) return StatusCode(403, new { code = "BAD_PIN", message = "Invalid supervisor PIN." });
@@ -120,26 +131,34 @@ public class PressMixBagChangeController : Controller
             }
             else
             {
+                // ❌ Tell frontend we need override (PIN)
                 return BadRequest(new
                 {
                     code = "NO_SCHEDULE_ROW",
                     message = $"No schedule row found for Part {model.Part}, Component {model.Component} (Prod {model.ProdNumber}, Run {model.Run})."
                 });
             }
-
         }
         else if (!normSched.Equals(normScan, StringComparison.Ordinal))
         {
-            // Mismatch
-            if (!string.IsNullOrEmpty(overridePin))
+            // MATERIAL MISMATCH
+            if (hasOverride)
+            {
+                // ✅ Already overridden earlier, don't ask again
+                allowInsert = true;
+                supervisorName = existingSup;
+            }
+            else if (!string.IsNullOrEmpty(overridePin))
             {
                 var (ok, supName) = await _pressMixBagChangeService.VerifySupervisorPinAsync(overridePin);
                 if (!ok) return StatusCode(403, new { code = "BAD_PIN", message = "Invalid supervisor PIN." });
+
                 allowInsert = true;
                 supervisorName = supName;
             }
             else
             {
+                // ❌ Tell frontend we need override (PIN)
                 return BadRequest(new
                 {
                     code = "MATERIAL_MISMATCH",
@@ -151,9 +170,10 @@ public class PressMixBagChangeController : Controller
         }
         else
         {
-            // Match
+            // Match -> no override needed
             allowInsert = true;
         }
+
 
         if (allowInsert)
         {

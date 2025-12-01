@@ -18,12 +18,16 @@
     // Split open records into main run records (SkidNumber == 0) and skid records (SkidNumber > 0)
     var mainRuns = openRecords.Where(r => r.SkidNumber == 0).ToList();
     var skids = openRecords.Where(r => r.SkidNumber > 0).ToList();
+
+    // 🔹 All runs for DataTables
+    var allRuns = ViewData["AllRuns"] as List<DashboardReportApp.Models.PressRunLogModel>
+                  ?? new List<DashboardReportApp.Models.PressRunLogModel>();
 }
 
-@if (TempData["DeviceMessage"] != null)
+@if (TempData["Error"] != null)
 {
-    <div class="alert alert-warning">
-        @TempData["DeviceMessage"]
+    <div class="alert alert-danger">
+        @TempData["Error"]
     </div>
 }
 
@@ -91,6 +95,8 @@
                                 <th>ID</th>
                                 <th>Prod Number</th>
                                 <th>Run</th>
+                                <th>Mix Lot</th>       
+                                <th>Mix Code</th>
                                 <th>Start Time</th>
                                 <th>Operator</th>
                                 <th>Machine</th>
@@ -106,6 +112,8 @@
                                     <td>@rec.Id</td>
                                     <td>@rec.ProdNumber</td>
                                     <td>@rec.Run</td>
+                                    <td>@rec.LotNumber</td>      
+                                    <td>@rec.MaterialCode</td>
                                     <td>@(rec.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
                                     <td>@rec.Operator</td>
                                     <td>@rec.Machine</td>
@@ -147,6 +155,8 @@
                                 <th>ID</th>
                                 <th>Prod Number</th>
                                 <th>Run</th>
+                                <th>Mix Lot</th>   
+                                <th>Mix Code</th>
                                 <th>Start Time</th>
                                 <th>SkidNumber</th>
                                 <th>Pcs Start</th>
@@ -164,6 +174,8 @@
                                     <td>@skid.Id</td>
                                     <td>@skid.ProdNumber</td>
                                     <td>@skid.Run</td>
+                                    <td>@skid.LotNumber</td>   
+                                    <td>@skid.MaterialCode</td> 
                                     <td>@skid.StartDateTime</td>
                                     <td>@skid.SkidNumber</td>
                                     <td>@skid.PcsStart</td>
@@ -202,222 +214,62 @@
             </div>
         </div>
 
-        <!-- React Table of All Runs (Optional) -->
-        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-            <div class="d-flex flex-column">
-                <label class="form-label mb-1" for="runsMachine">Machine</label>
-                <select id="runsMachine" class="form-select" style="min-width:140px">
-                    <option value="">All machines</option>
-                    <!-- optional static fallback; will be replaced if API is used -->
-                    <option>1</option>
-                    <option>2</option>
-                    <option>41</option>
-                    <option>45</option>
-                    <option>50</option>
-                    <option>51</option>
-                    <option>57</option>
-                    <option>59</option>
-                    <option>70</option>
-                    <option>74</option>
-                    <option>92</option>
-                    <option>95</option>
-                    <option>102</option>
-                    <option>112</option>
-                    <option>124</option>
-                    <option>125</option>
-                    <option>154</option>
-                    <option>156</option>
-                    <option>175</option>
-                </select>
-            </div>
+        <!-- All Runs (DataTables) -->
+        <h2 class="text-center mb-4">All Press Runs</h2>
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <table id="pressrunTable" class="table table-striped table-bordered">
 
-            <div class="d-flex flex-column">
-                <label class="form-label mb-1" for="runsStart">Start date</label>
-                <input type="date" id="runsStart" class="form-control">
-            </div>
 
-            <div class="d-flex flex-column">
-                <label class="form-label mb-1" for="runsEnd">End date</label>
-                <input type="date" id="runsEnd" class="form-control">
-            </div>
-
-            <div class="flex-grow-1 d-flex flex-column" style="min-width:260px">
-                <label class="form-label mb-1" for="runsSearch">Search</label>
-                <input type="search" id="runsSearch" class="form-control"
-                       placeholder="part, component, run, operator…">
-            </div>
-
-            <div class="d-flex flex-column">
-                <label class="form-label mb-1" for="runsPageSize">Page size</label>
-                <select id="runsPageSize" class="form-select">
-                    <option value="25">25</option>
-                    <option value="50" selected>50</option>
-                    <option value="100">100</option>
-                </select>
-            </div>
-
-            <div class="d-flex flex-column justify-content-end">
-                <button id="runsClear" type="button" class="btn btn-outline-secondary">
-                    Clear
-                </button>
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Part</th>
+                            <th>Component</th>
+                            <th>Prod Number</th>
+                            <th>Run</th>
+                            <th>Mix Lot</th>        <!-- 🔹 -->
+                            <th>Mix Code</th>       <!-- 🔹 -->
+                            <th>Machine</th>
+                            <th>Operator</th>
+                            <th>Skid #</th>
+                            <th>Pcs Start</th>
+                            <th>Pcs End</th>
+                            <th>Scrap</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in allRuns)
+                        {
+                            <tr>
+                                <td>@r.Id</td>
+                                <td>@r.Part</td>
+                                <td>@r.Component</td>
+                                <td>@r.ProdNumber</td>
+                                <td>@r.Run</td>
+                                <td>@r.LotNumber</td>       <!-- 🔹 -->
+                                <td>@r.MaterialCode</td>    <!-- 🔹 -->
+                                <td>@r.Machine</td>
+                                <td>@r.Operator</td>
+                                <td>@r.SkidNumber</td>
+                                <td>@r.PcsStart</td>
+                                <td>@r.PcsEnd</td>
+                                <td>@r.Scrap</td>
+                                <td>@(r.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "")</td>
+                                <td>@(r.EndDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "")</td>
+                                <td>@r.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div id="myReactPressRunTableRoot"></div>
 
-        <div class="d-flex justify-content-between align-items-center mt-2">
-            <small id="runsSummary"></small>
-            <div id="runsPager" class="btn-group"></div>
-        </div>
-
-
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- JavaScript for React Table -->
-<script src="/js/mydatatable.bundle.js"></script>
 <script>
-    const deviceIPs = {
-        "1":"192.168.1.30",  "2":"192.168.1.31",  "41":"192.168.1.32",
-        "45":"192.168.1.33", "50":"192.168.1.34", "51":"192.168.1.35",
-        "57":"192.168.1.36", "59":"192.168.1.37", "70":"192.168.1.38",
-        "74":"192.168.1.39", "92":"192.168.1.40", "95":"192.168.1.41",
-        "102":"192.168.1.42","112":"192.168.1.43","124":"192.168.1.44",
-        "125":"192.168.1.45","154":"192.168.1.46","156":"192.168.1.47",
-        "175":"192.168.1.48"
-    };
-             document.addEventListener("DOMContentLoaded", function () {
-      const columns = [
-        { key: "id", label: "ID" },
-        { key: "part", label: "Part" },
-        { key: "component", label: "Component" },
-        { key: "prodNumber", label: "Prod Number" },
-        { key: "run", label: "Run" },
-        { key: "machine", label: "Machine" },
-        { key: "operator", label: "Operator" },
-        { key: "startDateTime", label: "Start Time" },
-        { key: "endDateTime", label: "End Time" },
-        { key: "elapsedTime", label: "ElapsedTime" },
-        { key: "skidNumber", label: "SkidNumber" },
-        { key: "pcsStart", label: "Pcs Start" },
-        { key: "pcsEnd", label: "Pcs End" },
-        { key: "pcs", label: "Pcs" },
-        { key: "cycleTime", label: "CycleTime" },
-        { key: "scrap", label: "Scrap" },
-        { key: "notes", label: "Notes" }
-      ];
-
-      const state = {
-        page: 1,
-        pageSize: 50,
-        q: "",
-        machine: "",
-        start: "", // YYYY-MM-DD
-        end: ""    // YYYY-MM-DD
-      };
-
-      const $machine  = document.getElementById("runsMachine");
-      const $start    = document.getElementById("runsStart");
-      const $end      = document.getElementById("runsEnd");
-      const $search   = document.getElementById("runsSearch");
-      const $pageSize = document.getElementById("runsPageSize");
-      const $summary  = document.getElementById("runsSummary");
-      const $pager    = document.getElementById("runsPager");
-      const $clear    = document.getElementById("runsClear");
-
-      // Optional: populate machine dropdown from server
-      fetch("/PressRunLog/ApiMachines").then(r => {
-        if (!r.ok) return;
-        return r.json();
-      }).then(list => {
-        if (!Array.isArray(list)) return;
-        // preserve current selection
-        const sel = $machine.value;
-        $machine.innerHTML = '<option value="">All machines</option>' +
-          list.map(m => `<option value="${m}">${m}</option>`).join('');
-        $machine.value = sel;
-      }).catch(() => { /* fallback to static list already in HTML */ });
-
-      const debounce = (fn, ms=300) => {
-        let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-      };
-
-      const toLocalDateTime = (date, hour=0, min=0, sec=0) => {
-        const d = new Date(date + "T00:00:00");
-        d.setHours(hour, min, sec, 0);
-        const pad = n => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-      };
-
-      async function loadAllRuns() {
-        const params = new URLSearchParams({
-          page: state.page,
-          pageSize: state.pageSize
-        });
-        if (state.q)       params.set("q", state.q);
-        if (state.machine) params.set("machine", state.machine);
-        if (state.start)   params.set("start", toLocalDateTime(state.start, 0, 0, 0));      // inclusive
-        if (state.end) {   // make end exclusive by adding 1 day at 00:00:00
-          const endEx = new Date(state.end + "T00:00:00");
-          endEx.setDate(endEx.getDate() + 1);
-          const pad = n => String(n).padStart(2,"0");
-          const endStr = `${endEx.getFullYear()}-${pad(endEx.getMonth()+1)}-${pad(endEx.getDate())}T00:00:00`;
-          params.set("end", endStr);
-        }
-
-        const res = await fetch(`/PressRunLog/ApiRuns?` + params.toString());
-        if (!res.ok) { console.error("ApiRuns failed:", res.status); return; }
-
-        const { rows, total, page, pageSize } = await res.json();
-        state.page = page; state.pageSize = pageSize;
-
-        if (window.renderMyDataTable) {
-          // disable client-side search; we filter on the server now
-          window.renderMyDataTable("myReactPressRunTableRoot", rows, columns, false);
-        }
-
-        renderPager(total, page, pageSize);
-        const startRow = total ? (page - 1) * pageSize + 1 : 0;
-        const endRow   = Math.min(page * pageSize, total);
-        $summary.textContent = total ? `Showing ${startRow}–${endRow} of ${total}` : "No results";
-      }
-
-      function renderPager(total, page, pageSize) {
-        const totalPages = Math.max(1, Math.ceil(total / pageSize));
-        $pager.innerHTML = "";
-
-        const btn = (text, disabled, onClick) => {
-          const b = document.createElement("button");
-          b.type = "button";
-          b.className = "btn btn-outline-secondary btn-sm";
-          b.textContent = text;
-          b.disabled = disabled;
-          b.addEventListener("click", onClick);
-          $pager.appendChild(b);
-        };
-
-        btn("« First", page === 1, () => { state.page = 1; loadAllRuns(); });
-        btn("‹ Prev",  page === 1, () => { state.page = Math.max(1, page - 1); loadAllRuns(); });
-        btn("Next ›",  page >= totalPages, () => { state.page = Math.min(totalPages, page + 1); loadAllRuns(); });
-        btn("Last »",  page >= totalPages, () => { state.page = totalPages; loadAllRuns(); });
-      }
-
-      $machine.addEventListener("change", () => { state.machine = $machine.value; state.page = 1; loadAllRuns(); });
-      $start.addEventListener("change", () => { state.start = $start.value; state.page = 1; loadAllRuns(); });
-      $end.addEventListener("change",   () => { state.end   = $end.value;   state.page = 1; loadAllRuns(); });
-      $search.addEventListener("input", debounce(e => { state.q = e.target.value.trim(); state.page = 1; loadAllRuns(); }, 300));
-      $pageSize.addEventListener("change", e => { state.pageSize = +e.target.value || 50; state.page = 1; loadAllRuns(); });
-      $clear.addEventListener("click", () => {
-        state.page = 1; state.pageSize = +$pageSize.value || 50;
-        state.q = ""; state.machine = ""; state.start = ""; state.end = "";
-        $search.value = ""; $machine.value = ""; $start.value = ""; $end.value = "";
-        loadAllRuns();
-      });
-
-      loadAllRuns();
-    });
 
     // LOGIN: Set hidden values (including component) and open the modal
            function openLoginModalForRun(part, component, run, machine, prodNumber) {
@@ -539,78 +391,6 @@
 
 
 
-               function wireCountSetter(modalId, countInputId, checkboxId, machineHiddenId) {
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-        const form = modal.querySelector("form");
-
-        form.addEventListener("submit", async function (ev) {
-            if (form.dataset.submitted === "true") return;  // Already handled
-            const cb = document.getElementById(checkboxId);
-            if (!cb || !cb.checked) return;
-
-            const countEl = document.getElementById(countInputId);
-            const original = countEl.dataset.originalCount ?? "";
-            const current = countEl.value.trim();
-            if (current === original) return;
-
-            const machine = document.getElementById(machineHiddenId).value;
-            const ip = deviceIPs[machine];
-            if (!ip) {
-                console.warn("Unknown IP for machine", machine);
-                return;
-            }
-
-            ev.preventDefault();
-
-            try {
-                await fetch(`http://${ip}/update`, {
-                    method: "POST",
-                        headers: {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-    }
-    ,
-                    body: `count_value=${encodeURIComponent(current)}`
-                });
-            } catch (e) {
-                console.error("Count push failed:", e);
-            }
-
-            // Guard flag and trigger ajaxify manually
-            form.dataset.submitted = "true";
-
-            // Simulate AJAX call instead of re-triggering submit
-            ajaxifySubmit(form);
-        });
-    }
-
-
-
-
-       document.addEventListener("DOMContentLoaded", () => {
-        wireCountSetter("LoginModal",
-                        "loginPcsStart",
-                        "loginSetCountDevice",
-                        "loginMachineHidden");
-
-        wireCountSetter("LogoutModal",
-                        "logoutDeviceCountDisplay",
-                        "logoutSetCountDevice",
-                        "logoutMachineHidden");
-
-        wireCountSetter("StartSkidModal",
-                        "startSkidPcsStart",
-                        "startSkidSetCountDevice",
-                        "startSkidMachineHidden");
-
-        wireCountSetter("EndRunCountModal",
-                        "endRunFinalCount",
-                        "endRunSetCountDevice",
-                        "endRunMachineHidden");
-    });
-
-
 </script>
 
 <!-- Inline Modals -->
@@ -655,6 +435,8 @@
                             }
                         </select>
                     </div>
+                            
+
                     <button type="submit" class="btn btn-primary w-100">Confirm Login</button>
                 </form>
             </div>
@@ -760,7 +542,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="startSkidForm" method="post" asp-controller="PressRunLog" asp-action="StartSkid">
+                        <form id="startSkidForm" method="post" asp-controller="PressRunLog" asp-action="StartSkid">
+
                     @Html.AntiForgeryToken()
                     <input type="hidden" id="startSkidRunId" name="runId" />
                     <input type="hidden" id="startSkidRunValue" name="run" />
@@ -781,6 +564,7 @@
                             Set count on device
                         </label>
                     </div>
+                           
 
                     <button type="submit" class="btn btn-primary w-100">Confirm Start Skid</button>
                 </form>
@@ -788,7 +572,272 @@
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@section Scripts {
+            <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+            <script>
+                // ---------- shared helper for logout / end run ----------
+                function wireCountAndAjax(formId, cntId, chkId, machId) {
+                    const f = document.getElementById(formId);
+                    if (!f) return;
+
+                    f.addEventListener('submit', async ev => {
+                        if (f.dataset.submitted === 'true') {
+                            ev.preventDefault();
+                            return;
+                        }
+                        ev.preventDefault();
+                        f.dataset.submitted = 'true';
+
+                        /* optional device push */
+                        try {
+                            const cnt  = document.getElementById(cntId);
+                            const chk  = document.getElementById(chkId);
+                            const mach = document.getElementById(machId)?.value;
+                            const ip   = (window.deviceIPs || {})[mach];
+                            const orig = cnt?.dataset.originalCount ?? '';
+
+                            if (chk?.checked && cnt && ip && cnt.value.trim() !== orig) {
+                                await fetch(`http://${ip}/update`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: `count_value=${encodeURIComponent(cnt.value)}`
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Device push failed:', e);
+                        }
+
+                        /* main AJAX submit */
+                        try {
+                            const fd  = new FormData(f);
+                            const tok = f.querySelector('input[name="__RequestVerificationToken"]')?.value;
+
+                            // default to POST if method is empty
+                            let method = (f.method || 'POST').toUpperCase();
+
+                            const options = {
+                                method,
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    ...(tok ? { RequestVerificationToken: tok } : {})
+                                }
+                            };
+
+                            // Only attach body for non-GET/HEAD
+                            if (method !== 'GET' && method !== 'HEAD') {
+                                options.body = fd;
+                            }
+
+                            const resp = await (window.fetchWithSpinner
+                                ? window.fetchWithSpinner(f.action, options)
+                                : fetch(f.action, options));
+
+                            const json = await resp.json();
+
+                            if (json.ok) {
+                                await Swal.fire({
+                                    icon: 'success',
+                                    title: json.message || 'Done',
+                                    timer: 3000,
+                                    showConfirmButton: false
+                                });
+                                location.reload();
+                            } else {
+                                throw new Error(json.message || 'Request failed');
+                            }
+                        } catch (err) {
+                            Swal.fire('Error', err.message || 'Network error', 'error');
+                        } finally {
+                            f.dataset.submitted = 'false';
+                        }
+                    });
+                }
+
+                // ---------- supervisor override helpers for Login / Start Skid ----------
+                document.addEventListener('DOMContentLoaded', function () {
+                    // Forms that need override support (PIN)
+                    hookOverrideForm('#loginForm',
+                                     '/PressRunLog/ConfirmLogin',
+                                     'Login',
+                                     'LoginModal');
+
+                    hookOverrideForm('#startSkidForm',
+                                     '/PressRunLog/StartSkid',
+                                     'Start Skid',
+                                     'StartSkidModal');
+
+                    // Forms that still use the old device-push + spinner flow
+                    wireCountAndAjax('logoutForm',
+                                     'logoutDeviceCountDisplay',
+                                     'logoutSetCountDevice',
+                                     'logoutMachineHidden');
+
+                    wireCountAndAjax('endRunForm',
+                                     'endRunFinalCount',
+                                     'endRunSetCountDevice',
+                                     'endRunMachineHidden');
+                });
+
+                function hookOverrideForm(formSelector, url, actionLabel, modalId) {
+                    const form = document.querySelector(formSelector);
+                    if (!form) return;
+
+                    // ✅ Prevent double-wiring the same form
+                    if (form.dataset.overrideHooked === '1') {
+                        return;
+                    }
+                    form.dataset.overrideHooked = '1';
+
+                    form.addEventListener('submit', async function (e) {
+                        e.preventDefault(); // stop normal form post
+                        const formData = new FormData(form);
+
+                        try {
+                            await doOverrideFlow(url, formData, actionLabel, modalId);
+                        } catch (err) {
+                            console.error(err);
+                            Swal.fire({
+                                icon: 'error',
+                                title: actionLabel + ' failed',
+                                text: 'Unexpected error occurred.'
+                            });
+                        }
+                    });
+                }
+
+                async function doOverrideFlow(url, formData, actionLabel, modalId, overridePin) {
+                    if (overridePin) {
+                        formData.set('overridePin', overridePin);
+                    }
+
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: formData
+                    });
+
+                    let payload;
+                    let rawText;
+                    try {
+                        rawText = await res.text();
+                        payload = rawText ? JSON.parse(rawText) : {};
+                    } catch (e) {
+                        console.error('Non-JSON response:', rawText);
+                        await Swal.fire({
+                            icon: 'error',
+                            title: actionLabel + ' failed',
+                            text: 'Server did not return valid JSON.'
+                        });
+                        return;
+                    }
+
+                    const successFlag = (payload.ok === true || payload.success === true);
+
+                    // ✅ Success path
+                    if (res.ok && successFlag) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: actionLabel + ' Successful',
+                            text: payload.message || (actionLabel + ' completed.')
+                        });
+                        location.reload();
+                        return;
+                    }
+
+                                          if (res.status === 400 && !overridePin) {
+                    const msg = payload.message || 'Supervisor override required.';
+
+                    // Hide Bootstrap modal so it doesn't trap focus
+                    const modalEl = document.getElementById(modalId);
+                    if (modalEl) {
+                        const inst = bootstrap.Modal.getInstance(modalEl);
+                        if (inst) inst.hide();
+                    }
+
+                    const result = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Supervisor / Material Override',
+                        html: `<p style="text-align:left;">${msg}</p>`,
+
+                        // 🔹 Use TEXT instead of PASSWORD to defeat autofill
+                        input: 'text',
+                        inputLabel: 'Override PIN',
+                        inputPlaceholder: 'Enter override PIN',
+
+                        // 🔹 Force blank & try to kill autofill
+                        inputValue: '',
+                        inputAttributes: {
+                            maxlength: 10,
+                            autocapitalize: 'off',
+                            autocorrect: 'off',
+                            autocomplete: 'off',
+                            // random name so browser can't match previous field
+                            name: 'override_' + Date.now(),
+                            inputmode: 'numeric'      // optional, nicer keypad on mobile
+                        },
+
+                        showCancelButton: true,
+                        confirmButtonText: 'Submit PIN',
+                        cancelButtonText: 'Cancel',
+                        allowOutsideClick: false,
+
+                        didOpen: () => {
+                            const input = Swal.getInput();
+                            if (input) {
+                                // belt + suspenders: nuke any value browser tried to slip in
+                                input.value = '';
+                                input.setAttribute('autocomplete', 'off');
+                                input.focus();
+
+                                // extra nuke for aggressive autofill: clear again on a tiny delay
+                                setTimeout(() => {
+                                    if (input.value !== '') input.value = '';
+                                }, 50);
+                            }
+                        }
+                    });
+
+                    if (!result.isConfirmed || !result.value) {
+                        return; // user cancelled
+                    }
+
+                    const pin = result.value;
+
+                    // 🔁 Retry with overridePin
+                    return await doOverrideFlow(url, formData, actionLabel, modalId, pin);
+                }
+
+
+                    // ❌ If we got here with a second 400 (bad PIN or other failure)
+                    const rawCode = payload.code || payload.errorCode || payload.status || payload.error || '';
+                    const code = rawCode.toString().toUpperCase();
+                    const message = payload.message || 'An error occurred.';
+
+                    if (code === 'BAD_PIN') {
+                        await Swal.fire({
+                            icon: 'error',
+                            title: 'Invalid PIN',
+                            text: message
+                        });
+                        return;
+                    }
+
+                    await Swal.fire({
+                        icon: 'error',
+                        title: actionLabel + ' failed',
+                        text: message
+                    });
+                }
+            </script>
+}
+
+
+
 @if (TempData["Toast"] != null)
 {
     <script>
@@ -798,3 +847,23 @@
     </script>
 }
 
+
+
+
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                if (window.jQuery && $.fn.DataTable) {
+                    $('#pressrunTable').DataTable({
+                        pageLength: 50,
+                        lengthMenu: [[10, 25, 50, 100, -1],
+                                     [10, 25, 50, 100, "All"]],
+                        order: [[13, 'desc']] // Start Time column
+                    });
+                } else {
+                    console.warn('DataTables not found; table will be plain HTML.');
+                }
+            });
+        </script>
+
+    

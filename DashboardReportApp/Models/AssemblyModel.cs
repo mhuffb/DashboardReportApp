@@ -13,6 +13,12 @@ namespace DashboardReportApp.Models
         public sbyte? Open { get; set; }
         public int? SkidNumber { get; set; }
         public int? Pcs { get; set; }
+        public string? LotNumbers { get; set; }
+        public string? MaterialCodes { get; set; }
+        public string? Components { get; set; }
+        public string? Machines { get; set; }
+        public string? Run { get; set; }         
+
     }
 
     public class AssemblyRunViewModel

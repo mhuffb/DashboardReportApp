@@ -97,13 +97,30 @@ public class AssemblyService
     public async Task<List<PressRunLogModel>> GetOpenGreenSkidsAsync()
     {
         var openGreenSkids = new List<PressRunLogModel>();
-        var partsSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         string query = @"
-SELECT id, timestamp, prodNumber, run, part, component, endDateTime, operator, machine, pcsStart, pcsEnd, notes, skidNumber
+SELECT 
+    MIN(id)                  AS id,
+    MIN(timestamp)           AS timestamp,
+    prodNumber,
+    GROUP_CONCAT(DISTINCT run)        AS run,
+    part,
+    GROUP_CONCAT(DISTINCT component)  AS component,
+    MAX(endDateTime)         AS endDateTime,
+    GROUP_CONCAT(DISTINCT operator)   AS operator,
+    GROUP_CONCAT(DISTINCT machine)    AS machine,
+    MIN(pcsStart)            AS pcsStart,
+    MAX(pcsEnd)              AS pcsEnd,
+    ''                       AS notes,
+    0                        AS skidNumber,
+    GROUP_CONCAT(DISTINCT lotNumber)      AS lotNumber,
+    GROUP_CONCAT(DISTINCT materialCode)   AS materialCode
 FROM pressrun
-WHERE open = 1 AND skidNumber > 0
-ORDER BY startDateTime DESC";
+WHERE open = 1
+  AND skidNumber > 0
+  AND component LIKE '%C%'   -- assembly parent skids come from C components
+GROUP BY prodNumber, part
+ORDER BY part;";
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
         await connection.OpenAsync();
@@ -112,50 +129,36 @@ ORDER BY startDateTime DESC";
 
         while (await reader.ReadAsync())
         {
-            // Retrieve the component value.
-            string component = reader["component"]?.ToString() ?? "N/A";
-
-            // Only process if component contains "C" (case-insensitive)
-            if (string.IsNullOrEmpty(component) || component.IndexOf("C", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                continue;
-            }
-
-            // Retrieve the part value.
-            string part = reader["part"]?.ToString() ?? "N/A";
-
-            // Only add the record if this part hasn't been seen yet.
-            if (partsSeen.Contains(part))
-            {
-                continue;
-            }
-            partsSeen.Add(part);
-
             openGreenSkids.Add(new PressRunLogModel
             {
                 Id = reader.GetInt32("id"),
                 Timestamp = reader.GetDateTime("timestamp"),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
-                Run = reader["run"]?.ToString() ?? "N/A",
-                Part = part,
-                Component = component,
+                Run = reader["run"]?.ToString() ?? "",
+                Part = reader["part"]?.ToString() ?? "N/A",
+                Component = reader["component"]?.ToString() ?? "",
                 EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                              ? null
-                              : reader.GetDateTime("endDateTime"),
-                Operator = reader["operator"]?.ToString() ?? "N/A",
-                SkidNumber = reader.GetInt32("skidNumber"),
-                Machine = reader["machine"]?.ToString() ?? "N/A",
+                                ? (DateTime?)null
+                                : reader.GetDateTime("endDateTime"),
+                Operator = reader["operator"]?.ToString() ?? "",
+                SkidNumber = 0,
+                Machine = reader["machine"]?.ToString() ?? "",
                 PcsStart = reader.IsDBNull(reader.GetOrdinal("pcsStart"))
-                              ? 0
-                              : Convert.ToInt32(reader["pcsStart"]),
+                                ? 0
+                                : Convert.ToInt32(reader["pcsStart"]),
                 PcsEnd = reader.IsDBNull(reader.GetOrdinal("pcsEnd"))
-                              ? 0
-                              : Convert.ToInt32(reader["pcsEnd"])
+                                ? 0
+                                : Convert.ToInt32(reader["pcsEnd"]),
+                Notes = reader["notes"]?.ToString() ?? "",
+                LotNumber = reader["lotNumber"]?.ToString() ?? "",
+                MaterialCode = reader["materialCode"]?.ToString() ?? ""
             });
         }
 
         return openGreenSkids;
     }
+
+
     // Get a list of operators from MySQL
     public List<string> GetOperators()
     {
@@ -245,85 +248,116 @@ ORDER BY startDateTime DESC";
     /// </summary>
     public async Task<string> GenerateAssemblyReportAsync(AssemblyModel model)
     {
-        // Generate the PDF file path.
+        // 🔴 ADD THIS LINE: make sure the model has runs, components, lots, materials, machines
+        await PopulateAssemblyMetadataFromPressrunAsync(model);
+
         var fileName = $"AssemblyTag_{model.Id}.pdf";
         var filePath = System.IO.Path.Combine(_exportsFolder, fileName);
-        // Get the order of operations (unchanged).
+
         List<string> result = _sharedService.GetOrderOfOps(model.Part);
 
-        // Predefined fonts.
         PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
         PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
-        // Create writer and PDF document.
         PdfWriter writer = new PdfWriter(filePath);
         PdfDocument pdf = new PdfDocument(writer);
 
         using (var document = new iText.Layout.Document(pdf))
         {
-            // Set overall document margins.
             document.SetMargins(20, 20, 40, 20);
 
-            // Title at top center.
+            // Title
             document.Add(new Paragraph("Assembly Tag")
                 .SetFont(boldFont)
                 .SetFontSize(18)
                 .SetTextAlignment(TextAlignment.CENTER));
 
-            // Add a horizontal line separator.
             document.Add(new LineSeparator(new SolidLine()).SetMarginBottom(10));
 
-
-
-            // Order of Operations header (centered).
+            // Order of Operations header
             document.Add(new Paragraph("Order of Operations:")
                 .SetFont(boldFont)
                 .SetFontSize(14)
                 .SetTextAlignment(TextAlignment.CENTER)
                 .SetMarginBottom(2));
 
-            document.Add(new Paragraph($"Assembly")
+            document.Add(new Paragraph("Assembly")
                 .SetFont(boldFont)
                 .SetFontSize(12)
                 .SetTextAlignment(TextAlignment.CENTER)
-                .SetMarginBottom(2));
+                .SetMarginBottom(10));
 
-            // Add assembly record details.
+            // ==== CORE ASSEMBLY INFO (existing, plus run) ====
             document.Add(new Paragraph($"Assembly Id: {model.Id}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"Production Number: {model.ProdNumber}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"Part: {model.Part}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"End DateTime: {DateTime.Now}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"Operator: {model.Operator}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"Pcs: {model.Pcs}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+
             document.Add(new Paragraph($"Skid Number: {model.SkidNumber}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
-            document.Add(new Paragraph($"Notes: {model.Notes}")
-                .SetFont(normalFont)
-                .SetFontSize(12)
-                .SetMarginBottom(2));
+                .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
 
+            if (!string.IsNullOrWhiteSpace(model.Notes))
+            {
+                document.Add(new Paragraph($"Notes: {model.Notes}")
+                    .SetFont(normalFont).SetFontSize(12).SetMarginBottom(6));
+            }
 
-            // Loop through each order operation item.
+            // ==== NEW BLOCK: PRESS / MATERIAL INFO ====
+            if (!string.IsNullOrWhiteSpace(model.Components) ||
+                !string.IsNullOrWhiteSpace(model.LotNumbers) ||
+                !string.IsNullOrWhiteSpace(model.MaterialCodes) ||
+                !string.IsNullOrWhiteSpace(model.Machines))
+            {
+                document.Add(new LineSeparator(new SolidLine())
+                    .SetMarginTop(5).SetMarginBottom(5));
+
+                document.Add(new Paragraph("Source Press / Material Information")
+                    .SetFont(boldFont)
+                    .SetFontSize(13)
+                    .SetMarginBottom(4));
+
+                if (!string.IsNullOrWhiteSpace(model.Run))
+                {
+                    document.Add(new Paragraph($"Run: {model.Run}")
+                        .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+                }
+
+                if (!string.IsNullOrWhiteSpace(model.Components))
+                {
+                    document.Add(new Paragraph($"Components: {model.Components}")
+                        .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+                }
+                if (!string.IsNullOrWhiteSpace(model.LotNumbers))
+                {
+                    document.Add(new Paragraph($"Lot Number(s): {model.LotNumbers}")
+                        .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+                }
+                if (!string.IsNullOrWhiteSpace(model.MaterialCodes))
+                {
+                    document.Add(new Paragraph($"Material Code(s): {model.MaterialCodes}")
+                        .SetFont(normalFont).SetFontSize(12).SetMarginBottom(2));
+                }
+                if (!string.IsNullOrWhiteSpace(model.Machines))
+                {
+                    document.Add(new Paragraph($"Press Machine(s): {model.Machines}")
+                        .SetFont(normalFont).SetFontSize(12).SetMarginBottom(6));
+                }
+            }
+
+            // ==== ORDER OF OPS (unchanged) ====
             foreach (var item in result)
             {
                 document.Add(new Paragraph(_sharedService.processDesc(item))
@@ -335,32 +369,26 @@ ORDER BY startDateTime DESC";
                 if (item.ToLower().Contains("machin"))
                 {
                     document.Add(new Paragraph("Machine #: ____________ Signature: __________________________   Date: __________________")
-                        .SetFont(normalFont)
-                        .SetFontSize(12)
+                        .SetFont(normalFont).SetFontSize(12)
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(5));
                 }
                 else if (item.ToLower().Contains("sinter"))
                 {
                     document.Add(new Paragraph("Loaded By: __________________   Unloaded By: __________________   Date: __________________")
-                        .SetFont(normalFont)
-                        .SetFontSize(12)
+                        .SetFont(normalFont).SetFontSize(12)
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(5));
                 }
                 else
                 {
                     document.Add(new Paragraph("Signature: __________________________   Date: __________________")
-                        .SetFont(normalFont)
-                        .SetFontSize(12)
+                        .SetFont(normalFont).SetFontSize(12)
                         .SetTextAlignment(TextAlignment.CENTER)
                         .SetMarginBottom(5));
                 }
 
-
-
-
-                // Add a footer on each page with the part information.
+                // Footer on each page
                 int pageCount = pdf.GetNumberOfPages();
                 for (int i = 1; i <= pageCount; i++)
                 {
@@ -383,6 +411,8 @@ ORDER BY startDateTime DESC";
             return filePath;
         }
     }
+
+
     public void EndProduction(string part, string prodNumber)
     {
         string updateQuery1 = "UPDATE pressrun " +
@@ -405,33 +435,63 @@ ORDER BY startDateTime DESC";
     }
 
     public async Task<(List<AssemblyModel> Items, int TotalCount)> GetPagedRunsAsync(
-  int page, int pageSize, string sort, string dir, string search)
+     int page, int pageSize, string sort, string dir, string search)
     {
         var items = new List<AssemblyModel>();
         int total = 0;
 
         var validSort = sort switch
         {
-            "endDateTime" => "endDateTime",
-            "prodNumber" => "prodNumber",
-            "part" => "part",
-            "operator" => "operator",
-            _ => "id"
+            "endDateTime" => "a.endDateTime",
+            "prodNumber" => "a.prodNumber",
+            "part" => "a.part",
+            "operator" => "a.operator",
+            _ => "a.id"
         };
         var validDir = dir?.ToUpper() == "ASC" ? "ASC" : "DESC";
 
         string whereClause = "";
         if (!string.IsNullOrWhiteSpace(search))
         {
-            whereClause = @"WHERE prodNumber LIKE @search
-                     OR part LIKE @search
-                     OR operator LIKE @search";
+            whereClause = @"WHERE a.prodNumber LIKE @search
+                     OR a.part      LIKE @search
+                     OR a.operator  LIKE @search";
         }
 
-        string countSql = $"SELECT COUNT(*) FROM {datatable} {whereClause}";
+        string countSql = $"SELECT COUNT(*) FROM {datatable} a {whereClause}";
+
         string dataSql = $@"
-        SELECT id, timestamp, operator, prodNumber, part, endDateTime, notes, open, skidNumber, pcs
-        FROM {datatable}
+        SELECT 
+            a.id,
+            a.timestamp,
+            a.operator,
+            a.prodNumber,
+            a.part,
+            a.endDateTime,
+            a.notes,
+            a.open,
+            a.skidNumber,
+            a.pcs,
+            prAgg.runs,
+            prAgg.lotNumbers,
+            prAgg.materialCodes,
+            prAgg.components,
+            prAgg.machines
+        FROM {datatable} a
+        LEFT JOIN (
+            SELECT 
+                prodNumber,
+                part,
+                GROUP_CONCAT(DISTINCT run)        AS runs,
+                GROUP_CONCAT(DISTINCT lotNumber)  AS lotNumbers,
+                GROUP_CONCAT(DISTINCT materialCode) AS materialCodes,
+                GROUP_CONCAT(DISTINCT component)  AS components,
+                GROUP_CONCAT(DISTINCT machine)    AS machines
+            FROM pressrun
+            GROUP BY prodNumber, part
+        ) prAgg
+          ON prAgg.prodNumber = a.prodNumber
+         AND prAgg.part       = a.part
         {whereClause}
         ORDER BY {validSort} {validDir}
         LIMIT @pageSize OFFSET @offset";
@@ -465,12 +525,18 @@ ORDER BY startDateTime DESC";
                     ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                     Part = reader["part"]?.ToString() ?? "N/A",
                     EndDateTime = reader.IsDBNull(reader.GetOrdinal("endDateTime"))
-                                  ? DateTime.MinValue
-                                  : reader.GetDateTime("endDateTime"),
+                                    ? DateTime.MinValue
+                                    : reader.GetDateTime("endDateTime"),
                     Notes = reader["notes"]?.ToString(),
                     Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                     SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
-                    Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0
+                    Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0,
+
+                    Run = reader["runs"]?.ToString() ?? "",
+                    LotNumbers = reader["lotNumbers"]?.ToString() ?? "",
+                    MaterialCodes = reader["materialCodes"]?.ToString() ?? "",
+                    Components = reader["components"]?.ToString() ?? "",
+                    Machines = reader["machines"]?.ToString() ?? ""
                 });
             }
         }
@@ -478,6 +544,35 @@ ORDER BY startDateTime DESC";
         return (items, total);
     }
 
+    private async Task PopulateAssemblyMetadataFromPressrunAsync(AssemblyModel model)
+    {
+        const string sql = @"
+        SELECT 
+            GROUP_CONCAT(DISTINCT run)          AS runs,
+            GROUP_CONCAT(DISTINCT component)    AS components,
+            GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumbers,
+            GROUP_CONCAT(DISTINCT materialCode) AS materialCodes,
+            GROUP_CONCAT(DISTINCT machine)      AS machines
+        FROM pressrun
+        WHERE prodNumber = @prodNumber
+          AND part       = @part";
+
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+        cmd.Parameters.AddWithValue("@part", model.Part);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            model.Run = reader["runs"]?.ToString() ?? "";
+            model.Components = reader["components"]?.ToString() ?? "";
+            model.LotNumbers = reader["lotNumbers"]?.ToString() ?? "";
+            model.MaterialCodes = reader["materialCodes"]?.ToString() ?? "";
+            model.Machines = reader["machines"]?.ToString() ?? "";
+        }
+    }
 
 
 }

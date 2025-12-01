@@ -7,6 +7,7 @@ using iText.Layout.Element;
 using iText.Layout.Properties;
 using Microsoft.Extensions.Options;
 using MySql.Data.MySqlClient;
+using iText.Layout.Borders;
 
 namespace DashboardReportApp.Services
 {
@@ -115,9 +116,18 @@ namespace DashboardReportApp.Services
         {
             const string query = @"
 INSERT INTO holdrecords 
-(part, prodNumber, discrepancy, date, issuedBy, disposition, dispositionBy, reworkInstr, reworkInstrBy, quantity, unit, pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
-VALUES (@part, @prodNumber, @discrepancy, @date, @issuedBy, @disposition, @dispositionBy, @reworkInstr, @reworkInstrBy, @quantity, @unit, @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
+(part, component, prodNumber, lotNumber, materialCode, runNumber,
+ discrepancy, date, issuedBy, disposition, dispositionBy,
+ reworkInstr, reworkInstrBy, quantity, quantityOnHold, unit,
+ pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
+VALUES 
+(@part, @component, @prodNumber, @lotNumber, @materialCode, @runNumber,
+ @discrepancy, @date, @issuedBy, @disposition, @dispositionBy,
+ @reworkInstr, @reworkInstrBy, @quantity, @quantityOnHold, @unit,
+ @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
 SELECT LAST_INSERT_ID();";
+
+
 
 
 
@@ -126,7 +136,13 @@ SELECT LAST_INSERT_ID();";
             await using var command = new MySqlCommand(query, connection);
 
             command.Parameters.AddWithValue("@part", record.Part);
+            command.Parameters.AddWithValue("@component", (object?)record.Component ?? DBNull.Value);
             command.Parameters.AddWithValue("@prodNumber", (object?)record.ProdNumber ?? DBNull.Value);
+            command.Parameters.AddWithValue("@lotNumber", (object?)record.LotNumber ?? DBNull.Value);
+            command.Parameters.AddWithValue("@materialCode", (object?)record.MaterialCode ?? DBNull.Value);
+            command.Parameters.AddWithValue("@runNumber", (object?)record.RunNumber ?? DBNull.Value);
+
+
             command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
             command.Parameters.AddWithValue("@date", record.Date);
             command.Parameters.AddWithValue("@issuedBy", record.IssuedBy);
@@ -134,14 +150,16 @@ SELECT LAST_INSERT_ID();";
             command.Parameters.AddWithValue("@dispositionBy", (object?)record.DispositionBy ?? DBNull.Value);
             command.Parameters.AddWithValue("@reworkInstr", (object?)record.ReworkInstr ?? DBNull.Value);
             command.Parameters.AddWithValue("@reworkInstrBy", (object?)record.ReworkInstrBy ?? DBNull.Value);
+
             command.Parameters.AddWithValue("@quantity", record.Quantity);
+            command.Parameters.AddWithValue("@quantityOnHold", (object?)record.QuantityOnHold ?? DBNull.Value);
             command.Parameters.AddWithValue("@unit", record.Unit);
             command.Parameters.AddWithValue("@pcsScrapped", (object?)record.PcsScrapped ?? DBNull.Value);
             command.Parameters.AddWithValue("@dateCompleted", (object?)record.DateCompleted ?? DBNull.Value);
 
-            // Store whatever is currently on the model (filename or null)
             command.Parameters.AddWithValue("@fileAddress1", (object?)record.FileAddress1 ?? DBNull.Value);
             command.Parameters.AddWithValue("@fileAddress2", (object?)record.FileAddress2 ?? DBNull.Value);
+
 
             var newId = Convert.ToInt32(await command.ExecuteScalarAsync());
             record.Id = newId;
@@ -159,38 +177,72 @@ SELECT LAST_INSERT_ID();";
             using var pdf = new PdfDocument(writer);
             using var document = new Document(pdf);
 
-            document.Add(new Paragraph("Hold").SetFont(boldFont).SetFontSize(18).SetTextAlignment(TextAlignment.CENTER));
-            document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("ID:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph((record.Id == 0 ? "N/A" : record.Id.ToString())).SetFont(normalFont).SetFontSize(12));
-            document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Part Number:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part).SetFont(normalFont).SetFontSize(12));
-            document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Production Number:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.ProdNumber) ? "N/A" : record.ProdNumber)
-                .SetFont(normalFont).SetFontSize(12));
+            string prodNumber = string.IsNullOrWhiteSpace(record.ProdNumber) ? "N/A" : record.ProdNumber;
+            string runNumber = string.IsNullOrWhiteSpace(record.RunNumber) ? "N/A" : record.RunNumber;
+            string part = string.IsNullOrWhiteSpace(record.Part) ? "N/A" : record.Part;
+            string component = string.IsNullOrWhiteSpace(record.Component) ? "N/A" : record.Component;
+            string lotNumber = string.IsNullOrWhiteSpace(record.LotNumber) ? "N/A" : record.LotNumber;
+            string materialCode = string.IsNullOrWhiteSpace(record.MaterialCode) ? "N/A" : record.MaterialCode;
+            string discrepancy = string.IsNullOrWhiteSpace(record.Discrepancy) ? "N/A" : record.Discrepancy;
+            string issuedBy = string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy;
+            string issuedDate = record.Date.HasValue ? record.Date.Value.ToString("MM/dd/yyyy") : "N/A";
 
+            string unitDisplay = string.IsNullOrWhiteSpace(record.Unit) ? "" : record.Unit + "(s)";
+            string qtyTagsText = record.Quantity.HasValue ? record.Quantity.Value.ToString() : "N/A";
+            string qtyOnHoldText = record.QuantityOnHold.HasValue
+                ? $"{record.QuantityOnHold.Value} {unitDisplay}"
+                : "N/A";
+
+            // Header
+            document.Add(
+                new Paragraph("HOLD TAG")
+                    .SetFont(boldFont)
+                    .SetFontSize(20)
+                    .SetTextAlignment(TextAlignment.CENTER)
+            );
+
+            document.Add(new Paragraph($"ID: {record.Id}").SetFont(boldFont).SetFontSize(12).SetTextAlignment(TextAlignment.CENTER));
             document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Discrepancy:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph(record.Discrepancy ?? "N/A").SetFont(normalFont).SetFontSize(12));
+
+            // Production / Run / Part / Component / Lot / Material
+            document.Add(new Paragraph("Production Info").SetFont(boldFont).SetFontSize(14));
+            document.Add(new Paragraph($"Production #: {prodNumber}").SetFont(normalFont));
+            document.Add(new Paragraph($"Run #: {runNumber}").SetFont(normalFont));
+            document.Add(new Paragraph($"Part: {part}").SetFont(normalFont));
+            document.Add(new Paragraph($"Component: {component}").SetFont(normalFont));
+            document.Add(new Paragraph($"Lot #: {lotNumber}").SetFont(normalFont));
+            document.Add(new Paragraph($"Material: {materialCode}").SetFont(normalFont));
             document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Issued By:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph(string.IsNullOrWhiteSpace(record.IssuedBy) ? "Unknown" : record.IssuedBy).SetFont(normalFont).SetFontSize(12));
-            document.Add(new Paragraph("Issued Date:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph($"{record.Date:MM/dd/yyyy}").SetFont(normalFont).SetFontSize(12));
+
+            // Discrepancy
+            document.Add(new Paragraph("Discrepancy").SetFont(boldFont).SetFontSize(14));
+            document.Add(new Paragraph(discrepancy).SetFont(normalFont));
             document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Corrective Action Needed: Yes ☐  No ☐").SetFont(boldFont).SetFontSize(12));
+
+            // Quantities
+            document.Add(new Paragraph("Quantities").SetFont(boldFont).SetFontSize(14));
+            document.Add(new Paragraph($"Hold Tags: {qtyTagsText}").SetFont(normalFont));
+            document.Add(new Paragraph($"Qty On Hold: {qtyOnHoldText}").SetFont(normalFont));
             document.Add(new Paragraph("\n"));
-            var qtyUnit = $"{record.Quantity} {record.Unit}".Trim();
-            document.Add(new Paragraph("Amount:").SetFont(boldFont).SetFontSize(12));
-            document.Add(new Paragraph(string.IsNullOrWhiteSpace(qtyUnit) ? "N/A" : qtyUnit).SetFont(normalFont).SetFontSize(12));
+
+            // Issued info
+            document.Add(new Paragraph("Issued").SetFont(boldFont).SetFontSize(14));
+            document.Add(new Paragraph($"By: {issuedBy}").SetFont(normalFont));
+            document.Add(new Paragraph($"Date: {issuedDate}").SetFont(normalFont));
             document.Add(new Paragraph("\n"));
-            document.Add(new Paragraph("Return Form To QA Manager Once Completed")
-                .SetFont(boldFont).SetFontSize(12).SetTextAlignment(TextAlignment.CENTER));
+
+            // Footer reminder
+            document.Add(
+                new Paragraph("Return form to QA Manager once completed.")
+                    .SetFont(boldFont)
+                    .SetFontSize(12)
+                    .SetTextAlignment(TextAlignment.CENTER)
+            );
 
             return filePath;
         }
+
+
 
         public async Task UpdateFileAddress1Async(int id, string filenameOnly)
         {
@@ -220,6 +272,9 @@ SELECT LAST_INSERT_ID();";
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp")) ? null : reader.GetDateTime(reader.GetOrdinal("Timestamp")),
                     Part = reader.IsDBNull(reader.GetOrdinal("Part")) ? null : reader.GetString(reader.GetOrdinal("Part")),
+                    Component = reader.IsDBNull(reader.GetOrdinal("Component"))
+        ? null
+        : reader.GetString(reader.GetOrdinal("Component")),
                     ProdNumber = reader.IsDBNull(reader.GetOrdinal("ProdNumber"))
     ? null
     : reader.GetString(reader.GetOrdinal("ProdNumber")),
@@ -236,7 +291,17 @@ SELECT LAST_INSERT_ID();";
                     PcsScrapped = reader.IsDBNull(reader.GetOrdinal("PcsScrapped")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("PcsScrapped")),
                     DateCompleted = reader.IsDBNull(reader.GetOrdinal("DateCompleted")) ? null : reader.GetDateTime(reader.GetOrdinal("DateCompleted")),
                     FileAddress1 = reader.IsDBNull(reader.GetOrdinal("FileAddress1")) ? null : reader.GetString(reader.GetOrdinal("FileAddress1")),
-                    FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2")) ? null : reader.GetString(reader.GetOrdinal("FileAddress2"))
+                    FileAddress2 = reader.IsDBNull(reader.GetOrdinal("FileAddress2")) ? null : reader.GetString(reader.GetOrdinal("FileAddress2")),
+                    LotNumber = reader.IsDBNull(reader.GetOrdinal("LotNumber"))
+    ? null : reader.GetString(reader.GetOrdinal("LotNumber")),
+                    MaterialCode = reader.IsDBNull(reader.GetOrdinal("MaterialCode"))
+    ? null : reader.GetString(reader.GetOrdinal("MaterialCode")),
+                    RunNumber = reader.IsDBNull(reader.GetOrdinal("RunNumber"))
+    ? null : reader.GetString(reader.GetOrdinal("RunNumber")),
+
+                    QuantityOnHold = reader.IsDBNull(reader.GetOrdinal("QuantityOnHold"))
+    ? (int?)null : reader.GetInt32(reader.GetOrdinal("QuantityOnHold")),
+
                 };
                 records.Add(rec);
             }
@@ -338,27 +403,35 @@ LIMIT 10;";
             await connection.OpenAsync();
 
             const string query = @"
-        UPDATE HoldRecords
-        SET 
-            Part = @Part,
-            Discrepancy = @Discrepancy,
-            Date = @Date,
-            IssuedBy = @IssuedBy,
-            Disposition = @Disposition,
-            DispositionBy = @DispositionBy,
-            ReworkInstr = @ReworkInstr,
-            ReworkInstrBy = @ReworkInstrBy,
-            Quantity = @Quantity,
-            Unit = @Unit,
-            PcsScrapped = @PcsScrapped,
-            DateCompleted = @DateCompleted,
-            FileAddress1 = @FileAddress1,
-            FileAddress2 = @FileAddress2
-        WHERE Id = @Id";
+UPDATE HoldRecords
+SET 
+    Part = @Part,
+    Component = @Component,
+    ProdNumber = @ProdNumber,
+    LotNumber = @LotNumber,
+    MaterialCode = @MaterialCode,
+    RunNumber = @RunNumber,
+    Discrepancy = @Discrepancy,
+    Date = @Date,
+    IssuedBy = @IssuedBy,
+    Disposition = @Disposition,
+    DispositionBy = @DispositionBy,
+    ReworkInstr = @ReworkInstr,
+    ReworkInstrBy = @ReworkInstrBy,
+    Quantity = @Quantity,
+    QuantityOnHold = @QuantityOnHold,
+    Unit = @Unit,
+    PcsScrapped = @PcsScrapped,
+    DateCompleted = @DateCompleted,
+    FileAddress1 = @FileAddress1,
+    FileAddress2 = @FileAddress2
+WHERE Id = @Id";
+
 
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@Id", model.Id);
             command.Parameters.AddWithValue("@Part", (object?)model.Part ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Component", (object?)model.Component ?? DBNull.Value);
             command.Parameters.AddWithValue("@Discrepancy", (object?)model.Discrepancy ?? DBNull.Value);
             command.Parameters.AddWithValue("@Date", (object?)model.Date ?? DBNull.Value);
             command.Parameters.AddWithValue("@IssuedBy", (object?)model.IssuedBy ?? DBNull.Value);
@@ -374,6 +447,12 @@ LIMIT 10;";
                 string.IsNullOrWhiteSpace(fileName1) ? (object)DBNull.Value : fileName1);
             command.Parameters.AddWithValue("@FileAddress2",
                 string.IsNullOrWhiteSpace(fileName2) ? (object)DBNull.Value : fileName2);
+            command.Parameters.AddWithValue("@ProdNumber", (object?)model.ProdNumber ?? DBNull.Value);
+            command.Parameters.AddWithValue("@LotNumber", (object?)model.LotNumber ?? DBNull.Value);
+            command.Parameters.AddWithValue("@MaterialCode", (object?)model.MaterialCode ?? DBNull.Value);
+            command.Parameters.AddWithValue("@RunNumber", (object?)model.RunNumber ?? DBNull.Value);
+            command.Parameters.AddWithValue("@QuantityOnHold", (object?)model.QuantityOnHold ?? DBNull.Value);
+
 
             var rows = await command.ExecuteNonQueryAsync();
             return rows > 0;
@@ -415,6 +494,186 @@ LIMIT 10;";
 
             var combined = Path.Combine(_uploadsRoot, fileName);
             return File.Exists(combined) ? combined : null;
+        }
+        public class HoldScanResult
+        {
+            public string Source { get; set; } = ""; // "sinter" or "press"
+            public string? Part { get; set; }
+            public string? Component { get; set; }
+            public string? ProdNumber { get; set; }
+            public string? RunNumber { get; set; }
+            public string? LotNumber { get; set; }
+            public string? MaterialCode { get; set; }
+        }
+
+        public async Task<HoldScanResult?> LookupByScanAsync(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return null;
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1) Try as production number in sintering table
+            const string sinterSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM sinterrun
+WHERE prodNumber = @code
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using (var scmd = new MySqlCommand(sinterSql, conn))
+            {
+                scmd.Parameters.AddWithValue("@code", code);
+                await using var r = await scmd.ExecuteReaderAsync();
+                if (await r.ReadAsync())
+                {
+                    return new HoldScanResult
+                    {
+                        Source = "sinter",
+                        Part = r["part"] as string,
+                        Component = r["component"] as string,
+                        ProdNumber = r["prodNumber"] as string,
+                        RunNumber = r["run"] as string,
+                        LotNumber = r["lotNumber"] as string,
+                        MaterialCode = r["materialCode"] as string
+                    };
+                }
+            }
+
+            // 2) Try as run number in pressrun table
+            const string pressSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM pressrun
+WHERE run = @code
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using (var pcmd = new MySqlCommand(pressSql, conn))
+            {
+                pcmd.Parameters.AddWithValue("@code", code);
+                await using var r = await pcmd.ExecuteReaderAsync();
+                if (await r.ReadAsync())
+                {
+                    return new HoldScanResult
+                    {
+                        Source = "press",
+                        Part = r["part"] as string,
+                        Component = r["component"] as string,
+                        ProdNumber = r["prodNumber"] as string,
+                        RunNumber = r["run"] as string,
+                        LotNumber = r["lotNumber"] as string,
+                        MaterialCode = r["materialCode"] as string
+                    };
+                }
+            }
+
+            return null;
+        }
+        public async Task<HoldScanResult?> LookupByProdAsync(string prodNumber)
+        {
+            if (string.IsNullOrWhiteSpace(prodNumber))
+                return null;
+
+            prodNumber = prodNumber.Trim();
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1) Try SINTER table first (as requested)
+            const string sinterSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM sinterrun
+WHERE prodNumber = @prod
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using (var sinterCmd = new MySqlCommand(sinterSql, conn))
+            {
+                sinterCmd.Parameters.AddWithValue("@prod", prodNumber);
+
+                await using var r = await sinterCmd.ExecuteReaderAsync();
+                if (await r.ReadAsync())
+                {
+                    return new HoldScanResult
+                    {
+                        Source = "sinter",
+                        Part = r["part"] as string,
+                        Component = r["component"] as string,
+                        ProdNumber = r["prodNumber"] as string,
+                        RunNumber = r["run"] as string,
+                        LotNumber = r["lotNumber"] as string,
+                        MaterialCode = r["materialCode"] as string
+                    };
+                }
+            }
+
+            // 2) Fallback: try PRESS table (in case it hasn't been sintered yet)
+            const string pressSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM pressrun
+WHERE prodNumber = @prod
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using (var pressCmd = new MySqlCommand(pressSql, conn))
+            {
+                pressCmd.Parameters.AddWithValue("@prod", prodNumber);
+
+                await using var r2 = await pressCmd.ExecuteReaderAsync();
+                if (await r2.ReadAsync())
+                {
+                    return new HoldScanResult
+                    {
+                        Source = "press",
+                        Part = r2["part"] as string,
+                        Component = r2["component"] as string,
+                        ProdNumber = r2["prodNumber"] as string,
+                        RunNumber = r2["run"] as string,
+                        LotNumber = r2["lotNumber"] as string,
+                        MaterialCode = r2["materialCode"] as string
+                    };
+                }
+            }
+
+            // Nothing found in either table
+            return null;
+        }
+
+        public async Task<HoldScanResult?> LookupByRunAsync(string runNumber)
+        {
+            if (string.IsNullOrWhiteSpace(runNumber))
+                return null;
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            const string sql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM pressrun
+WHERE run = @run
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", runNumber);
+
+            await using var r = await cmd.ExecuteReaderAsync();
+            if (await r.ReadAsync())
+            {
+                return new HoldScanResult
+                {
+                    Source = "press",
+                    Part = r["part"] as string,
+                    Component = r["component"] as string,
+                    ProdNumber = r["prodNumber"] as string,
+                    RunNumber = r["run"] as string,
+                    LotNumber = r["lotNumber"] as string,
+                    MaterialCode = r["materialCode"] as string
+                };
+            }
+
+            return null;
         }
 
     }

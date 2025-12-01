@@ -24,6 +24,13 @@
         public int Pcs { get; set; }
         public decimal ElapsedTime { get; set; }
         public decimal CycleTime { get; set; }
+        public string LotNumber { get; set; }
+        public string MaterialCode { get; set; }
+        public bool IsOverride { get; set; }
+        public string? OverrideBy { get; set; }
+        public DateTime? OverrideAt { get; set; }
+
+
     }
 
     public class OpenSetups

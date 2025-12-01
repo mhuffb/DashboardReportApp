@@ -127,7 +127,8 @@
 <!-- ✅ SERVER-RENDERED TABLE (replaces React root) -->
 <div class="container-fluid px-3">
     <div class="table-responsive">
-        <table id="maintenanceTable" class="custom-table table-striped table-bordered shadow-sm w-100">
+        <table id="maintenanceTable" class="table table-striped table-bordered shadow-sm">
+
             @{
                 var colCount = isAdmin ? 13 : 12;
             }
