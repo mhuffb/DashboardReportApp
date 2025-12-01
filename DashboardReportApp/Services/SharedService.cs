@@ -535,11 +535,6 @@ ORDER BY p.measure_date DESC
                 return printerFromExact;
             }
 
-            // Try to get the printer name from the dictionary
-            if (userPrinterMappings.TryGetValue(userName, out string printerName))
-            {
-                return printerName;
-            }
 
             // Fallback option if not found
             return "Microsoft Print to PDF";
