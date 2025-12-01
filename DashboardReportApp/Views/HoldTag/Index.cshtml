@@ -264,6 +264,7 @@
                                         class="btn btn-primary btn-sm edit-btn mt-1"
                                         data-id="@record.Id"
                                         data-part="@record.Part"
+                                        data-component="@record.Component"
                                         data-discrepancy="@record.Discrepancy"
                                         data-date="@(record.Date?.ToString("yyyy-MM-dd") ?? "")"
                                         data-issuedby="@record.IssuedBy"
@@ -470,7 +471,10 @@
                             <label for="edit-part" class="form-label">Part</label>
                             <input type="text" name="Part" id="edit-part" class="form-control" />
                         </div>
-
+                        <div class="mb-3">
+                            <label for="edit-component" class="form-label">Component</label>
+                            <input type="text" name="Component" id="edit-component" class="form-control" />
+                        </div>
                         <div class="mb-3">
                             <label for="edit-discrepancy" class="form-label">Discrepancy</label>
                             <textarea name="Discrepancy" id="edit-discrepancy" class="form-control"></textarea>
@@ -928,8 +932,9 @@
         if (runInput) runInput.value = runNumber || "";
 
                 document.getElementById("edit-id").value = id;
-                document.getElementById("edit-part").value = part || "";
-                document.getElementById("edit-discrepancy").value = discrepancy || "";
+                        document.getElementById("edit-part").value = part || "";
+        document.getElementById("edit-component").value = component || "";
+                        document.getElementById("edit-discrepancy").value = discrepancy || "";
                 document.getElementById("edit-date").value = date || "";
                 document.getElementById("edit-issuedby").value = issuedBy || "";
                 document.getElementById("edit-disposition").value = disposition || "";

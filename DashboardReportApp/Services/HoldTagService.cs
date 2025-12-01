@@ -116,16 +116,17 @@ namespace DashboardReportApp.Services
         {
             const string query = @"
 INSERT INTO holdrecords 
-(part, prodNumber, lotNumber, materialCode, runNumber,
+(part, component, prodNumber, lotNumber, materialCode, runNumber,
  discrepancy, date, issuedBy, disposition, dispositionBy,
  reworkInstr, reworkInstrBy, quantity, quantityOnHold, unit,
  pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
 VALUES 
-(@part, @prodNumber, @lotNumber, @materialCode, @runNumber,
+(@part, @component, @prodNumber, @lotNumber, @materialCode, @runNumber,
  @discrepancy, @date, @issuedBy, @disposition, @dispositionBy,
  @reworkInstr, @reworkInstrBy, @quantity, @quantityOnHold, @unit,
  @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
 SELECT LAST_INSERT_ID();";
+
 
 
 
@@ -135,10 +136,12 @@ SELECT LAST_INSERT_ID();";
             await using var command = new MySqlCommand(query, connection);
 
             command.Parameters.AddWithValue("@part", record.Part);
+            command.Parameters.AddWithValue("@component", (object?)record.Component ?? DBNull.Value);
             command.Parameters.AddWithValue("@prodNumber", (object?)record.ProdNumber ?? DBNull.Value);
             command.Parameters.AddWithValue("@lotNumber", (object?)record.LotNumber ?? DBNull.Value);
             command.Parameters.AddWithValue("@materialCode", (object?)record.MaterialCode ?? DBNull.Value);
             command.Parameters.AddWithValue("@runNumber", (object?)record.RunNumber ?? DBNull.Value);
+
 
             command.Parameters.AddWithValue("@discrepancy", record.Discrepancy);
             command.Parameters.AddWithValue("@date", record.Date);
@@ -269,6 +272,9 @@ SELECT LAST_INSERT_ID();";
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
                     Timestamp = reader.IsDBNull(reader.GetOrdinal("Timestamp")) ? null : reader.GetDateTime(reader.GetOrdinal("Timestamp")),
                     Part = reader.IsDBNull(reader.GetOrdinal("Part")) ? null : reader.GetString(reader.GetOrdinal("Part")),
+                    Component = reader.IsDBNull(reader.GetOrdinal("Component"))
+        ? null
+        : reader.GetString(reader.GetOrdinal("Component")),
                     ProdNumber = reader.IsDBNull(reader.GetOrdinal("ProdNumber"))
     ? null
     : reader.GetString(reader.GetOrdinal("ProdNumber")),
@@ -400,6 +406,7 @@ LIMIT 10;";
 UPDATE HoldRecords
 SET 
     Part = @Part,
+    Component = @Component,
     ProdNumber = @ProdNumber,
     LotNumber = @LotNumber,
     MaterialCode = @MaterialCode,
@@ -424,6 +431,7 @@ WHERE Id = @Id";
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@Id", model.Id);
             command.Parameters.AddWithValue("@Part", (object?)model.Part ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Component", (object?)model.Component ?? DBNull.Value);
             command.Parameters.AddWithValue("@Discrepancy", (object?)model.Discrepancy ?? DBNull.Value);
             command.Parameters.AddWithValue("@Date", (object?)model.Date ?? DBNull.Value);
             command.Parameters.AddWithValue("@IssuedBy", (object?)model.IssuedBy ?? DBNull.Value);
