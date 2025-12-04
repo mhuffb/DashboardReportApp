@@ -33,7 +33,7 @@ namespace DashboardReportApp.Controllers
             ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync();
 
             // 🔹 New: all runs for DataTables HTML table
-            ViewData["AllRuns"] = await _pressRunLogService.GetAllRunsAsync();
+          //  ViewData["AllRuns"] = await _pressRunLogService.GetAllRunsAsync();
 
             return View();
         }
@@ -305,12 +305,12 @@ namespace DashboardReportApp.Controllers
 
         [HttpGet]
         public async Task<IActionResult> ApiRuns(
-      int page = 1,
-      int pageSize = 100,
-      string q = null,
-      string machine = null,
-      DateTime? start = null,
-      DateTime? end = null)
+     int page = 1,
+     int pageSize = 100,
+     string q = null,
+     string machine = null,
+     DateTime? start = null,
+     DateTime? end = null)
         {
             var result = await _pressRunLogService.GetRunsPagedAsync(page, pageSize, q, machine, start, end);
 
@@ -339,6 +339,10 @@ namespace DashboardReportApp.Controllers
                     run = r.Run,
                     machine = r.Machine,
 
+                    // 👇 NEW: lot & material
+                    lotNumber = r.LotNumber,
+                    materialCode = r.MaterialCode,
+
                     // ✅ alias Operator → operator
                     @operator = r.Operator,
 
@@ -356,9 +360,9 @@ namespace DashboardReportApp.Controllers
                 };
             }).ToList();
 
-
             return Json(new { rows, total = result.Total, page = result.Page, pageSize = result.PageSize });
         }
+
 
         [HttpGet]
         public async Task<IActionResult> ApiMachines()

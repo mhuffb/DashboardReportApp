@@ -20,8 +20,8 @@
     var skids = openRecords.Where(r => r.SkidNumber > 0).ToList();
 
     // 🔹 All runs for DataTables
-    var allRuns = ViewData["AllRuns"] as List<DashboardReportApp.Models.PressRunLogModel>
-                  ?? new List<DashboardReportApp.Models.PressRunLogModel>();
+   // var allRuns = ViewData["AllRuns"] as List<DashboardReportApp.Models.PressRunLogModel>
+   //               ?? new List<DashboardReportApp.Models.PressRunLogModel>();
 }
 
 @if (TempData["Error"] != null)
@@ -219,8 +219,6 @@
         <div class="card shadow mb-4">
             <div class="card-body">
                 <table id="pressrunTable" class="table table-striped table-bordered">
-
-
                     <thead class="table-dark">
                         <tr>
                             <th>ID</th>
@@ -228,8 +226,8 @@
                             <th>Component</th>
                             <th>Prod Number</th>
                             <th>Run</th>
-                            <th>Mix Lot</th>        <!-- 🔹 -->
-                            <th>Mix Code</th>       <!-- 🔹 -->
+                            <th>Mix Lot</th>
+                            <th>Mix Code</th>
                             <th>Machine</th>
                             <th>Operator</th>
                             <th>Skid #</th>
@@ -241,30 +239,9 @@
                             <th>Notes</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach (var r in allRuns)
-                        {
-                            <tr>
-                                <td>@r.Id</td>
-                                <td>@r.Part</td>
-                                <td>@r.Component</td>
-                                <td>@r.ProdNumber</td>
-                                <td>@r.Run</td>
-                                <td>@r.LotNumber</td>       <!-- 🔹 -->
-                                <td>@r.MaterialCode</td>    <!-- 🔹 -->
-                                <td>@r.Machine</td>
-                                <td>@r.Operator</td>
-                                <td>@r.SkidNumber</td>
-                                <td>@r.PcsStart</td>
-                                <td>@r.PcsEnd</td>
-                                <td>@r.Scrap</td>
-                                <td>@(r.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "")</td>
-                                <td>@(r.EndDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "")</td>
-                                <td>@r.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
+                    <tbody></tbody>
                 </table>
+
             </div>
         </div>
 
@@ -834,6 +811,82 @@
                     });
                 }
             </script>
+
+            <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.jQuery && $.fn.DataTable) {
+            $('#pressrunTable').DataTable({
+                processing: true,
+                serverSide: true,      // we’re paging on the server
+                searching: true,
+                pageLength: 50,
+                lengthMenu: [[10, 25, 50, 100],   // no "All" now
+                             [10, 25, 50, 100]],
+                order: [[13, 'desc']],            // 13 = Start Time column
+
+                ajax: function (data, callback) {
+                    // DataTables -> your API params
+                    const page     = Math.floor(data.start / data.length) + 1;
+                    const pageSize = data.length;
+                    const q        = data.search && data.search.value ? data.search.value : '';
+
+                    $.getJSON('/PressRunLog/ApiRuns', {
+                        page: page,
+                        pageSize: pageSize,
+                        q: q
+                    }, function (json) {
+                        callback({
+                            data: json.rows,
+                            recordsTotal: json.total,
+                            recordsFiltered: json.total
+                        });
+                    });
+                },
+
+                columns: [
+                    { data: 'id' },           // ID
+                    { data: 'part' },         // Part
+                    { data: 'component' },    // Component
+                    { data: 'prodNumber' },   // Prod Number
+                    { data: 'run' },          // Run
+                    { data: 'lotNumber' },    // Mix Lot   👈 NEW
+                    { data: 'materialCode' }, // Mix Code  👈 NEW
+                    { data: 'machine' },      // Machine
+                    { data: 'operator' },     // Operator (ApiRuns uses 
+                    { data: 'skidNumber' },   // Skid #
+                    { data: 'pcsStart' },     // Pcs Start
+                    { data: 'pcsEnd' },       // Pcs End
+                    { data: 'scrap' },        // Scrap
+                    {
+                        data: 'startDateTime',    // Start Time
+                        render: function (data) {
+                            if (!data) return '';
+                            // If backend sends ISO string, this is fine to just show raw:
+                            // return data;
+                            // Or do basic formatting:
+                            const d = new Date(data);
+                            if (isNaN(d)) return data; // fallback
+                            return d.toLocaleString();
+                        }
+                    },
+                    {
+                        data: 'endDateTime',      // End Time
+                        render: function (data) {
+                            if (!data) return '';
+                            const d = new Date(data);
+                            if (isNaN(d)) return data;
+                            return d.toLocaleString();
+                        }
+                    },
+                    { data: 'notes' }             // Notes
+                ]
+            });
+        } else {
+            console.warn('DataTables not found; table will be plain HTML.');
+        }
+    });
+</script>
+
 }
 
 
@@ -851,19 +904,5 @@
 
 
 
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                if (window.jQuery && $.fn.DataTable) {
-                    $('#pressrunTable').DataTable({
-                        pageLength: 50,
-                        lengthMenu: [[10, 25, 50, 100, -1],
-                                     [10, 25, 50, 100, "All"]],
-                        order: [[13, 'desc']] // Start Time column
-                    });
-                } else {
-                    console.warn('DataTables not found; table will be plain HTML.');
-                }
-            });
-        </script>
-
+       
     

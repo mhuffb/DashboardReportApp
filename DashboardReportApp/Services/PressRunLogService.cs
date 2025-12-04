@@ -1274,12 +1274,12 @@ WHERE endDateTime IS NULL";
         }
 
         public async Task<PagedResult<PressRunLogModel>> GetRunsPagedAsync(
-            int page = 1,
-            int pageSize = 100,
-            string q = null,
-            string machine = null,
-            DateTime? start = null,
-            DateTime? end = null)
+      int page = 1,
+      int pageSize = 100,
+      string q = null,
+      string machine = null,
+      DateTime? start = null,
+      DateTime? end = null)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 25, 1000);
@@ -1306,8 +1306,28 @@ WHERE endDateTime IS NULL";
 
             string whereSql = where.Count > 0 ? ("WHERE " + string.Join(" AND ", where)) : "";
 
-            const string cols = @"id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-                      operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber";
+            // 🔹 include lotNumber & materialCode (and override fields if you want)
+            const string cols = @"
+        id,
+        timestamp,
+        prodNumber,
+        run,
+        part,
+        component,
+        startDateTime,
+        endDateTime,
+        operator,
+        machine,
+        pcsStart,
+        pcsEnd,
+        scrap,
+        notes,
+        skidNumber,
+        lotNumber,
+        materialCode,
+        isOverride,
+        overrideBy,
+        overrideAt";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -1344,6 +1364,7 @@ WHERE endDateTime IS NULL";
                 PageSize = pageSize
             };
         }
+
         public async Task<List<string>> GetMachinesAsync()
         {
             var list = new List<string>();
