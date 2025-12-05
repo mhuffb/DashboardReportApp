@@ -216,6 +216,15 @@ public class PressMixBagChangeController : Controller
         var (op, mach) = await _pressMixBagChangeService.GetLatestRunInfoAsync(part, prod, run);
         return Json(new { op, mach });
     }
+    [HttpGet]
+    public IActionResult ApiGetMaterialCode(string machine)
+    {
+        if (string.IsNullOrWhiteSpace(machine))
+            return Json(new { materialCode = (string)null });
+
+        var materialCode = _pressMixBagChangeService.GetLatestMaterialCodeForMachine(machine);
+        return Json(new { materialCode });
+    }
 
 }
 

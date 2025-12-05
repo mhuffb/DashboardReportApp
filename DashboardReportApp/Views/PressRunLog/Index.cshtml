@@ -32,6 +32,12 @@
 }
 
 <div class="container-fluid px-3">
+    <!-- 🔹 NEW: Machine Count Cards at the top -->
+    <div class="mb-4">
+        <h2 class="text-center mb-3">Machine Counts</h2>
+        <div id="pressRunMachineCountsReactRoot"></div>
+    </div>
+
     <div class="table-responsive">
         <h1 class="text-center mb-4">Press Run Log</h1>
 
@@ -910,7 +916,19 @@
         }
     });
 </script>
+            <!-- 🔹 Load the React bundle that contains MachineCountsDashboard and renderMachineCounts -->
+            <script src="/js/mydatatable.bundle.js"></script>
 
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (window.renderMachineCounts) {
+                        // Use a different root id than the molding dashboard
+                        window.renderMachineCounts("pressRunMachineCountsReactRoot");
+                    } else {
+                        console.error("window.renderMachineCounts is not defined. Check mydatatable.bundle.js is loaded.");
+                    }
+                });
+            </script>
 }
 
 

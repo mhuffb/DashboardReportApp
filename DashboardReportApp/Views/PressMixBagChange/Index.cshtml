@@ -347,16 +347,19 @@
         const val = in1.value.trim();
 
         // Advantage-like (Advantage + Sintergy)
-        if (advantageLike.has(selectedType)) {
-          // expected: [ignored];[mat];[lot];[wgt];[bag]
-          const p = val.split(';');
-          mat.value = p[1] || "";
-          lot.value = p[2] || "";
-          wgt.value = p[3] || "";
-          bag.value = p[4] || "";
-          gotoForm();
-          return;
-        }
+           if (advantageLike.has(selectedType)) {
+      // expected: [ignored];[mat];[lot];[wgt];[bag]
+      const p = val.split(';');
+
+      mat.value = (p[1] || "").trim().toUpperCase();
+      lot.value = (p[2] || "").trim().toUpperCase();   // lot in caps too
+      wgt.value = (p[3] || "").trim();                 // weight is numeric, leave as-is
+      bag.value = (p[4] || "").trim().toUpperCase();   // optional, but keeps it consistent
+
+      gotoForm();
+      return;
+    }
+
 
            // Hoganas
     if (selectedType === "hoganas") {

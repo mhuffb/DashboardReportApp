@@ -444,6 +444,33 @@
 
             return (false, "");
         }
+        public string GetLatestMaterialCodeForMachine(string machine)
+        {
+            if (string.IsNullOrWhiteSpace(machine))
+                return null;
 
+            using (var conn = new MySqlConnection(_connectionStringMySQL))
+            {
+                conn.Open();
+
+                // Adjust column / date field names to match your real table
+                string sql = @"
+                SELECT materialCode
+                FROM pressmixbagchange
+                WHERE machine = @machine
+                ORDER BY sentDateTime DESC
+                LIMIT 1;";
+
+                using (var cmd = new MySqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@machine", machine);
+
+                    var result = cmd.ExecuteScalar();
+                    return result == null || result == DBNull.Value
+                        ? null
+                        : Convert.ToString(result);
+                }
+            }
+        }
     }
 }
