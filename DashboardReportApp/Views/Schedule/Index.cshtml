@@ -1,5 +1,7 @@
 ﻿@model DashboardReportApp.Models.ScheduleModel
 @using System.Text.Json;
+@using DashboardReportApp.Models
+
 <style>
     /* Make query results modal wider */
     .modal-dialog.modal-xxl {
@@ -37,6 +39,191 @@
         </button>
 
     </div>
+    @{
+        var openParts = Model.AllParts?.Where(p => p.Open == 1).ToList() ?? new List<SintergyComponent>();
+        var assignedUpcoming = openParts
+        .Where(p => !string.IsNullOrWhiteSpace(p.Machine))
+        .OrderByDescending(p => p.Priority ?? 0)
+        .ThenBy(p => p.Date)
+        .ToList();
+
+        var unassignedUpcoming = openParts
+        .Where(p => string.IsNullOrWhiteSpace(p.Machine))
+        .OrderByDescending(p => p.Priority ?? 0)
+        .ThenBy(p => p.Date)
+        .ToList();
+    }
+
+    @if (openParts.Any())
+    {
+        <div class="mt-4">
+            <h3 class="text-center mb-3">Upcoming Parts to Run</h3>
+
+            @if (assignedUpcoming.Any())
+            {
+                var machineGroups = assignedUpcoming
+                .GroupBy(p => p.Machine)
+                .OrderBy(g => g.Key) // just sort machines by name/number
+                .ToList();
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        Parts Assigned to Machines
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            @foreach (var group in machineGroups)
+                            {
+                                // Parts on this machine: sort by Priority DESC, then Date ASC
+                                var partsForMachine = group
+                                .OrderBy(x => x.Priority ?? int.MaxValue) // 1,2,3,... then nulls at end
+                                .ThenBy(x => x.Date)
+                                .ToList();
+
+
+                                <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+                                    <div class="card shadow-sm h-100 border-primary">
+                                        <div class="card-header d-flex justify-content-between align-items-center py-1">
+                                            <span class="fw-bold">Machine @group.Key</span>
+                                            @* NO machine-level priority badge anymore *@
+                                        </div>
+
+                                        <div class="card-body p-2">
+                                            <ul class="list-group list-group-flush small">
+                                                @foreach (var p in partsForMachine)
+                                                {
+                                                    var partUpper = p.MasterId?.ToUpper();
+                                                    <li class="list-group-item py-1">
+                                                        <div class="d-flex justify-content-between">
+                                                            <div>
+                                                                <div><strong>@partUpper</strong></div>
+
+                                                                @if (!string.IsNullOrWhiteSpace(p.Component))
+                                                                {
+                                                                    <div>Comp: @p.Component</div>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(p.MaterialCode))
+                                                                {
+                                                                    <div>Mat: @p.MaterialCode</div>
+                                                                }
+                                                                <div class="text-muted">
+                                                                    @p.Date?.ToString("yyyy-MM-dd")
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="text-end">
+                                                                <span class="badge bg-dark d-block mb-1">
+                                                                    Qty @p.QtyToSchedule
+                                                                </span>
+                                                                <span class="badge bg-info text-dark d-block mb-1">
+                                                                    Run @p.Run
+                                                                </span>
+
+                                                                @if (p.Priority.HasValue)
+                                                                {
+                                                                    <span class="badge bg-danger d-block mb-1">
+                                                                        Priority@(p.Priority ?? 0)
+                                                                    </span>
+                                                                }
+
+
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-primary mt-1 card-edit-btn"
+                                                                        data-id="@p.Id"
+                                                                        data-date="@(p.Date?.ToString("yyyy-MM-dd"))"
+                                                                        data-masterid="@partUpper"
+                                                                        data-component="@p.Component"
+                                                                        data-qty="@p.QtyToSchedule"
+                                                                        data-prodnumber="@p.ProdNumber"
+                                                                        data-run="@p.Run"
+                                                                        data-open="@p.Open"
+                                                                        data-material="@p.MaterialCode"
+                                                                        data-machine="@p.Machine"
+                                                                        data-priority="@(p.Priority?.ToString() ?? string.Empty)">
+                                                                    Edit
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+
+
+            @if (unassignedUpcoming.Any())
+            {
+                <div class="card mb-3">
+                    <div class="card-header">
+                        Parts Unassigned to Machines
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="table-responsive">
+                            <table id="upcomingUnassignedTable" class="table table-sm table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Priority</th>
+                                        <th>Date</th>
+                                        <th>Part</th>
+                                        <th>Component</th>
+                                        <th>Material</th>
+                                        <th>Qty</th>
+                                        <th>Run</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in unassignedUpcoming)
+                                    {
+                                        var partUpper = p.MasterId?.ToUpper();
+                                        <tr data-id="@p.Id"
+                                            data-date="@(p.Date?.ToString("yyyy-MM-dd"))"
+                                            data-masterid="@partUpper"
+                                            data-component="@p.Component"
+                                            data-qty="@p.QtyToSchedule"
+                                            data-prodnumber="@p.ProdNumber"
+                                            data-run="@p.Run"
+                                            data-open="@p.Open"
+                                            data-material="@p.MaterialCode"
+                                            data-machine="@p.Machine"
+                                            data-priority="@(p.Priority?.ToString() ?? string.Empty)">
+                                            <td>
+                                                @if (p.Priority.HasValue)
+                                                {
+                                                    <span class="badge bg-warning text-dark">@p.Priority</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">0</span>
+                                                }
+                                            </td>
+                                            <td>@p.Date?.ToString("yyyy-MM-dd")</td>
+                                            <td>@partUpper</td>
+                                            <td>@p.Component</td>
+                                            <td>@p.MaterialCode</td>
+                                            <td>@p.QtyToSchedule</td>
+                                            <td>@p.Run</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-primary edit-btn">Edit</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 
     <!-- Table of All Scheduled Parts -->
     <h3 class="mt-4 text-center">Parts Scheduled</h3>
@@ -54,44 +241,51 @@
                         <th class="sortable" data-label="Part">Part</th>
                         <th class="sortable" data-label="Component">Component</th>
                         <th class="sortable" data-label="MaterialCode">Material Code</th>
-
                         <th class="sortable" data-label="Quantity">Quantity</th>
                         <th class="sortable" data-label="ProdNumber">Production Number</th>
                         <th class="sortable" data-label="Run">Run</th>
+                        <th class="sortable" data-label="Priority">Priority</th>
+                        <th class="sortable" data-label="Machine">Machine</th>
                         <th class="sortable" data-label="Open">Open</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     @for (int i = 0; i < Model.AllParts.Count; i++)
                     {
-                        var partUpper = Model.AllParts[i].MasterId?.ToUpper();
+                        var row = Model.AllParts[i];
+                        var partUpper = row.MasterId?.ToUpper();
                         <tr data-index="@i"
-                            data-date="@(Model.AllParts[i].Date?.ToString("yyyy-MM-dd"))"
+                            data-date="@(row.Date?.ToString("yyyy-MM-dd"))"
                             data-masterid="@partUpper"
-                            data-component="@Model.AllParts[i].Component"
-                            data-qty="@Model.AllParts[i].QtyToSchedule"
-                            data-prodnumber="@Model.AllParts[i].ProdNumber"
-                            data-run="@Model.AllParts[i].Run"
-                            data-id="@Model.AllParts[i].Id"
-                            data-open="@Model.AllParts[i].Open"
-                            data-material="@Model.AllParts[i].MaterialCode">
-                            
-                            <td>@Model.AllParts[i].Date?.ToString("yyyy-MM-dd")</td>
-                            <td>@partUpper</td>
-                            <td>@Model.AllParts[i].Component</td>
-                            <td>@Model.AllParts[i].MaterialCode</td>
+                            data-component="@row.Component"
+                            data-qty="@row.QtyToSchedule"
+                            data-prodnumber="@row.ProdNumber"
+                            data-run="@row.Run"
+                            data-id="@row.Id"
+                            data-open="@row.Open"
+                            data-material="@row.MaterialCode"
+                            data-machine="@row.Machine"
+                            data-priority="@(row.Priority?.ToString() ?? string.Empty)">
 
-                            <td>@Model.AllParts[i].QtyToSchedule</td>
-                            <td>@Model.AllParts[i].ProdNumber</td>
-                            <td>@Model.AllParts[i].Run</td>
-                            <td>@(Model.AllParts[i].Open == 1 ? "Yes" : "No")</td>
+                            <td>@row.Date?.ToString("yyyy-MM-dd")</td>
+                            <td>@partUpper</td>
+                            <td>@row.Component</td>
+                            <td>@row.MaterialCode</td>
+                            <td>@row.QtyToSchedule</td>
+                            <td>@row.ProdNumber</td>
+                            <td>@row.Run</td>
+                            <td>@(row.Priority?.ToString() ?? "")</td>
+                            <td>@row.Machine</td>
+                            <td>@(row.Open == 1 ? "Yes" : "No")</td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary edit-btn" data-index="@i">Edit</button>
                             </td>
                         </tr>
                     }
                 </tbody>
+
             </table>
         </div>
     }
@@ -202,6 +396,15 @@
                             <option value="0">No</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label for="editMachine" class="form-label">Machine</label>
+                        <input type="text" class="form-control" id="editMachine" name="Machine" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="editPriority" class="form-label">Priority</label>
+                        <input type="number" class="form-control" id="editPriority" name="Priority" />
+                    </div>
+
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -317,23 +520,27 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" id="btnGenerateQr" class="btn btn-primary">Generate</button>
+                    <button type="button" id="btnGenerateQr" class="btn btn-primary">
+                        Generate
+                    </button>
+
                     <button type="button" id="btnDownloadQr"
                             class="btn btn-outline-secondary"
-                            onclick="return window.mixqrDownload()"
                             disabled>
                         Download PNG
                     </button>
 
                     <button type="button" id="btnPrintQr"
                             class="btn btn-outline-dark"
-                            onclick="return window.mixqrPrint()"
                             disabled>
                         Print
                     </button>
 
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Close
+                    </button>
                 </div>
+
             </form>
         </div>
     </div>
@@ -354,6 +561,13 @@
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" />
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+
+@section Scripts {
     <script>
         // ---------- Utilities ----------
         const $$   = (sel, root=document) => Array.from(root.querySelectorAll(sel));
@@ -380,56 +594,49 @@
           });
         }
 
-        // ---------- 2) Start Scheduling -> Query components ----------
-        document.addEventListener("DOMContentLoaded", function () {
-      const btnQuery = byId("queryButtonModal");
-          if (btnQuery) {
-            btnQuery.addEventListener("click", function () {
-              let part = $("#queryPart").val();
-              const quantity = $("#queryQuantity").val();
-              if (!part || !quantity) { Swal.fire({icon:'warning', title:'Missing', text:'Enter part and quantity.'}); return; }
+     
+        // ---------- 3) Edit modal population for scheduled parts ----------
+                     document.addEventListener('DOMContentLoaded', function () {
+            // existing table edit handler…
+            $$('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const row = btn.closest('tr');
+                    if (!row) return;
 
-              part = part.toUpperCase();
-              $("#queryPart").val(part);
-
-              const startModalEl = document.getElementById('startSchedulingModal');
-              const startModal   = bootstrap.Modal.getInstance(startModalEl);
-              startModal && startModal.hide();
-
-              fetch('/Schedule/GetComponents?part=' + encodeURIComponent(part) + '&quantity=' + encodeURIComponent(quantity))
-                .then(r => r.text())
-                .then(html => {
-                  $("#queryResultsContent").html(html);
-                  initMaterialAutocomplete(); // new rows get autocomplete
-                  new bootstrap.Modal(document.getElementById('queryResultsModal')).show();
-                })
-                .catch(err => {
-                  console.error(err);
-                  Swal.fire({icon:'error', title:'Error', text:'Could not load components.'});
+                    $('#editId').val(row.getAttribute('data-id'));
+                    $('#editDate').val(row.getAttribute('data-date'));
+                    $('#editMasterId').val(row.getAttribute('data-masterid'));
+                    $('#editComponent').val(row.getAttribute('data-component'));
+                    $('#editQtyToSchedule').val(row.getAttribute('data-qty'));
+                    $('#editProdNumber').val(row.getAttribute('data-prodnumber'));
+                    $('#editRun').val(row.getAttribute('data-run'));
+                    $('#editOpen').val(row.getAttribute('data-open'));
+                    $('#editMaterialCode').val(row.getAttribute('data-material') || '');
+                    $('#editMachine').val(row.getAttribute('data-machine') || '');
+                    $('#editPriority').val(row.getAttribute('data-priority') || '');
+                    new bootstrap.Modal(document.getElementById('editModal')).show();
                 });
             });
-          }
+
+            // NEW: card edit handler – reads from button data-attrs
+            $$('.card-edit-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    $('#editId').val(btn.getAttribute('data-id'));
+                    $('#editDate').val(btn.getAttribute('data-date'));
+                    $('#editMasterId').val(btn.getAttribute('data-masterid'));
+                    $('#editComponent').val(btn.getAttribute('data-component'));
+                    $('#editQtyToSchedule').val(btn.getAttribute('data-qty'));
+                    $('#editProdNumber').val(btn.getAttribute('data-prodnumber'));
+                    $('#editRun').val(btn.getAttribute('data-run'));
+                    $('#editOpen').val(btn.getAttribute('data-open'));
+                    $('#editMaterialCode').val(btn.getAttribute('data-material') || '');
+                    $('#editMachine').val(btn.getAttribute('data-machine') || '');
+                    $('#editPriority').val(btn.getAttribute('data-priority') || '');
+                    new bootstrap.Modal(document.getElementById('editModal')).show();
+                });
+            });
         });
 
-        // ---------- 3) Edit modal population for scheduled parts ----------
-        document.addEventListener('DOMContentLoaded', function () {
-          $$('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-              const row = btn.closest('tr');
-              if (!row) return;
-              $('#editId').val(row.getAttribute('data-id'));
-              $('#editDate').val(row.getAttribute('data-date'));
-              $('#editMasterId').val(row.getAttribute('data-masterid'));
-              $('#editComponent').val(row.getAttribute('data-component'));
-              $('#editQtyToSchedule').val(row.getAttribute('data-qty'));
-              $('#editProdNumber').val(row.getAttribute('data-prodnumber'));
-              $('#editRun').val(row.getAttribute('data-run'));
-              $('#editOpen').val(row.getAttribute('data-open'));
-              $('#editMaterialCode').val(row.getAttribute('data-material') || '');
-              new bootstrap.Modal(document.getElementById('editModal')).show();
-            });
-          });
-        });
 
         // ---------- 4) Receive Powder: upload, confirm, insert ----------
         document.addEventListener('DOMContentLoaded', function () {
@@ -601,7 +808,7 @@
 
 
 
-@section Scripts {
+
     <script>
         /* ========= Helpers (one place) ========= */
         (function(){
@@ -896,332 +1103,429 @@
           });
         })();
     </script>
+  
+
+   
+
+  
     <script>
-        /* ===== MIX QR: FINAL DIAG/WORKING PRINT+DOWNLOAD ===== */
+              $(document).ready(function () {
+            if ($.fn.DataTable) {
+                $('#scheduledPartsTable').DataTable({
+                    paging: true,
+                    pageLength: 25,
+                    lengthMenu: [10, 25, 50, 100],
+                    searching: true,
+                    order: [[0, 'desc']],
+                    columnDefs: [
+                        { targets: -1, orderable: false }
+                    ]
+                });
+
+                if ($('#upcomingUnassignedTable').length) {
+                    $('#upcomingUnassignedTable').DataTable({
+                        paging: false,
+                        searching: false,
+                        info: false,
+                        ordering: true,
+                        order: [[0, 'desc']] // Priority desc
+                    });
+                }
+            } else {
+                console.warn('DataTables plugin not found');
+            }
+        });
+
+    </script>
+    <script>
         (function () {
-          if (window.__MIXQR_FINAL_IO__) return;
-          window.__MIXQR_FINAL_IO__ = true;
+            if (window.__MIXQR_V3_INIT__) return;
+            window.__MIXQR_V3_INIT__ = true;
 
-          const $  = (s, r=document)=>r.querySelector(s);
-          const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+            // ---------- small helpers ----------
+            function setBtnState(enabled) {
+                var dl = document.getElementById('btnDownloadQr');
+                var pr = document.getElementById('btnPrintQr');
+                if (dl) dl.disabled = !enabled;
+                if (pr) pr.disabled = !enabled;
+            }
 
-          function getImgs() {
-            const list = $$('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img');
-            console.log('[mixqr] found images:', list.length, list);
-            return list;
-          }
-          function enableButtons(flag) {
-            const dl = $('#btnDownloadQr'), pr = $('#btnPrintQr');
-            if (dl) dl.disabled = !flag;
-            if (pr) pr.disabled = !flag;
-          }
+            function clearPreview() {
+                var grid = document.getElementById('qrGrid') || document.getElementById('qrContainer');
+                if (grid) grid.innerHTML = '';
+                var prev = document.getElementById('qrTextPreview');
+                if (prev) prev.value = '';
+                setBtnState(false);
+            }
 
-          // Turn any <img> (data: or blob: or normal URL) into a PNG dataURL via <canvas>
-          function imageToPngDataURL(img) {
-            return new Promise((resolve, reject) => {
-              // If it’s already data: PNG, just return
-              const src = img.currentSrc || img.src || '';
-              if (src.startsWith('data:image/png')) {
-                console.log('[mixqr] using existing PNG dataURL');
-                return resolve(src);
-              }
-              // Draw onto canvas to normalize (works for blob:/http: as long as CORS allows it)
-              const tmp = new Image();
-              tmp.crossOrigin = 'anonymous';
-              tmp.onload = function () {
+            function getLabelImages() {
+                var nodes = document.querySelectorAll('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img');
+                return Array.prototype.slice.call(nodes);
+            }
+
+            function imgToDataURL(img) {
+                return new Promise(function (resolve, reject) {
+                    var src = img.currentSrc || img.src || '';
+                    if (src.indexOf('data:image/png') === 0) {
+                        return resolve(src);
+                    }
+
+                    var probe = new Image();
+                    probe.crossOrigin = 'anonymous';
+                    probe.onload = function () {
+                        try {
+                            var w = img.naturalWidth || probe.naturalWidth || 360;
+                            var h = img.naturalHeight || probe.naturalHeight || 360;
+                            var cx = document.createElement('canvas');
+                            cx.width = w;
+                            cx.height = h;
+                            var ctx = cx.getContext('2d');
+                            ctx.drawImage(probe, 0, 0, w, h);
+                            resolve(cx.toDataURL('image/png'));
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    probe.onerror = function () {
+                        reject(new Error('Failed to load: ' + src));
+                    };
+                    probe.src = src;
+                });
+            }
+
+            function triggerDownload(dataUrl, fileName) {
+                var a = document.createElement('a');
+                a.href = dataUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+
+            // ---------- QR generation helpers ----------
+            function makeQrCanvas(text) {
+                return new Promise(function (resolve, reject) {
+                    if (!window.QRCode) {
+                        return reject(new Error('QRCode library not found. Make sure qrcode.min.js loads before this script.'));
+                    }
+
+                    var holder = document.createElement('div');
+                    holder.style.position = 'absolute';
+                    holder.style.left = '-10000px';
+                    document.body.appendChild(holder);
+
+                    try {
+                        new QRCode(holder, {
+                            text: text,
+                            width: 256,
+                            height: 256,
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    } catch (err) {
+                        document.body.removeChild(holder);
+                        return reject(err);
+                    }
+
+                    setTimeout(function () {
+                        var srcCanvas = holder.querySelector('canvas');
+                        var srcImg = holder.querySelector('img');
+                        var out = document.createElement('canvas');
+                        out.width = 256;
+                        out.height = 256;
+                        var ctx = out.getContext('2d');
+
+                        function finish() {
+                            document.body.removeChild(holder);
+                            resolve(out);
+                        }
+
+                        if (srcCanvas) {
+                            ctx.drawImage(srcCanvas, 0, 0);
+                            finish();
+                        } else if (srcImg) {
+                            if (srcImg.complete) {
+                                ctx.drawImage(srcImg, 0, 0, 256, 256);
+                                finish();
+                            } else {
+                                srcImg.onload = function () {
+                                    ctx.drawImage(srcImg, 0, 0, 256, 256);
+                                    finish();
+                                };
+                                srcImg.onerror = function () {
+                                    document.body.removeChild(holder);
+                                    reject(new Error('QR image failed to load'));
+                                };
+                            }
+                        } else {
+                            document.body.removeChild(holder);
+                            reject(new Error('QR did not render'));
+                        }
+                    }, 60);
+                });
+            }
+
+            function makeLabeledImage(opts) {
+                var mix = opts.mix;
+                var lot = opts.lot;
+                var wt = opts.wt;
+                var bag = opts.bag;
+
+                var QR_SIZE = 256, W = 360, headerH = 44, padTop = 12, padBetween = 14, padBottom = 18, lineH = 22;
+                var payload = 'ADV;' + mix + ';' + lot + ';' + wt + ';' + bag + '\n';
+
+                return makeQrCanvas(payload).then(function (qr) {
+                    var H = headerH + padTop + QR_SIZE + padBetween + (4 * lineH) + padBottom;
+                    var cx = document.createElement('canvas');
+                    cx.width = W;
+                    cx.height = H;
+                    var ctx = cx.getContext('2d');
+
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(0, 0, W, H);
+
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 22px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('Sintergy', W / 2, headerH / 2);
+
+                    var qrX = Math.round((W - QR_SIZE) / 2);
+                    var qrY = headerH + padTop;
+                    ctx.drawImage(qr, qrX, qrY, QR_SIZE, QR_SIZE);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#000';
+                    ctx.strokeRect(qrX - 1, qrY - 1, QR_SIZE + 2, QR_SIZE + 2);
+
+                    ctx.font = '16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    var y = qrY + QR_SIZE + padBetween;
+                    ctx.fillText('Mix Code: ' + mix, W / 2, y); y += lineH;
+                    ctx.fillText('Lot #: ' + lot, W / 2, y); y += lineH;
+                    ctx.fillText('Weight: ' + wt, W / 2, y); y += lineH;
+                    ctx.fillText('Bag: ' + bag, W / 2, y);
+
+                    return { dataUrl: cx.toDataURL('image/png'), payload: payload };
+                });
+            }
+
+            // ---------- Handlers ----------
+            async function handleGenerateClick(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
                 try {
-                  const w = img.naturalWidth || 360;
-                  const h = img.naturalHeight || 360;
-                  const cx = document.createElement('canvas');
-                  cx.width = w; cx.height = h;
-                  const ctx = cx.getContext('2d');
-                  ctx.drawImage(tmp, 0, 0, w, h);
-                  const data = cx.toDataURL('image/png');
-                  resolve(data);
+                    var mixEl = document.getElementById('mixCode');
+                    var lotEl = document.getElementById('lotNumber');
+                    var wtEl = document.getElementById('weightPerBag');
+                    var startEl = document.getElementById('startBagNo');
+                    var qtyEl = document.getElementById('labelQty') || document.getElementById('totalQty');
+
+                    var mix = (mixEl && mixEl.value ? mixEl.value : '').trim();
+                    var lot = (lotEl && lotEl.value ? lotEl.value : '').trim();
+                    var wt = (wtEl && wtEl.value ? wtEl.value : '').trim();
+                    var start = startEl ? parseInt(startEl.value || '1', 10) : 1;
+                    var qty = qtyEl ? parseInt(qtyEl.value || '1', 10) : 1;
+
+                    var problems = [];
+                    if (!mix) problems.push('Mix Code');
+                    if (!lot) problems.push('Lot Number');
+                    if (!wt) problems.push('Weight per Bag/Drum');
+                    if (!isFinite(start) || start < 1) problems.push('Starting Bag # ≥ 1');
+                    if (!isFinite(qty) || qty < 1) problems.push('Number of labels ≥ 1');
+
+                    if (problems.length) {
+                        if (window.Swal && Swal.fire) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Missing or invalid',
+                                html: '<ul class="text-start"><li>' + problems.join('</li><li>') + '</li></ul>'
+                            });
+                        } else {
+                            alert('Missing/invalid: ' + problems.join(', '));
+                        }
+                        return;
+                    }
+
+                    var grid = document.getElementById('qrGrid') || document.getElementById('qrContainer');
+                    if (!grid) {
+                        console.warn('[MixQR] #qrGrid/#qrContainer not found');
+                        return;
+                    }
+
+                    clearPreview();
+
+                    var firstPayload = null;
+
+                    for (var i = 0; i < qty; i++) {
+                        var bag = start + i;
+                        var result = await makeLabeledImage({ mix: mix, lot: lot, wt: wt, bag: bag });
+
+                        if (!firstPayload) firstPayload = result.payload;
+
+                        var col = document.createElement('div');
+                        col.className = 'col-auto d-flex justify-content-center';
+
+                        var img = document.createElement('img');
+                        img.src = result.dataUrl;
+                        img.alt = 'Label for bag ' + bag;
+                        img.style.width = '360px';
+                        img.style.height = 'auto';
+                        img.className = 'mixqr-label-img';
+                        img.dataset.bag = String(bag);
+
+                        col.appendChild(img);
+                        grid.appendChild(col);
+                    }
+
+                    var prev = document.getElementById('qrTextPreview');
+                    if (prev && firstPayload) {
+                        prev.value = firstPayload.replace(/\n$/, '');
+                    }
+
+                    setBtnState(true);
                 } catch (err) {
-                  console.warn('[mixqr] canvas normalize failed', err);
-                  reject(err);
+                    console.error('[MixQR] generate error:', err);
+                    if (window.Swal && Swal.fire) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error generating labels',
+                            text: err && err.message ? err.message : String(err)
+                        });
+                    } else {
+                        alert('Error generating labels: ' + (err && err.message ? err.message : err));
+                    }
                 }
-              };
-              tmp.onerror = () => reject(new Error('image failed to load: ' + src));
-              tmp.src = src;
-            });
-          }
-
-          function aDownload(dataUrl, filename) {
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = filename;
-            document.body.appendChild(a); a.click(); a.remove();
-          }
-
-          // ---------- DOWNLOAD ----------
-          async function onDownload(e) {
-            e.preventDefault(); e.stopPropagation();
-
-            const list = getImgs();
-            if (!list.length) return Swal?.fire?.({icon:'warning', title:'Nothing to download'}) || alert('Nothing to download');
-
-            try {
-              // Single → 1 file
-              if (list.length === 1) {
-                const img = list[0];
-                const dataUrl = await imageToPngDataURL(img);
-                const bag = img.dataset.bag || '1';
-                console.log('[mixqr] downloading single PNG, size=', dataUrl.length);
-                return aDownload(dataUrl, `sintergy-label-bag-${bag}.png`);
-              }
-
-              // Multiple → try JSZip if already present; if not, do many single downloads (most reliable)
-              const allData = list.every(im => (im.currentSrc || im.src || '').startsWith('data:'));
-              if (!window.JSZip || !allData) {
-                console.log('[mixqr] JSZip unavailable or non-data URLs present → downloading individually');
-                for (let i=0;i<list.length;i++) {
-                  const im = list[i];
-                  const dataUrl = await imageToPngDataURL(im);
-                  const bag = im.dataset.bag || (i+1);
-                  aDownload(dataUrl, `sintergy-label-bag-${bag}.png`);
-                }
-                return;
-              }
-
-              // JSZip path (if you already include JSZip elsewhere)
-              const zip = new JSZip();
-              for (let i=0;i<list.length;i++) {
-                const im = list[i];
-                const dataUrl = await imageToPngDataURL(im);
-                const base64 = dataUrl.split(',')[1];
-                const bag = im.dataset.bag || (i+1);
-                zip.file(`sintergy-label-bag-${bag}.png`, base64, { base64:true });
-              }
-              const blob = await zip.generateAsync({ type:'blob' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url; a.download = 'sintergy-labels.zip';
-              document.body.appendChild(a); a.click(); a.remove();
-              setTimeout(()=>URL.revokeObjectURL(url), 1500);
-            } catch (err) {
-              console.error('[mixqr] download error:', err);
-              Swal?.fire?.({icon:'error', title:'Download failed', text:String(err)}) || alert('Download failed: ' + err);
             }
-          }
 
-          // ---------- PRINT ----------
-          async function onPrint(e) {
-            e.preventDefault(); e.stopPropagation();
+            async function handleDownloadClick(e) {
+                e.preventDefault();
+                e.stopPropagation();
 
-            const list = getImgs();
-            if (!list.length) return Swal?.fire?.({icon:'warning', title:'Nothing to print'}) || alert('Nothing to print');
-
-            // Open the window/tab immediately (user gesture) — no awaits before this
-            const w = window.open('', '_blank');
-            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return; }
-
-            try {
-              // Pre-build the skeleton page synchronously
-              w.document.open();
-              w.document.write(`<!doctype html>
-                <html><head><meta charset="utf-8"><title>Print Labels</title></head>
-                <body style="margin:16px;text-align:center;"></body></html>`);
-              w.document.close();
-
-              // Now convert images to data: PNGs (await allowed after window is open)
-              const urls = [];
-              for (const im of list) urls.push(await imageToPngDataURL(im));
-
-              // Inject images then auto-print
-              const body = w.document.body;
-              urls.forEach(u => {
-                const img = w.document.createElement('img');
-                img.src = u;
-                img.style.cssText = 'width:360px;height:auto;display:inline-block;margin:8px;';
-                body.appendChild(img);
-              });
-
-              const script = w.document.createElement('script');
-              script.textContent = `
-                window.onload = function () {
-                  setTimeout(function () {
-                    window.focus(); window.print();
-                    setTimeout(function(){ window.close && window.close(); }, 300);
-                  }, 50);
-                };
-              `;
-              w.document.body.appendChild(script);
-            } catch (err) {
-              console.error('[mixqr] print error:', err);
-              w && w.close();
-              Swal?.fire?.({icon:'error', title:'Print failed', text:String(err)}) || alert('Print failed: ' + err);
-            }
-          }
-
-          // ---------- WIRING ----------
-          document.addEventListener('DOMContentLoaded', () => {
-            $('#btnDownloadQr')?.addEventListener('click', onDownload);
-            $('#btnPrintQr')?.addEventListener('click', onPrint);
-
-            // auto-enable when labels appear
-            const container = $('#qrGrid') || $('#qrContainer');
-            if (container && window.MutationObserver) {
-              new MutationObserver(() => enableButtons(getImgs().length > 0))
-                .observe(container, { childList:true, subtree:true });
-            }
-          });
-
-          // delegated backup (survives re-renders)
-          document.addEventListener('click', (e) => {
-            const dl = e.target.closest?.('#btnDownloadQr'); if (dl) return onDownload(e);
-            const pr = e.target.closest?.('#btnPrintQr');    if (pr) return onPrint(e);
-          });
-
-          // When QR modal shows, sync button state
-          $('#createMixQrModal')?.addEventListener('shown.bs.modal', () => {
-            enableButtons(getImgs().length > 0);
-          });
-        })();
-    </script>
-
-    <script>
-        /* ===== Ultra-simple, inline-wired handlers ===== */
-        (function () {
-          if (window.__MIXQR_INLINE_IO__) return;
-          window.__MIXQR_INLINE_IO__ = true;
-
-          const $  = (s, r=document)=>r.querySelector(s);
-          const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-
-          function getImgs() {
-            const list = $$('#qrGrid img.mixqr-label-img, #qrContainer img.mixqr-label-img');
-            console.log('[mixqr] images found:', list.length, list);
-            return list;
-          }
-          function enableButtons(flag) {
-            const dl = $('#btnDownloadQr'), pr = $('#btnPrintQr');
-            if (dl) dl.disabled = !flag;
-            if (pr) pr.disabled = !flag;
-          }
-
-          // Convert any <img> to a PNG dataURL via <canvas> (robust across src types)
-          function imgToDataURL(img) {
-            return new Promise((resolve, reject) => {
-              const src = img.currentSrc || img.src || '';
-              if (src.startsWith('data:image/png')) return resolve(src);
-
-              const probe = new Image();
-              probe.crossOrigin = 'anonymous';
-              probe.onload = () => {
                 try {
-                  const w = img.naturalWidth || probe.naturalWidth || 360;
-                  const h = img.naturalHeight || probe.naturalHeight || 360;
-                  const cx = document.createElement('canvas');
-                  cx.width = w; cx.height = h;
-                  const ctx = cx.getContext('2d');
-                  ctx.drawImage(probe, 0, 0, w, h);
-                  resolve(cx.toDataURL('image/png'));
-                } catch (err) { reject(err); }
-              };
-              probe.onerror = () => reject(new Error('failed to load: ' + src));
-              probe.src = src;
+                    var imgs = getLabelImages();
+                    if (!imgs.length) {
+                        alert('Nothing to download');
+                        return;
+                    }
+
+                    if (imgs.length === 1) {
+                        var single = imgs[0];
+                        var data = await imgToDataURL(single);
+                        var bag = single.dataset.bag || '1';
+                        triggerDownload(data, 'sintergy-label-bag-' + bag + '.png');
+                        return;
+                    }
+
+                    for (var i = 0; i < imgs.length; i++) {
+                        var im = imgs[i];
+                        var d = await imgToDataURL(im);
+                        var bagNo = im.dataset.bag || (i + 1);
+                        triggerDownload(d, 'sintergy-label-bag-' + bagNo + '.png');
+                    }
+                } catch (err) {
+                    console.error('[mixqr] download error', err);
+                    alert('Download failed: ' + (err && err.message ? err.message : err));
+                }
+            }
+
+            async function handlePrintClick(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var imgs = getLabelImages();
+                if (!imgs.length) {
+                    alert('Nothing to print');
+                    return;
+                }
+
+                var w = window.open('', '_blank');
+                if (!w) {
+                    alert('Pop-up blocked. Allow pop-ups to print.');
+                    return;
+                }
+
+                try {
+                    // Prepare blank doc safely (no document.write string)
+                    var doc = w.document;
+                    doc.open();
+                    doc.close();
+
+                    doc.title = 'Print Labels';
+                    var body = doc.body || doc.getElementsByTagName('body')[0];
+                    if (!body) {
+                        body = doc.createElement('body');
+                        doc.appendChild(body);
+                    }
+                    body.style.margin = '16px';
+                    body.style.textAlign = 'center';
+
+                    var urls = [];
+                    for (var i = 0; i < imgs.length; i++) {
+                        urls.push(await imgToDataURL(imgs[i]));
+                    }
+
+                    for (var j = 0; j < urls.length; j++) {
+                        var imgEl = doc.createElement('img');
+                        imgEl.src = urls[j];
+                        imgEl.style.width = '360px';
+                        imgEl.style.height = 'auto';
+                        imgEl.style.display = 'inline-block';
+                        imgEl.style.margin = '8px';
+                        body.appendChild(imgEl);
+                    }
+
+                    setTimeout(function () {
+                        try {
+                            w.focus();
+                            w.print();
+                        } catch (err2) {
+                            console.error('[mixqr] print call error', err2);
+                        }
+                    }, 150);
+                } catch (err) {
+                    console.error('[mixqr] print error', err);
+                    try { w.close(); } catch (e2) { }
+                    alert('Print failed: ' + (err && err.message ? err.message : err));
+                }
+            }
+
+            // ---------- Wiring ----------
+            document.addEventListener('DOMContentLoaded', function () {
+                if (!window.QRCode) {
+                    console.error('[MixQR] QRCode not found. Check qrcode.min.js.');
+                    if (window.Swal && Swal.fire) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'QR library missing',
+                            text: 'qrcode.min.js did not load. Make sure it is included before this script.'
+                        });
+                    }
+                }
+
+                var modal = document.getElementById('createMixQrModal');
+                if (modal) {
+                    modal.addEventListener('shown.bs.modal', function () {
+                        clearPreview();
+                        var startBag = document.getElementById('startBagNo');
+                        if (startBag && !startBag.value) startBag.value = 1;
+                        var mixInput = document.getElementById('mixCode');
+                        if (mixInput) mixInput.focus();
+                    });
+                    modal.addEventListener('hidden.bs.modal', window.__cleanBackdrops || function () { });
+                }
+
+                var btnGen = document.getElementById('btnGenerateQr');
+                if (btnGen) btnGen.addEventListener('click', handleGenerateClick);
+
+                var btnDownload = document.getElementById('btnDownloadQr');
+                if (btnDownload) btnDownload.addEventListener('click', handleDownloadClick);
+
+                var btnPrint = document.getElementById('btnPrintQr');
+                if (btnPrint) btnPrint.addEventListener('click', handlePrintClick);
             });
-          }
-
-          function aDownload(dataUrl, filename) {
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = filename;
-            document.body.appendChild(a); a.click(); a.remove();
-          }
-
-          // Expose globals used by inline onclick=
-          window.mixqrDownload = async function () {
-            try {
-              const imgs = getImgs();
-              if (!imgs.length) { alert('Nothing to download'); return false; }
-
-              if (imgs.length === 1) {
-                const img = imgs[0];
-                const data = await imgToDataURL(img);
-                const bag = img.dataset.bag || '1';
-                aDownload(data, `sintergy-label-bag-${bag}.png`);
-                return false;
-              }
-
-              // Multiple → download one-by-one (most reliable across CSP/pop-up settings)
-              for (let i = 0; i < imgs.length; i++) {
-                const img = imgs[i];
-                const data = await imgToDataURL(img);
-                const bag = img.dataset.bag || (i + 1);
-                aDownload(data, `sintergy-label-bag-${bag}.png`);
-              }
-            } catch (err) {
-              console.error('[mixqr] download error', err);
-              alert('Download failed: ' + (err?.message || err));
-            }
-            return false;
-          };
-
-          window.mixqrPrint = async function () {
-            const imgs = getImgs();
-            if (!imgs.length) { alert('Nothing to print'); return false; }
-
-            // Open the window/tab immediately (sync with the click)
-            const w = window.open('', '_blank');
-            if (!w) { alert('Pop-up blocked. Allow pop-ups to print.'); return false; }
-
-            // Build shell first (still sync)
-            w.document.open();
-            w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title></head><body style="margin:16px;text-align:center;"></body></html>');
-            w.document.close();
-
-            try {
-              // Now convert asynchronously
-              const urls = [];
-              for (const im of imgs) urls.push(await imgToDataURL(im));
-
-              urls.forEach(u => {
-                const img = w.document.createElement('img');
-                img.src = u;
-                img.style.cssText = 'width:360px;height:auto;display:inline-block;margin:8px;';
-                w.document.body.appendChild(img);
-              });
-
-              const s = w.document.createElement('script');
-              s.textContent = `
-                window.onload = function () {
-                  setTimeout(function () {
-                    window.focus(); window.print();
-                    setTimeout(function(){ window.close && window.close(); }, 300);
-                  }, 60);
-                };
-              `;
-              w.document.body.appendChild(s);
-            } catch (err) {
-              console.error('[mixqr] print error', err);
-              try { w.close(); } catch {}
-              alert('Print failed: ' + (err?.message || err));
-            }
-            return false;
-          };
-
-          // Auto-enable buttons when labels appear
-          document.addEventListener('DOMContentLoaded', () => {
-            const container = $('#qrGrid') || $('#qrContainer');
-            if (container && window.MutationObserver) {
-              new MutationObserver(() => enableButtons(getImgs().length > 0))
-                .observe(container, { childList:true, subtree:true });
-            }
-          });
-
-          // Also re-check whenever the modal is shown
-          $('#createMixQrModal')?.addEventListener('shown.bs.modal', () => {
-            enableButtons(getImgs().length > 0);
-          });
         })();
     </script>
-
-
 
 
 }
-
-

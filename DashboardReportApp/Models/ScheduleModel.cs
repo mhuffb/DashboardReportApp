@@ -23,6 +23,9 @@
         public sbyte GetsSintergySecondary { get; set; }
         public string MaterialCode { get; set; }
 
+        public string Machine { get; set; }
+        public int? Priority { get; set; }
+
     }
     public class ScheduleItem
     {
