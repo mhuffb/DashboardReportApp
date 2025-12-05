@@ -346,6 +346,11 @@ namespace DashboardReportApp.Controllers
                     // ✅ alias Operator → operator
                     @operator = r.Operator,
 
+                    // 👇 NEW
+                    overrideBy = r.OverrideBy,
+
+                    isOverride = r.IsOverride,   
+                    scheduledMaterial = r.ScheduledMaterial,
                     startDateTime = r.StartDateTime,
                     endDateTime = r.EndDateTime,
                     skidNumber = r.SkidNumber,

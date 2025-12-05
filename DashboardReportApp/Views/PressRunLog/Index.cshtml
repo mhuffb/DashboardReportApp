@@ -227,7 +227,9 @@
                             <th>Prod Number</th>
                             <th>Run</th>
                             <th>Mix Lot</th>
-                            <th>Mix Code</th>
+                            <th>Sched Material</th>
+                            <th>Scanned Mix Code</th>
+                            <th>Override By</th>
                             <th>Machine</th>
                             <th>Operator</th>
                             <th>Skid #</th>
@@ -849,11 +851,33 @@
                     { data: 'component' },    // Component
                     { data: 'prodNumber' },   // Prod Number
                     { data: 'run' },          // Run
-                    { data: 'lotNumber' },    // Mix Lot   👈 NEW
-                    { data: 'materialCode' }, // Mix Code  👈 NEW
+                    { data: 'lotNumber' },
+                                  // 👉 show SCHEDULED material *plainly* in its own column
+                { data: 'scheduledMaterial' }, // Sched Material
+
+                // 👉 show ACTUAL mix with mismatch highlighted
+                {
+                    data: 'materialCode',
+                    render: function (data, type, row) {
+                        const sched = row.scheduledMaterial || '';
+                        const mix   = data || '';
+
+                        if (!sched && !mix) return '';
+
+                        // same → just show normal
+                        if (sched === mix) {
+                            return mix;
+                        }
+
+                        // mismatch → red, with tooltip showing scheduled
+                        return `<span style="color:red;" title="Scheduled: ${sched}">${mix}</span>`;
+                    }
+                }, // Mix Code
+                             { data: 'overrideBy' },
                     { data: 'machine' },      // Machine
-                    { data: 'operator' },     // Operator (ApiRuns uses 
-                    { data: 'skidNumber' },   // Skid #
+                                { data: 'operator' },       // Operator
+               
+                                { data: 'skidNumber' },   // Skid #
                     { data: 'pcsStart' },     // Pcs Start
                     { data: 'pcsEnd' },       // Pcs End
                     { data: 'scrap' },        // Scrap

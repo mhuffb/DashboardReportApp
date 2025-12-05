@@ -85,6 +85,7 @@ try
     builder.Services.AddScoped<ProlinkService>();
     builder.Services.AddScoped<CalendarService>();
     builder.Services.AddScoped<ToolingInventoryService>();
+    builder.Services.AddScoped<ITestBakeService, TestBakeService>();
 
     builder.Services.AddHttpContextAccessor();
 

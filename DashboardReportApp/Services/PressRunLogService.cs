@@ -1,24 +1,25 @@
 ﻿using DashboardReportApp.Models;
+using iText.Barcodes;
+using iText.IO.Font.Constants;
+using iText.Kernel.Colors; // only needed if you use the overload with colors
+using iText.Kernel.Font;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Canvas.Draw;
+using iText.Layout;
+using iText.Layout.Borders;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Data.Common;
 using System.Data;
-using iText.IO.Font.Constants;
-using iText.Kernel.Font;
-using iText.Kernel.Pdf;
-using iText.Layout;
-using iText.Layout.Properties;
-using iText.Kernel.Pdf.Canvas.Draw;
-using iText.Kernel.Pdf.Canvas;
-using iText.Kernel.Geom;
-using Microsoft.Extensions.Configuration;
-using iText.Layout.Element;
-using iText.Layout.Borders;
+using System.Data.Common;
 using System.IO;
-using iText.Barcodes;
-using iText.Kernel.Colors; // only needed if you use the overload with colors
+using System.Net;
+using System.Threading.Tasks;
 
 namespace DashboardReportApp.Services
 {
@@ -349,10 +350,10 @@ namespace DashboardReportApp.Services
         INSERT INTO pressrun
               (operator, part, component, machine, prodNumber, run,
                startDateTime, skidNumber, lotNumber, materialCode,
-               isOverride, overrideBy, overrideAt)
+               isOverride, overrideBy, overrideAt, scheduledMaterial)
         VALUES (@operator, @part, @component, @machine, @prod, @run,
                 @start, 0, @lotNumber, @materialCode,
-                @isOverride, @overrideBy, @overrideAt);";
+                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial);";
 
             using (var cmd = new MySqlCommand(insertMain, conn, (MySqlTransaction)tx))
             {
@@ -368,6 +369,8 @@ namespace DashboardReportApp.Services
                 cmd.Parameters.AddWithValue("@isOverride", isOverride);
                 cmd.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
+
+                cmd.Parameters.AddWithValue("@scheduledMaterial", (object?)scheduledCode ?? DBNull.Value);
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -399,10 +402,10 @@ namespace DashboardReportApp.Services
         INSERT INTO pressrun
               (run, part, component, startDateTime, operator,
                machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode,
-               isOverride, overrideBy, overrideAt)
+               isOverride, overrideBy, overrideAt, scheduledMaterial)
         VALUES (@run, @part, @component, NOW(), @operator,
                 @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode,
-                @isOverride, @overrideBy, @overrideAt);";
+                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial);";
 
             if (allClosed)
             {
@@ -425,6 +428,7 @@ namespace DashboardReportApp.Services
                 newSkidCmd.Parameters.AddWithValue("@isOverride", isOverride);
                 newSkidCmd.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
                 newSkidCmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
+                newSkidCmd.Parameters.AddWithValue("@scheduledMaterial", (object?)scheduledCode ?? DBNull.Value);
                 await newSkidCmd.ExecuteNonQueryAsync();
             }
             else
@@ -447,6 +451,7 @@ namespace DashboardReportApp.Services
                 insert.Parameters.AddWithValue("@isOverride", isOverride);
                 insert.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
                 insert.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
+                insert.Parameters.AddWithValue("@scheduledMaterial", (object?)scheduledCode ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync();
             }
 
@@ -1018,7 +1023,8 @@ LIMIT 1";
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
-       lotNumber, materialCode, isOverride, overrideBy, overrideAt
+       lotNumber, materialCode, isOverride, overrideBy, overrideAt,
+       scheduledMaterial
 FROM pressrun
 WHERE run = @run
   AND skidNumber = @skidNumber
@@ -1051,7 +1057,7 @@ LIMIT 1";
             var isOvOrd = TryOrdinal(rdr, "isOverride");
             var ovByOrd = TryOrdinal(rdr, "overrideBy");
             var ovAtOrd = TryOrdinal(rdr, "overrideAt");
-
+            var schedOrd = TryOrdinal(rdr, "scheduledMaterial");
             var model = new PressRunLogModel
             {
                 Id = rdr.GetInt32("id"),
@@ -1075,7 +1081,12 @@ LIMIT 1";
                 // 🔹 new override fields
                 IsOverride = isOvOrd >= 0 && !rdr.IsDBNull(isOvOrd) && Convert.ToBoolean(rdr["isOverride"]),
                 OverrideBy = ovByOrd >= 0 && !rdr.IsDBNull(ovByOrd) ? rdr["overrideBy"]?.ToString() : null,
-                OverrideAt = ovAtOrd >= 0 && !rdr.IsDBNull(ovAtOrd) ? rdr.GetDateTime(ovAtOrd) : (DateTime?)null
+                OverrideAt = ovAtOrd >= 0 && !rdr.IsDBNull(ovAtOrd) ? rdr.GetDateTime(ovAtOrd) : (DateTime?)null,
+
+
+    ScheduledMaterial = schedOrd >= 0 && !rdr.IsDBNull(schedOrd)
+        ? rdr["scheduledMaterial"]?.ToString()
+        : null
             };
             return model;
         }
@@ -1248,7 +1259,8 @@ ORDER BY part, run";
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
        operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
-       lotNumber, materialCode, isOverride, overrideBy, overrideAt
+       lotNumber, materialCode, isOverride, overrideBy, overrideAt,
+       scheduledMaterial
 FROM pressrun
 WHERE endDateTime IS NULL";
 
@@ -1327,7 +1339,8 @@ WHERE endDateTime IS NULL";
         materialCode,
         isOverride,
         overrideBy,
-        overrideAt";
+        overrideAt,
+       scheduledMaterial";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -1351,9 +1364,23 @@ WHERE endDateTime IS NULL";
                 listCmd.Parameters.AddWithValue("@limit", pageSize);
                 listCmd.Parameters.AddWithValue("@offset", offset);
 
-                using var rdr = await listCmd.ExecuteReaderAsync();
-                while (await rdr.ReadAsync())
-                    rows.Add(ParseRunFromReader(rdr));
+                using (var rdr = await listCmd.ExecuteReaderAsync())
+                {
+                    while (await rdr.ReadAsync())
+                        rows.Add(ParseRunFromReader(rdr));
+                }
+
+                // 🔹 Now that the reader is closed, we can reuse the same conn
+                foreach (var row in rows)
+                {
+                    row.ScheduledMaterial = await GetScheduledMaterialCodeAsync(
+                        conn,
+                        row.Part ?? "",
+                        row.ProdNumber ?? "",
+                        row.Run ?? ""
+                    );
+                }
+
             }
 
             return new PagedResult<PressRunLogModel>
@@ -1471,7 +1498,8 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
         materialCode,
         isOverride,
         overrideBy,
-        overrideAt
+        overrideAt,
+       scheduledMaterial
     FROM pressrun
     ORDER BY startDateTime DESC;";
 

@@ -12,6 +12,8 @@ Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
 
 
-5. show lot number and materialcode in molding dashboard and does it have to be react?
+5. show lot number and materialcode in molding dashboard. react?
 6. Add production # and run # barcodes to tracer tag
 
+add average to prolink report
+add inspection prolink search
