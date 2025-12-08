@@ -59,6 +59,8 @@ namespace DashboardReportApp.Services
         public double Lsl { get; set; }
         public double Max { get; set; }
         public double Min { get; set; }
+
+        public double Average { get; set; }
     }
 
     // Container grouping a department's data.
@@ -87,10 +89,10 @@ namespace DashboardReportApp.Services
 
         // 1) Retrieve raw measurement records.
         public List<MeasurementRecord> GetMeasurementRecords(
-     string partString,
-     string type,
-     DateTime? startDate,
-     DateTime? endDate)
+       string partString,
+       string type,
+       DateTime? startDate,
+       DateTime? endDate)
         {
             // If partString is null or whitespace, search across all parts.
             partString = string.IsNullOrWhiteSpace(partString) ? "" : partString;
@@ -99,6 +101,7 @@ namespace DashboardReportApp.Services
             using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
+
                 string sql = @"
 SELECT   
     p.part_id,
@@ -116,24 +119,36 @@ JOIN dbo.measurement m ON p.part_id = m.part_id
 JOIN dbo.dimension d ON m.dim_id = d.dim_id
 WHERE 
     qf.qcc_file_desc LIKE '%' + @PartString + '%'
-    AND (
-         (@Type IS NOT NULL AND qf.qcc_file_desc LIKE '%' + @Type + '%')
-         OR (@Type IS NULL AND (
-                qf.qcc_file_desc LIKE '%MOLD%' OR 
-                qf.qcc_file_desc LIKE '%SINT%' OR 
-                qf.qcc_file_desc LIKE '%MACHIN%'
-             ))
-        )
     AND m.deleted_flag = 0
     AND (@StartDate IS NULL OR p.measure_date >= @StartDate)
-    AND (@EndDate IS NULL OR p.measure_date <= @EndDate)
-ORDER BY p.measure_date asc";
+    AND (@EndDate   IS NULL OR p.measure_date <= @EndDate)
+    AND (
+        -- Specific department selected in the UI
+        (
+            @Type IS NOT NULL AND @Type <> '' AND
+            qf.edl_desc = CASE 
+                WHEN @Type = 'mold'   THEN 'MOLDING'
+                WHEN @Type = 'sint'   THEN 'SINTERING'
+                WHEN @Type = 'machin' THEN 'MACHINING'
+                WHEN @Type = 'insp'   THEN 'INSPECTION'
+                ELSE qf.edl_desc  -- if somehow something else sneaks in, don't exclude everything
+            END
+        )
+        -- No department selected (Any) → include all 4 edl_desc values
+        OR (
+            (@Type IS NULL OR @Type = '')
+            AND qf.edl_desc IN ('MOLDING','SINTERING','MACHINING','INSPECTION')
+        )
+    )
+ORDER BY p.measure_date ASC;";
+
                 using (var command = new SqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@PartString", partString);
                     command.Parameters.AddWithValue("@Type", string.IsNullOrEmpty(type) ? (object)DBNull.Value : type);
                     command.Parameters.AddWithValue("@StartDate", startDate.HasValue ? (object)startDate.Value : DBNull.Value);
                     command.Parameters.AddWithValue("@EndDate", endDate.HasValue ? (object)endDate.Value : DBNull.Value);
+
                     using (var reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -154,8 +169,10 @@ ORDER BY p.measure_date asc";
                     }
                 }
             }
+
             return records;
         }
+
 
 
         // 2) Pivot measurements.
@@ -264,9 +281,10 @@ WHERE pf.part_id = @PartId";
         {
             List<string> departments;
             if (string.IsNullOrEmpty(departmentParam))
-                departments = new List<string> { "mold", "sint", "machin" };
+                departments = new List<string> { "mold", "sint", "machin", "insp" };   // add insp
             else
                 departments = new List<string> { departmentParam };
+
 
             var results = new List<PivotedDepartmentResult>();
 
@@ -274,8 +292,11 @@ WHERE pf.part_id = @PartId";
             {
                 // Map department code to full name.
                 string displayDept = dept.Equals("mold", StringComparison.OrdinalIgnoreCase) ? "Molding" :
-                                     dept.Equals("sint", StringComparison.OrdinalIgnoreCase) ? "Sintering" :
-                                     dept.Equals("machin", StringComparison.OrdinalIgnoreCase) ? "Machining" : dept;
+                      dept.Equals("sint", StringComparison.OrdinalIgnoreCase) ? "Sintering" :
+                      dept.Equals("machin", StringComparison.OrdinalIgnoreCase) ? "Machining" :
+                      dept.Equals("insp", StringComparison.OrdinalIgnoreCase) ? "Inspection" :
+                      dept;
+
 
                 var rawRecords = GetMeasurementRecords(partString, dept, startDate, endDate);
                 if (onlyOutOfSpec)
@@ -346,6 +367,9 @@ WHERE pf.part_id = @PartId";
                 {
                     double? maxVal = null;
                     double? minVal = null;
+                    double sum = 0;
+                    int count = 0;
+
                     foreach (var pr in pivotRows)
                     {
                         if (pr.Measurements.TryGetValue(dim, out string strVal) &&
@@ -355,22 +379,31 @@ WHERE pf.part_id = @PartId";
                                 maxVal = dblVal;
                             if (!minVal.HasValue || dblVal < minVal.Value)
                                 minVal = dblVal;
+
+                            sum += dblVal;
+                            count++;
                         }
                     }
+
                     double usl = 0.0, lsl = 0.0;
                     if (dimTolerances.TryGetValue(dim, out var t))
                     {
                         usl = t.nom + t.plus;
                         lsl = t.nom + t.minus;
                     }
+
+                    double avg = count > 0 ? sum / count : 0.0;
+
                     dimensionStats[dim] = new DimensionStats
                     {
                         Usl = usl,
                         Lsl = lsl,
                         Max = maxVal ?? 0.0,
-                        Min = minVal ?? 0.0
+                        Min = minVal ?? 0.0,
+                        Average = avg
                     };
                 }
+
 
                 var deptResult = new PivotedDepartmentResult
                 {
@@ -426,12 +459,13 @@ WHERE pf.part_id = @PartId";
                 List<string> departments;
                 if (string.IsNullOrEmpty(type))
                 {
-                    departments = new List<string> { "mold", "sint", "machin" };
+                    departments = new List<string> { "mold", "sint", "machin", "insp" };  // add insp
                 }
                 else
                 {
                     departments = new List<string> { type };
                 }
+
 
                 bool firstDept = true;
                 foreach (string dept in departments)
@@ -444,12 +478,15 @@ WHERE pf.part_id = @PartId";
 
                     // Map department code to full name.
                     string deptDisplay = dept.Equals("mold", StringComparison.OrdinalIgnoreCase)
-                        ? "Molding"
-                        : dept.Equals("sint", StringComparison.OrdinalIgnoreCase)
-                            ? "Sintering"
-                            : dept.Equals("machin", StringComparison.OrdinalIgnoreCase)
-                                ? "Machining"
-                                : dept;
+     ? "Molding"
+     : dept.Equals("sint", StringComparison.OrdinalIgnoreCase)
+         ? "Sintering"
+         : dept.Equals("machin", StringComparison.OrdinalIgnoreCase)
+             ? "Machining"
+             : dept.Equals("insp", StringComparison.OrdinalIgnoreCase)
+                 ? "Inspection"
+                 : dept;
+
                     document.Add(new Paragraph($"Department: {deptDisplay}")
                         .SetFont(boldFont)
                         .SetFontSize(smallFontSize));
@@ -527,7 +564,7 @@ WHERE pf.part_id = @PartId";
                             ))
                             .ToList();
 
-                        var measurementStats = new Dictionary<string, (double max, double min)>();
+                        var measurementStats = new Dictionary<string, (double max, double min, double avg)>();
                         foreach (var dim in measurementColumns)
                         {
                             var vals = partGroup
@@ -543,8 +580,15 @@ WHERE pf.part_id = @PartId";
                                 .ToList();
 
                             if (vals.Any())
-                                measurementStats[dim] = (vals.Max(), vals.Min());
+                            {
+                                double max = vals.Max();
+                                double min = vals.Min();
+                                double avg = vals.Average();
+
+                                measurementStats[dim] = (max, min, avg);
+                            }
                         }
+
 
                         var dimensionTolerances = new Dictionary<string, (double nominal, double plus, double minus)>();
                         // Use raw records filtered by part.
@@ -586,12 +630,12 @@ WHERE pf.part_id = @PartId";
 
         // 7) BuildDepartmentTable: constructs the PDF table and appends a corrective actions row after each record row.
         private void BuildDepartmentTable(
-    Document document,
-    List<PartMeasurementPivot> pivotRecords,
-    List<string> measurementColumns,
-    List<string> factorColumns,
-    Dictionary<string, (double max, double min)> measurementStats,
-    Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
+      Document document,
+      List<PartMeasurementPivot> pivotRecords,
+      List<string> measurementColumns,
+      List<string> factorColumns,
+      Dictionary<string, (double max, double min, double avg)> measurementStats,
+      Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
     PdfFont boldFont,
     PdfFont regularFont,
     float smallFontSize)
@@ -612,7 +656,9 @@ WHERE pf.part_id = @PartId";
                 .SetMarginTop(10);
 
             // Header rows for tolerance and stats (USL, LSL, Max, Min)
-            string[] rowLabels = { "USL", "LSL", "Max", "Min" };
+            // Header rows for tolerance and stats (USL, LSL, Average, Max, Min)
+            string[] rowLabels = { "USL", "LSL", "Average", "Max", "Min" };
+
             foreach (var label in rowLabels)
             {
                 // For the common columns, display the label in the first cell and blank in the next.
@@ -634,7 +680,7 @@ WHERE pf.part_id = @PartId";
                     {
                         double nom = tol.nominal;
                         double plus = tol.plus;
-                        double minus = tol.minus;  // Note: tol.minus is typically negative.
+                        double minus = tol.minus;  // typically negative
                         double usl = nom + plus;
                         double lsl = nom + minus;
 
@@ -642,11 +688,14 @@ WHERE pf.part_id = @PartId";
                             cellText = usl.ToString("F4");
                         else if (label == "LSL")
                             cellText = lsl.ToString("F4");
+                        else if (label == "Average" && measurementStats.ContainsKey(dim))
+                            cellText = measurementStats[dim].avg.ToString("F4");
                         else if (label == "Max" && measurementStats.ContainsKey(dim))
                             cellText = measurementStats[dim].max.ToString("F4");
                         else if (label == "Min" && measurementStats.ContainsKey(dim))
                             cellText = measurementStats[dim].min.ToString("F4");
                     }
+
                     table.AddHeaderCell(new Cell()
                         .Add(new Paragraph(cellText).SetFont(regularFont).SetFontSize(smallFontSize))
                         .SetBackgroundColor(ColorConstants.LIGHT_GRAY)

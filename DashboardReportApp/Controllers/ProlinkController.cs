@@ -43,8 +43,10 @@ namespace DashboardReportApp.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, ex.Message);
+                // TEMP: send full exception to client to debug
+                return StatusCode(500, ex.ToString());
             }
+
         }
 
         [HttpGet("QueryData")]
