@@ -79,7 +79,7 @@ namespace DashboardReportApp.Services
         private readonly string connectionString;
         private readonly List<string> allowedFactors = new List<string>
         {
-            "Operator", "Mix Lot #", "Mix No.", "Press", "Machine", "Oven"
+            "Operator", "Mix Lot #", "Mix No.", "Press", "Machine", "Oven", "INSPECTORS"
         };
 
         public ProlinkService(IConfiguration configuration)
@@ -205,6 +205,7 @@ ORDER BY p.measure_date ASC;";
         }
 
         // 3) Populate factor values.
+        // 3) Populate factor values.
         public void PopulateFactorValues(List<PartMeasurementPivot> pivotRecords)
         {
             using (var connection = new SqlConnection(connectionString))
@@ -217,19 +218,21 @@ SELECT f.factor_desc, pf.value
 FROM dbo.part_factor pf
 JOIN dbo.factor f ON pf.factor_id = f.factor_id
 WHERE pf.part_id = @PartId";
+
                     using (var command = new SqlCommand(factorSql, connection))
                     {
                         command.Parameters.AddWithValue("@PartId", pivot.PartId);
+
                         using (var reader = command.ExecuteReader())
                         {
                             while (reader.Read())
                             {
                                 string factorDesc = reader.GetString(reader.GetOrdinal("factor_desc"));
-                                if (!allowedFactors.Contains(factorDesc))
-                                    continue;
                                 string value = reader.IsDBNull(reader.GetOrdinal("value"))
                                     ? ""
                                     : reader.GetString(reader.GetOrdinal("value"));
+
+                                // Store ALL factors
                                 pivot.FactorValues[factorDesc] = value;
                             }
                         }
@@ -346,12 +349,13 @@ WHERE pf.part_id = @PartId";
                     .OrderBy(d => d)
                     .ToList();
 
-                var factorColumns = allowedFactors
-                    .Where(f => pivotRows.Any(p =>
-                        p.FactorValues.ContainsKey(f) &&
-                        !string.IsNullOrWhiteSpace(p.FactorValues[f])
-                    ))
-                    .ToList();
+                var factorColumns = pivotRows
+    .SelectMany(p => p.FactorValues.Keys)
+    .Where(k => !string.IsNullOrWhiteSpace(k))
+    .Distinct()
+    .OrderBy(k => k)
+    .ToList();
+
 
                 var dimTolerances = new Dictionary<string, (double nom, double plus, double minus)>();
                 foreach (var rr in rawRecords)
@@ -557,12 +561,13 @@ WHERE pf.part_id = @PartId";
                             .OrderBy(d => d)
                             .ToList();
 
-                        var factorColumns = allowedFactors
-                            .Where(f => partGroup.Any(p =>
-                                p.FactorValues.ContainsKey(f) &&
-                                !string.IsNullOrWhiteSpace(p.FactorValues[f])
-                            ))
-                            .ToList();
+                        var factorColumns = partGroup
+    .SelectMany(p => p.FactorValues.Keys)
+    .Where(k => !string.IsNullOrWhiteSpace(k))
+    .Distinct()
+    .OrderBy(k => k)
+    .ToList();
+
 
                         var measurementStats = new Dictionary<string, (double max, double min, double avg)>();
                         foreach (var dim in measurementColumns)
@@ -628,189 +633,267 @@ WHERE pf.part_id = @PartId";
 
 
 
-        // 7) BuildDepartmentTable: constructs the PDF table and appends a corrective actions row after each record row.
+        // 7) BuildDepartmentTable: constructs one or more PDF tables so that
+        // measurement columns are split into chunks and do NOT run off the page.
         private void BuildDepartmentTable(
-      Document document,
-      List<PartMeasurementPivot> pivotRecords,
-      List<string> measurementColumns,
-      List<string> factorColumns,
-      Dictionary<string, (double max, double min, double avg)> measurementStats,
-      Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
-    PdfFont boldFont,
-    PdfFont regularFont,
-    float smallFontSize)
+     Document document,
+     List<PartMeasurementPivot> pivotRecords,
+     List<string> measurementColumns,
+     List<string> factorColumns,
+     Dictionary<string, (double max, double min, double avg)> measurementStats,
+     Dictionary<string, (double nominal, double plus, double minus)> dimensionTolerances,
+     PdfFont boldFont,
+     PdfFont regularFont,
+     float smallFontSize)
         {
-            // Use only 2 common columns: Record and Date/Time.
-            int commonCols = 2;
-            int measCount = measurementColumns.Count;
-            int factorCount = factorColumns.Count;
-            int totalCols = commonCols + measCount + factorCount;
-            float[] colWidths = new float[totalCols];
-            colWidths[0] = 1f;    // Record
-            colWidths[1] = 3f;    // Date/Time
-            for (int i = 2; i < totalCols; i++)
-                colWidths[i] = 1f;
+            // How many measurement columns to show per table.
+            const int maxMeasurementColumnsPerTable = 8;
 
-            var table = new Table(colWidths)
-                .SetWidth(UnitValue.CreatePercentValue(100))
-                .SetMarginTop(10);
-
-            // Header rows for tolerance and stats (USL, LSL, Max, Min)
-            // Header rows for tolerance and stats (USL, LSL, Average, Max, Min)
-            string[] rowLabels = { "USL", "LSL", "Average", "Max", "Min" };
-
-            foreach (var label in rowLabels)
+            int totalMeasurementCount = measurementColumns.Count;
+            if (totalMeasurementCount == 0)
             {
-                // For the common columns, display the label in the first cell and blank in the next.
-                for (int i = 0; i < commonCols; i++)
-                {
-                    string cellText = (i == 0) ? label : "";
-                    table.AddHeaderCell(new Cell()
-                        .Add(new Paragraph(cellText).SetFont(boldFont).SetFontSize(smallFontSize))
-                        .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
-                        .SetTextAlignment(TextAlignment.CENTER)
-                        .SetPadding(3)
-                        .SetBorder(new SolidBorder(1)));
-                }
-                // Then add header cells for measurement columns.
-                foreach (var dim in measurementColumns)
-                {
-                    string cellText = "";
-                    if (dimensionTolerances.TryGetValue(dim, out var tol))
-                    {
-                        double nom = tol.nominal;
-                        double plus = tol.plus;
-                        double minus = tol.minus;  // typically negative
-                        double usl = nom + plus;
-                        double lsl = nom + minus;
+                return;
+            }
 
-                        if (label == "USL")
-                            cellText = usl.ToString("F4");
-                        else if (label == "LSL")
-                            cellText = lsl.ToString("F4");
-                        else if (label == "Average" && measurementStats.ContainsKey(dim))
-                            cellText = measurementStats[dim].avg.ToString("F4");
-                        else if (label == "Max" && measurementStats.ContainsKey(dim))
-                            cellText = measurementStats[dim].max.ToString("F4");
-                        else if (label == "Min" && measurementStats.ContainsKey(dim))
-                            cellText = measurementStats[dim].min.ToString("F4");
+            int commonCols = 2; // Record, Date/Time
+
+            // Split measurement columns into chunks
+            for (int start = 0; start < totalMeasurementCount; start += maxMeasurementColumnsPerTable)
+            {
+                var measChunk = measurementColumns
+                    .Skip(start)
+                    .Take(maxMeasurementColumnsPerTable)
+                    .ToList();
+
+                int measCount = measChunk.Count;
+                int factorCount = factorColumns.Count;
+                int totalCols = commonCols + measCount + factorCount;
+
+                // Optional: indicate continuation for chunks after the first
+                if (start > 0)
+                {
+                    document.Add(new Paragraph("Characteristics (continued...)")
+                        .SetFont(regularFont)
+                        .SetFontSize(smallFontSize)
+                        .SetMarginTop(5));
+                }
+
+                // Column widths (relative)
+                float[] colWidths = new float[totalCols];
+                colWidths[0] = 1f; // Record
+                colWidths[1] = 3f; // Date/Time
+                for (int i = 2; i < totalCols; i++)
+                    colWidths[i] = 1f;
+
+                var table = new Table(colWidths)
+                    .SetWidth(UnitValue.CreatePercentValue(100))
+                    .SetMarginTop(5);
+
+                // --------------------------------------------------------------------
+                // 1) Header rows for USL, LSL, Average, Max, Min
+                // --------------------------------------------------------------------
+                string[] rowLabels = { "USL", "LSL", "Average", "Max", "Min" };
+
+                foreach (var label in rowLabels)
+                {
+                    // Common columns: first cell shows the label, second is blank
+                    for (int i = 0; i < commonCols; i++)
+                    {
+                        string cellText = (i == 0) ? label : "";
+                        table.AddHeaderCell(new Cell()
+                            .Add(new Paragraph(cellText).SetFont(boldFont).SetFontSize(smallFontSize))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetPadding(3)
+                            .SetBorder(new SolidBorder(1)));
                     }
 
-                    table.AddHeaderCell(new Cell()
-                        .Add(new Paragraph(cellText).SetFont(regularFont).SetFontSize(smallFontSize))
-                        .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
-                        .SetTextAlignment(TextAlignment.CENTER)
-                        .SetPadding(3)
-                        .SetBorder(new SolidBorder(1)));
-                }
-                // Finally, add header cells for the factor columns.
-                for (int i = 0; i < factorCount; i++)
-                {
-                    table.AddHeaderCell(new Cell()
-                        .Add(new Paragraph("").SetFont(regularFont).SetFontSize(smallFontSize))
-                        .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
-                        .SetTextAlignment(TextAlignment.CENTER)
-                        .SetPadding(3)
-                        .SetBorder(new SolidBorder(1)));
-                }
-            }
-
-            // Main header row: "Record", "Date/Time", then measurement and factor columns.
-            string[] commonHeaders = { "Record", "Date/Time" };
-            for (int i = 0; i < totalCols; i++)
-            {
-                string text;
-                if (i < commonCols)
-                    text = commonHeaders[i];
-                else if (i < commonCols + measCount)
-                    text = measurementColumns[i - commonCols];
-                else
-                    text = factorColumns[i - commonCols - measCount];
-
-                table.AddHeaderCell(new Cell()
-                    .Add(new Paragraph(text).SetFont(boldFont).SetFontSize(smallFontSize))
-                    .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
-                    .SetTextAlignment(TextAlignment.CENTER)
-                    .SetPadding(3)
-                    .SetBorder(new SolidBorder(1)));
-            }
-
-            // Data rows: for each record, add record number, date/time, then measurement and factor values.
-            foreach (var pivot in pivotRecords)
-            {
-                // Record number cell.
-                table.AddCell(new Cell()
-                    .Add(new Paragraph(pivot.RecordNumber.ToString()).SetFont(regularFont).SetFontSize(smallFontSize))
-                    .SetPadding(3)
-                    .SetBorder(new SolidBorder(1)));
-
-                // Date/Time cell.
-                table.AddCell(new Cell()
-                    .Add(new Paragraph(pivot.MeasureDate.ToString("g")).SetFont(regularFont).SetFontSize(smallFontSize))
-                    .SetTextAlignment(TextAlignment.CENTER)
-                    .SetPadding(3)
-                    .SetBorder(new SolidBorder(1)));
-
-                // Add measurement columns.
-                foreach (var dim in measurementColumns)
-                {
-                    pivot.Measurements.TryGetValue(dim, out var val);
-                    if (string.IsNullOrWhiteSpace(val)) val = "";
-                    var paragraph = new Paragraph(val).SetFont(regularFont).SetFontSize(smallFontSize);
-                    if (dimensionTolerances.ContainsKey(dim) && double.TryParse(val, out double doubleVal))
+                    // Measurement columns for this chunk
+                    foreach (var dim in measChunk)
                     {
-                        var (nom, plus, minus) = dimensionTolerances[dim];
-                        double usl = nom + plus;
-                        double lsl = nom + minus;
-                        // Check if the measurement is out-of-spec.
-                        if (doubleVal > usl || doubleVal < lsl)
+                        string cellText = "";
+
+                        if (dimensionTolerances.TryGetValue(dim, out var tol))
                         {
-                            paragraph.SetFontColor(ColorConstants.RED);
-                            // If measurement is above the upper spec, calculate the positive difference.
-                            if (doubleVal > usl)
+                            double nom = tol.nominal;
+                            double plus = tol.plus;
+                            double minus = tol.minus;
+                            double usl = nom + plus;
+                            double lsl = nom + minus;
+
+                            if (label == "USL")
+                                cellText = usl.ToString("F4");
+                            else if (label == "LSL")
+                                cellText = lsl.ToString("F4");
+                            else if (measurementStats.ContainsKey(dim))
                             {
-                                double diff = doubleVal - usl;
-                                paragraph.Add(new Text(" (+" + diff.ToString("F4") + ")").SetFontColor(ColorConstants.RED));
-                            }
-                            // If measurement is below the lower spec, calculate the difference.
-                            else if (doubleVal < lsl)
-                            {
-                                double diff = lsl - doubleVal;
-                                paragraph.Add(new Text(" (-" + diff.ToString("F4") + ")").SetFontColor(ColorConstants.RED));
+                                var stats = measurementStats[dim];
+                                if (label == "Average")
+                                    cellText = stats.avg.ToString("F4");
+                                else if (label == "Max")
+                                    cellText = stats.max.ToString("F4");
+                                else if (label == "Min")
+                                    cellText = stats.min.ToString("F4");
                             }
                         }
+
+                        table.AddHeaderCell(new Cell()
+                            .Add(new Paragraph(cellText).SetFont(regularFont).SetFontSize(smallFontSize))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetPadding(3)
+                            .SetBorder(new SolidBorder(1)));
                     }
-                    table.AddCell(new Cell()
-                        .Add(paragraph)
-                        .SetTextAlignment(TextAlignment.RIGHT)
-                        .SetPadding(3)
-                        .SetBorder(new SolidBorder(1)));
+
+                    // Factor columns (blank in these tol/stat rows)
+                    for (int i = 0; i < factorCount; i++)
+                    {
+                        table.AddHeaderCell(new Cell()
+                            .Add(new Paragraph("").SetFont(regularFont).SetFontSize(smallFontSize))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(TextAlignment.CENTER)
+                            .SetPadding(3)
+                            .SetBorder(new SolidBorder(1)));
+                    }
                 }
-                // Add factor columns.
-                foreach (var factor in factorColumns)
+
+                // --------------------------------------------------------------------
+                // 2) Main header row: Record, Date/Time, measurement names, factor names
+                // --------------------------------------------------------------------
+                string[] commonHeaders = { "Record", "Date/Time" };
+                for (int colIndex = 0; colIndex < totalCols; colIndex++)
                 {
-                    pivot.FactorValues.TryGetValue(factor, out var fVal);
-                    if (string.IsNullOrWhiteSpace(fVal)) fVal = "";
-                    table.AddCell(new Cell()
-                        .Add(new Paragraph(fVal).SetFont(regularFont).SetFontSize(smallFontSize))
-                        .SetTextAlignment(TextAlignment.RIGHT)
+                    string text;
+                    if (colIndex < commonCols)
+                    {
+                        text = commonHeaders[colIndex];
+                    }
+                    else if (colIndex < commonCols + measCount)
+                    {
+                        text = measChunk[colIndex - commonCols];
+                    }
+                    else
+                    {
+                        text = factorColumns[colIndex - commonCols - measCount];
+                    }
+
+                    table.AddHeaderCell(new Cell()
+                        .Add(new Paragraph(text).SetFont(boldFont).SetFontSize(smallFontSize))
+                        .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                        .SetTextAlignment(TextAlignment.CENTER)
                         .SetPadding(3)
                         .SetBorder(new SolidBorder(1)));
                 }
-                // Append corrective actions row if available.
+
+                // --------------------------------------------------------------------
+                // 3) Data rows
+                // --------------------------------------------------------------------
+                foreach (var pivot in pivotRecords)
+                {
+                    // Record #
+                    table.AddCell(new Cell()
+                        .Add(new Paragraph(pivot.RecordNumber.ToString())
+                            .SetFont(regularFont).SetFontSize(smallFontSize))
+                        .SetPadding(3)
+                        .SetBorder(new SolidBorder(1)));
+
+                    // Date/Time
+                    table.AddCell(new Cell()
+                        .Add(new Paragraph(pivot.MeasureDate.ToString("g"))
+                            .SetFont(regularFont).SetFontSize(smallFontSize))
+                        .SetTextAlignment(TextAlignment.CENTER)
+                        .SetPadding(3)
+                        .SetBorder(new SolidBorder(1)));
+
+                    // Measurement cells (only this chunk)
+                    foreach (var dim in measChunk)
+                    {
+                        pivot.Measurements.TryGetValue(dim, out var val);
+                        if (string.IsNullOrWhiteSpace(val)) val = "";
+
+                        var paragraph = new Paragraph(val)
+                            .SetFont(regularFont)
+                            .SetFontSize(smallFontSize);
+
+                        // Out-of-spec highlighting
+                        if (dimensionTolerances.ContainsKey(dim) &&
+                            double.TryParse(val, out double doubleVal))
+                        {
+                            var (nom, plus, minus) = dimensionTolerances[dim];
+                            double usl = nom + plus;
+                            double lsl = nom + minus;
+
+                            if (doubleVal > usl || doubleVal < lsl)
+                            {
+                                paragraph.SetFontColor(ColorConstants.RED);
+
+                                if (doubleVal > usl)
+                                {
+                                    double diff = doubleVal - usl;
+                                    paragraph.Add(new Text(" (+" + diff.ToString("F4") + ")")
+                                        .SetFontColor(ColorConstants.RED));
+                                }
+                                else
+                                {
+                                    double diff = lsl - doubleVal;
+                                    paragraph.Add(new Text(" (-" + diff.ToString("F4") + ")")
+                                        .SetFontColor(ColorConstants.RED));
+                                }
+                            }
+                        }
+
+                        table.AddCell(new Cell()
+                            .Add(paragraph)
+                            .SetTextAlignment(TextAlignment.RIGHT)
+                            .SetPadding(3)
+                            .SetBorder(new SolidBorder(1)));
+                    }
+
+                    // Factor cells (all factors on every table)
+                    foreach (var factor in factorColumns)
+                    {
+                        pivot.FactorValues.TryGetValue(factor, out var fVal);
+                        if (string.IsNullOrWhiteSpace(fVal)) fVal = "";
+
+                        table.AddCell(new Cell()
+                            .Add(new Paragraph(fVal)
+                                .SetFont(regularFont).SetFontSize(smallFontSize))
+                            .SetTextAlignment(TextAlignment.RIGHT)
+                            .SetPadding(3)
+                            .SetBorder(new SolidBorder(1)));
+                    }
+                }
+
+                // Add this chunk's table to the document
+                document.Add(table);
+            }
+
+            // ------------------------------------------------------------------------
+            // 4) Corrective actions rows (one per record, spanning full width visually)
+            // ------------------------------------------------------------------------
+            foreach (var pivot in pivotRecords)
+            {
                 if (pivot.CorrectiveActions != null && pivot.CorrectiveActions.Any())
                 {
-                    string caText = "Corrective Actions: " + string.Join("; ",
-                        pivot.CorrectiveActions.Select(a => a.ActionRef + ": " + a.ActionDesc));
-                    table.AddCell(new Cell(1, totalCols)
-                        .Add(new Paragraph(caText).SetFont(regularFont).SetFontSize(smallFontSize))
+                    string caText = "Corrective Actions: " +
+                                    string.Join("; ",
+                                        pivot.CorrectiveActions.Select(a => a.ActionRef + ": " + a.ActionDesc));
+
+                    var caTable = new Table(1)
+                        .SetWidth(UnitValue.CreatePercentValue(100))
+                        .SetMarginTop(2);
+
+                    caTable.AddCell(new Cell()
+                        .Add(new Paragraph(caText)
+                            .SetFont(regularFont)
+                            .SetFontSize(smallFontSize))
                         .SetTextAlignment(TextAlignment.LEFT)
                         .SetBackgroundColor(ColorConstants.YELLOW)
                         .SetBorder(new SolidBorder(1)));
+
+                    document.Add(caTable);
                 }
             }
-
-            document.Add(table);
         }
 
 
