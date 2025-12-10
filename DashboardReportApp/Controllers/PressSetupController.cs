@@ -12,10 +12,12 @@ namespace DashboardReportApp.Controllers
     public class PressSetupController : Controller
     {
         private readonly PressSetupService _pressSetupService;
+        private readonly SharedService _sharedService;   // 👈 add this
 
-        public PressSetupController(PressSetupService pressSetupService)
+        public PressSetupController(PressSetupService pressSetupService, SharedService sharedService)
         {
             _pressSetupService = pressSetupService;
+            _sharedService = sharedService;             // 👈 store it
         }
 
         [HttpGet]
@@ -24,7 +26,8 @@ namespace DashboardReportApp.Controllers
                                    string sortBy, string sortOrder = "desc")
         {
             ViewData["Title"] = "Press Setup";
-            ViewData["Operators"] = _pressSetupService.GetOperators();
+            ViewData["Operators"] = _sharedService.GetFormattedOperators();
+
             ViewData["Machines"] = _pressSetupService.GetEquipment();
             ViewData["Trainers"] = _pressSetupService.GetTrainers();
             ViewData["Parts"] = _pressSetupService.GetScheduledParts();
@@ -113,6 +116,21 @@ namespace DashboardReportApp.Controllers
             return Json(_pressSetupService.GetEquipment());
         }
 
+        [HttpPost("PullMaterial")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PullMaterial(long id)
+        {
+            try
+            {
+                await _pressSetupService.RefreshMaterialFromPressAsync(id);
+                TempData["Message"] = "Material code and lot number pulled from press.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Error pulling material: {ex.Message}";
+            }
+            return RedirectToAction("Index");
+        }
 
     }
 }

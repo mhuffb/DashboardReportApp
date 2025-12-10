@@ -570,34 +570,131 @@ LIMIT 1;";
 
             return null;
         }
-        public async Task<HoldScanResult?> LookupByProdAsync(string prodNumber)
-        {
-            if (string.IsNullOrWhiteSpace(prodNumber))
-                return null;
+       public async Task<HoldScanResult?> LookupByProdAsync(string prodNumber)
+{
+    if (string.IsNullOrWhiteSpace(prodNumber))
+        return null;
 
-            prodNumber = prodNumber.Trim();
+    prodNumber = prodNumber.Trim();
 
-            await using var conn = new MySqlConnection(_connectionString);
-            await conn.OpenAsync();
+    await using var conn = new MySqlConnection(_connectionString);
+    await conn.OpenAsync();
 
-            // 1) Try SINTER table first (as requested)
-            const string sinterSql = @"
+    // 1) Try SINTER first (unchanged)
+    const string sinterSql = @"
 SELECT part, component, prodNumber, run, lotNumber, materialCode
 FROM sinterrun
 WHERE prodNumber = @prod
 ORDER BY id DESC
 LIMIT 1;";
 
-            await using (var sinterCmd = new MySqlCommand(sinterSql, conn))
-            {
-                sinterCmd.Parameters.AddWithValue("@prod", prodNumber);
+    await using (var sinterCmd = new MySqlCommand(sinterSql, conn))
+    {
+        sinterCmd.Parameters.AddWithValue("@prod", prodNumber);
 
-                await using var r = await sinterCmd.ExecuteReaderAsync();
+        await using var r = await sinterCmd.ExecuteReaderAsync();
+        if (await r.ReadAsync())
+        {
+            return new HoldScanResult
+            {
+                Source       = "sinterrun",
+                Part         = r["part"] as string,
+                Component    = r["component"] as string,
+                ProdNumber   = r["prodNumber"] as string,
+                RunNumber    = r["run"] as string,
+                LotNumber    = r["lotNumber"] as string,
+                MaterialCode = r["materialCode"] as string
+            };
+        }
+    }
+
+    // 2) Fallback #1: PRESSRUN
+    const string pressSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM pressrun
+WHERE prodNumber = @prod
+ORDER BY id DESC
+LIMIT 1;";
+
+    await using (var pressCmd = new MySqlCommand(pressSql, conn))
+    {
+        pressCmd.Parameters.AddWithValue("@prod", prodNumber);
+
+        await using var r2 = await pressCmd.ExecuteReaderAsync();
+        if (await r2.ReadAsync())
+        {
+            return new HoldScanResult
+            {
+                Source       = "pressrun",
+                Part         = r2["part"] as string,
+                Component    = r2["component"] as string,
+                ProdNumber   = r2["prodNumber"] as string,
+                RunNumber    = r2["run"] as string,
+                LotNumber    = r2["lotNumber"] as string,
+                MaterialCode = r2["materialCode"] as string
+            };
+        }
+    }
+
+    // 3) Fallback #2: PRESSSETUP (new)
+    const string setupSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM presssetup
+WHERE prodNumber = @prod
+ORDER BY startDateTime DESC
+LIMIT 1;";
+
+    await using (var setupCmd = new MySqlCommand(setupSql, conn))
+    {
+        setupCmd.Parameters.AddWithValue("@prod", prodNumber);
+
+        await using var r3 = await setupCmd.ExecuteReaderAsync();
+        if (await r3.ReadAsync())
+        {
+            return new HoldScanResult
+            {
+                Source       = "presssetup",
+                Part         = r3["part"] as string,
+                Component    = r3["component"] as string,
+                ProdNumber   = r3["prodNumber"] as string,
+                RunNumber    = r3["run"] as string,
+                LotNumber    = r3["lotNumber"] as string,
+                MaterialCode = r3["materialCode"] as string
+            };
+        }
+    }
+
+    return null;
+}
+
+        public async Task<HoldScanResult?> LookupByRunAsync(string runNumber)
+        {
+            if (string.IsNullOrWhiteSpace(runNumber))
+                return null;
+
+            runNumber = runNumber.Trim();
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1) Try PRESSRUN first (current behavior)
+            const string pressSql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode
+FROM pressrun
+WHERE run = @run
+ORDER BY id DESC
+LIMIT 1;";
+
+            await using (var pressCmd = new MySqlCommand(pressSql, conn))
+            {
+                pressCmd.Parameters.AddWithValue("@run", runNumber);
+
+                await using var r = await pressCmd.ExecuteReaderAsync();
                 if (await r.ReadAsync())
                 {
                     return new HoldScanResult
                     {
-                        Source = "sinter",
+                        Source = "pressrun",
                         Part = r["part"] as string,
                         Component = r["component"] as string,
                         ProdNumber = r["prodNumber"] as string,
@@ -608,24 +705,24 @@ LIMIT 1;";
                 }
             }
 
-            // 2) Fallback: try PRESS table (in case it hasn't been sintered yet)
-            const string pressSql = @"
+            // 2) Fallback: PRESSSETUP if not found in pressrun
+            const string setupSql = @"
 SELECT part, component, prodNumber, run, lotNumber, materialCode
-FROM pressrun
-WHERE prodNumber = @prod
-ORDER BY id DESC
+FROM presssetup
+WHERE run = @run
+ORDER BY startDateTime DESC
 LIMIT 1;";
 
-            await using (var pressCmd = new MySqlCommand(pressSql, conn))
+            await using (var setupCmd = new MySqlCommand(setupSql, conn))
             {
-                pressCmd.Parameters.AddWithValue("@prod", prodNumber);
+                setupCmd.Parameters.AddWithValue("@run", runNumber);
 
-                await using var r2 = await pressCmd.ExecuteReaderAsync();
+                await using var r2 = await setupCmd.ExecuteReaderAsync();
                 if (await r2.ReadAsync())
                 {
                     return new HoldScanResult
                     {
-                        Source = "press",
+                        Source = "presssetup",
                         Part = r2["part"] as string,
                         Component = r2["component"] as string,
                         ProdNumber = r2["prodNumber"] as string,
@@ -636,43 +733,7 @@ LIMIT 1;";
                 }
             }
 
-            // Nothing found in either table
-            return null;
-        }
-
-        public async Task<HoldScanResult?> LookupByRunAsync(string runNumber)
-        {
-            if (string.IsNullOrWhiteSpace(runNumber))
-                return null;
-
-            await using var conn = new MySqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            const string sql = @"
-SELECT part, component, prodNumber, run, lotNumber, materialCode
-FROM pressrun
-WHERE run = @run
-ORDER BY id DESC
-LIMIT 1;";
-
-            await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@run", runNumber);
-
-            await using var r = await cmd.ExecuteReaderAsync();
-            if (await r.ReadAsync())
-            {
-                return new HoldScanResult
-                {
-                    Source = "press",
-                    Part = r["part"] as string,
-                    Component = r["component"] as string,
-                    ProdNumber = r["prodNumber"] as string,
-                    RunNumber = r["run"] as string,
-                    LotNumber = r["lotNumber"] as string,
-                    MaterialCode = r["materialCode"] as string
-                };
-            }
-
+            // Nothing found in either
             return null;
         }
 

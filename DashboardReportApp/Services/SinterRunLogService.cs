@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Odbc;
+using System.Globalization;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 public class SinterRunLogService
@@ -94,80 +95,9 @@ public class SinterRunLogService
     }
 
 
-    // Get a list of operators from MySQL
-    public List<CalendarModel> GetOperators()
-    {
-        var list = new List<CalendarModel>();
+  
 
-        const string sql = @"
-                SELECT fname, lname, date_employed, active_status, email, vac_balance
-                FROM dbo.employee
-                WHERE active_status = 'A'
-                ORDER BY lname";
-
-        using var conn = new SqlConnection(_sqlServerConnection);
-        using var cmd = new SqlCommand(sql, conn);
-        conn.Open();
-
-        using var rdr = cmd.ExecuteReader();
-        int ordF = rdr.GetOrdinal("fname");
-        int ordL = rdr.GetOrdinal("lname");
-        int ordD = rdr.GetOrdinal("date_employed");
-        int ordA = rdr.GetOrdinal("active_status");
-        int ordE = rdr.GetOrdinal("email");
-        int ordV = rdr.GetOrdinal("vac_balance");
-
-        while (rdr.Read())
-        {
-            var m = new CalendarModel
-            {
-                FirstName = rdr.IsDBNull(ordF) ? "" : rdr.GetString(ordF).Trim(),
-                LastName = rdr.IsDBNull(ordL) ? "" : rdr.GetString(ordL).Trim(),
-                DateEmployed = rdr.IsDBNull(ordD) ? DateTime.MinValue : rdr.GetDateTime(ordD),
-                ActiveStatus = rdr.IsDBNull(ordA) ? "" : rdr.GetString(ordA).Trim(),
-                Email = rdr.IsDBNull(ordE) ? "" : rdr.GetString(ordE).Trim(),
-                VacationBalance = rdr.IsDBNull(ordV) ? 0m : Convert.ToDecimal(rdr.GetValue(ordV))
-            };
-            list.Add(m);
-        }
-
-        // ✅ Keep your manual test employee
-        list.Add(new CalendarModel
-        {
-            FirstName = "User",
-            LastName = "Test",
-            DateEmployed = DateTime.Today,
-            ActiveStatus = "A",
-            Email = "asdfff@sintergy.net",
-            VacationBalance = 999m
-        });
-
-        return list;
-    }
-
-    // Fetch furnaces from MySQL
-    public List<string> GetFurnaces()
-    {
-        var furnaces = new List<string>();
-        string query = "SELECT equipment FROM equipment WHERE name = 'furnace' ORDER BY equipment";
-
-        using (var connection = new MySqlConnection(_connectionStringMySQL))
-        {
-            connection.Open();
-            using (var command = new MySqlCommand(query, connection))
-            {
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        furnaces.Add(reader["equipment"].ToString());
-                    }
-                }
-            }
-        }
-
-        return furnaces;
-    }
+   
 
 
     // Start a new skid (insert into sinterrun table)

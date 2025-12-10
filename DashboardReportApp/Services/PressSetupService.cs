@@ -15,26 +15,86 @@ namespace DashboardReportApp.Services
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
 
-        public PressSetupService(IConfiguration config, SharedService sharedService, MoldingService moldingService)
+        public PressSetupService(IConfiguration config, SharedService sharedService)
         {
             _connectionStringMySQL = config.GetConnectionString("MySQLConnection");
             _sharedService = sharedService;
-            _moldingService = moldingService;
         }
         public List<PressSetupModel> GetAllRecords()
         {
             var records = new List<PressSetupModel>();
-            records = _moldingService.GetPressSetups();
+
+            const string sql = @"
+        SELECT 
+            id,
+            part,
+            component,
+            prodNumber,
+            run,
+            operator,
+            machine,
+            startDateTime,
+            endDateTime,
+            pressType,
+            difficulty,
+            setupComp,
+            assistanceReq,
+            assistedBy,
+            notes,
+            materialCode,
+            lotNumber
+        FROM presssetup
+        ORDER BY startDateTime DESC;";
+
+            using var connection = new MySqlConnection(_connectionStringMySQL);
+            connection.Open();
+
+            using var command = new MySqlCommand(sql, connection);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                records.Add(new PressSetupModel
+                {
+                    Id = reader.GetInt32("id"),
+                    Part = reader["part"]?.ToString(),
+                    Component = reader["component"]?.ToString(),
+                    ProdNumber = reader["prodNumber"]?.ToString(),
+                    Run = reader["run"]?.ToString(),
+                    Operator = reader["operator"]?.ToString(),
+                    Machine = reader["machine"]?.ToString(),
+                    StartDateTime = reader["startDateTime"] as DateTime?,
+                    EndDateTime = reader["endDateTime"] as DateTime?,
+                    PressType = reader["pressType"]?.ToString(),
+                    Difficulty = reader["difficulty"]?.ToString(),
+                    SetupComp = reader["setupComp"]?.ToString(),
+                    AssistanceReq = reader["assistanceReq"]?.ToString(),
+                    AssistedBy = reader["assistedBy"]?.ToString(),
+                    Notes = reader["notes"]?.ToString(),
+                    MaterialCode = reader["materialCode"]?.ToString(),
+                    LotNumber = reader["lotNumber"]?.ToString()
+                });
+            }
+
             return records;
         }
+
 
         public async Task LoginAsync(PressSetupLoginViewModel model)
         {
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
-                string query = @"INSERT INTO presssetup (part, component, run, operator, machine, startDateTime, open, prodNumber) 
-                         VALUES (@part, @component, @run, @operator, @machine, @startDateTime, @open, @prodNumber)";
+
+                // 🔹 Get current mix for this machine from pressmixbagchange
+                var mix = await GetCurrentMixForMachineAsync(model.Machine);
+                string mixLot = mix?.LotNumber;
+                string mixCode = mix?.MaterialCode;
+
+                string query = @"
+            INSERT INTO presssetup 
+                (part, component, run, operator, machine, startDateTime, open, prodNumber, materialCode, lotNumber) 
+            VALUES 
+                (@part, @component, @run, @operator, @machine, @startDateTime, @open, @prodNumber, @materialCode, @lotNumber);";
 
                 using (var command = new MySqlCommand(query, connection))
                 {
@@ -45,7 +105,9 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@machine", model.Machine);
                     command.Parameters.AddWithValue("@startDateTime", DateTime.Now);
                     command.Parameters.AddWithValue("@open", 0);
-                    command.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
+                    command.Parameters.AddWithValue("@prodNumber", model.ProdNumber ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@materialCode", (object?)mixCode ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@lotNumber", (object?)mixLot ?? DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
@@ -53,49 +115,93 @@ namespace DashboardReportApp.Services
         }
 
 
-
-        public async Task LogoutAsync(string partNumber, DateTime startDateTime, string difficulty, string assistanceRequired,
-                                      string assistedBy, string setupComplete, string notes, string run)
+        public async Task LogoutAsync(
+      string partNumber,
+      DateTime startDateTime,
+      string difficulty,
+      string assistanceRequired,
+      string assistedBy,
+      string setupComplete,
+      string notes,
+      string run)
         {
             using (var connection = new MySqlConnection(_connectionStringMySQL))
             {
                 await connection.OpenAsync();
-                string query = @"UPDATE presssetup 
-                                 SET endDateTime = @endDateTime, 
-                                     difficulty = @difficulty, 
-                                     assistanceReq = @assistanceReq, 
-                                     assistedBy = @assistedBy, 
-                                     setupComp = @setupComp, 
-                                     open = @open,
-                                     notes = @notes
-                                 WHERE run = @run AND startDateTime = @startDateTime";
 
-                using (var command = new MySqlCommand(query, connection))
+                // 1) Get the machine for this setup row
+                string machine = null!;
+                const string getMachineSql = @"
+            SELECT machine
+            FROM presssetup
+            WHERE run = @run AND startDateTime = @startDateTime
+            LIMIT 1;";
+
+                using (var getCmd = new MySqlCommand(getMachineSql, connection))
+                {
+                    getCmd.Parameters.AddWithValue("@run", run);
+                    getCmd.Parameters.AddWithValue("@startDateTime", startDateTime);
+                    var result = await getCmd.ExecuteScalarAsync();
+                    machine = result?.ToString();
+                }
+
+                // 2) Pull current material for that machine (from pressmixbagchange)
+                string? materialCode = null;
+                string? lotNumber = null;
+
+                if (!string.IsNullOrWhiteSpace(machine))
+                {
+                    var mix = await GetCurrentMixForMachineAsync(machine);
+                    materialCode = mix?.MaterialCode;
+                    lotNumber = mix?.LotNumber;
+                }
+
+                // 3) Update presssetup row including material + lot
+                string updateSql = @"
+            UPDATE presssetup 
+            SET endDateTime   = @endDateTime, 
+                difficulty    = @difficulty, 
+                assistanceReq = @assistanceReq, 
+                assistedBy    = @assistedBy, 
+                setupComp     = @setupComp, 
+                open          = @open,
+                notes         = @notes,
+                materialCode  = @materialCode,
+                lotNumber     = @lotNumber
+            WHERE run = @run AND startDateTime = @startDateTime;";
+
+                using (var command = new MySqlCommand(updateSql, connection))
                 {
                     command.Parameters.AddWithValue("@endDateTime", DateTime.Now);
                     command.Parameters.AddWithValue("@difficulty", difficulty);
                     command.Parameters.AddWithValue("@assistanceReq", assistanceRequired);
-                    command.Parameters.AddWithValue("@assistedBy", assistanceRequired == "Assisted" ? assistedBy : null);
-                    
+                    command.Parameters.AddWithValue("@assistedBy",
+                        assistanceRequired == "Assisted" ? assistedBy : (object?)DBNull.Value);
                     command.Parameters.AddWithValue("@setupComp", setupComplete);
+
                     if (setupComplete == "Yes")
                     {
                         command.Parameters.AddWithValue("@open", 1);
-                        CloseOnScheduleAsync(run);
+                        // close schedule row for this run
+                        await CloseOnScheduleAsync(run);
                     }
                     else
                     {
                         command.Parameters.AddWithValue("@open", 0);
                     }
-                    command.Parameters.AddWithValue("@notes", notes);
-                    command.Parameters.AddWithValue("@part", partNumber);
-                    command.Parameters.AddWithValue("@startDateTime", startDateTime);
+
+                    command.Parameters.AddWithValue("@notes", notes ?? "");
                     command.Parameters.AddWithValue("@run", run);
+                    command.Parameters.AddWithValue("@startDateTime", startDateTime);
+
+                    command.Parameters.AddWithValue("@materialCode", (object?)materialCode ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@lotNumber", (object?)lotNumber ?? DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
             }
         }
+
         public List<string> GetOperators()
         {
             var operators = new List<string>();
@@ -288,6 +394,8 @@ namespace DashboardReportApp.Services
                 "Machine" => "machine",
                 "StartDateTime" => "startDateTime",
                 "EndDateTime" => "endDateTime",
+                "MaterialCode" => "materialCode",   
+                "LotNumber" => "lotNumber",     
                 _ => "startDateTime"
             };
             var direction = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
@@ -337,13 +445,15 @@ namespace DashboardReportApp.Services
 
             // ----- Page -----
             using (var cmd = new MySqlCommand($@"
-        SELECT id, part, component, prodNumber, run, operator, machine,
-               startDateTime, endDateTime, pressType, difficulty, setupComp,
-               assistanceReq, assistedBy, notes
-        FROM presssetup
-        {whereSql}
-        ORDER BY {sortColumn} {direction}
-        LIMIT @take OFFSET @skip;", conn))
+    SELECT id, part, component, prodNumber, run, operator, machine,
+           startDateTime, endDateTime, pressType, difficulty, setupComp,
+           assistanceReq, assistedBy, notes,
+           materialCode, lotNumber           -- 👈 NEW
+    FROM presssetup
+    {whereSql}
+    ORDER BY {sortColumn} {direction}
+    LIMIT @take OFFSET @skip;", conn))
+
             {
                 if (!string.IsNullOrWhiteSpace(search))
                     cmd.Parameters.AddWithValue("@q", $"%{search}%");
@@ -376,7 +486,9 @@ namespace DashboardReportApp.Services
                         SetupComp = rdr["setupComp"]?.ToString(),
                         AssistanceReq = rdr["assistanceReq"]?.ToString(),
                         AssistedBy = rdr["assistedBy"]?.ToString(),
-                        Notes = rdr["notes"]?.ToString()
+                        Notes = rdr["notes"]?.ToString(),
+                        MaterialCode = rdr["materialCode"]?.ToString(),   
+                        LotNumber = rdr["lotNumber"]?.ToString()
                     });
                 }
             }
@@ -384,6 +496,107 @@ namespace DashboardReportApp.Services
             return (rows, total);
         }
 
+        public async Task RefreshMaterialFromPressAsync(long setupId)
+        {
+            using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            // 1) Find the row + machine
+            string getSql = @"SELECT machine FROM presssetup WHERE id = @id LIMIT 1";
+            string machine = null;
+
+            using (var cmd = new MySqlCommand(getSql, conn))
+            {
+                cmd.Parameters.AddWithValue("@id", setupId);
+                var result = await cmd.ExecuteScalarAsync();
+                machine = result?.ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(machine))
+            {
+                Console.WriteLine($"[RefreshMaterialFromPressAsync] No machine found for id={setupId}");
+                return;
+            }
+
+            // 2) Get current material from press
+            // 2) Get current material from press
+            // 2) Get current material from pressmixbagchange (same logic as PressRunLogService)
+            var current = await GetCurrentMixForMachineAsync(machine);
+            var materialCode = current?.MaterialCode;
+            var lotNumber = current?.LotNumber;
+
+
+
+            // 3) Update the presssetup row
+            string updateSql = @"
+        UPDATE presssetup
+        SET materialCode = @materialCode,
+            lotNumber    = @lotNumber
+        WHERE id = @id";
+
+            using (var cmd = new MySqlCommand(updateSql, conn))
+            {
+                cmd.Parameters.AddWithValue("@id", setupId);
+                cmd.Parameters.AddWithValue("@materialCode", (object?)materialCode ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@lotNumber", (object?)lotNumber ?? DBNull.Value);
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        public async Task<(string LotNumber, string MaterialCode)?> GetMaterialForSetupAsync(
+    string prodNumber,
+    string run)
+        {
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+        SELECT lotNumber, materialCode
+        FROM presssetup
+        WHERE prodNumber = @prodNumber
+          AND run        = @run
+        ORDER BY startDateTime DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@prodNumber", prodNumber ?? "");
+            cmd.Parameters.AddWithValue("@run", run ?? "");
+
+            await using var rdr = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (!await rdr.ReadAsync())
+                return null;
+
+            var lot = rdr["lotNumber"]?.ToString() ?? string.Empty;
+            var mat = rdr["materialCode"]?.ToString() ?? string.Empty;
+            return (lot, mat);
+        }
+        public async Task<(string LotNumber, string MaterialCode)?> GetCurrentMixForMachineAsync(string machine)
+        {
+            if (string.IsNullOrWhiteSpace(machine))
+                return null;
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            const string sql = @"
+        SELECT LotNumber, MaterialCode
+        FROM pressmixbagchange
+        WHERE Machine = @machine
+        ORDER BY id DESC
+        LIMIT 1;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@machine", machine);
+
+            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            if (!await reader.ReadAsync())
+                return null;
+
+            var lot = reader["LotNumber"]?.ToString() ?? string.Empty;
+            var mat = reader["MaterialCode"]?.ToString() ?? string.Empty;
+
+            return (lot, mat);
+        }
 
 
     }

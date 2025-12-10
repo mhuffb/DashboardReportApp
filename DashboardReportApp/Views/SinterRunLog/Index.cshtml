@@ -165,7 +165,16 @@
                                                 data-materialcode="@pressRun.MaterialCode">
                                             Login to Skid Run
                                         </button>
+
+                                        <a class="btn btn-warning btn-sm"
+                                           asp-controller="TestBake"
+                                           asp-action="Index"
+                                           asp-route-prodNumber="@pressRun.ProdNumber"
+                                           asp-route-operatorName="@pressRun.Operator">
+                                            Test Bake
+                                        </a>
                                     </td>
+
                                 </tr>
 
                             }

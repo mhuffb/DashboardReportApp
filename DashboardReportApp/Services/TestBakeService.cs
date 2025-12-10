@@ -1,12 +1,25 @@
 ﻿using DashboardReportApp.Models;
+using iText.IO.Font.Constants;
+using iText.Kernel.Colors;
+using iText.Kernel.Font;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Layout.Properties;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Globalization;
+using Path = System.IO.Path;
 
 namespace DashboardReportApp.Services
 {
@@ -15,10 +28,33 @@ namespace DashboardReportApp.Services
         Task<TestBakeViewModel> LoadInitialAsync(
             string productionNumber,
             string runNumber,
-            string department,
             string testType,
-            string reason);
+            string reason,
+            DateTime? testBakeStartTime,
+            int? headerId);
+
+        Task LoginAsync(string @operator);
+        Task PlaceTestBakeAsync(TestBakeLoginRow login);  // NEW
+        Task<List<TestBakeLoginRow>> GetActiveLoginsAsync();
+        Task<TestBakeLoginRow?> GetLoginByIdAsync(int id);
+        Task<int> FinishTestBakeAsync(int loginId);
+
+
+
+        Task<int> CreateTestBakeHeaderAsync(TestBakeHeaderRow header);
+        Task<TestBakeHeaderRow?> GetHeaderByIdAsync(int id);
+
+        // NEW: for PDF generation (used later)
+        Task<byte[]> GenerateTestBakePdfAsync(TestBakeViewModel vm);
+
+        Task<int> GetHeaderCountAsync();
+        Task<List<TestBakeHeaderRow>> GetRecentHeadersAsync(int page, int pageSize);
+
+        Task<byte[]> GetPdfFromDiskAsync(int headerId);
     }
+
+
+
 
     public class TestBakeService : ITestBakeService
     {
@@ -26,57 +62,95 @@ namespace DashboardReportApp.Services
         private readonly string _mastersConnStr;   // SqlServerConnectionsinTSQL
         private readonly string _mysqlConnStr;     // MySQLConnection
 
+        private readonly string _uploadPath;
         // Adjust these to match whatever factor_desc names you use in Prolink
-        private const string FactorDescProdNumber = "Prod Number";
-        private const string FactorDescRunNumber = "Run Number";
-        private const string FactorDescTBType = "TB Type";   // values: "mtb", "stb"
+
+
+        private const string FactorDescTestBake = "TestBake"; // new; value = 'Yes'
 
         public TestBakeService(IConfiguration config)
         {
             _prolinkConnStr = config.GetConnectionString("SQLExpressConnection");
             _mastersConnStr = config.GetConnectionString("SqlServerConnectionsinTSQL");
             _mysqlConnStr = config.GetConnectionString("MySQLConnection");
+
+
+            _uploadPath = config.GetValue<string>("Paths:TestBakeUploads")
+                         ?? Path.Combine(AppContext.BaseDirectory, "Uploads", "TestBake");
+
+            Directory.CreateDirectory(_uploadPath);
         }
 
+
         public async Task<TestBakeViewModel> LoadInitialAsync(
-            string productionNumber,
-            string runNumber,
-            string department,
-            string testType,
-            string reason)
+       string productionNumber,
+       string runNumber,
+       string testType,
+       string reason,
+       DateTime? testBakeStartTime,
+       int? headerId)
         {
             var vm = new TestBakeViewModel
             {
                 SearchProductionNumber = productionNumber ?? "",
                 SearchRunNumber = runNumber ?? "",
-                SearchDepartment = department ?? "",
                 SearchTestType = testType ?? "",
-                SearchReason = reason ?? ""
+                SearchReason = reason ?? "",
+                TestBakeStartTime = testBakeStartTime,
+                HeaderId = headerId
             };
 
             try
             {
-                // 1) Header (part/component/date) from Prolink via factors
+                // 1) If we have a saved header row, load it first
+                if (headerId.HasValue)
+                {
+                    var storedHeader = await GetHeaderByIdAsync(headerId.Value);
+                    if (storedHeader != null)
+                    {
+                        vm.HeaderId = storedHeader.Id;
+
+                        // This is the Prolink part we want to drive all lookups (e.g., SG-1104)
+                        vm.Header.Part = storedHeader.ProlinkPart;
+                        vm.Header.Component = null; // or storedHeader.Component if you add that field
+                        vm.Header.ProductionNumber = storedHeader.ProductionNumber;
+                        vm.Header.RunNumber = storedHeader.RunNumber;
+                        vm.Header.TestType = storedHeader.TestType;
+                        vm.Header.Reason = storedHeader.Reason;
+                        vm.TestBakeStartTime = storedHeader.TestBakeStartTime;
+                        vm.Header.TestedBy = storedHeader.Operator;
+                    }
+                }
+
+                // 2) If nothing came from stored header (Initial scan path), fall back to search fields
+                if (string.IsNullOrWhiteSpace(vm.Header.ProductionNumber) &&
+                    string.IsNullOrWhiteSpace(vm.Header.RunNumber) &&
+                    string.IsNullOrWhiteSpace(vm.Header.TestType) &&
+                    string.IsNullOrWhiteSpace(vm.Header.Reason))
+                {
+                    vm.Header.ProductionNumber = vm.SearchProductionNumber;
+                    vm.Header.RunNumber = vm.SearchRunNumber;
+                    vm.Header.TestType = vm.SearchTestType;
+                    vm.Header.Reason = vm.SearchReason;
+                    // Part will be filled by LoadHeaderFromProlinkAsync if still empty
+                }
+
+                // 3) Get Prolink header info (Date, Machine, Material, Lot, etc.)
                 await LoadHeaderFromProlinkAsync(vm);
 
-                // copy search info into header
-                vm.Header.ProductionNumber = vm.SearchProductionNumber;
-                vm.Header.RunNumber = vm.SearchRunNumber;
-                vm.Header.Department = vm.SearchDepartment;
-                vm.Header.TestType = vm.SearchTestType;
-                vm.Header.Reason = vm.SearchReason;
+                await LoadMachineMaterialLotFromRunsAsync(vm);
 
-                // 2) Tool numbers + punches / testedBy from toolinginventory (MySQL)
+                // 4) Tool numbers from tooling_inventory using vm.Header.Part
                 await LoadToolNumbersAndDetailsAsync(vm);
 
-                // 3) Master limits from masterm (SinTSQL)
+                // 5) Master limits from masterm using header Part + Component
                 var masterRows = await LoadMasterDimensionsAsync(vm.Header.Part, vm.Header.Component);
 
-                // 4) Prolink MOLD + SINTER dimensions using mtb / stb
-                var moldDims = await LoadProlinkDimsAsync(vm, "mtb"); // molding test bake
-                var sinterDims = await LoadProlinkDimsAsync(vm, "stb"); // sintering test bake
+                // 6) Prolink MOLD + SINTER dims using header Part
+                var moldDims = await LoadProlinkDimsByLocationAsync(vm, "MOLDING");
+                var sinterDims = await LoadProlinkDimsByLocationAsync(vm, "SINTERING");
 
-                // 5) Merge master + Prolink using fuzzy name match
+                // 7) Merge
                 vm.Dimensions = MergeDimensions(masterRows, moldDims, sinterDims);
 
                 vm.HasResults = true;
@@ -87,8 +161,11 @@ namespace DashboardReportApp.Services
                 vm.HasResults = false;
             }
 
+
             return vm;
         }
+
+
 
         #region Prolink header
 
@@ -97,74 +174,54 @@ namespace DashboardReportApp.Services
             using var conn = new SqlConnection(_prolinkConnStr);
             await conn.OpenAsync();
 
-            // This query assumes you've added part_factor rows for:
-            // - Prod Number
-            // - Run Number
-            // - TB Type (mtb/stb)
-            // We just need one matching record to get part & component & date.
-            // You can refine this later if you have a dedicated test-bake qcc_file_desc pattern.
-
             const string sql = @"
-WITH PartWithFactors AS (
+WITH TestBakeParts AS (
     SELECT
         p.part_id,
         p.record_number,
         p.measure_date,
-        qf.qcc_file_desc,
-        MAX(CASE WHEN f.factor_desc = @FactorProd THEN pf.value END) AS ProdNumber,
-        MAX(CASE WHEN f.factor_desc = @FactorRun  THEN pf.value END) AS RunNumber
-        -- TB Type factor isn't needed for header
+        qf.qcc_file_desc
     FROM dbo.part p
-    JOIN dbo.qcc_file qf    ON p.qcc_file_id = qf.qcc_file_id
+    JOIN dbo.qcc_file qf     ON p.qcc_file_id = qf.qcc_file_id
     LEFT JOIN dbo.part_factor pf ON p.part_id = pf.part_id
     LEFT JOIN dbo.factor f       ON pf.factor_id = f.factor_id
-    WHERE (@ProdNumber IS NULL OR @ProdNumber = '' OR pf.value = @ProdNumber OR 1 = 1)
-    GROUP BY p.part_id, p.record_number, p.measure_date, qf.qcc_file_desc
+    WHERE
+        f.factor_desc = @FactorTestBake
+        AND pf.value = 'Yes'
+        AND (@StartTime IS NULL OR p.measure_date >= @StartTime)
 )
 SELECT TOP 1
     part_id,
     record_number,
     measure_date,
-    qcc_file_desc,
-    ProdNumber,
-    RunNumber
-FROM PartWithFactors
-WHERE (@ProdNumber IS NULL OR ProdNumber = @ProdNumber)
-  AND (@RunNumber  IS NULL OR RunNumber  = @RunNumber)
-ORDER BY measure_date DESC;";
+    qcc_file_desc
+FROM TestBakeParts
+ORDER BY measure_date ASC;";
 
             using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@FactorProd", FactorDescProdNumber);
-            cmd.Parameters.AddWithValue("@FactorRun", FactorDescRunNumber);
-
-            cmd.Parameters.AddWithValue("@ProdNumber",
-                string.IsNullOrWhiteSpace(vm.SearchProductionNumber) ? (object)DBNull.Value : vm.SearchProductionNumber);
-            cmd.Parameters.AddWithValue("@RunNumber",
-                string.IsNullOrWhiteSpace(vm.SearchRunNumber) ? (object)DBNull.Value : vm.SearchRunNumber);
+            cmd.Parameters.AddWithValue("@FactorTestBake", FactorDescTestBake);
+            cmd.Parameters.AddWithValue("@StartTime",
+                vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
 
             using var reader = await cmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
             {
-                throw new Exception("No matching Prolink record found for that production/run number.");
+                throw new Exception("No Prolink TestBake records found at or after the login time.");
             }
 
             int partId = reader.GetInt32(reader.GetOrdinal("part_id"));
-            vm.SearchProductionNumber = reader["ProdNumber"]?.ToString() ?? vm.SearchProductionNumber;
-            vm.SearchRunNumber = reader["RunNumber"]?.ToString() ?? vm.SearchRunNumber;
-            vm.Header.Date = reader["measure_date"] as DateTime?;
+            vm.Header.Date = (DateTime?)reader["measure_date"];
             string qccDesc = reader["qcc_file_desc"]?.ToString() ?? "";
 
-            // For now, treat qcc_file_desc as the raw "part string" (Prolink style).
-            // If you want to parse it to Sintergy part/component, you can use your SharedService.ParseProlinkPartNumber, or
-            // look it up in your own parts table. Here we just put it in Part.
-            vm.SearchPart = qccDesc;
-            vm.Header.Part = qccDesc;
-            vm.Header.Component = "";  // you can later map to your component if needed
+            // 🔹 Only set Part from Prolink if it wasn't already supplied (e.g., from MySQL header)
+            if (string.IsNullOrWhiteSpace(vm.Header.Part))
+            {
+                vm.Header.Part = qccDesc;
+            }
 
-            // TODO: if you store machine/material/lot as factors too,
-            // you can call another helper to read those from part_factor here.
             await LoadBasicFactorsForHeaderAsync(vm, conn, partId);
         }
+
 
         private async Task LoadBasicFactorsForHeaderAsync(TestBakeViewModel vm, SqlConnection conn, int partId)
         {
@@ -211,7 +268,7 @@ WHERE pf.part_id = @PartId;";
             // Get distinct tool numbers for this part (AssemblyNumber)
             const string sql = @"
 SELECT DISTINCT ToolNumber
-FROM toolinginventory
+FROM tooling_inventory
 WHERE AssemblyNumber = @part
   AND ToolNumber IS NOT NULL
 ORDER BY ToolNumber;";
@@ -256,8 +313,8 @@ SELECT
     [desc],        -- molding dimension name
     dim1,          -- molding low
     dim2,          -- molding high
-    finish_dim1,   -- sintering low
-    finish_dim2    -- sintering high
+    s_dim1,   -- sintering low
+    s_dim2    -- sintering high
 FROM masterm
 WHERE master_id = @masterId
   AND ([desc] IS NOT NULL)
@@ -269,10 +326,10 @@ ORDER BY [desc];";
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                var lowMold = reader["dim1"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["dim1"]);
-                var highMold = reader["dim2"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["dim2"]);
-                var lowSinter = reader["finish_dim1"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["finish_dim1"]);
-                var highSinter = reader["finish_dim2"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["finish_dim2"]);
+                var lowMold = SafeDecimal(reader["dim1"]);
+                var highMold = SafeDecimal(reader["dim2"]);
+                var lowSinter = SafeDecimal(reader["s_dim1"]);
+                var highSinter = SafeDecimal(reader["s_dim2"]);
 
                 var row = new CombinedDimensionRow
                 {
@@ -303,7 +360,51 @@ ORDER BY [desc];";
             return list;
         }
 
-        private static string ResolveMasterId(string part, string component)
+       
+
+private static decimal? SafeDecimal(object dbValue)
+    {
+        if (dbValue == null || dbValue == DBNull.Value)
+            return null;
+
+        var s = dbValue.ToString().Trim();
+        if (string.IsNullOrEmpty(s))
+            return null;
+
+        // Remove any non-numeric / non-sign / non-decimal characters (like '#')
+        var filtered = new string(s.Where(c =>
+            char.IsDigit(c) || c == '.' || c == '-' || c == '+'
+        ).ToArray());
+
+        if (string.IsNullOrWhiteSpace(filtered))
+            return null;
+
+        // Try invariant culture first
+        if (decimal.TryParse(filtered,
+            NumberStyles.Any,
+            CultureInfo.InvariantCulture,
+            out var val))
+        {
+            return val;
+        }
+
+        // As a fallback, try current culture
+        if (decimal.TryParse(filtered,
+            NumberStyles.Any,
+            CultureInfo.CurrentCulture,
+            out val))
+        {
+            return val;
+        }
+
+        // If it still won't parse, just ignore it instead of blowing up
+        // or you can log it somewhere if you want
+        return null;
+        // If you *really* want to see the bad value, you could instead:
+        // throw new FormatException($"The input string '{s}' was not in a correct decimal format.");
+    }
+
+    private static string ResolveMasterId(string part, string component)
         {
             // Your rule:
             // - if component has a "C" in the component name, use component
@@ -329,17 +430,14 @@ ORDER BY [desc];";
             public decimal? Measurement { get; set; }
         }
 
-        private async Task<List<ProlinkDimRow>> LoadProlinkDimsAsync(TestBakeViewModel vm, string tbTypeValue)
+        private async Task<List<ProlinkDimRow>> LoadProlinkDimsByLocationAsync(
+      TestBakeViewModel vm,
+      string location)
         {
             var list = new List<ProlinkDimRow>();
 
             using var conn = new SqlConnection(_prolinkConnStr);
             await conn.OpenAsync();
-
-            // This query assumes:
-            // - Prod Number & Run Number are stored as factors
-            // - TB Type factor holds "mtb" or "stb"
-            // Adjust factor_desc names & table aliases as needed.
 
             const string sql = @"
 WITH PartWithFactors AS (
@@ -348,18 +446,26 @@ WITH PartWithFactors AS (
         p.record_number,
         p.measure_date,
         qf.qcc_file_desc,
-        MAX(CASE WHEN f.factor_desc = @FactorProd   THEN pf.value END) AS ProdNumber,
-        MAX(CASE WHEN f.factor_desc = @FactorRun    THEN pf.value END) AS RunNumber,
-        MAX(CASE WHEN f.factor_desc = @FactorTBType THEN pf.value END) AS TBType
+        MAX(CASE WHEN f.factor_desc = @FactorTestBake THEN pf.value END) AS TestBake
     FROM dbo.part p
-    JOIN dbo.qcc_file qf    ON p.qcc_file_id = qf.qcc_file_id
+    JOIN dbo.qcc_file qf      ON p.qcc_file_id = qf.qcc_file_id
     LEFT JOIN dbo.part_factor pf ON p.part_id = pf.part_id
     LEFT JOIN dbo.factor f       ON pf.factor_id = f.factor_id
+    WHERE
+        -- Department/location filter (MOLDING, SINTERING, etc.)
+        qf.edl_desc = @Location
+        
+        -- 🔍 NEW: filter Prolink parts that CONTAIN the header part string
+        AND (
+            @PartDesc IS NULL
+            OR @PartDesc = ''
+            OR qf.qcc_file_desc LIKE '%' + @PartDesc + '%'
+        )
     GROUP BY p.part_id, p.record_number, p.measure_date, qf.qcc_file_desc
 )
 SELECT
     d.dim_desc AS DimName,
-    d.nominal  AS Nominal,
+    d.nominal   AS Nominal,
     d.tol_minus AS TolMinus,
     d.tol_plus  AS TolPlus,
     CAST(m.value AS DECIMAL(18,5)) AS MeasuredValue
@@ -368,19 +474,24 @@ JOIN dbo.measurement m ON pw.part_id = m.part_id
 JOIN dbo.dimension   d ON m.dim_id  = d.dim_id
 WHERE
     m.deleted_flag = 0
-    AND pw.ProdNumber = @ProdNumber
-    AND pw.RunNumber  = @RunNumber
-    AND pw.TBType     = @TBType
+    AND pw.TestBake = 'Yes'
+    AND (@StartTime IS NULL OR pw.measure_date >= @StartTime)
 ORDER BY d.dim_desc;";
 
             using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@FactorProd", FactorDescProdNumber);
-            cmd.Parameters.AddWithValue("@FactorRun", FactorDescRunNumber);
-            cmd.Parameters.AddWithValue("@FactorTBType", FactorDescTBType);
+            cmd.Parameters.AddWithValue("@FactorTestBake", FactorDescTestBake);
 
-            cmd.Parameters.AddWithValue("@ProdNumber", vm.Header.ProductionNumber);
-            cmd.Parameters.AddWithValue("@RunNumber", vm.Header.RunNumber);
-            cmd.Parameters.AddWithValue("@TBType", tbTypeValue);
+            // MOLDING / SINTERING etc. (matches qf.edl_desc)
+            cmd.Parameters.AddWithValue("@Location", location);
+
+            // ✅ use the header part as the substring to search in qcc_file_desc
+            cmd.Parameters.AddWithValue("@PartDesc",
+                string.IsNullOrWhiteSpace(vm.Header.Part)
+                    ? (object)DBNull.Value
+                    : vm.Header.Part);
+
+            cmd.Parameters.AddWithValue("@StartTime",
+                vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
 
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -388,12 +499,13 @@ ORDER BY d.dim_desc;";
                 list.Add(new ProlinkDimRow
                 {
                     Name = reader["DimName"]?.ToString() ?? "",
-                    Nominal = reader["Nominal"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["Nominal"]),
-                    TolMinus = reader["TolMinus"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["TolMinus"]),
-                    TolPlus = reader["TolPlus"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["TolPlus"]),
-                    Measurement = reader["MeasuredValue"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["MeasuredValue"])
+                    Nominal = SafeDecimal(reader["Nominal"]),
+                    TolMinus = SafeDecimal(reader["TolMinus"]),
+                    TolPlus = SafeDecimal(reader["TolPlus"]),
+                    Measurement = SafeDecimal(reader["MeasuredValue"])
                 });
             }
+
 
             return list;
         }
@@ -531,7 +643,633 @@ ORDER BY d.dim_desc;";
             }
             return (double)same / Math.Max(na.Length, nb.Length);
         }
+        public async Task LoginAsync(string @operator)
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"
+INSERT INTO testbake_login (Operator, StartTime, IsActive)
+VALUES (@op, @start, 1);";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@op", @operator);
+            cmd.Parameters.AddWithValue("@start", DateTime.Now);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<List<TestBakeLoginRow>> GetActiveLoginsAsync()
+        {
+            var list = new List<TestBakeLoginRow>();
+
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"
+SELECT Id, Operator, StartTime,
+       Furnace, ProductionNumber, RunNumber,
+       Part, Component, TestType, Reason
+FROM testbake_login
+WHERE IsActive = 1
+ORDER BY StartTime DESC;";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                list.Add(new TestBakeLoginRow
+                {
+                    Id = reader.GetInt32("Id"),
+                    Operator = reader["Operator"]?.ToString() ?? "",
+                    StartTime = reader.GetDateTime("StartTime"),
+                    Furnace = reader["Furnace"]?.ToString() ?? "",
+                    ProductionNumber = reader["ProductionNumber"]?.ToString(),
+                    RunNumber = reader["RunNumber"]?.ToString(),
+                    Part = reader["Part"]?.ToString(),
+                    Component = reader["Component"]?.ToString(),
+                    TestType = reader["TestType"]?.ToString(),
+                    Reason = reader["Reason"]?.ToString()
+                });
+            }
+
+            return list;
+        }
+
+        public async Task<TestBakeLoginRow?> GetLoginByIdAsync(int id)
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"
+SELECT Id, Operator, StartTime,
+       Furnace, ProductionNumber, RunNumber,
+       Part, Component, TestType, Reason
+FROM testbake_login
+WHERE Id = @id;";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", id);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                return null;
+
+            return new TestBakeLoginRow
+            {
+                Id = reader.GetInt32("Id"),
+                Operator = reader["Operator"]?.ToString() ?? "",
+                StartTime = reader.GetDateTime("StartTime"),
+                Furnace = reader["Furnace"]?.ToString() ?? "",
+                ProductionNumber = reader["ProductionNumber"]?.ToString(),
+                RunNumber = reader["RunNumber"]?.ToString(),
+                Part = reader["Part"]?.ToString(),
+                Component = reader["Component"]?.ToString(),
+                TestType = reader["TestType"]?.ToString(),
+                Reason = reader["Reason"]?.ToString()
+            };
+        }
+
 
         #endregion
+
+        public async Task<int> CreateTestBakeHeaderAsync(TestBakeHeaderRow header)
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sqlInsert = @"
+INSERT INTO testbake_header
+    (LoginId, Operator, ProductionNumber, RunNumber,
+     TestType, Reason, ProlinkPart, TestBakeStartTime,
+     OutcomeStatus, OutcomeNotes, OutcomeBy, OutcomeDate,
+     CreatedAt, UpdatedAt)
+VALUES
+    (@LoginId, @Operator, @Prod, @Run,
+     @TestType, @Reason, @ProlinkPart, @StartTime,
+     @OutcomeStatus, @OutcomeNotes, @OutcomeBy, @OutcomeDate,
+     @CreatedAt, @UpdatedAt);
+SELECT LAST_INSERT_ID();";
+
+            using var cmd = new MySqlCommand(sqlInsert, conn);
+            cmd.Parameters.AddWithValue("@LoginId", header.LoginId);
+            cmd.Parameters.AddWithValue("@Operator", header.Operator);
+            cmd.Parameters.AddWithValue("@Prod", (object?)header.ProductionNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Run", (object?)header.RunNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@TestType", (object?)header.TestType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Reason", (object?)header.Reason ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ProlinkPart", (object?)header.ProlinkPart ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@StartTime", header.TestBakeStartTime);
+            cmd.Parameters.AddWithValue("@OutcomeStatus", (object?)header.OutcomeStatus ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@OutcomeNotes", (object?)header.OutcomeNotes ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@OutcomeBy", (object?)header.OutcomeBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@OutcomeDate", (object?)header.OutcomeDate ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@CreatedAt", header.CreatedAt);
+            cmd.Parameters.AddWithValue("@UpdatedAt", (object?)header.UpdatedAt ?? DBNull.Value);
+
+            var idObj = await cmd.ExecuteScalarAsync();
+            var id = Convert.ToInt32(idObj);
+
+            // compute filename (matches controller download name)
+            var fileName = $"TestBake_{id}.pdf";
+
+            const string sqlUpdate = @"
+UPDATE testbake_header
+SET FileName = @FileName
+WHERE Id = @Id;";
+
+            using (var cmd2 = new MySqlCommand(sqlUpdate, conn))
+            {
+                cmd2.Parameters.AddWithValue("@FileName", fileName);
+                cmd2.Parameters.AddWithValue("@Id", id);
+                await cmd2.ExecuteNonQueryAsync();
+            }
+
+            return id;
+        }
+
+        public async Task<TestBakeHeaderRow?> GetHeaderByIdAsync(int id)
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"SELECT * FROM testbake_header WHERE Id = @Id;";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                return null;
+
+            return new TestBakeHeaderRow
+            {
+                Id = reader.GetInt32("Id"),
+                LoginId = reader.GetInt32("LoginId"),
+                Operator = reader["Operator"]?.ToString() ?? "",
+                ProductionNumber = reader["ProductionNumber"]?.ToString(),
+                RunNumber = reader["RunNumber"]?.ToString(),
+                TestType = reader["TestType"]?.ToString(),
+                Reason = reader["Reason"]?.ToString(),
+                ProlinkPart = reader["ProlinkPart"]?.ToString(),
+                TestBakeStartTime = reader.GetDateTime("TestBakeStartTime"),
+                OutcomeStatus = reader["OutcomeStatus"]?.ToString(),
+                OutcomeNotes = reader["OutcomeNotes"]?.ToString(),
+                OutcomeBy = reader["OutcomeBy"]?.ToString(),
+                OutcomeDate = reader["OutcomeDate"] as DateTime?,
+                FileName = reader["FileName"]?.ToString(),     // <-- NEW
+                CreatedAt = reader.GetDateTime("CreatedAt"),
+                UpdatedAt = reader["UpdatedAt"] as DateTime?
+            };
+        }
+
+        public async Task<byte[]> GenerateTestBakePdfAsync(TestBakeViewModel vm)
+        {
+            // 🔹 If dimensions are empty, reload the full VM using the header id
+            if ((vm.Dimensions == null || vm.Dimensions.Count == 0) && vm.HeaderId.HasValue)
+            {
+                vm = await LoadInitialAsync(
+                    productionNumber: vm.Header.ProductionNumber ?? "",
+                    runNumber: vm.Header.RunNumber ?? "",
+                    testType: vm.Header.TestType ?? "",
+                    reason: vm.Header.Reason ?? "",
+                    testBakeStartTime: vm.TestBakeStartTime,
+                    headerId: vm.HeaderId
+                );
+            }
+
+            using var ms = new MemoryStream();
+
+            var writer = new PdfWriter(ms);
+            var pdf = new PdfDocument(writer);
+            var doc = new Document(pdf, PageSize.A4.Rotate());
+            doc.SetMargins(20, 20, 20, 20);
+
+            PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+            PdfFont fontBold = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+
+            doc.Add(new Paragraph("Initial Testbake Sheet")
+                .SetFont(fontBold)
+                .SetFontSize(16)
+                .SetTextAlignment(TextAlignment.CENTER));
+
+            doc.Add(new Paragraph($"Date: {vm.Header.Date:g}")
+                .SetFont(font)
+                .SetFontSize(10));
+            doc.Add(new Paragraph($"Part: {vm.Header.Part}    Component: {vm.Header.Component}")
+                .SetFontSize(10));
+            doc.Add(new Paragraph($"Prod #: {vm.Header.ProductionNumber}    Run #: {vm.Header.RunNumber}")
+                .SetFontSize(10));
+            doc.Add(new Paragraph($"Machine: {vm.Header.MachineNumber}    Material: {vm.Header.Material}    Lot: {vm.Header.LotNumber}")
+                .SetFontSize(10));
+            doc.Add(new Paragraph($"Test Type: {vm.Header.TestType}    Reason: {vm.Header.Reason}")
+                .SetFontSize(10));
+            doc.Add(new Paragraph($"Tested By: {vm.Header.TestedBy}    Tool #: {vm.Header.ToolNumber}")
+                .SetFontSize(10));
+
+            doc.Add(new Paragraph(" ")); // spacer
+
+            // === DIMENSION TABLE (limits only) ===
+            var table = new Table(new float[]
+            {
+        3, 2, 2, 2, 2,       // Master name + Master Mold L/H + Master Sinter L/H
+        3, 2, 2, 2,          // Mold section
+        3, 2, 2, 2           // Sinter section
+            });
+            table.SetWidth(UnitValue.CreatePercentValue(100));
+
+            string[] headers = new[]
+            {
+        "Master Name",
+        "Master Mold Low", "Master Mold High",
+        "Master Sinter Low", "Master Sinter High",
+        "Mold Name", "Mold Low", "Mold High", "Mold Meas",
+        "Sinter Name", "Sinter Low", "Sinter High", "Sinter Meas"
+    };
+
+            foreach (var h in headers)
+            {
+                table.AddHeaderCell(
+                    new Cell().Add(
+                        new Paragraph(h)
+                            .SetFont(fontBold)
+                            .SetFontSize(8)
+                    )
+                );
+            }
+
+            // If STILL no dimensions, put a single row to make it obvious
+            if (vm.Dimensions == null || vm.Dimensions.Count == 0)
+            {
+                var cell = new Cell(1, headers.Length)
+                    .Add(new Paragraph("No dimensions found for this test bake.")
+                        .SetFontSize(8));
+                table.AddCell(cell);
+            }
+            else
+            {
+                foreach (var row in vm.Dimensions)
+                {
+                    decimal? moldLow = null, moldHigh = null;
+                    decimal? sinterLow = null, sinterHigh = null;
+
+                    if (row.MoldNominal.HasValue && row.MoldTolMinus.HasValue)
+                        moldLow = row.MoldNominal.Value + row.MoldTolMinus.Value;
+                    if (row.MoldNominal.HasValue && row.MoldTolPlus.HasValue)
+                        moldHigh = row.MoldNominal.Value + row.MoldTolPlus.Value;
+
+                    if (row.SinterNominal.HasValue && row.SinterTolMinus.HasValue)
+                        sinterLow = row.SinterNominal.Value + row.SinterTolMinus.Value;
+                    if (row.SinterNominal.HasValue && row.SinterTolPlus.HasValue)
+                        sinterHigh = row.SinterNominal.Value + row.SinterTolPlus.Value;
+
+                    // Master
+                    table.AddCell(new Paragraph(row.MasterMoldName ?? "").SetFontSize(8));
+
+                    table.AddCell(new Paragraph(row.MasterMoldLow?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+                    table.AddCell(new Paragraph(row.MasterMoldHigh?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+
+                    table.AddCell(new Paragraph(row.MasterSinterLow?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+                    table.AddCell(new Paragraph(row.MasterSinterHigh?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+
+                    // Mold (Prolink)
+                    table.AddCell(new Paragraph(row.MoldName ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(moldLow?.ToString("0.0000") ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(moldHigh?.ToString("0.0000") ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(row.MoldMeasurement?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+
+                    // Sinter (Prolink)
+                    table.AddCell(new Paragraph(row.SinterName ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(sinterLow?.ToString("0.0000") ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(sinterHigh?.ToString("0.0000") ?? "").SetFontSize(8));
+                    table.AddCell(new Paragraph(row.SinterMeasurement?.ToString("0.0000") ?? "")
+                        .SetFontSize(8));
+                }
+            }
+
+            doc.Add(table);
+            doc.Close();
+
+            return ms.ToArray();
+        }
+
+        public async Task<int> GetHeaderCountAsync()
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = "SELECT COUNT(*) FROM testbake_header;";
+            using var cmd = new MySqlCommand(sql, conn);
+            var obj = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(obj);
+        }
+
+        public async Task<List<TestBakeHeaderRow>> GetRecentHeadersAsync(int page, int pageSize)
+        {
+            var list = new List<TestBakeHeaderRow>();
+            int offset = (page - 1) * pageSize;
+
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"
+SELECT *
+FROM testbake_header
+ORDER BY CreatedAt DESC
+LIMIT @Offset, @PageSize;";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Offset", offset);
+            cmd.Parameters.AddWithValue("@PageSize", pageSize);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                list.Add(new TestBakeHeaderRow
+                {
+                    Id = reader.GetInt32("Id"),
+                    LoginId = reader.GetInt32("LoginId"),
+                    Operator = reader["Operator"]?.ToString() ?? "",
+                    ProductionNumber = reader["ProductionNumber"]?.ToString(),
+                    RunNumber = reader["RunNumber"]?.ToString(),
+                    TestType = reader["TestType"]?.ToString(),
+                    Reason = reader["Reason"]?.ToString(),
+                    ProlinkPart = reader["ProlinkPart"]?.ToString(),
+                    TestBakeStartTime = reader.GetDateTime("TestBakeStartTime"),
+                    OutcomeStatus = reader["OutcomeStatus"]?.ToString(),
+                    OutcomeNotes = reader["OutcomeNotes"]?.ToString(),
+                    OutcomeBy = reader["OutcomeBy"]?.ToString(),
+                    OutcomeDate = reader["OutcomeDate"] as DateTime?,
+                    FileName = reader["FileName"]?.ToString(),
+                    CreatedAt = reader.GetDateTime("CreatedAt"),
+                    UpdatedAt = reader["UpdatedAt"] as DateTime?
+                });
+            }
+
+            return list;
+        }
+
+        private async Task LoadMachineMaterialLotFromRunsAsync(TestBakeViewModel vm)
+        {
+            // Need at least Prod or Run to search
+            if (string.IsNullOrWhiteSpace(vm.Header.ProductionNumber) &&
+                string.IsNullOrWhiteSpace(vm.Header.RunNumber))
+                return;
+
+            string? prod = string.IsNullOrWhiteSpace(vm.Header.ProductionNumber)
+                ? null
+                : vm.Header.ProductionNumber;
+            string? run = string.IsNullOrWhiteSpace(vm.Header.RunNumber)
+                ? null
+                : vm.Header.RunNumber;
+
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            // ------------------ PRESS SIDE (pressrun THEN presssetup) ------------------
+            string? pressMachine = null;
+            string? pressMaterial = null;
+            string? pressLot = null;
+
+            bool foundPressRun = false;
+
+            const string sqlPress = @"
+SELECT Machine, MaterialCode, LotNumber
+FROM pressrun
+WHERE (@Prod IS NULL OR ProdNumber = @Prod)
+  AND (@Run  IS NULL OR Run        = @Run)
+ORDER BY StartDateTime DESC
+LIMIT 1;";
+
+            using (var cmdPress = new MySqlCommand(sqlPress, conn))
+            {
+                cmdPress.Parameters.AddWithValue("@Prod", (object?)prod ?? DBNull.Value);
+                cmdPress.Parameters.AddWithValue("@Run", (object?)run ?? DBNull.Value);
+
+                using var r = await cmdPress.ExecuteReaderAsync();
+                if (await r.ReadAsync())
+                {
+                    foundPressRun = true;
+                    pressMachine = r["Machine"]?.ToString();
+                    pressMaterial = r["MaterialCode"]?.ToString();
+                    pressLot = r["LotNumber"]?.ToString();
+                }
+            }
+
+            // 🔁 FALLBACK: if nothing found in pressrun, look in presssetup
+            if (!foundPressRun)
+            {
+                const string sqlPressSetup = @"
+SELECT machine, materialCode, lotNumber
+FROM presssetup
+WHERE (@Prod IS NULL OR prodNumber = @Prod)
+  AND (@Run  IS NULL OR run        = @Run)
+ORDER BY startDateTime DESC
+LIMIT 1;";
+
+                using (var cmdSetup = new MySqlCommand(sqlPressSetup, conn))
+                {
+                    cmdSetup.Parameters.AddWithValue("@Prod", (object?)prod ?? DBNull.Value);
+                    cmdSetup.Parameters.AddWithValue("@Run", (object?)run ?? DBNull.Value);
+
+                    using var rs = await cmdSetup.ExecuteReaderAsync();
+                    if (await rs.ReadAsync())
+                    {
+                        pressMachine = rs["machine"]?.ToString();
+                        pressMaterial = rs["materialCode"]?.ToString();
+                        pressLot = rs["lotNumber"]?.ToString();
+                    }
+                }
+            }
+
+            // ------------------ SINTER SIDE (unchanged) ------------------
+            string? sinterMachine = null;
+            string? sinterMaterial = null;
+            string? sinterLot = null;
+
+            const string sqlSinter = @"
+SELECT Oven, MaterialCode, LotNumber
+FROM sinterrun
+WHERE (@Prod IS NULL OR ProdNumber = @Prod)
+  AND (@Run  IS NULL OR Run        = @Run)
+ORDER BY StartDateTime DESC
+LIMIT 1;";
+
+            using (var cmdSinter = new MySqlCommand(sqlSinter, conn))
+            {
+                cmdSinter.Parameters.AddWithValue("@Prod", (object?)prod ?? DBNull.Value);
+                cmdSinter.Parameters.AddWithValue("@Run", (object?)run ?? DBNull.Value);
+
+                using var r = await cmdSinter.ExecuteReaderAsync();
+                if (await r.ReadAsync())
+                {
+                    sinterMachine = r["Oven"]?.ToString();
+                    sinterMaterial = r["MaterialCode"]?.ToString();
+                    sinterLot = r["LotNumber"]?.ToString();
+                }
+            }
+
+            // ------------------ COMBINE INTO HEADER ------------------
+
+            // Machine = BOTH press + sinter, comma separated (only non-empty)
+            var machines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(pressMachine)) machines.Add(pressMachine);
+            if (!string.IsNullOrWhiteSpace(sinterMachine)) machines.Add(sinterMachine);
+            if (machines.Any())
+                vm.Header.MachineNumber = string.Join(", ", machines);
+
+            // Material, Lot: prefer sinterrun if present, else press side (pressrun or presssetup)
+            var material = !string.IsNullOrWhiteSpace(sinterMaterial) ? sinterMaterial : pressMaterial;
+            var lot = !string.IsNullOrWhiteSpace(sinterLot) ? sinterLot : pressLot;
+
+            if (!string.IsNullOrWhiteSpace(material))
+                vm.Header.Material = material;
+            if (!string.IsNullOrWhiteSpace(lot))
+                vm.Header.LotNumber = lot;
+        }
+
+        public async Task PlaceTestBakeAsync(TestBakeLoginRow login)
+        {
+            using var conn = new MySqlConnection(_mysqlConnStr);
+            await conn.OpenAsync();
+
+            const string sql = @"
+INSERT INTO testbake_login
+    (Operator, StartTime, IsActive,
+     Furnace, ProductionNumber, RunNumber,
+     Part, Component, TestType, Reason)
+VALUES
+    (@Operator, @StartTime, 1,
+     @Furnace, @Prod, @Run,
+     @Part, @Component, @TestType, @Reason);";
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Operator", login.Operator);
+            cmd.Parameters.AddWithValue("@StartTime", login.StartTime);
+            cmd.Parameters.AddWithValue("@Furnace", (object?)login.Furnace ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Prod", (object?)login.ProductionNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Run", (object?)login.RunNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Part", (object?)login.Part ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Component", (object?)login.Component ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@TestType", (object?)login.TestType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Reason", (object?)login.Reason ?? DBNull.Value);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        public async Task<int> FinishTestBakeAsync(int loginId)
+        {
+            // 1) Get login
+            var login = await GetLoginByIdAsync(loginId);
+            if (login == null)
+                throw new InvalidOperationException($"No active test bake found for Id {loginId}.");
+
+            // 2) Build header row using login info
+            var headerRow = new TestBakeHeaderRow
+            {
+                LoginId = login.Id,
+                Operator = login.Operator,
+                ProductionNumber = login.ProductionNumber,
+                RunNumber = login.RunNumber,
+                TestType = login.TestType,
+                Reason = login.Reason,
+                ProlinkPart = login.Part,
+                TestBakeStartTime = login.StartTime,
+                OutcomeStatus = null,
+                OutcomeNotes = null,
+                OutcomeBy = null,
+                OutcomeDate = null,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = null
+            };
+
+            // 3) Create header in MySQL (also sets FileName)
+            var headerId = await CreateTestBakeHeaderAsync(headerRow);
+
+            // 4) Load full VM (Prolink + masterm)
+            var vm = await LoadInitialAsync(
+                productionNumber: headerRow.ProductionNumber ?? "",
+                runNumber: headerRow.RunNumber ?? "",
+                testType: headerRow.TestType ?? "",
+                reason: headerRow.Reason ?? "",
+                testBakeStartTime: headerRow.TestBakeStartTime,
+                headerId: headerId);
+
+            // Ensure TestedBy is set (operator)
+            vm.Header.TestedBy = headerRow.Operator;
+
+            // 5) Generate PDF bytes
+            var pdfBytes = await GenerateTestBakePdfAsync(vm);
+
+            // 6) Save PDF to uploads folder
+            var fileName = $"TestBake_{headerId}.pdf";
+            var fullPath = System.IO.Path.Combine(_uploadPath, fileName);
+            await File.WriteAllBytesAsync(fullPath, pdfBytes);
+
+            // 7) Mark login inactive
+            using (var conn = new MySqlConnection(_mysqlConnStr))
+            {
+                await conn.OpenAsync();
+                const string sql = @"UPDATE testbake_login SET IsActive = 0 WHERE Id = @Id;";
+                using var cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@Id", loginId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            return headerId;
+        }
+        public async Task<byte[]> GetPdfFromDiskAsync(int headerId)
+        {
+            // 1) Load header to know the file name and core fields
+            var headerRow = await GetHeaderByIdAsync(headerId);
+            if (headerRow == null)
+                throw new InvalidOperationException($"TestBake header {headerId} not found.");
+
+            // 2) Determine file name
+            var fileName = headerRow.FileName;
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                // fall back to convention
+                fileName = $"TestBake_{headerId}.pdf";
+
+                // optionally update DB once so future calls have FileName set
+                using var conn = new MySqlConnection(_mysqlConnStr);
+                await conn.OpenAsync();
+                const string sqlUpdate = @"UPDATE testbake_header SET FileName = @FileName WHERE Id = @Id;";
+                using var cmd = new MySqlCommand(sqlUpdate, conn);
+                cmd.Parameters.AddWithValue("@FileName", fileName);
+                cmd.Parameters.AddWithValue("@Id", headerId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var fullPath = Path.Combine(_uploadPath, fileName);
+
+            // 3) If the file exists on the share, return it
+            if (System.IO.File.Exists(fullPath))
+            {
+                return await System.IO.File.ReadAllBytesAsync(fullPath);
+            }
+
+            // 4) Fallback: regenerate from Prolink + masters + runs,
+            //    save it into the uploads folder, then return bytes.
+            var vm = await LoadInitialAsync(
+                productionNumber: headerRow.ProductionNumber ?? "",
+                runNumber: headerRow.RunNumber ?? "",
+                testType: headerRow.TestType ?? "",
+                reason: headerRow.Reason ?? "",
+                testBakeStartTime: headerRow.TestBakeStartTime,
+                headerId: headerRow.Id);
+
+            var pdfBytes = await GenerateTestBakePdfAsync(vm);
+
+            Directory.CreateDirectory(_uploadPath); // just in case
+            await System.IO.File.WriteAllBytesAsync(fullPath, pdfBytes);
+
+            return pdfBytes;
+        }
+
     }
 }

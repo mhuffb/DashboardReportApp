@@ -11,6 +11,7 @@ using Mysqlx.Crud;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing.Printing;
+using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 
@@ -47,9 +48,6 @@ namespace DashboardReportApp.Services
        
 
        
-        public void SendEmailWithAttachment2(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
-        {
-        }
         public void SendEmailWithAttachment(string receiverEmail, string attachmentPath, string attachmentPath2, string subject, string body)
         {
             string senderEmail = "notifications@sintergy.net";
@@ -680,5 +678,83 @@ ORDER BY p.measure_date DESC
 
             try { File.Delete(pdfPath); } catch { /* ignore */ }
         }
+        // Get a list of operators 
+        public List<string> GetFormattedOperators()
+        {
+            var list = new List<string>();
+
+            const string sql = @"
+        SELECT fname, lname
+        FROM dbo.employee
+        WHERE active_status = 'A'
+        ORDER BY lname";
+
+            using var conn = new SqlConnection(_connectionStringSinTSQL);
+            using var cmd = new SqlCommand(sql, conn);
+            conn.Open();
+
+            using var rdr = cmd.ExecuteReader();
+            int ordF = rdr.GetOrdinal("fname");
+            int ordL = rdr.GetOrdinal("lname");
+
+            while (rdr.Read())
+            {
+                var first = rdr.IsDBNull(ordF) ? "" : rdr.GetString(ordF).Trim();
+                var last = rdr.IsDBNull(ordL) ? "" : rdr.GetString(ordL).Trim();
+
+                // Title-case the last name (SMITH -> Smith, VAN DYKE -> Van Dyke)
+                if (!string.IsNullOrWhiteSpace(last))
+                {
+                    last = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(last.ToLower());
+                }
+
+                var initial = first.Length > 0
+                    ? char.ToUpperInvariant(first[0]).ToString()
+                    : "";
+
+                // Format: "Last, F"
+                string formatted = string.IsNullOrEmpty(last)
+                    ? initial
+                    : $"{last}, {initial}";
+
+                if (!string.IsNullOrWhiteSpace(formatted))
+                    list.Add(formatted);
+            }
+
+            // keep your manual test employee
+            list.Add("Test, U");
+
+            // de-dupe + sort
+            return list
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+        }
+
+        // Fetch furnaces from MySQL
+        public List<string> GetFurnaces()
+        {
+            var furnaces = new List<string>();
+            string query = "SELECT equipment FROM equipment WHERE name = 'furnace' ORDER BY equipment";
+
+            using (var connection = new MySqlConnection(_connectionStringMySQL))
+            {
+                connection.Open();
+                using (var command = new MySqlCommand(query, connection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            furnaces.Add(reader["equipment"].ToString());
+                        }
+                    }
+                }
+            }
+
+            return furnaces;
+        }
+
     }
 }

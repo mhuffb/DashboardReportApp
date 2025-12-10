@@ -54,12 +54,15 @@
                                 <th>Run</th>
                                 <th>Operator</th>
                                 <th>Machine</th>
+                                <th>Material</th>     <!-- NEW -->
+                                <th>Lot #</th>        <!-- NEW -->
                                 <th>Start Time</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
+
                         <tbody>
-                            @foreach (var login in Model)  // Model already filtered to open in the controller
+                            @foreach (var login in Model)
                             {
                                 var startIso = login.StartDateTime?.ToString("o") ?? "";
                                 <tr>
@@ -69,15 +72,42 @@
                                     <td>@login.Run</td>
                                     <td>@login.Operator</td>
                                     <td>@login.Machine</td>
+                                    <td>@login.MaterialCode</td>    <!-- NEW -->
+                                    <td>@login.LotNumber</td>       <!-- NEW -->
                                     <td>@(login.StartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</td>
                                     <td>
                                         <button class="btn btn-danger btn-sm"
                                                 onclick="openStopSetupModal('@login.Part', '@login.Run', '@startIso', '@login.Machine')">
                                             Logout of Setup
                                         </button>
+
+                                        <span>&nbsp;</span>
+
+                                        <a class="btn btn-warning btn-sm"
+                                           asp-controller="TestBake"
+                                           asp-action="Index"
+                                           asp-route-run="@login.Run"
+                                           asp-route-prodNumber="@login.ProdNumber"
+                                           asp-route-operatorName="@login.Operator">
+                                            Test Bake
+                                        </a>
+
+                                        <span>&nbsp;</span>
+
+                                        <!-- NEW: pull material from press -->
+                                        <form asp-action="PullMaterial"
+                                              method="post"
+                                              class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@login.Id" />
+                                            <button type="submit" class="btn btn-secondary btn-sm">
+                                                Pull Material from Press
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                             }
+
                         </tbody>
                     </table>
                 </div>
@@ -153,6 +183,8 @@
                             <th data-key="Run">Run</th>
                             <th data-key="Operator">Operator</th>
                             <th data-key="Machine">Machine</th>
+                            <th data-key="MaterialCode">Material</th>   <!-- NEW -->
+                            <th data-key="LotNumber">Lot #</th>         <!-- NEW -->
                             <th data-key="StartDateTime">Start</th>
                             <th data-key="EndDateTime">End</th>
                             <th data-key="Difficulty">Difficulty</th>
@@ -162,6 +194,7 @@
                             <th data-key="Notes">Notes</th>
                         </tr>
                     </thead>
+
                     <tbody></tbody>
                 </table>
             </div>
@@ -237,21 +270,24 @@
             $tableBody.innerHTML = "";
             for (const r of rows) {
               const tr = document.createElement("tr");
-              tr.innerHTML = `
-                <td>${r.id ?? ""}</td>
-                <td>${r.part ?? ""}</td>
-                <td>${r.component ?? ""}</td>
-                <td>${r.prodNumber ?? ""}</td>
-                <td>${r.run ?? ""}</td>
-                <td>${r.operator ?? ""}</td>
-                <td>${r.machine ?? ""}</td>
-                <td>${fmt(r.startDateTime)}</td>
-                <td>${fmt(r.endDateTime)}</td>
-                <td>${r.difficulty ?? ""}</td>
-                <td>${r.setupComp ?? ""}</td>
-                <td>${r.assistanceReq ?? ""}</td>
-                <td>${r.assistedBy ?? ""}</td>
-                <td>${r.notes ?? ""}</td>`;
+                      tr.innerHTML = `
+            <td>${r.id ?? ""}</td>
+            <td>${r.part ?? ""}</td>
+            <td>${r.component ?? ""}</td>
+            <td>${r.prodNumber ?? ""}</td>
+            <td>${r.run ?? ""}</td>
+            <td>${r.operator ?? ""}</td>
+            <td>${r.machine ?? ""}</td>
+            <td>${r.materialCode ?? ""}</td>   
+            <td>${r.lotNumber ?? ""}</td>     
+            <td>${fmt(r.startDateTime)}</td>
+            <td>${fmt(r.endDateTime)}</td>
+            <td>${r.difficulty ?? ""}</td>
+            <td>${r.setupComp ?? ""}</td>
+            <td>${r.assistanceReq ?? ""}</td>
+            <td>${r.assistedBy ?? ""}</td>
+            <td>${r.notes ?? ""}</td>`;
+
               $tableBody.appendChild(tr);
             }
 

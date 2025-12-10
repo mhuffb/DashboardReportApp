@@ -54,7 +54,7 @@ namespace DashboardReportApp.Models
     {
         public DateTime? Date { get; set; }
         public string Part { get; set; } = "";
-        public string Component { get; set; } = "";
+        public string? Component { get; set; } = "";
         public string ProductionNumber { get; set; } = "";
         public string RunNumber { get; set; } = "";
 
@@ -71,7 +71,6 @@ namespace DashboardReportApp.Models
         public string ToolNumber { get; set; } = "";
 
         // user-selected
-        public string Department { get; set; } = "";  // Molding / Sintering
         public string TestType { get; set; } = "";    // Molding Test Bake / Sintering Test Bake
         public string Reason { get; set; } = "";
     }
@@ -97,10 +96,9 @@ namespace DashboardReportApp.Models
         public string SearchProductionNumber { get; set; } = "";
         public string SearchRunNumber { get; set; } = "";
         public string SearchPart { get; set; } = "";
-        public string SearchComponent { get; set; } = "";
+        public string? SearchComponent { get; set; } = "";
 
         // User inputs
-        public string SearchDepartment { get; set; } = "";
         public string SearchTestType { get; set; } = "";
         public string SearchReason { get; set; } = "";
 
@@ -121,5 +119,60 @@ namespace DashboardReportApp.Models
 
         public bool HasResults { get; set; }
         public string ErrorMessage { get; set; } = "";
+        public List<TestBakeLoginRow> ActiveLogins { get; set; } = new();
+
+
+        public List<TestBakeHeaderRow> HeaderHistory { get; set; } = new();
+
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 25;
+        public int TotalPages { get; set; }
+        public int TotalCount { get; set; }
+
+
+        public int? HeaderId { get; set; }
+        public DateTime? TestBakeStartTime { get; set; }
+
+
     }
+    public class TestBakeLoginRow
+    {
+        public int Id { get; set; }
+        public string Operator { get; set; } = "";
+        public DateTime StartTime { get; set; }
+
+        public string Furnace { get; set; } = "";
+        public string? ProductionNumber { get; set; }
+        public string? RunNumber { get; set; }
+        public string? Part { get; set; }
+        public string? Component { get; set; }
+        public string? TestType { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    public class TestBakeHeaderRow
+    {
+        public int Id { get; set; }
+        public int LoginId { get; set; }
+        public string Operator { get; set; } = "";
+
+        public string? ProductionNumber { get; set; }
+        public string? RunNumber { get; set; }
+        public string? TestType { get; set; }
+        public string? Reason { get; set; }
+
+        public string? ProlinkPart { get; set; }
+        public DateTime TestBakeStartTime { get; set; }
+
+        public string? OutcomeStatus { get; set; }
+        public string? OutcomeNotes { get; set; }
+        public string? OutcomeBy { get; set; }
+        public DateTime? OutcomeDate { get; set; }
+
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+
+        public string? FileName { get; set; }
+    }
+
 }

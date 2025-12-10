@@ -1,0 +1,443 @@
+﻿@model DashboardReportApp.Models.TestBakeViewModel
+
+@{
+    ViewData["Title"] = "Initial Testbake Sheet";
+
+    var reasons = new[] { "Molding Setup", "Sintering Setup", "Lot Change", "Tool Change", "Density Split", "Infiltration", "Crush Test" };
+
+    var operators = ViewData["Operators"] as List<string> ?? new List<string>();
+    var furnaces = ViewData["Furnaces"] as List<string> ?? new List<string>();   // 👈 new
+}
+
+<div class="container-fluid px-3 mt-4">
+    <h2 class="text-center mb-4">Initial Testbake Sheet</h2>
+
+    <div class="d-flex justify-content-end mb-3">
+        <button type="button"
+                class="btn btn-success"
+                data-bs-toggle="modal"
+                data-bs-target="#placeTestBakeModal">
+            Place Test Bake on Furnace
+        </button>
+    </div>
+
+    @* show errors (e.g., from bad login / start test bake) *@
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@e.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    @* ACTIVE LOGINS TABLE *@
+    @if (Model?.ActiveLogins != null && Model.ActiveLogins.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-header">Parts Currently Being TestBaked</div>
+            <div class="card-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Furnace</th>
+                                <th>Operator</th>
+                                <th>Start Time</th>
+                                <th>Prod #</th>
+                                <th>Run #</th>
+                                <th>Part</th>
+                                <th>Component</th>
+                                <th>Test Type</th>
+                                <th>Reason</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var login in Model.ActiveLogins)
+                            {
+                                <tr>
+                                    <td>@login.Furnace</td>
+                                    <td>@login.Operator</td>
+                                    <td>@login.StartTime.ToString("g")</td>
+                                    <td>@login.ProductionNumber</td>
+                                    <td>@login.RunNumber</td>
+                                    <td>@login.Part</td>
+                                    <td>@login.Component</td>
+                                    <td>@login.TestType</td>
+                                    <td>@login.Reason</td>
+                                    <td class="text-end">
+                                        <form asp-action="FinishTestBake" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="loginId" value="@login.Id" />
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-primary">
+                                                Finish Test Bake
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <p class="text-muted">No parts currently being test baked.</p>
+    }
+
+</div>
+
+
+<div class="modal fade" id="placeTestBakeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="PlaceTestBake" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Place Test Bake on Furnace</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Operator</label>
+                        <select id="PlaceOperator"
+                                name="Operator"
+                                class="form-select"
+                                required>
+                            <option value="">-- Select --</option>
+                            @foreach (var op in operators)
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </div>
+
+
+                    <div class="mb-2">
+                        <label class="form-label">Furnace</label>
+                        <select name="Furnace" class="form-select" required>
+                            <option value="">-- Select --</option>
+                            @foreach (var f in furnaces)
+                            {
+                                <option value="@f">@f</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label">Test Type</label>
+                        <select name="TestType" class="form-select" required>
+                            <option value="">-- Select --</option>
+                            <option value="Molding Test Bake">Molding Test Bake</option>
+                            <option value="Sintering Test Bake">Sintering Test Bake</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label">Reason</label>
+                        <select name="Reason" class="form-select" required>
+                            <option value="">-- Select --</option>
+                            @foreach (var r in reasons)
+                            {
+                                <option value="@r">@r</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Production # (scan or type)</label>
+                        <input id="PlaceProdNumber"
+                               name="ProductionNumber"
+                               class="form-control"
+                               autocomplete="off" />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label">Run # (scan or type)</label>
+                        <input id="PlaceRunNumber"
+                               name="RunNumber"
+                               class="form-control"
+                               autocomplete="off" />
+                    </div>
+
+                    <hr />
+
+                    <div class="mb-2">
+                        <label class="form-label">Part</label>
+                        <input id="PlacePart"
+                               name="Part"
+                               class="form-control"
+                               readonly />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label">Component</label>
+                        <input id="PlaceComponent"
+                               name="Component"
+                               class="form-control"
+                               readonly />
+                    </div>
+
+                    
+
+                    <div class="alert alert-info mt-3" style="font-size: 0.9rem;">
+                        <strong>IMPORTANT:</strong><br />
+                        • After clicking <strong>Place Test Bake on Furnace</strong>, you must send the measurements to Prolink.<br />
+                        • The Prolink Factor field <strong>TestBake = Yes</strong> must be included with the data.<br />
+                        • Only Prolink measurements taken <em>after</em> placing the test bake will appear on the PDF.
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Place Test Bake
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+@if (Model?.HeaderHistory != null && Model.HeaderHistory.Any())
+{
+    <div class="card mt-4">
+        <div class="card-header">
+            Recent Testbake Sheets
+        </div>
+        <div class="card-body p-2">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped table-bordered shadow-sm w-100">
+                    <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Created</th>
+                            <th>Operator</th>
+                            <th>Prod #</th>
+                            <th>Run #</th>
+                            <th>Test Type</th>
+                            <th>Reason</th>
+                            <th>Part</th>
+                            <th>File</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in Model.HeaderHistory)
+                        {
+                            <tr>
+                                <td>@h.Id</td>
+                                <td>@h.CreatedAt.ToString("g")</td>
+                                <td>@h.Operator</td>
+                                <td>@h.ProductionNumber</td>
+                                <td>@h.RunNumber</td>
+                                <td>@h.TestType</td>
+                                <td>@h.Reason</td>
+                                <td>@h.ProlinkPart</td>
+                                <td>@h.FileName</td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       target="_blank"
+                                       href="@Url.Action("TestBakePdf", "TestBake", new { headerId = h.Id })">
+                                        Preview
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Model.TotalPages > 1)
+            {
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(Model.Page == 1 ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { page = Model.Page - 1, pageSize = Model.PageSize })">
+                                Previous
+                            </a>
+                        </li>
+
+                        @for (int i = 1; i <= Model.TotalPages; i++)
+                        {
+                            <li class="page-item @(i == Model.Page ? "active" : "")">
+                                <a class="page-link"
+                                   href="@Url.Action("Index", new { page = i, pageSize = Model.PageSize })">
+                                    @i
+                                </a>
+                            </li>
+                        }
+
+                        <li class="page-item @(Model.Page == Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { page = Model.Page + 1, pageSize = Model.PageSize })">
+                                Next
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <p class="text-muted mt-3">No testbake sheets have been created yet.</p>
+}
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            // --- SCAN LOOKUP (reuse HoldTag logic) ---
+            const partInput = document.getElementById('PlacePart');
+            const compInput = document.getElementById('PlaceComponent');
+            const prodInput = document.getElementById('PlaceProdNumber');
+            const runInput  = document.getElementById('PlaceRunNumber');
+
+            if (!prodInput || !runInput || !partInput || !compInput) {
+                return;
+            }
+
+            let scanBusy = false;
+
+            async function doScanLookup(mode, code) {
+                if (!code || scanBusy) return;
+                scanBusy = true;
+
+                try {
+                    const url = `/HoldTag/ScanLookup?mode=${encodeURIComponent(mode)}&code=${encodeURIComponent(code)}`;
+                    const resp = await fetch(url);
+
+                    if (!resp.ok) {
+                        alert('Scan lookup failed.');
+                        return;
+                    }
+
+                    const data = await resp.json();
+
+                    if (!data.success) {
+                        // clear fields if nothing found
+                        partInput.value = "";
+                        compInput.value = "";
+                        if (mode === 'prod') {
+                            if (runInput) runInput.value = "";
+                        } else if (mode === 'run') {
+                            if (prodInput) prodInput.value = "";
+                        }
+                        alert(data.message || 'No records found for that code.');
+                        return;
+                    }
+
+                    // Fill part/component from result
+                    partInput.value = data.part || "";
+                    compInput.value = data.component || "";
+
+                    if (mode === 'prod') {
+                        prodInput.value = data.prodNumber || code;
+                        if (data.runNumber && runInput) {
+                            runInput.value = data.runNumber;
+                        }
+                    } else if (mode === 'run') {
+                        runInput.value = data.runNumber || code;
+                        if (data.prodNumber && prodInput) {
+                            prodInput.value = data.prodNumber;
+                        }
+                    }
+
+                    console.log("TestBake scan lookup source:", data.source);
+                } catch (err) {
+                    console.error('TestBake ScanLookup error:', err);
+                    alert('Error during scan lookup.');
+                } finally {
+                    scanBusy = false;
+                }
+            }
+
+            function wireField(input, mode) {
+                if (!input) return;
+
+                let lastCode = "";
+
+                function triggerLookup() {
+                    const code = input.value.trim();
+                    if (!code) return;
+                    if (code === lastCode) return;
+                    lastCode = code;
+                    doScanLookup(mode, code);
+                }
+
+                // Scanner friendly: Enter triggers lookup
+                input.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        triggerLookup();
+                    }
+                });
+
+                // Normal typing: change/blur also trigger lookup
+                input.addEventListener('change', triggerLookup);
+                input.addEventListener('blur', triggerLookup);
+            }
+
+            // Wire: prod uses mode=prod, run uses mode=run
+            wireField(prodInput, 'prod');
+            wireField(runInput,  'run');
+        });
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const params = new URLSearchParams(window.location.search);
+            const run = params.get("run");
+            const prodNumber = params.get("prodNumber");
+            const operatorName = params.get("operatorName"); // 👈 from link
+
+            const runInput  = document.getElementById("PlaceRunNumber");
+            const prodInput = document.getElementById("PlaceProdNumber");
+            const operInput = document.getElementById("PlaceOperator");
+            const modalEl   = document.getElementById("placeTestBakeModal");
+
+            // Prefill fields if values were passed
+            if (run && runInput) {
+                runInput.value = run;
+
+                // 🔥 Force the existing wireField('run') listeners to fire
+                runInput.dispatchEvent(new Event("change"));
+            }
+
+            if (prodNumber && prodInput) {
+                prodInput.value = prodNumber;
+
+                // 🔥 Force the existing wireField('prod') listeners to fire
+                prodInput.dispatchEvent(new Event("change"));
+            }
+
+            if (operatorName && operInput) {
+                operInput.value = operatorName;
+            }
+
+            // If we have at least one of the values, open the modal automatically
+            if ((run || prodNumber || operatorName) && modalEl && window.bootstrap) {
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        });
+    </script>
+
+
+
+}
+

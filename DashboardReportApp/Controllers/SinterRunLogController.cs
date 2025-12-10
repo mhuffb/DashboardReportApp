@@ -1,4 +1,5 @@
 ﻿using DashboardReportApp.Models;
+using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DashboardReportApp.Controllers
@@ -7,18 +8,22 @@ namespace DashboardReportApp.Controllers
     public class SinterRunLogController : Controller
     {
         private readonly SinterRunLogService _sinterRunLogService;
+        private readonly SharedService _sharedService;
 
-        public SinterRunLogController(SinterRunLogService sinterRunLogService)
+        public SinterRunLogController(
+            SinterRunLogService sinterRunLogService,
+            SharedService sharedService)
         {
             _sinterRunLogService = sinterRunLogService;
+            _sharedService = sharedService;
         }
 
         [HttpGet("")]
         public async Task<IActionResult> Index(int page = 1, int pageSize = 50, string? search = null, string? sort = "id", string? dir = "DESC")
         {
             // Aux data
-            var operators = _sinterRunLogService.GetOperators();
-            var furnaces = _sinterRunLogService.GetFurnaces();
+            var operators = _sharedService.GetFormattedOperators();
+            var furnaces = _sharedService.GetFurnaces();
 
             var openGreenSkids = await _sinterRunLogService.GetOpenGreenSkidsAsync();
             var openSinterRuns = await _sinterRunLogService.GetOpenSinterRunsAsync();
@@ -27,23 +32,10 @@ namespace DashboardReportApp.Controllers
             var total = await _sinterRunLogService.GetRunsCountAsync(search);
             var items = await _sinterRunLogService.GetRunsPageAsync(page, pageSize, sort, dir, search);
 
-            // Fix for CS0029 and IDE0028
-            // Change: Operators = operators ?? new List<CalendarModel>(),
-            // To: Operators = operators?.Select(o => o.FirstName + " " + o.LastName).ToList() ?? new List<string>(),
-
             var vm = new SinterRunLogViewModel
             {
-                Operators = operators?
-    .Select(o =>
-    {
-        var last = (o.LastName ?? "").Trim();
-        var first = (o.FirstName ?? "").Trim();
-        var initial = first.Length > 0 ? char.ToUpperInvariant(first[0]).ToString() : "";
-        return string.IsNullOrEmpty(last) ? initial : $"{last}, {initial}";
-    })
-    .ToList()
-    ?? new List<string>(),
-
+                // ✅ hook it up here
+                Operators = operators ?? new List<string>(),
                 Furnaces = furnaces ?? new List<string>(),
                 OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>(),
                 OpenSinterRuns = openSinterRuns ?? new List<SinterRunSkid>(),
@@ -58,6 +50,7 @@ namespace DashboardReportApp.Controllers
 
             return View(vm);
         }
+
 
         // JSON data endpoint for the React table (optional, if you want client fetch)
         [HttpGet("Data")]

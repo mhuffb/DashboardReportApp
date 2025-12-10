@@ -24,6 +24,9 @@ namespace DashboardReportApp.Models
         public string? Component { get; set; }
         public string Subcomponent { get; set; }
         public decimal ElapsedTime { get; set; }
+
+        public string MaterialCode { get; set; }
+        public string LotNumber { get; set; }
     }
     public class PressSetupLoginViewModel
     {

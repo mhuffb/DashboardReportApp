@@ -28,7 +28,7 @@ namespace DashboardReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            ViewData["Operators"] = await _pressRunLogService.GetOperatorsAsync();
+            ViewData["Operators"] = _sharedService.GetFormattedOperators();
             ViewData["OpenParts"] = await _pressRunLogService.GetOpenSetups();
             ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync();
 

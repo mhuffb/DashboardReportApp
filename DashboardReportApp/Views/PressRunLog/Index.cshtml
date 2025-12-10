@@ -130,13 +130,26 @@
                                                 onclick="openLogoutModal('@rec.Id', '@rec.Machine')">
                                             Logout
                                         </button>
-                                        
+
                                         <span>&nbsp;</span>
+
                                         <button class="btn btn-info btn-sm"
                                                 onclick="openStartSkidModal('@rec.Id', '@rec.Machine', '@rec.Part', '@rec.Component', '@rec.Operator', '@rec.Run', '@rec.ProdNumber')">
                                             Start Skid
                                         </button>
+
+                                        <span>&nbsp;</span>
+
+                                        <a class="btn btn-warning btn-sm"
+                                           asp-controller="TestBake"
+                                           asp-action="Index"
+                                           asp-route-run="@rec.Run"
+                                           asp-route-prodNumber="@rec.ProdNumber"
+                                           asp-route-operatorName="@rec.Operator">
+                                            Test Bake
+                                        </a>
                                     </td>
+
                                 </tr>
                             }
                         </tbody>

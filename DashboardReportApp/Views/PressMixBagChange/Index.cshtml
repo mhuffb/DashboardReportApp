@@ -17,13 +17,7 @@
     }
 </style>
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill"></i> @TempData["Success"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-}
+
 @if (TempData["Error"] != null && !ViewContext.HttpContext.Request.Method.Equals("GET"))
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
