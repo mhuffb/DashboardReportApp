@@ -780,7 +780,6 @@ Open in Dashboard: {link}
             }
         }
 
-
         [HttpGet]
         public IActionResult AttachmentPreviewModal(int id)
         {
@@ -801,10 +800,47 @@ Open in Dashboard: {link}
             else
             {
                 vm.FileName = header.AttachmentFileName;
-                vm.FileUrl = $"/uploads/{header.AttachmentFileName}";
+
+                // 🔹 Point to the controller action that will stream the file
+                vm.FileUrl = Url.Action("GetAttachment", "ToolingWorkOrder", new { id });
             }
 
             return PartialView("_ToolingAttachmentModal", vm);
+        }
+
+        [HttpGet]
+        public IActionResult GetAttachment(int id)
+        {
+            var header = _service.GetHeaderById(id);
+            if (header == null || string.IsNullOrWhiteSpace(header.AttachmentFileName))
+                return NotFound();
+
+            var root = _cfg["Paths:ToolingWorkOrderUploads"];
+            if (string.IsNullOrWhiteSpace(root))
+                return Problem("Paths:ToolingWorkOrderUploads not configured.");
+
+            var fullPath = Path.Combine(root, header.AttachmentFileName);
+
+            if (!System.IO.File.Exists(fullPath))
+                return NotFound();
+
+            // Simple content-type guessing based on extension
+            var ext = Path.GetExtension(fullPath)?.ToLowerInvariant();
+            var contentType = ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                ".mp4" => "video/mp4",
+                ".mov" => "video/quicktime",
+                ".webm" => "video/webm",
+                ".m4v" => "video/x-m4v",
+                _ => "application/octet-stream"
+            };
+
+            return PhysicalFile(fullPath, contentType);
         }
 
 

@@ -10,9 +10,6 @@ Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
 
 
-assembly skids in sintering not closing out automatically
-end skid does close it out though
-
 fix picture on tooling work order page
 
 add skid number to holdtag and get material by skid number

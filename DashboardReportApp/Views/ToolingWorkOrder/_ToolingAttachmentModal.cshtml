@@ -1,5 +1,10 @@
 ﻿@model DashboardReportApp.Models.ToolingAttachmentPreviewVM
 
+@{
+    // ✔ declare lower once at the very top (Razor-safe)
+    var lower = (Model.FileName ?? "").ToLowerInvariant();
+}
+
 <div class="modal-header">
     <h5 class="modal-title">Attachment — Work Order @Model.Id</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -17,22 +22,22 @@
             URL: @Model.FileUrl
         </p>
 
-        
-            var lower = (Model.FileUrl ?? "").ToLowerInvariant();
-        
-
-        @if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png") || lower.EndsWith(".gif") || lower.EndsWith(".webp"))
+        @* IMAGE *@
+        @if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") ||
+            lower.EndsWith(".png") || lower.EndsWith(".gif") ||
+            lower.EndsWith(".webp"))
         {
             <img src="@Model.FileUrl" class="img-fluid rounded border" alt="Attachment image" />
         }
-        else if (lower.EndsWith(".mp4") || lower.EndsWith(".mov") || lower.EndsWith(".webm") || lower.EndsWith(".m4v"))
+        @* VIDEO *@
+        else if (lower.EndsWith(".mp4") || lower.EndsWith(".mov") ||
+        lower.EndsWith(".webm") || lower.EndsWith(".m4v"))
         {
-            <video src="@Model.FileUrl"
-                   controls
-                   class="w-100 rounded border">
+            <video src="@Model.FileUrl" controls class="w-100 rounded border">
                 Your browser does not support the video tag.
             </video>
         }
+        @* OTHER *@
         else
         {
             <a href="@Model.FileUrl" target="_blank" class="btn btn-outline-secondary">
