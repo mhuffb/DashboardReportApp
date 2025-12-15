@@ -58,6 +58,7 @@ namespace DashboardReportApp.Controllers
                 model.SearchTestType,
                 model.SearchReason,
                 model.TestBakeStartTime,
+                model.TestBakeEndTime,
                 model.HeaderId);
 
             if (!string.IsNullOrEmpty(vm.ErrorMessage))

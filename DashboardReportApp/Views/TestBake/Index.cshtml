@@ -12,7 +12,7 @@
 <div class="container-fluid px-3 mt-4">
     <h2 class="text-center mb-4">Initial Testbake Sheet</h2>
 
-    <div class="d-flex justify-content-end mb-3">
+    <div class="d-flex justify-content-center mb-3">
         <button type="button"
                 class="btn btn-success"
                 data-bs-toggle="modal"
@@ -20,6 +20,7 @@
             Place Test Bake on Furnace
         </button>
     </div>
+
 
     @* show errors (e.g., from bad login / start test bake) *@
     @if (!ViewData.ModelState.IsValid)
@@ -183,14 +184,19 @@
                                readonly />
                     </div>
 
-                    
+
 
                     <div class="alert alert-info mt-3" style="font-size: 0.9rem;">
                         <strong>IMPORTANT:</strong><br />
-                        • After clicking <strong>Place Test Bake on Furnace</strong>, you must send the measurements to Prolink.<br />
-                        • The Prolink Factor field <strong>TestBake = Yes</strong> must be included with the data.<br />
-                        • Only Prolink measurements taken <em>after</em> placing the test bake will appear on the PDF.
+                        • When you click <strong>Place Test Bake on Furnace</strong>, the system records a <strong>start time</strong> for this test bake.<br />
+                        • When you click <strong>Finish Test Bake</strong>, the system records an <strong>end time</strong>.<br />
+                        • The PDF will only include Prolink measurements for this part where the factor
+                        <strong>TestBake = Yes</strong> and the measurement time is
+                        <strong>between the start and end time</strong> (from placing the test bake until you finish it).<br />
+                        • If you send measurements to Prolink <em>before</em> placing the test bake, or
+                        <em>after</em> finishing it, those readings will <strong>not</strong> appear on this Test Bake sheet.
                     </div>
+
 
                 </div>
                 <div class="modal-footer">

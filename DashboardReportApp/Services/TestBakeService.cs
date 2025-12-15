@@ -31,6 +31,7 @@ namespace DashboardReportApp.Services
             string testType,
             string reason,
             DateTime? testBakeStartTime,
+    DateTime? testBakeEndTime,
             int? headerId);
 
         Task LoginAsync(string @operator);
@@ -88,6 +89,7 @@ namespace DashboardReportApp.Services
        string testType,
        string reason,
        DateTime? testBakeStartTime,
+       DateTime? testBakeEndTime,
        int? headerId)
         {
             var vm = new TestBakeViewModel
@@ -97,6 +99,7 @@ namespace DashboardReportApp.Services
                 SearchTestType = testType ?? "",
                 SearchReason = reason ?? "",
                 TestBakeStartTime = testBakeStartTime,
+                TestBakeEndTime =testBakeEndTime,
                 HeaderId = headerId
             };
 
@@ -118,10 +121,16 @@ namespace DashboardReportApp.Services
                         vm.Header.TestType = storedHeader.TestType;
                         vm.Header.Reason = storedHeader.Reason;
                         vm.TestBakeStartTime = storedHeader.TestBakeStartTime;
+                        vm.TestBakeEndTime = storedHeader.TestBakeEndTime;
                         vm.Header.TestedBy = storedHeader.Operator;
                     }
                 }
-
+                else
+                {
+                    // no header row yet: just carry through what was passed in
+                    vm.TestBakeStartTime = testBakeStartTime;
+                    vm.TestBakeEndTime = testBakeEndTime;
+                }
                 // 2) If nothing came from stored header (Initial scan path), fall back to search fields
                 if (string.IsNullOrWhiteSpace(vm.Header.ProductionNumber) &&
                     string.IsNullOrWhiteSpace(vm.Header.RunNumber) &&
@@ -186,9 +195,11 @@ WITH TestBakeParts AS (
     LEFT JOIN dbo.part_factor pf ON p.part_id = pf.part_id
     LEFT JOIN dbo.factor f       ON pf.factor_id = f.factor_id
     WHERE
-        f.factor_desc = @FactorTestBake
-        AND pf.value = 'Yes'
-        AND (@StartTime IS NULL OR p.measure_date >= @StartTime)
+    f.factor_desc = @FactorTestBake
+    AND pf.value = 'Yes'
+    AND (@StartTime IS NULL OR p.measure_date >= @StartTime)
+    AND (@EndTime   IS NULL OR p.measure_date <= @EndTime)
+
 )
 SELECT TOP 1
     part_id,
@@ -201,7 +212,10 @@ ORDER BY measure_date ASC;";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@FactorTestBake", FactorDescTestBake);
             cmd.Parameters.AddWithValue("@StartTime",
-                vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
+    vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@EndTime",
+                vm.TestBakeEndTime.HasValue ? vm.TestBakeEndTime.Value : (object)DBNull.Value);
+
 
             using var reader = await cmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
@@ -476,7 +490,9 @@ WHERE
     m.deleted_flag = 0
     AND pw.TestBake = 'Yes'
     AND (@StartTime IS NULL OR pw.measure_date >= @StartTime)
-ORDER BY d.dim_desc;";
+    AND (@EndTime   IS NULL OR pw.measure_date <= @EndTime)
+ORDER BY d.dim_desc;
+";
 
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@FactorTestBake", FactorDescTestBake);
@@ -491,7 +507,10 @@ ORDER BY d.dim_desc;";
                     : vm.Header.Part);
 
             cmd.Parameters.AddWithValue("@StartTime",
-                vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
+    vm.TestBakeStartTime.HasValue ? vm.TestBakeStartTime.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@EndTime",
+                vm.TestBakeEndTime.HasValue ? vm.TestBakeEndTime.Value : (object)DBNull.Value);
+
 
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -740,15 +759,18 @@ WHERE Id = @id;";
             const string sqlInsert = @"
 INSERT INTO testbake_header
     (LoginId, Operator, ProductionNumber, RunNumber,
-     TestType, Reason, ProlinkPart, TestBakeStartTime,
+     TestType, Reason, ProlinkPart,
+     TestBakeStartTime, TestBakeEndTime,
      OutcomeStatus, OutcomeNotes, OutcomeBy, OutcomeDate,
      CreatedAt, UpdatedAt)
 VALUES
     (@LoginId, @Operator, @Prod, @Run,
-     @TestType, @Reason, @ProlinkPart, @StartTime,
+     @TestType, @Reason, @ProlinkPart,
+     @StartTime, @EndTime,
      @OutcomeStatus, @OutcomeNotes, @OutcomeBy, @OutcomeDate,
      @CreatedAt, @UpdatedAt);
 SELECT LAST_INSERT_ID();";
+
 
             using var cmd = new MySqlCommand(sqlInsert, conn);
             cmd.Parameters.AddWithValue("@LoginId", header.LoginId);
@@ -759,6 +781,8 @@ SELECT LAST_INSERT_ID();";
             cmd.Parameters.AddWithValue("@Reason", (object?)header.Reason ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ProlinkPart", (object?)header.ProlinkPart ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@StartTime", header.TestBakeStartTime);
+
+            cmd.Parameters.AddWithValue("@EndTime", (object?)header.TestBakeEndTime ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@OutcomeStatus", (object?)header.OutcomeStatus ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@OutcomeNotes", (object?)header.OutcomeNotes ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@OutcomeBy", (object?)header.OutcomeBy ?? DBNull.Value);
@@ -812,6 +836,8 @@ WHERE Id = @Id;";
                 Reason = reader["Reason"]?.ToString(),
                 ProlinkPart = reader["ProlinkPart"]?.ToString(),
                 TestBakeStartTime = reader.GetDateTime("TestBakeStartTime"),
+
+                TestBakeEndTime = reader["TestBakeEndTime"] as DateTime?,
                 OutcomeStatus = reader["OutcomeStatus"]?.ToString(),
                 OutcomeNotes = reader["OutcomeNotes"]?.ToString(),
                 OutcomeBy = reader["OutcomeBy"]?.ToString(),
@@ -833,6 +859,7 @@ WHERE Id = @Id;";
                     testType: vm.Header.TestType ?? "",
                     reason: vm.Header.Reason ?? "",
                     testBakeStartTime: vm.TestBakeStartTime,
+                    testBakeEndTime: vm.TestBakeEndTime,
                     headerId: vm.HeaderId
                 );
             }
@@ -1167,6 +1194,9 @@ VALUES
             if (login == null)
                 throw new InvalidOperationException($"No active test bake found for Id {loginId}.");
 
+
+            var now = DateTime.Now;
+
             // 2) Build header row using login info
             var headerRow = new TestBakeHeaderRow
             {
@@ -1178,6 +1208,7 @@ VALUES
                 Reason = login.Reason,
                 ProlinkPart = login.Part,
                 TestBakeStartTime = login.StartTime,
+                TestBakeEndTime = now,
                 OutcomeStatus = null,
                 OutcomeNotes = null,
                 OutcomeBy = null,
@@ -1196,6 +1227,7 @@ VALUES
                 testType: headerRow.TestType ?? "",
                 reason: headerRow.Reason ?? "",
                 testBakeStartTime: headerRow.TestBakeStartTime,
+                testBakeEndTime: headerRow.TestBakeEndTime,
                 headerId: headerId);
 
             // Ensure TestedBy is set (operator)
@@ -1261,6 +1293,7 @@ VALUES
                 testType: headerRow.TestType ?? "",
                 reason: headerRow.Reason ?? "",
                 testBakeStartTime: headerRow.TestBakeStartTime,
+                testBakeEndTime: headerRow.TestBakeEndTime,
                 headerId: headerRow.Id);
 
             var pdfBytes = await GenerateTestBakePdfAsync(vm);

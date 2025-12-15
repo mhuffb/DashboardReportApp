@@ -10,11 +10,13 @@ Remove react table. make html table with pagination, datatables and jquery
 <table id="maintenanceTable" class="table table-striped table-bordered">
 
 
-error change event time
-add occurence edit to edit modal
-
 assembly skids in sintering not closing out automatically
 end skid does close it out though
 
 fix picture on tooling work order page
 
+add skid number to holdtag and get material by skid number
+when placing on hold allow multuiple skids to be placed on hold at once
+add materialcode and lot choice to holdtag if more than one material and from sinter table
+
+holdtags add buttons to molding and sintering pages to add holdtags directly from those pages

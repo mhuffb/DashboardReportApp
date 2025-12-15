@@ -182,10 +182,12 @@ ORDER  BY sr.id, d.requested_date";
             conn.Open();
             var cmd = new MySqlCommand(@"
 SELECT id, fname, lname, email, vac_balance,
-          department, shift, schedule, time_off_type,
-          explanation ,
-       attribute   
+       department, shift, schedule, time_off_type,
+       explanation,
+       attribute,
+       occurrence        
 FROM servicerecords WHERE id=@id", conn);
+
             cmd.Parameters.AddWithValue("@id", id);
 
             using var rdr = cmd.ExecuteReader();
@@ -203,8 +205,10 @@ FROM servicerecords WHERE id=@id", conn);
                 Schedule = rdr["schedule"].ToString(),
                 TimeOffType = rdr["time_off_type"].ToString(),
                 Explanation = rdr["explanation"].ToString(),
-                Attribute = rdr["attribute"]?.ToString() ?? ""
+                Attribute = rdr["attribute"]?.ToString() ?? "",
+                Occurrence = rdr["occurrence"]?.ToString() ?? ""  
             };
+
         }
 
         /* ─────────────────────────── BLUE CALENDAR EVENTS ─────────────────────────── */

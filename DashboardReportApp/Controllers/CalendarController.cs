@@ -240,12 +240,15 @@ Approved by {approver} on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
                 timeOffType = rec.TimeOffType,
                 shift = rec.Shift,
                 explanation = rec.Explanation,
-                dates = dates
+                dates = dates,
+                occurrence = rec.Occurrence   
             });
+
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult EditRecord(int id, string type, string shift, string explanation, string dates)
+        public IActionResult EditRecord(int id, string type, string shift, string explanation, string dates,
+    string occurrence)
         {
             // 1️⃣  Load original record for comparison or details
             var original = _calendarService.GetServiceRecordById(id);
@@ -257,16 +260,22 @@ Approved by {approver} on {DateTime.Now:MM/dd/yyyy h:mm tt}{voucherLine}";
             using var tran = conn.BeginTransaction();
 
             var update = new MySqlCommand(@"
-            UPDATE servicerecords
-               SET time_off_type = @type,
-                   shift = @shift,
-                   explanation = @expl
-             WHERE id = @id", conn, tran);
+    UPDATE servicerecords
+       SET time_off_type = @type,
+           shift         = @shift,
+           explanation   = @expl,
+           occurrence    = @occ
+     WHERE id = @id", conn, tran);
+
             update.Parameters.AddWithValue("@type", type);
             update.Parameters.AddWithValue("@shift", shift);
             update.Parameters.AddWithValue("@expl", explanation);
+            update.Parameters.AddWithValue("@occ", string.IsNullOrWhiteSpace(occurrence) || occurrence == "No occurrence"
+                                                    ? (object)DBNull.Value
+                                                    : occurrence);
             update.Parameters.AddWithValue("@id", id);
             update.ExecuteNonQuery();
+
 
             var del = new MySqlCommand("DELETE FROM servicerecord_dates WHERE servicerecord_id = @id", conn, tran);
             del.Parameters.AddWithValue("@id", id);
@@ -318,17 +327,20 @@ Type         : {original.TimeOffType}
 Shift        : {original.Shift}
 Dates        : {origDatesText}
 Explanation  : {original.Explanation}
+Occurrence   : {original.Occurrence ?? "No occurrence"}
 
 --- AFTER ---
 Type         : {type}
 Shift        : {shift}
 Dates        : {newDatesText}
 Explanation  : {explanation}
+Occurrence   : {occurrence}
 
 Edited on    : {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
-http://192.168.1.9:5000/Calendar
+http://Sintergydc2024.local:5000/Calendar
 -------------------------------------------------------------------";
+
 
             SendConfigured(_emailCalendarTo,
     $"Edited Time-Off Request: {original.LastName}, {original.FirstName}", body);
@@ -567,29 +579,63 @@ http://192.168.1.9:5000/Calendar
         // CalendarController.cs
         [HttpGet]  // get one event for editing
         public IActionResult GetCalendarEvent(int id) => Json(_calendarService.GetCalendarEventById(id));
-
-        // CalendarController.cs
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult EditCalendarEvent(CalendarEventModel m)
         {
             try
             {
-                ModelState.Remove(nameof(CalendarEventModel.SubmittedOn));
-                ModelState.Remove(nameof(CalendarEventModel.Scheduler));
+                // We are not using ModelState constraints here because we only post a subset
+                // of the full CalendarEventModel from the SweetAlert form.
 
-                /* 1️⃣  Basic validation */
-                if (!ModelState.IsValid)
-                    throw new InvalidOperationException("ModelState is invalid");
+                // 1️⃣ Grab raw strings from the form
+                var dateStr = Request.Form["Date"];
+                var startStr = Request.Form["StartTime"];
+                var endStr = Request.Form["EndTime"];
 
-                /* 2️⃣  Load the existing event (throws if not found) */
+                if (!DateTime.TryParse(dateStr, out var newDate))
+                    throw new Exception($"Bad Date value: '{dateStr}'");
+
+                if (!TimeSpan.TryParse(startStr, out var newStart))
+                    throw new Exception($"Bad StartTime value: '{startStr}'");
+
+                if (!TimeSpan.TryParse(endStr, out var newEnd))
+                    throw new Exception($"Bad EndTime value: '{endStr}'");
+
+                // 2️⃣ Load the existing event (to keep Scheduler, Series, Recur, etc.)
                 var before = _calendarService.GetCalendarEventById(m.Id)
                              ?? throw new Exception($"No calendar event found with Id {m.Id}");
 
-                /* 3️⃣  Persist the changes */
-                _calendarService.UpdateCalendarEvent(m);
+                // 3️⃣ Build an updated copy with all important fields populated
+                var updated = new CalendarEventModel
+                {
+                    Id = before.Id,
+                    Title = m.Title?.Trim(),
+                    Location = m.Location,
+                    Description = m.Description,
+                    Date = newDate.Date,
+                    StartTime = newStart,
+                    EndTime = newEnd,
 
-                /* 4️⃣  Build the notification e-mail */
+                    // keep existing metadata
+                    Scheduler = before.Scheduler,
+                    SeriesId = before.SeriesId,
+                    IsSeed = before.IsSeed,
+                    RecurRule = before.RecurRule,
+                    RecurUntil = before.RecurUntil,
+                    SubmittedOn = before.SubmittedOn
+                };
+
+                // 4️⃣ Persist the changes
+                _calendarService.UpdateCalendarEvent(updated);
+
+                // 5️⃣ Pre-format times as strings (avoid inline format specifiers that blew up)
+                string beforeStart = before.StartTime.ToString(@"hh\:mm");
+                string beforeEnd = before.EndTime.ToString(@"hh\:mm");
+                string afterStart = updated.StartTime.ToString(@"hh\:mm");
+                string afterEnd = updated.EndTime.ToString(@"hh\:mm");
+
+                // 6️⃣ Build the notification e-mail
                 string body = $@"
 A calendar event has been *edited*.
 
@@ -597,39 +643,95 @@ A calendar event has been *edited*.
 Title      : {before.Title}
 Location   : {before.Location}
 Date       : {before.Date:MM/dd/yyyy}
-Start Time : {before.StartTime:hh\:mm}
-End Time   : {before.EndTime:hh\:mm}
-Description: {before.Description ?? "(none)"}
+Start Time : {beforeStart}
+End Time   : {beforeEnd}
+Description: {(before.Description ?? "(none)")}
 
 --- AFTER ---
-Title      : {m.Title}
-Location   : {m.Location}
-Date       : {m.Date:MM/dd/yyyy}
-Start Time : {m.StartTime:hh\:mm}
-End Time   : {m.EndTime:hh\:mm}
-Description: {m.Description ?? "(none)"}
+Title      : {updated.Title}
+Location   : {updated.Location}
+Date       : {updated.Date:MM/dd/yyyy}
+Start Time : {afterStart}
+End Time   : {afterEnd}
+Description: {(updated.Description ?? "(none)")}
 
 Edited on {DateTime.Now:MM/dd/yyyy h:mm tt}
 Link to Calendar:
 http://192.168.1.9:5000/Calendar
 -------------------------------------------------------------------";
 
-
-                /* 5️⃣  Try to send e-mail (swallow any SMTP failure) */
                 SendConfigured(_emailCalendarTo, $"Edited Event: {before.Title}", body);
 
-
-                /* 6️⃣  All good → HTTP 200 */
+                // 7️⃣ All good
                 return Ok();
             }
             catch (Exception ex)
             {
-                /* Log and surface the full stack trace so we can see it in DevTools */
                 _logger.LogError(ex, "EditCalendarEvent failed");
+                // Return the exception text so your JS sees 500 and you can view details in network tab
                 return StatusCode(500, ex.ToString());
             }
         }
+        // ────────────────────  EDIT CALENDAR SERIES (title/location/desc/times)  ────────────────────
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult EditCalendarSeries(
+            string seriesId,
+            string Title,
+            string Location,
+            string Description,
+            string StartTime,
+            string EndTime)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(seriesId))
+                    return BadRequest("Missing seriesId");
 
+                if (!TimeSpan.TryParse(StartTime, out var st))
+                    return BadRequest($"Bad StartTime '{StartTime}'");
+
+                if (!TimeSpan.TryParse(EndTime, out var et))
+                    return BadRequest($"Bad EndTime '{EndTime}'");
+
+                // Update all events in this series
+                _calendarService.UpdateCalendarSeries_All(
+                    seriesId,
+                    Title?.Trim(),
+                    Location,
+                    Description,
+                    st,
+                    et
+                );
+
+                // Optional: e-mail summary
+                string stStr = st.ToString(@"hh\:mm");
+                string etStr = et.ToString(@"hh\:mm");
+
+                string body = $@"
+A calendar event series has been *edited*.
+
+Series Id  : {seriesId}
+Title      : {Title}
+Location   : {Location}
+Time Range : {stStr} - {etStr}
+Description: {(string.IsNullOrWhiteSpace(Description) ? "(none)" : Description)}
+
+Edited on {DateTime.Now:MM/dd/yyyy h:mm tt}
+Link to Calendar:
+http://192.168.1.9:5000/Calendar
+-------------------------------------------------------------------";
+
+                SendConfigured(_emailCalendarTo, $"Edited Event Series: {Title}", body);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "EditCalendarSeries failed (seriesId={SeriesId})", seriesId);
+                return StatusCode(500, ex.ToString());
+            }
+        }
 
 
         // helper (add once, anywhere in the class)

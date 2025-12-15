@@ -23,6 +23,8 @@
         public DateTime SubmittedOn { get; set; }
 
         public string ApprovedBy { get; set; }
+        public string? Occurrence { get; set; }
+
     }
 
 

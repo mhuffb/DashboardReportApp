@@ -129,10 +129,11 @@ namespace DashboardReportApp.Models
         public int TotalPages { get; set; }
         public int TotalCount { get; set; }
 
-
+        
         public int? HeaderId { get; set; }
         public DateTime? TestBakeStartTime { get; set; }
 
+        public DateTime? TestBakeEndTime { get; set; }
 
     }
     public class TestBakeLoginRow
@@ -173,6 +174,8 @@ namespace DashboardReportApp.Models
         public DateTime? UpdatedAt { get; set; }
 
         public string? FileName { get; set; }
+
+        public DateTime? TestBakeEndTime { get; set; }
     }
 
 }

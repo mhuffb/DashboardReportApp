@@ -756,36 +756,50 @@
         fetch(`/Calendar/GetRecord?id=${num}`).then(r=>r.json()).then(data=>{
             Swal.fire({
                 title:'Edit Request',
-                html:`<label>Time-Off Type</label>
-                      <select id='edType' class='form-select mb-2'>
-                        <option ${data.timeOffType==='Paid Vacation'?'selected':''}>Paid Vacation</option>
-                        <option ${data.timeOffType==='Unpaid Time Off'?'selected':''}>Unpaid Time Off</option>
-                        <option ${data.timeOffType==='Other'?'selected':''}>Other</option>
-                      </select>
-                      <label>Shift</label>
-                      <select id='edShift' class='form-select mb-2'>
-                        <option ${data.shift==='1'?'selected':''}>1</option>
-                        <option ${data.shift==='2'?'selected':''}>2</option>
-                        <option ${data.shift==='3'?'selected':''}>3</option>
-                      </select>
-                      <label>Explanation</label>
-                      <textarea id='edExp' class='form-control mb-2'>${data.explanation||''}</textarea>
-                      <label>Dates</label>
-                      <input id='edDates' class='form-control mb-2'>`,
+                  html:`<label>Time-Off Type</label>
+          <select id='edType' class='form-select mb-2'>
+            <option ${data.timeOffType==='Paid Vacation'?'selected':''}>Paid Vacation</option>
+            <option ${data.timeOffType==='Unpaid Time Off'?'selected':''}>Unpaid Time Off</option>
+            <option ${data.timeOffType==='Other'?'selected':''}>Other</option>
+          </select>
+
+          <label>Shift</label>
+          <select id='edShift' class='form-select mb-2'>
+            <option ${data.shift==='1'?'selected':''}>1</option>
+            <option ${data.shift==='2'?'selected':''}>2</option>
+            <option ${data.shift==='3'?'selected':''}>3</option>
+          </select>
+
+          <label>Occurrence</label>
+          <select id='edOcc' class='form-select mb-2'>
+            <option ${!data.occurrence || data.occurrence === 'No occurrence' ? 'selected' : ''}>No occurrence</option>
+            <option ${data.occurrence === 'SEPP occurrence' ? 'selected' : ''}>SEPP occurrence</option>
+            <option ${data.occurrence === 'Profit share occurrence' ? 'selected' : ''}>Profit share occurrence</option>
+            <option ${data.occurrence === 'SEPP Voucher required' ? 'selected' : ''}>SEPP Voucher required</option>
+          </select>
+
+          <label>Explanation</label>
+          <textarea id='edExp' class='form-control mb-2'>${data.explanation||''}</textarea>
+
+          <label>Dates</label>
+          <input id='edDates' class='form-control mb-2'>`,
+
                 didOpen:() => flatpickr('#edDates',{mode:'multiple',dateFormat:'m/d/Y',defaultDate:data.dates||[]}),
                 showCancelButton:true,confirmButtonText:'Save'
             }).then(r=>{
                 if(!r.isConfirmed) return;
-                fetchWithSpinner('/Calendar/EditRecord',{
-                    method:'POST',
-                    body:new URLSearchParams(antiF({
-                        id:num,
-                        type:document.getElementById('edType').value,
-                        shift:document.getElementById('edShift').value,
-                        explanation:document.getElementById('edExp').value,
-                        dates:document.getElementById('edDates').value
-                    }))
-                }).then(resp=>resp.ok?Swal.fire('Saved','Changes applied','success').then(()=>location.reload())
+                       fetchWithSpinner('/Calendar/EditRecord',{
+            method:'POST',
+            body:new URLSearchParams(antiF({
+                id: num,
+                type: document.getElementById('edType').value,
+                shift: document.getElementById('edShift').value,
+                explanation: document.getElementById('edExp').value,
+                dates: document.getElementById('edDates').value,
+                occurrence: document.getElementById('edOcc').value   // 👈 new
+            }))
+        })
+        .then(resp=>resp.ok?Swal.fire('Saved','Changes applied','success').then(()=>location.reload())
                                      :Swal.fire('Error','Save failed','error'));
             });
         });
