@@ -857,7 +857,8 @@ Open in Dashboard: {link}
 
         private string? SaveToolingAttachmentFile(int headerId, IFormFile file)
         {
-            if (file == null || file.Length == 0) return null;
+            if (file == null || file.Length == 0)
+                return null;
 
             var root = _cfg["Paths:ToolingWorkOrderUploads"];
             if (string.IsNullOrWhiteSpace(root))
@@ -865,22 +866,50 @@ Open in Dashboard: {link}
 
             Directory.CreateDirectory(root);
 
+            // 🔹 Look up any existing attachment to delete later
+            string? oldFileName = null;
+            if (headerId > 0)
+            {
+                var existingHeader = _service.GetHeaderById(headerId);
+                oldFileName = existingHeader?.AttachmentFileName;
+            }
+
             var ext = Path.GetExtension(file.FileName);
             if (string.IsNullOrWhiteSpace(ext))
                 ext = ".bin";
 
-            var fileName = $"toolworkorderFile1_{headerId}{ext}";
+            // 🔹 New unique filename for this upload
+            var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+            var fileName = $"toolworkorderFile1_{headerId}_{stamp}{ext}";
             fileName = SanitizeFileNameLocal(fileName);
 
             var fullPath = Path.Combine(root, fileName);
 
-            using (var fs = new FileStream(fullPath, FileMode.Create))
+            using (var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 file.CopyTo(fs);
             }
 
+            // 🔹 Delete old file if it exists and has a different name
+            if (!string.IsNullOrEmpty(oldFileName))
+            {
+                try
+                {
+                    var oldPath = Path.Combine(root, oldFileName);
+                    if (System.IO.File.Exists(oldPath))
+                    {
+                        System.IO.File.Delete(oldPath);
+                    }
+                }
+                catch
+                {
+                    // optionally log, but don't blow up save if delete fails
+                }
+            }
+
             return fileName;
         }
+
 
 
     }

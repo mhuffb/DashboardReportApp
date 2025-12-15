@@ -33,11 +33,11 @@ namespace DashboardReportApp.Controllers
         public async Task<IActionResult> Admin()
         {
             // same data as Index, but explicitly in "admin mode"
-            var parts = await _sharedService.GetActiveProlinkParts();
+            
             var operators = await _sharedService.GetAllOperators();
             var records = await _holdTagService.GetAllHoldRecordsAsync();
 
-            ViewData["Parts"] = parts ?? new List<string>();
+            
             ViewData["Operators"] = operators;
 
             ViewBag.IsAdmin = true; // let the view know to show edit controls
@@ -67,9 +67,6 @@ namespace DashboardReportApp.Controllers
 
             try
             {
-                Console.WriteLine("[HoldTag.Index] Before GetActiveProlinkParts");
-                parts = await _sharedService.GetActiveProlinkParts();
-                Console.WriteLine("[HoldTag.Index] After GetActiveProlinkParts");
 
                 Console.WriteLine("[HoldTag.Index] Before GetAllOperators");
                 operators = await _sharedService.GetAllOperators();
@@ -86,7 +83,6 @@ namespace DashboardReportApp.Controllers
                 return Content("Error in HoldTag/Index:\n\n" + ex);
             }
 
-            ViewData["Parts"] = parts ?? new List<string>();
             ViewData["Operators"] = operators ?? new List<string>();
 
             bool isAdmin = User.IsInRole("HoldAdmin");
@@ -313,12 +309,10 @@ Hold Tag Page: {indexUrl}
 
                 TempData["ErrorMessage"] = "Please correct the errors and try again.";
 
-                // re-hydrate the index view
-                var parts = await _sharedService.GetActiveProlinkParts();
+                
                 var ops = await _sharedService.GetAllOperators();
                 var records = await _holdTagService.GetAllHoldRecordsAsync();
 
-                ViewData["Parts"] = parts ?? new List<string>();
                 ViewData["Operators"] = ops;
 
                 ViewBag.IsAdmin = true; // if they could reach this action, they’re admin
