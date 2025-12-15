@@ -9,6 +9,7 @@ using System.Data;
 using System.Data.Odbc;
 using System.Globalization;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
+using static Org.BouncyCastle.Utilities.Test.FixedSecureRandom;
 
 public class SinterRunLogService
 {
@@ -189,7 +190,7 @@ public class SinterRunLogService
             }
 
             // 3) If run isn't null or empty, close the pressrun skid
-            if (!string.IsNullOrEmpty(model.Run))
+            if (model.Source == "pressrun")
             {
                 string updatePressrunQuery = @"
                 UPDATE pressrun
@@ -349,51 +350,6 @@ public class SinterRunLogService
             }
 
 
-            // Check if 'run' is null or empty
-            if (string.IsNullOrEmpty(run))
-            {
-                // If run is null (or empty), update 'pressrun'
-                string updateQueryPressrun = @"
-            UPDATE pressrun
-            SET open = 0
-            WHERE prodNumber = @prodNumber
-              AND run        = @run
-              AND part       = @part
-              AND skidNumber = @skidNumber
-            ORDER BY id DESC
-            LIMIT 1"
-                ;
-
-                using (var updateCommand = new MySqlCommand(updateQueryPressrun, connection))
-                {
-                    updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
-                    updateCommand.Parameters.AddWithValue("@run", run ?? (object)DBNull.Value); // in case run == null
-                    updateCommand.Parameters.AddWithValue("@part", part);
-                    updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
-
-                    int rowsAffected = updateCommand.ExecuteNonQuery();
-                    Console.WriteLine($"✅ Rows Updated in pressrun: {rowsAffected}");
-                }
-            }
-            else
-            {
-                // If run is NOT null, update 'assembly'
-                string updateQueryAssembly = @"
-            UPDATE assembly
-            SET open = 0
-            WHERE prodNumber = @prodNumber
-              AND skidNumber = @skidNumber"
-                ;
-
-                using (var updateCommand = new MySqlCommand(updateQueryAssembly, connection))
-                {
-                    updateCommand.Parameters.AddWithValue("@prodNumber", prodNumber);
-                    updateCommand.Parameters.AddWithValue("@skidNumber", skidNumber);
-
-                    int rowsAffected = updateCommand.ExecuteNonQuery();
-                    Console.WriteLine($"✅ Rows Updated in assembly: {rowsAffected}");
-                }
-            }
         }
 
     }
@@ -437,7 +393,8 @@ public class SinterRunLogService
     skidNumber,
     MIN(startDateTime) AS startDateTime,
     GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumber,
-    GROUP_CONCAT(DISTINCT materialCode) AS materialCode
+    GROUP_CONCAT(DISTINCT materialCode) AS materialCode,
+    'pressrun' AS source   
 FROM (
     SELECT * FROM pressrun
     WHERE open = 1 
@@ -469,7 +426,8 @@ UNION ALL
         a.skidNumber,
         MAX(a.endDateTime)                                  AS startDateTime,
         COALESCE(GROUP_CONCAT(DISTINCT pr.lotNumber), '')   AS lotNumber,
-        COALESCE(GROUP_CONCAT(DISTINCT pr.materialCode), '') AS materialCode
+        COALESCE(GROUP_CONCAT(DISTINCT pr.materialCode), '') AS materialCode,
+        'assembly' AS source 
     FROM assembly a
     LEFT JOIN pressrun pr
       ON pr.prodNumber = a.prodNumber
@@ -514,7 +472,9 @@ ORDER BY part, skidNumber;
                                : Convert.ToInt32(reader["pcsEnd"]),
                 Notes = reader["notes"]?.ToString() ?? "",
                 LotNumber = lotNumber,
-                MaterialCode = materialCode
+                MaterialCode = materialCode,
+
+                Source = reader["source"]?.ToString() ?? "pressrun"
             });
         }
 

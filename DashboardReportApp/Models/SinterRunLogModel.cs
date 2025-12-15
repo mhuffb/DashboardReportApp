@@ -19,6 +19,8 @@
         public int Pcs { get; set; }
         public string LotNumber { get; set; }
         public string MaterialCode { get; set; }
+        public string Source { get; set; }
+
     }
 
     public class SinterRunLogViewModel

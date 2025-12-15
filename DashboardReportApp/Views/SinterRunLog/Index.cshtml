@@ -162,7 +162,9 @@
                                                 data-pcsend="@pressRun.PcsEnd"
                                                 data-skidnumber="@pressRun.SkidNumber"
                                                 data-lotnumber="@pressRun.LotNumber"
-                                                data-materialcode="@pressRun.MaterialCode">
+                                                data-materialcode="@pressRun.MaterialCode"
+                                            data-source="@pressRun.Source">
+
                                             Login to Skid Run
                                         </button>
 
@@ -291,6 +293,7 @@
                         <input type="hidden" id="Component" name="Component" />
                         <input type="hidden" id="LotNumber" name="LotNumber" />
                         <input type="hidden" id="MaterialCode" name="MaterialCode" />
+                        <input type="hidden" id="Source" name="Source" />
 
                         <!-- Display Part -->
                         <div class="mb-3">
@@ -385,6 +388,8 @@
                 var component    = button.getAttribute('data-component');
                 var lotNumber    = button.getAttribute('data-lotnumber');
                 var materialCode = button.getAttribute('data-materialcode');
+                var source       = button.getAttribute('data-source');
+
 
                 // pcs calc (unchanged)
                 var pcsStartStr = button.getAttribute('data-pcsstart');
@@ -408,6 +413,7 @@
                 loginSkidModal.querySelector('#Component').value    = component || "";
                 loginSkidModal.querySelector('#LotNumber').value    = lotNumber || "";
                 loginSkidModal.querySelector('#MaterialCode').value = materialCode || "";
+                loginSkidModal.querySelector('#Source').value       = source || "";
 
                 // Visible elements
                 loginSkidModal.querySelector('#displayPart').textContent          = part;

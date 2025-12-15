@@ -31,6 +31,7 @@
         public DateTime? OverrideAt { get; set; }
         public string? ScheduledMaterial { get; set; }
 
+        public string Source { get; set; } = "pressrun";
 
     }
 
