@@ -252,12 +252,13 @@
                             <th>Machine</th>
                             <th>Operator</th>
                             <th>Skid #</th>
-                            <th>Pcs Start</th>
-                            <th>Pcs End</th>
+                            <th>Pcs</th>
+                            <th>Duration (hrs)</th>
+                            <th>Date</th>
                             <th>Scrap</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
                             <th>Notes</th>
+                            <th>Actions</th>
+
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -835,6 +836,13 @@
             </script>
 
             <script>
+            function getAntiForgeryToken() {
+    // grabs any anti-forgery token already on the page (your modals include them)
+    const el = document.querySelector('input[name="__RequestVerificationToken"]');
+    return el ? el.value : '';
+}
+
+
     document.addEventListener('DOMContentLoaded', function () {
         if (window.jQuery && $.fn.DataTable) {
             $('#pressrunTable').DataTable({
@@ -844,7 +852,8 @@
                 pageLength: 50,
                 lengthMenu: [[10, 25, 50, 100],   // no "All" now
                              [10, 25, 50, 100]],
-                order: [[13, 'desc']],            // 13 = Start Time column
+                                order: [[14, 'desc']], // Date
+                            // 13 = Start Time column
 
                 ajax: function (data, callback) {
                     // DataTables -> your API params
@@ -865,64 +874,70 @@
                     });
                 },
 
-                columns: [
-                    { data: 'id' },           // ID
-                    { data: 'part' },         // Part
-                    { data: 'component' },    // Component
-                    { data: 'prodNumber' },   // Prod Number
-                    { data: 'run' },          // Run
-                    { data: 'lotNumber' },
-                                  // 👉 show SCHEDULED material *plainly* in its own column
-                { data: 'scheduledMaterial' }, // Sched Material
+                               columns: [
+                  { data: 'id' },
+                  { data: 'part' },
+                  { data: 'component' },
+                  { data: 'prodNumber' },
+                  { data: 'run' },
+                  { data: 'lotNumber' },
 
-                // 👉 show ACTUAL mix with mismatch highlighted
-                {
+                  { data: 'scheduledMaterial' },
+
+                  {
                     data: 'materialCode',
                     render: function (data, type, row) {
-                        const sched = row.scheduledMaterial || '';
-                        const mix   = data || '';
-
-                        if (!sched && !mix) return '';
-
-                        // same → just show normal
-                        if (sched === mix) {
-                            return mix;
-                        }
-
-                        // mismatch → red, with tooltip showing scheduled
-                        return `<span style="color:red;" title="Scheduled: ${sched}">${mix}</span>`;
+                      const sched = row.scheduledMaterial || '';
+                      const mix   = data || '';
+                      if (!sched && !mix) return '';
+                      if (sched === mix) return mix;
+                      return `<span style="color:red;" title="Scheduled: ${sched}">${mix}</span>`;
                     }
-                }, // Mix Code
-                             { data: 'overrideBy' },
-                    { data: 'machine' },      // Machine
-                                { data: 'operator' },       // Operator
-               
-                                { data: 'skidNumber' },   // Skid #
-                    { data: 'pcsStart' },     // Pcs Start
-                    { data: 'pcsEnd' },       // Pcs End
-                    { data: 'scrap' },        // Scrap
-                    {
-                        data: 'startDateTime',    // Start Time
-                        render: function (data) {
-                            if (!data) return '';
-                            // If backend sends ISO string, this is fine to just show raw:
-                            // return data;
-                            // Or do basic formatting:
-                            const d = new Date(data);
-                            if (isNaN(d)) return data; // fallback
-                            return d.toLocaleString();
-                        }
-                    },
-                    {
-                        data: 'endDateTime',      // End Time
-                        render: function (data) {
-                            if (!data) return '';
-                            const d = new Date(data);
-                            if (isNaN(d)) return data;
-                            return d.toLocaleString();
-                        }
-                    },
-                    { data: 'notes' }             // Notes
+                  },
+
+                  { data: 'overrideBy' },
+                  { data: 'machine' },
+                  { data: 'operator' },
+                  { data: 'skidNumber' },
+
+                  // ✅ NEW
+                  { data: 'pcs' },
+                  { data: 'durationHours' },
+                  {
+                    data: 'runDate',
+                    render: function (data) {
+                      if (!data) return '';
+                      const d = new Date(data);
+                      if (isNaN(d)) return data;
+                      return d.toLocaleDateString();
+                    }
+                  },
+
+                  { data: 'scrap' },
+                  { data: 'notes' },
+
+                  {
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    render: function (data, type, row) {
+                      const skidNum = row.skidNumber || 0;
+                      if (skidNum === 0) return '';
+                      const run = row.run || '';
+                      const prod = row.prodNumber || '';
+                      const source = 'pressrun';
+                      const url =
+                        `/HoldTag?source=${encodeURIComponent(source)}` +
+                        `&run=${encodeURIComponent(run)}` +
+                        `&prodNumber=${encodeURIComponent(prod)}`;
+                      return `<a class="btn btn-warning btn-sm" href="${url}">Place on Hold</a>`;
+                    }
+                  }
+                
+
+
+                
+                             // Notes
                 ]
             });
         } else {

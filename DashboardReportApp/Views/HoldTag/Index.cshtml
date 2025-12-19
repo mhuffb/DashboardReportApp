@@ -308,83 +308,9 @@
             <form asp-action="Submit" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <div class="modal-body">
-                   
-                    <!-- SCAN FIELDS FIRST -->
-                    <!-- PRODUCTION NUMBER -->
-                    <div class="mb-3">
-                        <label for="ModalProdNumber" class="form-label">
-                            Production Number (scan or type)
-                        </label>
-                        <input type="text"
-                               id="ModalProdNumber"
-                               name="ProdNumber"
-                               class="form-control"
-                               autocomplete="off"
-                               placeholder="Scan or type Production #..." />
-                        <span asp-validation-for="FormModel.ProdNumber" class="text-danger"></span>
-                    </div>
 
-                    <!-- RUN NUMBER -->
-                    <div class="mb-3">
-                        <label for="ModalRunNumber" class="form-label">
-                            Run Number (scan or type)
-                        </label>
-                        <input type="text"
-                               id="ModalRunNumber"
-                               name="RunNumber"
-                               class="form-control"
-                               autocomplete="off"
-                               placeholder="Scan or type Run #..." />
-                        <!-- if you add RunNumber to model, you can add asp-validation-for here -->
-                    </div>
-
-                    <hr />
-
-                    <!-- AUTO-FILLED FIELDS BELOW -->
-                    <!-- PART -->
-                    <div class="mb-3">
-                        <label for="ModalPart" class="form-label">Part</label>
-                        <input type="text"
-                               id="ModalPart"
-                               name="Part"
-                               class="form-control"
-                               readonly />
-                        <span asp-validation-for="FormModel.Part" class="text-danger"></span>
-                    </div>
-
-                    <!-- OPTIONAL: COMPONENT -->
-                    <div class="mb-3">
-                        <label for="ModalComponent" class="form-label">Component</label>
-                        <input type="text"
-                               id="ModalComponent"
-                               name="Component"
-                               class="form-control"
-                               readonly />
-                        <!-- add asp-validation-for if you add Component to model -->
-                    </div>
-
-                    <!-- LOT NUMBER -->
-                    <div class="mb-3">
-                        <label for="ModalLotNumber" class="form-label">Lot Number</label>
-                        <input type="text"
-                               id="ModalLotNumber"
-                               name="LotNumber"
-                               class="form-control"
-                               readonly />
-                        <span asp-validation-for="FormModel.LotNumber" class="text-danger"></span>
-                    </div>
-
-                    <!-- MATERIAL CODE -->
-                    <div class="mb-3">
-                        <label for="ModalMaterialCode" class="form-label">Material Code</label>
-                        <input type="text"
-                               id="ModalMaterialCode"
-                               name="MaterialCode"
-                               class="form-control"
-                               readonly />
-                        <span asp-validation-for="FormModel.MaterialCode" class="text-danger"></span>
-                    </div>
-
+                    <!-- SOURCE (hidden) -->
+                    <input type="hidden" id="ModalSource" name="Source" />
 
                     <!-- OPERATOR -->
                     <div class="mb-3">
@@ -408,6 +334,7 @@
                         <textarea id="ModalDiscrepancy" name="Discrepancy" class="form-control text-area-large" required></textarea>
                         <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
                     </div>
+
                     <!-- QUANTITY OF HOLD TAGS -->
                     <div class="mb-3">
                         <label for="ModalQuantity" class="form-label">Quantity of Hold Tags</label>
@@ -415,14 +342,14 @@
                         <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
                     </div>
 
-                    <!-- NEW: QUANTITY ON HOLD (pcs/skids/totes/etc) -->
+                    <!-- QUANTITY ON HOLD -->
                     <div class="mb-3">
                         <label for="ModalQuantityOnHold" class="form-label">Quantity On Hold</label>
                         <input type="number" id="ModalQuantityOnHold" name="QuantityOnHold" class="form-control" required />
                         <span asp-validation-for="FormModel.QuantityOnHold" class="text-danger"></span>
                     </div>
 
-                    <!-- UNIT -->
+                    <!-- UNIT (retain ability to change it) -->
                     <div class="mb-3">
                         <label for="ModalUnit" class="form-label">Unit</label>
                         <select id="ModalUnit" name="Unit" class="form-control">
@@ -434,12 +361,57 @@
                         </select>
                         <span asp-validation-for="FormModel.Unit" class="text-danger"></span>
                     </div>
+
+                    <hr />
+
+                    <!-- RUN -->
+                    <div class="mb-3">
+                        <label for="ModalRunNumber" class="form-label">Run Number</label>
+                        <input type="text" id="ModalRunNumber" name="RunNumber" class="form-control" autocomplete="off" />
+                    </div>
+
+                    <!-- PRODNUMBER -->
+                    <div class="mb-3">
+                        <label for="ModalProdNumber" class="form-label">Production Number</label>
+                        <input type="text" id="ModalProdNumber" name="ProdNumber" class="form-control" autocomplete="off" />
+                        <span asp-validation-for="FormModel.ProdNumber" class="text-danger"></span>
+                    </div>
+
+                    <!-- PART -->
+                    <div class="mb-3">
+                        <label for="ModalPart" class="form-label">Part</label>
+                        <input type="text" id="ModalPart" name="Part" class="form-control" readonly />
+                        <span asp-validation-for="FormModel.Part" class="text-danger"></span>
+                    </div>
+
+                    <!-- COMPONENT -->
+                    <div class="mb-3">
+                        <label for="ModalComponent" class="form-label">Component</label>
+                        <input type="text" id="ModalComponent" name="Component" class="form-control" readonly />
+                    </div>
+
+                    <!-- MATERIAL CODE -->
+                    <div class="mb-3">
+                        <label for="ModalMaterialCode" class="form-label">Material Code</label>
+                        <input type="text" id="ModalMaterialCode" name="MaterialCode" class="form-control" readonly />
+                        <span asp-validation-for="FormModel.MaterialCode" class="text-danger"></span>
+                    </div>
+
+                    <!-- LOT -->
+                    <div class="mb-3">
+                        <label for="ModalLotNumber" class="form-label">Lot Number</label>
+                        <input type="text" id="ModalLotNumber" name="LotNumber" class="form-control" readonly />
+                        <span asp-validation-for="FormModel.LotNumber" class="text-danger"></span>
+                    </div>
+
                     <!-- File Upload -->
                     <div class="mb-3">
                         <label for="ModalFile" class="form-label">Attach File (Optional)</label>
                         <input type="file" name="file" id="ModalFile" class="form-control" />
                     </div>
+
                 </div>
+
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Submit Request</button>
@@ -629,6 +601,7 @@
 
 
 @section Scripts {
+
     <!-- jQuery DataTables JS (uses the jQuery already in your layout) -->
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
@@ -639,6 +612,11 @@
 
     <!-- QR Code Generation for Both QR Codes -->
     <script>
+
+
+        window.__holdtagPrefilled = false;
+
+
         document.addEventListener('DOMContentLoaded', function () {
             // Generate QR code for the current page
             var currentUrl = window.location.href;
@@ -665,45 +643,7 @@
             });
         });
     </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const partInput = document.getElementById('ModalPart');
-            const prodInput = document.getElementById('ModalProdNumber');
-            const prodList = document.getElementById('ProdNumberList');
-
-            async function loadProdNumbersForPart() {
-                const part = partInput.value.trim();
-                prodList.innerHTML = '';
-
-                if (!part) {
-                    return;
-                }
-
-                try {
-                    const resp = await fetch(`/HoldTag/ProdNumbersForPart?part=${encodeURIComponent(part)}`);
-                    if (!resp.ok) {
-                        throw new Error('Failed to load production numbers.');
-                    }
-
-                    const data = await resp.json(); // expected: ["12345","23456",...]
-                    data.forEach(pn => {
-                        const opt = document.createElement('option');
-                        opt.value = pn;
-                        prodList.appendChild(opt);
-                    });
-                } catch (err) {
-                    console.error('Error fetching prod numbers:', err);
-                }
-            }
-
-            // Load suggestions when they leave the Part box or change it
-            if (partInput) {
-                partInput.addEventListener('blur', loadProdNumbersForPart);
-                partInput.addEventListener('change', loadProdNumbersForPart);
-            }
-        });
-    </script>
-
+   
     <!-- Table Filtering and Sorting Scripts -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
@@ -1128,6 +1068,114 @@
         });
     </script>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', async function () {
+
+            // prevent duplicate auto-runs
+            window.__holdtagPrefilled = window.__holdtagPrefilled || false;
+            if (window.__holdtagPrefilled) return;
+
+            const qs = new URLSearchParams(window.location.search);
+            const source = (qs.get('source') || '').trim();
+            const run = (qs.get('run') || '').trim();
+            const prodNumber = (qs.get('prodNumber') || '').trim();
+
+            if (!source) return;
+            if (!run && !prodNumber) return;
+
+            // set flag early so DataTables / other DOMContentLoaded stuff doesn't cause double-fires
+            window.__holdtagPrefilled = true;
+
+            try {
+                const url = `/HoldTag/SourcePrefill?source=${encodeURIComponent(source)}&run=${encodeURIComponent(run)}&prodNumber=${encodeURIComponent(prodNumber)}`;
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('Prefill request failed');
+
+                const data = await resp.json();
+                if (!data.success) {
+                    await Swal.fire({ icon: 'warning', title: 'Prefill', text: data.message || 'No data found.' });
+                    return;
+                }
+
+                // Fill fields
+                document.getElementById('ModalSource').value = data.source || source;
+
+                document.getElementById('ModalRunNumber').value  = data.runNumber  || run || '';
+                document.getElementById('ModalProdNumber').value = data.prodNumber || prodNumber || '';
+
+                document.getElementById('ModalPart').value         = data.part || '';
+                document.getElementById('ModalComponent').value    = data.component || '';
+                document.getElementById('ModalMaterialCode').value = data.materialCode || '';
+                document.getElementById('ModalLotNumber').value    = data.lotNumber || '';
+
+                // ✅ Qty on hold + unit (prefer quantityOnHold; fallback to pcs)
+                const qty = (data.quantityOnHold ?? data.pcs);
+                if (qty !== null && qty !== undefined && qty !== '') {
+                    document.getElementById('ModalQuantityOnHold').value = qty;
+                } else {
+                    document.getElementById('ModalQuantityOnHold').value = '';
+                }
+
+                // ✅ Map unit to your dropdown values
+                const unitRaw = (data.unit || '').toLowerCase().trim();
+                const unitMap = {
+                    "pcs": "pc",
+                    "pc": "pc",
+                    "piece": "pc",
+                    "pieces": "pc",
+                    "skids": "skid",
+                    "skid": "skid",
+                    "trays": "tray",
+                    "tray": "tray",
+                    "totes": "tote",
+                    "tote": "tote",
+                    "barrels": "barrel",
+                    "barrel": "barrel"
+                };
+
+                const unitVal = unitMap[unitRaw] || (unitRaw.endsWith("s") ? unitMap[unitRaw.slice(0, -1)] : null) || unitRaw;
+
+                const unitSelect = document.getElementById('ModalUnit');
+                if (unitSelect && unitVal) {
+                    // only set if option exists
+                    const opt = unitSelect.querySelector(`option[value="${unitVal}"]`);
+                    if (opt) unitSelect.value = unitVal;
+                }
+
+                // Open modal
+                const modalEl = document.getElementById('addRequestModal');
+                new bootstrap.Modal(modalEl).show();
+
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Loaded from ' + (data.source || source),
+                    toast: true,
+                    position: 'top-end',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+            } catch (err) {
+                console.error(err);
+                await Swal.fire({ icon: 'error', title: 'Prefill Error', text: 'Failed to auto-load hold tag info.' });
+
+                // allow retry on refresh if something broke
+                window.__holdtagPrefilled = false;
+            }
+        });
+    </script>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('addRequestModal');
+            if (!modalEl) return;
+
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                window.__holdtagPrefilled = false;
+            });
+        });
+    </script>
 
 
 }

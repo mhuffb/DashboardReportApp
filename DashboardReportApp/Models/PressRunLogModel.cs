@@ -21,7 +21,7 @@
         public string? Notes { get; set; }
         public sbyte Open { get; set; }
         public int SkidNumber { get; set; }
-        public int Pcs { get; set; }
+        public int? Pcs { get; set; }
         public decimal ElapsedTime { get; set; }
         public decimal CycleTime { get; set; }
         public string LotNumber { get; set; }
@@ -32,6 +32,10 @@
         public string? ScheduledMaterial { get; set; }
 
         public string Source { get; set; } = "pressrun";
+        public int? DurationMinutes { get; set; }
+        public DateTime? RunDate { get; set; }  // store as DateTime? even if DB is DATE
+        public decimal? DurationHours { get; set; }
+
 
     }
 

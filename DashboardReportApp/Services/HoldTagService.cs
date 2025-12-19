@@ -736,6 +736,191 @@ LIMIT 1;";
             // Nothing found in either
             return null;
         }
+        public class HoldSourcePrefill
+        {
+            public string Source { get; set; } = "";
+            public string? Part { get; set; }
+            public string? Component { get; set; }
+            public string? RunNumber { get; set; }
+            public string? ProdNumber { get; set; }
+            public string? LotNumber { get; set; }
+            public string? MaterialCode { get; set; }
+
+            public int? QuantityOnHold { get; set; }
+            public string Unit { get; set; } = "pcs";
+
+
+            public int? Pcs { get; set; }
+            public double? DurationHours { get; set; }
+
+            public DateTime? RunDate { get; set; }
+        }
+
+        public async Task<HoldSourcePrefill?> LookupBySourceAsync(string source, string? run, string? prodNumber)
+        {
+            // priority: run first (if provided), else prodNumber
+            string? keyRun = string.IsNullOrWhiteSpace(run) ? null : run;
+            string? keyProd = string.IsNullOrWhiteSpace(prodNumber) ? null : prodNumber;
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            if (source == "pressrun" || source == "press")
+            {
+                // priority: run first (if provided), else prodNumber
+                const string sql = @"
+SELECT
+  part,
+  component,
+  prodNumber,
+  run,
+  lotNumber,
+  materialCode,
+  pcs,
+  pcsStart,
+  pcsEnd,
+  durationHours,
+  runDate
+FROM pressrun
+WHERE
+    (
+        (@run IS NOT NULL AND run = @run)
+        OR
+        (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
+    )
+  AND skidNumber > 0
+ORDER BY id DESC
+LIMIT 1;";
+
+
+                await using var cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
+
+                await using var r = await cmd.ExecuteReaderAsync();
+                if (!await r.ReadAsync()) return null;
+
+                int? pcs = r["pcs"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcs"]);
+
+                int? pcsStart = r["pcsStart"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcsStart"]);
+                int? pcsEnd = r["pcsEnd"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcsEnd"]);
+
+                // Fallback: if pcs is null but we have both start/end, compute it
+                if (!pcs.HasValue && pcsStart.HasValue && pcsEnd.HasValue)
+                {
+                    var diff = pcsEnd.Value - pcsStart.Value;
+                    pcs = diff >= 0 ? diff : (int?)null;
+                }
+
+                // Optional: if you want it to always show something instead of blank
+                // if (!pcs.HasValue) pcs = 0;
+
+
+                // durationHours in DB might be decimal; store as double? in DTO
+                double? durationHours = null;
+                if (r["durationHours"] != DBNull.Value)
+                {
+                    durationHours = Convert.ToDouble(r["durationHours"]);
+                }
+
+                DateTime? runDate = null;
+                if (r["runDate"] != DBNull.Value)
+                {
+                    runDate = Convert.ToDateTime(r["runDate"]);
+                }
+
+                return new HoldSourcePrefill
+                {
+                    Source = "pressrun",
+                    Part = r["part"] as string,
+                    Component = r["component"] as string,
+                    ProdNumber = r["prodNumber"] as string,
+                    RunNumber = r["run"] as string,
+                    LotNumber = r["lotNumber"] as string,
+                    MaterialCode = r["materialCode"] as string,
+
+                    // ✅ HoldTag should use pcs directly now (no pcsStart/pcsEnd math)
+                    QuantityOnHold = pcs,
+                    Unit = "pcs",
+
+                    // ✅ extra info (optional for UI)
+                    Pcs = pcs,
+                    DurationHours = durationHours,
+                    RunDate = runDate
+                };
+            }
+
+
+            if (source == "sinterrun" || source == "sinter" || source == "sintering")
+            {
+                // qtyOnHold = pcs column
+                const string sql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode, pcs
+FROM sinterrun
+WHERE (@run IS NOT NULL AND run = @run)
+   OR (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
+ORDER BY id DESC
+LIMIT 1;";
+
+                await using var cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
+
+                await using var r = await cmd.ExecuteReaderAsync();
+                if (!await r.ReadAsync()) return null;
+
+                int? pcs = r["pcs"] == DBNull.Value ? null : Convert.ToInt32(r["pcs"]);
+
+                return new HoldSourcePrefill
+                {
+                    Source = "sinterrun",
+                    Part = r["part"] as string,
+                    Component = r["component"] as string,
+                    ProdNumber = r["prodNumber"] as string,
+                    RunNumber = r["run"] as string,
+                    LotNumber = r["lotNumber"] as string,
+                    MaterialCode = r["materialCode"] as string,
+                    QuantityOnHold = pcs,
+                    Unit = "pc"
+                };
+            }
+
+            if (source == "assembly")
+            {
+                // qtyOnHold = pcs column (adjust column names if your assembly schema differs)
+                const string sql = @"
+SELECT part, component, prodNumber, run, lotNumber, materialCode, pcs
+FROM assembly
+WHERE (@run IS NOT NULL AND run = @run)
+   OR (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
+ORDER BY id DESC
+LIMIT 1;";
+
+                await using var cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
+
+                await using var r = await cmd.ExecuteReaderAsync();
+                if (!await r.ReadAsync()) return null;
+
+                int? pcs = r["pcs"] == DBNull.Value ? null : Convert.ToInt32(r["pcs"]);
+
+                return new HoldSourcePrefill
+                {
+                    Source = "assembly",
+                    Part = r["part"] as string,
+                    Component = r["component"] as string,
+                    ProdNumber = r["prodNumber"] as string,
+                    RunNumber = r["run"] as string,
+                    LotNumber = r["lotNumber"] as string,
+                    MaterialCode = r["materialCode"] as string,
+                    QuantityOnHold = pcs,
+                    Unit = "pc"
+                };
+            }
+
+            return null;
+        }
 
     }
 }

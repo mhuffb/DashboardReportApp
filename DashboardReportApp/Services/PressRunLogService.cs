@@ -199,12 +199,16 @@ namespace DashboardReportApp.Services
             if (currentSkidNumber > 0)
             {
                 const string closeSql = @"
-            UPDATE pressrun
-            SET endDateTime = NOW(),
-                pcsEnd      = @pcsEnd,
-                open        = 1
-            WHERE run = @run AND skidNumber = @skid AND endDateTime IS NULL
-            LIMIT 1;";
+           UPDATE pressrun
+SET endDateTime = NOW(),
+    pcsEnd      = @pcsEnd,
+    pcs         = (@pcsEnd - pcsStart),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate     = DATE(startDateTime),
+    open        = 1
+WHERE run = @run AND skidNumber = @skid AND endDateTime IS NULL
+LIMIT 1;
+";
                 using var closeCmd = new MySqlCommand(closeSql, conn);
                 closeCmd.Parameters.AddWithValue("@run", model.Run);
                 closeCmd.Parameters.AddWithValue("@skid", currentSkidNumber);
@@ -510,11 +514,14 @@ namespace DashboardReportApp.Services
             const string sql = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
     scrap = @scrap,
     notes = @notes
 WHERE id = @runId
   AND skidNumber = 0
-LIMIT 1";
+LIMIT 1
+";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -544,16 +551,20 @@ LIMIT 1";
             // Update the last open skid (skidNumber > 0 and endDateTime is null)
             const string updateSkidSql = @"
         UPDATE pressrun
-        SET pcsEnd = @pcsEnd,
-            endDateTime = NOW(),
-            scrap = @scrap,
-            notes = @notes,
-            open = 1
-        WHERE run = @run
-          AND skidNumber > 0
-          AND endDateTime IS NULL
-        ORDER BY skidNumber DESC
-        LIMIT 1";
+SET pcsEnd = @pcsEnd,
+    endDateTime = NOW(),
+    pcs = (@pcsEnd - pcsStart),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
+    scrap = @scrap,
+    notes = @notes,
+    open = 1
+WHERE run = @run
+  AND skidNumber > 0
+  AND endDateTime IS NULL
+ORDER BY skidNumber DESC
+LIMIT 1
+";
             using (var update = new MySqlCommand(updateSkidSql, conn2))
             {
                 update.Parameters.AddWithValue("@pcsEnd", finalCount);
@@ -575,10 +586,14 @@ LIMIT 1";
 UPDATE pressrun
 SET endDateTime = NOW(),
     pcsEnd = @finalCount,
+    pcs = (@finalCount - pcsStart),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
     open = 1
 WHERE run = @run
   AND skidNumber > 0
-  AND endDateTime IS NULL";
+  AND endDateTime IS NULL
+";
             using (var endSkidCmd = new MySqlCommand(endSkidQuery, conn))
             {
                 endSkidCmd.Parameters.AddWithValue("@run", run);
@@ -590,11 +605,14 @@ WHERE run = @run
             const string endMainRun = @"
 UPDATE pressrun
 SET endDateTime = NOW(),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
     scrap = @scrap,
     notes = @notes
 WHERE run = @run
   AND skidNumber = 0
-LIMIT 1";
+LIMIT 1
+";
             using (var endMainCmd = new MySqlCommand(endMainRun, conn))
             {
                 endMainCmd.Parameters.AddWithValue("@run", run);
@@ -1022,7 +1040,10 @@ LIMIT 1";
         {
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,pcs,
+durationHours,
+runDate,
+
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
        scheduledMaterial
 FROM pressrun
@@ -1051,6 +1072,10 @@ LIMIT 1";
 
         private PressRunLogModel ParseRunFromReader(DbDataReader rdr)
         {
+            var pcsOrd = TryOrdinal(rdr, "pcs");
+            var durOrd = TryOrdinal(rdr, "durationHours");
+            var dateOrd = TryOrdinal(rdr, "runDate");
+
             var tsOrd = TryOrdinal(rdr, "timestamp");
             var lotOrd = TryOrdinal(rdr, "lotNumber");
             var matOrd = TryOrdinal(rdr, "materialCode");
@@ -1072,6 +1097,16 @@ LIMIT 1";
                 Machine = rdr["machine"]?.ToString(),
                 PcsStart = rdr.IsDBNull(rdr.GetOrdinal("pcsStart")) ? (int?)null : rdr.GetInt32("pcsStart"),
                 PcsEnd = rdr.IsDBNull(rdr.GetOrdinal("pcsEnd")) ? (int?)null : rdr.GetInt32("pcsEnd"),
+                Pcs = pcsOrd >= 0 && !rdr.IsDBNull(pcsOrd) ? Convert.ToInt32(rdr["pcs"]) : (int?)null,
+
+                DurationHours = durOrd >= 0 && !rdr.IsDBNull(durOrd)
+    ? Convert.ToDecimal(rdr["durationHours"])
+    : (decimal?)null,
+
+                RunDate = dateOrd >= 0 && !rdr.IsDBNull(dateOrd)
+    ? Convert.ToDateTime(rdr["runDate"])
+    : (DateTime?)null,
+
                 Scrap = rdr.IsDBNull(rdr.GetOrdinal("scrap")) ? (int?)null : rdr.GetInt32("scrap"),
                 Notes = rdr["notes"]?.ToString(),
                 SkidNumber = rdr.IsDBNull(rdr.GetOrdinal("skidNumber")) ? 0 : rdr.GetInt32("skidNumber"),
@@ -1258,7 +1293,10 @@ ORDER BY part, run";
             var list = new List<PressRunLogModel>();
             const string sql = @"
 SELECT id, timestamp, prodNumber, run, part, component, startDateTime, endDateTime,
-       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,
+       operator, machine, pcsStart, pcsEnd, scrap, notes, skidNumber,pcs,
+durationHours,
+runDate,
+
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
        scheduledMaterial
 FROM pressrun
@@ -1327,7 +1365,10 @@ WHERE endDateTime IS NULL";
         part,
         component,
         startDateTime,
-        endDateTime,
+        endDateTime,pcs,
+durationHours,
+runDate,
+
         operator,
         machine,
         pcsStart,
@@ -1436,12 +1477,15 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
             // Close the main run
             const string closeMain = @"
         UPDATE pressrun
-        SET endDateTime = NOW(),
-            notes = CONCAT(IFNULL(notes,''), 
-                   CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
-                   '[Auto-logout by ', @newOp, ' ', DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i'), ']')
-        WHERE id = @id
-        LIMIT 1;";
+SET endDateTime = NOW(),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
+    notes = CONCAT(IFNULL(notes,''), 
+           CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
+           '[Auto-logout by ', @newOp, ' ', DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i'), ']')
+WHERE id = @id
+LIMIT 1;
+;";
             using (var cmd = new MySqlCommand(closeMain, conn, tx))
             {
                 cmd.Parameters.AddWithValue("@newOp", newOperator ?? "");
@@ -1451,18 +1495,22 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
 
             // Close the most-recent open skid for that run, if any
             const string closeSkid = @"
-        UPDATE pressrun
-        SET pcsEnd = @pcsEnd,
-            endDateTime = NOW(),
-            open = 1,
-            notes = CONCAT(IFNULL(notes,''), 
-                   CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
-                   '[Auto-logout main closed]')
-        WHERE run = @run
-          AND skidNumber > 0
-          AND endDateTime IS NULL
-        ORDER BY skidNumber DESC
-        LIMIT 1;";
+       UPDATE pressrun
+SET pcsEnd = @pcsEnd,
+    endDateTime = NOW(),
+    pcs = (@pcsEnd - pcsStart),
+    durationHours = ROUND(TIMESTAMPDIFF(SECOND, startDateTime, NOW()) / 3600, 2),
+    runDate = DATE(startDateTime),
+    open = 1,
+    notes = CONCAT(IFNULL(notes,''), 
+           CASE WHEN IFNULL(notes,'') = '' THEN '' ELSE ' ' END,
+           '[Auto-logout main closed]')
+WHERE run = @run
+  AND skidNumber > 0
+  AND endDateTime IS NULL
+ORDER BY skidNumber DESC
+LIMIT 1;
+;";
             using (var cmd = new MySqlCommand(closeSkid, conn, tx))
             {
                 cmd.Parameters.AddWithValue("@pcsEnd", pcsEndForPrev);
@@ -1489,7 +1537,10 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
         endDateTime,
         operator,
         machine,
-        pcsStart,
+        pcsStart,pcs,
+durationHours,
+runDate,
+
         pcsEnd,
         scrap,
         notes,
@@ -1567,6 +1618,8 @@ AutoLogoutIfMachineOccupiedAsync(MySqlConnection conn, MySqlTransaction tx,
 
             return (false, "");
         }
+       
+
 
     }
 }

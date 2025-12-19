@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using static DashboardReportApp.Services.PressRunLogService;
 using MySql.Data.MySqlClient;
 using System.Data;
+using System.Linq;
+
 
 namespace DashboardReportApp.Controllers
 {
@@ -305,29 +307,24 @@ namespace DashboardReportApp.Controllers
 
         [HttpGet]
         public async Task<IActionResult> ApiRuns(
-     int page = 1,
-     int pageSize = 100,
-     string q = null,
-     string machine = null,
-     DateTime? start = null,
-     DateTime? end = null)
+       int page = 1,
+       int pageSize = 100,
+       string q = null,
+       string machine = null,
+       DateTime? start = null,
+       DateTime? end = null)
         {
             var result = await _pressRunLogService.GetRunsPagedAsync(page, pageSize, q, machine, start, end);
 
-            // Shape rows with derived values the grid expects
+            // ✅ rows now use DB-stored pcs, durationHours, runDate
             var rows = result.Rows.Select(r =>
             {
-                var startDt = r.StartDateTime ?? DateTime.MinValue;
-                var endDt = r.EndDateTime ?? DateTime.Now;
+                int? pcs = r.Pcs;
+                decimal? durationHours = r.DurationHours;
 
-                var elapsedSec = Math.Max(0, (long)(endDt - startDt).TotalSeconds);
-
-                int? pcs = (r.PcsEnd.HasValue && r.PcsStart.HasValue)
-                    ? r.PcsEnd.Value - r.PcsStart.Value
-                    : (int?)null;
-
-                double? cycleSec = (pcs.HasValue && pcs.Value > 0)
-                    ? Math.Round(elapsedSec / (double)pcs.Value, 2)
+                // Optional derived cycle time (sec/pc) using stored durationHours + stored pcs
+                double? cycleSec = (durationHours.HasValue && pcs.HasValue && pcs.Value > 0)
+                    ? Math.Round(((double)durationHours.Value * 3600.0) / pcs.Value, 2)
                     : (double?)null;
 
                 return new
@@ -339,34 +336,32 @@ namespace DashboardReportApp.Controllers
                     run = r.Run,
                     machine = r.Machine,
 
-                    // 👇 NEW: lot & material
                     lotNumber = r.LotNumber,
                     materialCode = r.MaterialCode,
 
-                    // ✅ alias Operator → operator
                     @operator = r.Operator,
-
-                    // 👇 NEW
                     overrideBy = r.OverrideBy,
-
-                    isOverride = r.IsOverride,   
+                    isOverride = r.IsOverride,
                     scheduledMaterial = r.ScheduledMaterial,
-                    startDateTime = r.StartDateTime,
-                    endDateTime = r.EndDateTime,
+
                     skidNumber = r.SkidNumber,
-                    pcsStart = r.PcsStart,
-                    pcsEnd = r.PcsEnd,
+
+                    // ✅ NEW: from DB
+                    runDate = r.RunDate,
+                    durationHours = r.DurationHours,
+                    pcs = r.Pcs,
+
                     scrap = r.Scrap,
                     notes = r.Notes,
 
-                    elapsedTime = elapsedSec,
-                    pcs = pcs,
+                    // optional
                     cycleTime = cycleSec
                 };
             }).ToList();
 
             return Json(new { rows, total = result.Total, page = result.Page, pageSize = result.PageSize });
         }
+
 
 
         [HttpGet]

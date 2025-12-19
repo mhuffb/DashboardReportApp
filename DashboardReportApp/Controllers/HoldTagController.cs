@@ -2,6 +2,7 @@
 using DashboardReportApp.Models;
 using DashboardReportApp.Services;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using System.Threading.Tasks;
 using static DashboardReportApp.Services.HoldTagService;
 
@@ -56,8 +57,10 @@ namespace DashboardReportApp.Controllers
         }
 
 
+        [HttpGet("")]
         [HttpGet("Index")]
         public async Task<IActionResult> Index()
+
         {
             Console.WriteLine("[HoldTag.Index] Start");
 
@@ -108,15 +111,7 @@ namespace DashboardReportApp.Controllers
         }
 
 
-        [HttpGet("ProdNumbersForPart")]
-        public async Task<IActionResult> ProdNumbersForPart(string part)
-        {
-            if (string.IsNullOrWhiteSpace(part))
-                return Json(Array.Empty<string>());
-
-            var list = await _holdTagService.GetLastProdNumbersForPartAsync(part);
-            return Json(list);
-        }
+       
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -429,6 +424,53 @@ Hold Tag Page: {indexUrl}
                 materialCode = result.MaterialCode
             });
         }
+        [HttpGet("SourcePrefill")]
+        public async Task<IActionResult> SourcePrefill(string source, string? run, string? prodNumber)
+        {
+            try
+            {
+                source = (source ?? "").Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(source))
+                    return Json(new { success = false, message = "Missing source." });
+
+                var result = await _holdTagService.LookupBySourceAsync(source, run?.Trim(), prodNumber?.Trim());
+                if (result == null)
+                    return Json(new { success = false, message = "No matching record found for prefill." });
+
+                // ✅ FIX: log "result" (not "prefill")
+                Log.Information(
+                    "[HoldTag.SourcePrefill] source={Source} run={Run} prod={Prod} pcs={Pcs} unit={Unit}",
+                    source, run, prodNumber, result.Pcs, "pcs"
+                );
+
+                return Json(new
+                {
+                    success = true,
+                    source = result.Source,
+                    part = result.Part,
+                    component = result.Component,
+                    runNumber = result.RunNumber,
+                    prodNumber = result.ProdNumber,
+                    lotNumber = result.LotNumber,
+                    materialCode = result.MaterialCode,
+
+                    // ✅ the fields your modal expects
+                    quantityOnHold = result.Pcs,
+                    unit = "pc",
+
+                    // optional extras (fine)
+                    pcs = result.Pcs,
+                    durationHours = result.DurationHours,
+                    runDate = result.RunDate
+                });
+
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message, detail = ex.ToString() });
+            }
+        }
+
 
     }
 }
