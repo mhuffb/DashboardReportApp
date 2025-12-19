@@ -109,6 +109,13 @@
                                                                 <div class="text-muted">
                                                                     @p.Date?.ToString("yyyy-MM-dd")
                                                                 </div>
+                                                                @if (!string.IsNullOrWhiteSpace(p.Notes))
+                                                                {
+                                                                    <div class="text-muted">
+                                                                        <em>Notes:</em> @p.Notes
+                                                                    </div>
+                                                                }
+
                                                             </div>
 
                                                             <div class="text-end">
@@ -119,12 +126,9 @@
                                                                     Run @p.Run
                                                                 </span>
 
-                                                                @if (p.Priority.HasValue)
-                                                                {
-                                                                    <span class="badge bg-danger d-block mb-1">
-                                                                        Priority@(p.Priority ?? 0)
-                                                                    </span>
-                                                                }
+                                                                <span class="badge bg-danger d-block mb-1">
+                                                                    @(p.Priority ?? 0)
+                                                                </span>
 
 
                                                                 <button type="button"
@@ -139,7 +143,8 @@
                                                                         data-open="@p.Open"
                                                                         data-material="@p.MaterialCode"
                                                                         data-machine="@p.Machine"
-                                                                        data-priority="@(p.Priority?.ToString() ?? string.Empty)">
+                                                                        data-priority="@(p.Priority?.ToString() ?? string.Empty)"
+                                                                        data-notes="@p.Notes">
                                                                     Edit
                                                                 </button>
                                                             </div>
@@ -176,7 +181,9 @@
                                         <th>Material</th>
                                         <th>Qty</th>
                                         <th>Run</th>
+                                        <th>Notes</th>
                                         <th>Actions</th>
+
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -190,6 +197,7 @@
                                             data-qty="@p.QtyToSchedule"
                                             data-prodnumber="@p.ProdNumber"
                                             data-run="@p.Run"
+                                            data-notes="@p.Notes"
                                             data-open="@p.Open"
                                             data-material="@p.MaterialCode"
                                             data-machine="@p.Machine"
@@ -210,9 +218,11 @@
                                             <td>@p.MaterialCode</td>
                                             <td>@p.QtyToSchedule</td>
                                             <td>@p.Run</td>
+                                            <td>@p.Notes</td>
                                             <td>
                                                 <button type="button" class="btn btn-sm btn-outline-primary edit-btn">Edit</button>
                                             </td>
+
                                         </tr>
                                     }
                                 </tbody>
@@ -403,6 +413,10 @@
                     <div class="mb-3">
                         <label for="editPriority" class="form-label">Priority</label>
                         <input type="number" class="form-control" id="editPriority" name="Priority" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="editNotes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="editNotes" name="Notes" rows="3"></textarea>
                     </div>
 
                 </div>
@@ -614,6 +628,8 @@
                     $('#editMaterialCode').val(row.getAttribute('data-material') || '');
                     $('#editMachine').val(row.getAttribute('data-machine') || '');
                     $('#editPriority').val(row.getAttribute('data-priority') || '');
+                    $('#editNotes').val(row.getAttribute('data-notes') || '');
+
                     new bootstrap.Modal(document.getElementById('editModal')).show();
                 });
             });
@@ -632,6 +648,8 @@
                     $('#editMaterialCode').val(btn.getAttribute('data-material') || '');
                     $('#editMachine').val(btn.getAttribute('data-machine') || '');
                     $('#editPriority').val(btn.getAttribute('data-priority') || '');
+                    $('#editNotes').val(btn.getAttribute('data-notes') || '');
+
                     new bootstrap.Modal(document.getElementById('editModal')).show();
                 });
             });

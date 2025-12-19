@@ -17,11 +17,10 @@ add materialcode and lot choice to holdtag if more than one material and from si
 holdtags add buttons to molding and sintering pages to add holdtags directly from those pages
 make it so the holdtags gets the amount of pcs per skid being put on hold
 
-in toolworkorder the submit button is not visible on phones
+
+
 
 holdtags run number isn't being sent to database. 
 
-add comments and remove priority wording. just make it a number instead of priority
 
-add desc to table in tool work order
 

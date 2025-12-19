@@ -25,6 +25,8 @@
     <h5 class="modal-title">Tooling Work Order @Model.Id - @Model.Part</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
+<div class="modal-body">
+@Html.ValidationSummary(true, "", new { @class = "text-danger" })
 
 <form id="toolWorkOrderForm"
       asp-action="SaveToolingWorkOrder"
@@ -148,6 +150,8 @@
     </div>
 
 </form>
+
+</div>
 <script type="application/json" id="toolingInProgressJson">
     @Html.Raw(inProgressJson)
 </script>

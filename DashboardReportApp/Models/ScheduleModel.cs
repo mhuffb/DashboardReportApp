@@ -26,6 +26,8 @@
         public string Machine { get; set; }
         public int? Priority { get; set; }
 
+        public string? Notes { get; set; }
+
     }
     public class ScheduleItem
     {

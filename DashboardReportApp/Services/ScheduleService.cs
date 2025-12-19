@@ -136,10 +136,11 @@ namespace DashboardReportApp.Services
         {
             var openParts = new List<SintergyComponent>();
             string query = @"
-        SELECT id, date, part, component, quantity, run, prodNumber, open, materialCode,
-               machine, priority
-        FROM schedule
-        ORDER BY id DESC";
+    SELECT id, date, part, component, quantity, run, prodNumber, open, materialCode,
+           machine, priority, notes
+    FROM schedule
+    ORDER BY id DESC";
+
 
 
             using (var connection = new MySqlConnection(_connectionStringMySQL))
@@ -163,7 +164,8 @@ namespace DashboardReportApp.Services
                                 Open = reader["open"] == DBNull.Value ? 0 : Convert.ToInt32(reader["open"]),
                                 MaterialCode = reader["materialCode"] == DBNull.Value ? null : reader["materialCode"].ToString(),
                                 Machine = reader["machine"] == DBNull.Value ? null : reader["machine"].ToString(),
-                                Priority = reader["priority"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["priority"])
+                                Priority = reader["priority"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["priority"]),
+                                Notes = reader["notes"] == DBNull.Value ? null : reader["notes"].ToString(),
 
                             };
                             openParts.Add(component);
@@ -234,12 +236,12 @@ namespace DashboardReportApp.Services
      prodNumber, qtyNeededFor1Assy,
      needsSintergySecondary, numberOfSintergySecondaryOps,
      openToSecondary, secondaryWorkFlag, materialCode,
-     machine, priority)
+     machine, priority, notes)
     VALUES (@part, @comp, @qty, @run, @date, 1,
             @prod, @q1,
             @needsSec, @opsCnt,
             @openToSec, @flag, @mat,
-            @machine, @priority)";
+            @machine, @priority, @Notes)";
 
             const string sqlNoComponent = @"
     INSERT INTO schedule
@@ -247,12 +249,12 @@ namespace DashboardReportApp.Services
      prodNumber, qtyNeededFor1Assy,
      needsSintergySecondary, numberOfSintergySecondaryOps,
      openToSecondary, secondaryWorkFlag, materialCode,
-     machine, priority)
+     machine, priority, notes)
     VALUES (@part, @qty, @run, @date, 1,
             @prod, @q1,
             @needsSec, @opsCnt,
             @openToSec, @flag, @mat,
-            @machine, @priority)";
+            @machine, @priority, @Notes)";
 
 
             using var conn = new MySqlConnection(_connectionStringMySQL);
@@ -303,6 +305,7 @@ namespace DashboardReportApp.Services
 
                 cmd.Parameters.AddWithValue("@machine", string.IsNullOrWhiteSpace(c.Machine) ? (object)DBNull.Value : c.Machine);
                 cmd.Parameters.AddWithValue("@priority", c.Priority.HasValue ? (object)c.Priority.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@notes", (object?)c.Notes ?? DBNull.Value);
 
                 cmd.ExecuteNonQuery();
             }
@@ -354,18 +357,20 @@ namespace DashboardReportApp.Services
             {
                 connection.Open();
                 string query = @"
-            UPDATE schedule 
-            SET date = @Date, 
-                part = @Part, 
-                component = @Component, 
-                quantity = @Quantity, 
-                run = @Run, 
-                open = @Open, 
-                prodNumber = @ProdNumber,
-                materialCode = @MaterialCode,
-                machine = @Machine,
-                priority = @Priority      -- NEW
-            WHERE id = @Id";
+    UPDATE schedule 
+    SET date = @Date, 
+        part = @Part, 
+        component = @Component, 
+        quantity = @Quantity, 
+        run = @Run, 
+        open = @Open, 
+        prodNumber = @ProdNumber,
+        materialCode = @MaterialCode,
+        machine = @Machine,
+        priority = @Priority,
+        notes = @Notes
+    WHERE id = @Id";
+
 
                 using (var command = new MySqlCommand(query, connection))
                 {
@@ -379,6 +384,7 @@ namespace DashboardReportApp.Services
                     command.Parameters.AddWithValue("@MaterialCode", (object?)part.MaterialCode ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Machine", (object?)part.Machine ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Priority", (object?)part.Priority ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@Notes", (object?)part.Notes ?? DBNull.Value);
 
                     command.Parameters.AddWithValue("@Id", part.Id);
                     command.ExecuteNonQuery();
