@@ -26,6 +26,8 @@
         <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-striped table-bordered shadow-sm wider-table">
+
+
                         <thead class="table-dark">
                             <tr>
                                 <th>ID</th>
@@ -108,45 +110,11 @@
    <h3 class="text-center mt-4">All Assembly Run Records</h3>
 <div class="card shadow mb-4">
   <div class="card-body">
-    <form class="row g-2 mb-3" method="get" action="/AssemblyRun">
-        <div class="col-sm-4">
-            <input name="search" value="@Model.Search" class="form-control" placeholder="Search Prod/Part/Operator" />
-        </div>
-        <div class="col-sm-2">
-                        <select name="pageSize" class="form-select">
-                            @foreach (var size in new[] { 25, 50, 100, 200 })
-                            {
-                                <option value="@size" selected="@(Model.PageSize == size)">
-                                    @size / page
-                                </option>
-                            }
-                        </select>
-
-        </div>
-        <div class="col-sm-2">
-                        <select name="sort" class="form-select">
-                            <option value="id" selected="@(Model.Sort == "id")">ID</option>
-                            <option value="endDateTime" selected="@(Model.Sort == "endDateTime")">End</option>
-                            <option value="prodNumber" selected="@(Model.Sort == "prodNumber")">Prod #</option>
-                            <option value="part" selected="@(Model.Sort == "part")">Part</option>
-                            <option value="operator" selected="@(Model.Sort == "operator")">Operator</option>
-                        </select>
-
-        </div>
-        <div class="col-sm-2">
-                        <select name="dir" class="form-select">
-                            <option value="DESC" selected="@(Model.Dir == "DESC")">Desc</option>
-                            <option value="ASC" selected="@(Model.Dir == "ASC")">Asc</option>
-                        </select>
-
-        </div>
-        <div class="col-sm-2">
-            <button class="btn btn-primary w-100">Apply</button>
-        </div>
-    </form>
+   
 
     <div class="table-responsive">
-      <table class="table table-striped table-bordered shadow-sm wider-table">
+                    <table id="assemblyRecordsTable" class="table table-striped table-bordered shadow-sm wider-table">
+
                         <thead class="table-dark">
                             <tr>
                                 <th>ID</th>
@@ -199,31 +167,7 @@
       </table>
     </div>
 
-    @{
-        var firstItem = (Model.Total == 0) ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
-        var lastItem  = Math.Min(Model.Page * Model.PageSize, Model.Total);
-        var totalPages = (int)Math.Ceiling((double)Model.Total / Model.PageSize);
-        string qsBase = $"?search={Model.Search}&pageSize={Model.PageSize}&sort={Model.Sort}&dir={Model.Dir}";
-    }
-    <div class="d-flex justify-content-between align-items-center">
-        <div>Showing <strong>@firstItem–@lastItem</strong> of <strong>@Model.Total</strong></div>
-        <nav>
-            <ul class="pagination mb-0">
-                <li class="page-item @(Model.Page<=1?"disabled":"")">
-                    <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={Model.Page-1}")">Prev</a>
-                </li>
-                @for (int p = Math.Max(1, Model.Page-2); p <= Math.Min(totalPages, Model.Page+2); p++)
-                {
-                    <li class="page-item @(p==Model.Page?"active":"")">
-                        <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={p}")">@p</a>
-                    </li>
-                }
-                <li class="page-item @(Model.Page>=totalPages?"disabled":"")">
-                    <a class="page-link" href="@($"/AssemblyRun{qsBase}&page={Model.Page+1}")">Next</a>
-                </li>
-            </ul>
-        </nav>
-    </div>
+  
   </div>
 </div>
 
@@ -257,37 +201,7 @@
             </div>
         </div>
 
-    <script src="/js/mydatatable.bundle.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const container = document.getElementById("myReactAssemblyRunTableRoot");
-            if (!container) return;
-
-            // Get JSON data from the Razor model
-            const rawData = container.getAttribute("data-records");
-            const data = JSON.parse(rawData);
-
-            // Define columns for the React table
-                   const columns = [
-            { key: "Id", label: "ID" },
-            { key: "ProdNumber", label: "Production Number" },
-            { key: "Part", label: "Part" },
-            { key: "SkidNumber", label: "Skid Number" }, // Added
-            { key: "Pcs", label: "Pcs" }, // Added
-            { key: "SentDateTime", label: "Sent Time" },
-            { key: "Operator", label: "Operator" },
-            { key: "Notes", label: "Notes" },
-            { key: "Open", label: "Open" }
-        ];
-
-
-            if (window.renderMyDataTable) {
-                window.renderMyDataTable("myReactAssemblyRunTableRoot", data, columns, true);
-            } else {
-                console.error("React table render function not found!");
-            }
-        });
-    </script>
+   
 
     <!-- Modal for Logging In a Skid Run -->
         <div class="modal fade" id="loginSkidModal" tabindex="-1" aria-hidden="true">
@@ -448,4 +362,22 @@
 
 
     </div>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script>
+        $(function () {
+          $("#assemblyRecordsTable").DataTable({
+            paging: true,
+            pageLength: 50,
+            lengthMenu: [25, 50, 100, 200],
+            ordering: true,
+            searching: true,
+            info: true,
+            order: [[0, "desc"]] // sort by ID desc
+          });
+        });
+    </script>
+
 </div>

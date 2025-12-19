@@ -191,6 +191,9 @@ ORDER BY part;";
     /// <returns>The file path to the generated PDF report.</returns>
     public async Task LogSkidAsync(AssemblyModel model)
     {
+        // Pull metadata from pressrun BEFORE saving
+        await PopulateAssemblyMetadataFromPressrunAsync(model);
+
         int nextSkidNumber = 1;
         string selectQuery = "SELECT IFNULL(MAX(skidNumber), 0) FROM " + datatable + " WHERE prodNumber = @prodNumber AND part = @part";
 
@@ -198,25 +201,21 @@ ORDER BY part;";
         {
             connection.Open();
 
-            // Determine the next skid number.
             using (var selectCommand = new MySqlCommand(selectQuery, connection))
             {
                 selectCommand.Parameters.AddWithValue("@prodNumber", model.ProdNumber);
                 selectCommand.Parameters.AddWithValue("@part", model.Part.ToUpper());
                 var result = selectCommand.ExecuteScalar();
-                if (result != null)
-                {
-                    int currentMax = Convert.ToInt32(result);
-                    nextSkidNumber = currentMax + 1;
-                }
+                nextSkidNumber = (result != null) ? Convert.ToInt32(result) + 1 : 1;
             }
 
-            // Insert the new skid record with open = 1.
             string insertQuery = @"
             INSERT INTO " + datatable + @" 
-                (prodNumber, part, endDateTime, operator, notes, skidNumber, pcs, open) 
+                (prodNumber, part, endDateTime, operator, notes, skidNumber, pcs, open,
+                 runs, components, lotNumbers, materialCodes, machines) 
             VALUES 
-                (@prodNumber, @part, @endDateTime, @operator, @notes, @skidNumber, @pcs, 1)";
+                (@prodNumber, @part, @endDateTime, @operator, @notes, @skidNumber, @pcs, 1,
+                 @runs, @components, @lotNumbers, @materialCodes, @machines)";
 
             using (var command = new MySqlCommand(insertQuery, connection))
             {
@@ -228,19 +227,20 @@ ORDER BY part;";
                 command.Parameters.AddWithValue("@skidNumber", nextSkidNumber);
                 command.Parameters.AddWithValue("@pcs", model.Pcs);
 
-                command.ExecuteNonQuery();
+                command.Parameters.AddWithValue("@runs", string.IsNullOrWhiteSpace(model.Run) ? DBNull.Value : (object)model.Run);
+                command.Parameters.AddWithValue("@components", string.IsNullOrWhiteSpace(model.Components) ? DBNull.Value : (object)model.Components);
+                command.Parameters.AddWithValue("@lotNumbers", string.IsNullOrWhiteSpace(model.LotNumbers) ? DBNull.Value : (object)model.LotNumbers);
+                command.Parameters.AddWithValue("@materialCodes", string.IsNullOrWhiteSpace(model.MaterialCodes) ? DBNull.Value : (object)model.MaterialCodes);
+                command.Parameters.AddWithValue("@machines", string.IsNullOrWhiteSpace(model.Machines) ? DBNull.Value : (object)model.Machines);
 
-                // Retrieve the last inserted ID and update the model.
-                long insertedId = command.LastInsertedId;
-                model.Id = Convert.ToInt32(insertedId);
+                command.ExecuteNonQuery();
+                model.Id = Convert.ToInt32(command.LastInsertedId);
             }
 
-            // Update the model with the newly determined skid number.
             model.SkidNumber = nextSkidNumber;
         }
-
-        
     }
+
 
 
     /// <summary>
@@ -461,40 +461,10 @@ ORDER BY part;";
         string countSql = $"SELECT COUNT(*) FROM {datatable} a {whereClause}";
 
         string dataSql = $@"
-        SELECT 
-            a.id,
-            a.timestamp,
-            a.operator,
-            a.prodNumber,
-            a.part,
-            a.endDateTime,
-            a.notes,
-            a.open,
-            a.skidNumber,
-            a.pcs,
-            prAgg.runs,
-            prAgg.lotNumbers,
-            prAgg.materialCodes,
-            prAgg.components,
-            prAgg.machines
-        FROM {datatable} a
-        LEFT JOIN (
-            SELECT 
-                prodNumber,
-                part,
-                GROUP_CONCAT(DISTINCT run)        AS runs,
-                GROUP_CONCAT(DISTINCT lotNumber)  AS lotNumbers,
-                GROUP_CONCAT(DISTINCT materialCode) AS materialCodes,
-                GROUP_CONCAT(DISTINCT component)  AS components,
-                GROUP_CONCAT(DISTINCT machine)    AS machines
-            FROM pressrun
-            GROUP BY prodNumber, part
-        ) prAgg
-          ON prAgg.prodNumber = a.prodNumber
-         AND prAgg.part       = a.part
-        {whereClause}
-        ORDER BY {validSort} {validDir}
-        LIMIT @pageSize OFFSET @offset";
+       SELECT 
+  a.id, a.timestamp, a.operator, a.prodNumber, a.part, a.endDateTime, a.notes, a.open, a.skidNumber, a.pcs,
+  a.runs, a.lotNumbers, a.materialCodes, a.components, a.machines
+FROM assembly a";
 
         await using var conn = new MySqlConnection(_connectionStringMySQL);
         await conn.OpenAsync();
