@@ -1045,7 +1045,10 @@ durationHours,
 runDate,
 
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
-       scheduledMaterial
+       scheduledMaterial, status,
+holdRecordId,
+holdAt
+
 FROM pressrun
 WHERE run = @run
   AND skidNumber = @skidNumber
@@ -1083,6 +1086,10 @@ LIMIT 1";
             var ovByOrd = TryOrdinal(rdr, "overrideBy");
             var ovAtOrd = TryOrdinal(rdr, "overrideAt");
             var schedOrd = TryOrdinal(rdr, "scheduledMaterial");
+            var statusOrd = TryOrdinal(rdr, "status");
+            var holdIdOrd = TryOrdinal(rdr, "holdRecordId");
+            var holdAtOrd = TryOrdinal(rdr, "holdAt");
+
             var model = new PressRunLogModel
             {
                 Id = rdr.GetInt32("id"),
@@ -1121,7 +1128,12 @@ LIMIT 1";
 
     ScheduledMaterial = schedOrd >= 0 && !rdr.IsDBNull(schedOrd)
         ? rdr["scheduledMaterial"]?.ToString()
-        : null
+        : null,
+           
+
+            Status = statusOrd >= 0 && !rdr.IsDBNull(statusOrd) ? rdr["status"]?.ToString() : null,
+            HoldRecordId = holdIdOrd >= 0 && !rdr.IsDBNull(holdIdOrd) ? Convert.ToInt32(rdr["holdRecordId"]) : (int?)null,
+            HoldAt = holdAtOrd >= 0 && !rdr.IsDBNull(holdAtOrd) ? Convert.ToDateTime(rdr["holdAt"]) : (DateTime?)null,
             };
             return model;
         }
@@ -1298,7 +1310,10 @@ durationHours,
 runDate,
 
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
-       scheduledMaterial
+       scheduledMaterial, status,
+holdRecordId,
+holdAt
+
 FROM pressrun
 WHERE endDateTime IS NULL";
 
@@ -1381,7 +1396,11 @@ runDate,
         isOverride,
         overrideBy,
         overrideAt,
-       scheduledMaterial";
+       scheduledMaterial,
+status,
+holdRecordId,
+holdAt
+";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
@@ -1550,7 +1569,11 @@ runDate,
         isOverride,
         overrideBy,
         overrideAt,
-       scheduledMaterial
+       scheduledMaterial,
+status,
+holdRecordId,
+holdAt
+
     FROM pressrun
     ORDER BY startDateTime DESC;";
 
@@ -1618,8 +1641,29 @@ runDate,
 
             return (false, "");
         }
-       
 
+        public async Task<int> MarkSkidOnHoldAsync(string run, string prodNumber, int skidNumber, int holdRecordId)
+        {
+            const string sql = @"
+UPDATE pressrun
+SET status = 'HOLD',
+    holdRecordId = @holdId,
+    holdAt = NOW()
+WHERE run = @run
+  AND prodNumber = @prod
+  AND skidNumber = @skid;";
+
+            await using var conn = new MySqlConnection(_connectionStringMySQL);
+            await conn.OpenAsync();
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", run);
+            cmd.Parameters.AddWithValue("@prod", prodNumber);
+            cmd.Parameters.AddWithValue("@skid", skidNumber);
+            cmd.Parameters.AddWithValue("@holdId", holdRecordId);
+
+            return await cmd.ExecuteNonQueryAsync();
+        }
 
     }
 }

@@ -311,6 +311,11 @@
 
                     <!-- SOURCE (hidden) -->
                     <input type="hidden" id="ModalSource" name="Source" />
+                    <input type="hidden" asp-for="FormModel.Source" />
+                    <input type="hidden" asp-for="FormModel.RunNumber" />
+                    <input type="hidden" asp-for="FormModel.ProdNumber" />
+                    <input type="hidden" id="ModalSkidNumber" name="SkidNumber" value="" />
+
 
                     <!-- OPERATOR -->
                     <div class="mb-3">
@@ -1072,22 +1077,29 @@
         document.addEventListener('DOMContentLoaded', async function () {
 
             // prevent duplicate auto-runs
-            window.__holdtagPrefilled = window.__holdtagPrefilled || false;
-            if (window.__holdtagPrefilled) return;
+                   // only run once per page load
+        window.__holdtagPrefilled = window.__holdtagPrefilled || false;
+        if (window.__holdtagPrefilled) return;
 
-            const qs = new URLSearchParams(window.location.search);
-            const source = (qs.get('source') || '').trim();
-            const run = (qs.get('run') || '').trim();
-            const prodNumber = (qs.get('prodNumber') || '').trim();
+        const qs = new URLSearchParams(window.location.search);
+        const source = (qs.get('source') || '').trim();
+        const run = (qs.get('run') || '').trim();
+        const prodNumber = (qs.get('prodNumber') || '').trim();
+        const skidNumber = (qs.get('skidNumber') || qs.get('skid') || '').trim();
 
-            if (!source) return;
-            if (!run && !prodNumber) return;
+        if (!source) return;
+        if (!run && !prodNumber) return;
 
-            // set flag early so DataTables / other DOMContentLoaded stuff doesn't cause double-fires
-            window.__holdtagPrefilled = true;
+        // ✅ set flag early so other DOMContentLoaded handlers don't cause double-fires
+        window.__holdtagPrefilled = true;
+
 
             try {
-                const url = `/HoldTag/SourcePrefill?source=${encodeURIComponent(source)}&run=${encodeURIComponent(run)}&prodNumber=${encodeURIComponent(prodNumber)}`;
+                      const url =
+        `/HoldTag/SourcePrefill?source=${encodeURIComponent(source)}`
+        + `&run=${encodeURIComponent(run)}`
+        + `&prodNumber=${encodeURIComponent(prodNumber)}`
+        + `&skidNumber=${encodeURIComponent(skidNumber)}`;
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error('Prefill request failed');
 
@@ -1103,6 +1115,7 @@
                 document.getElementById('ModalRunNumber').value  = data.runNumber  || run || '';
                 document.getElementById('ModalProdNumber').value = data.prodNumber || prodNumber || '';
 
+                document.getElementById('ModalSkidNumber').value = skidNumber || '';
                 document.getElementById('ModalPart').value         = data.part || '';
                 document.getElementById('ModalComponent').value    = data.component || '';
                 document.getElementById('ModalMaterialCode').value = data.materialCode || '';

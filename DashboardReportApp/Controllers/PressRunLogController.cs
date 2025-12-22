@@ -327,6 +327,10 @@ namespace DashboardReportApp.Controllers
                     ? Math.Round(((double)durationHours.Value * 3600.0) / pcs.Value, 2)
                     : (double?)null;
 
+                bool onHold =
+       r.HoldRecordId.HasValue
+       || string.Equals(r.Status, "HOLD", StringComparison.OrdinalIgnoreCase);
+
                 return new
                 {
                     id = r.Id,
@@ -355,7 +359,11 @@ namespace DashboardReportApp.Controllers
                     notes = r.Notes,
 
                     // optional
-                    cycleTime = cycleSec
+                    cycleTime = cycleSec,
+                    status = r.Status,
+                    holdRecordId = r.HoldRecordId,
+                    holdAt = r.HoldAt,
+                    onHold = onHold
                 };
             }).ToList();
 

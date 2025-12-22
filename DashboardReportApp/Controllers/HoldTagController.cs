@@ -15,19 +15,24 @@ namespace DashboardReportApp.Controllers
         private readonly SharedService _sharedService;
         private readonly string _holdTagEmailTo;
         private readonly string _holdTagPrinter;
-        public HoldTagController(HoldTagService service,
-                         SharedService sharedService,
-                         IConfiguration cfg)
+        private readonly PressRunLogService _pressRunLogService;
+
+        public HoldTagController(
+     HoldTagService service,
+     SharedService sharedService,
+     PressRunLogService pressRunLogService,
+     IConfiguration cfg)
         {
             _holdTagService = service;
             _sharedService = sharedService;
+            _pressRunLogService = pressRunLogService;
 
-            // Configurable email + printer, with sane fallbacks
             _holdTagEmailTo = cfg["Email:HoldTagTo"]
                          ?? cfg["Email:DevTo"]
                          ?? "holdtag@sintergy.net";
             _holdTagPrinter = cfg["Printers:HoldTag"] ?? "QaholdTags";
         }
+
         // GET: HoldTag/Admin  → password-protected admin view of Hold Tags
         [PasswordProtected(Password = "5intergy")] // same attribute you used on AdminHoldTag
         [HttpGet("Admin")]
@@ -56,35 +61,12 @@ namespace DashboardReportApp.Controllers
             return View("Index", model);
         }
 
-
         [HttpGet("")]
         [HttpGet("Index")]
-        public async Task<IActionResult> Index()
-
+        public async Task<IActionResult> Index(string? source, string? run, string? prodNumber, int? skidNumber)
         {
-            Console.WriteLine("[HoldTag.Index] Start");
-
-            List<string>? parts = null;
-            List<string>? operators = null;
-            List<HoldTagModel>? records = null;
-
-            try
-            {
-
-                Console.WriteLine("[HoldTag.Index] Before GetAllOperators");
-                operators = await _sharedService.GetAllOperators();
-                Console.WriteLine("[HoldTag.Index] After GetAllOperators");
-
-                Console.WriteLine("[HoldTag.Index] Before GetAllHoldRecordsAsync");
-                records = await _holdTagService.GetAllHoldRecordsAsync();
-                Console.WriteLine("[HoldTag.Index] After GetAllHoldRecordsAsync");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[HoldTag.Index] ERROR: " + ex);
-                // Show the error so the page at least loads
-                return Content("Error in HoldTag/Index:\n\n" + ex);
-            }
+            var operators = await _sharedService.GetAllOperators();
+            var records = await _holdTagService.GetAllHoldRecordsAsync();
 
             ViewData["Operators"] = operators ?? new List<string>();
 
@@ -93,25 +75,29 @@ namespace DashboardReportApp.Controllers
 
             if (isAdmin)
             {
-                Console.WriteLine("[HoldTag.Index] Before admin operator lists");
                 ViewBag.IssuedByOperators = await _holdTagService.GetIssuedByOperatorsAsync();
                 ViewBag.DispositionOperators = await _holdTagService.GetDispositionOperatorsAsync();
                 ViewBag.ReworkOperators = await _holdTagService.GetReworkOperatorsAsync();
-                Console.WriteLine("[HoldTag.Index] After admin operator lists");
             }
 
             var model = new HoldTagIndexViewModel
             {
-                FormModel = new HoldTagModel(),
+                FormModel = new HoldTagModel
+                {
+                    Source = (source ?? "").Trim(),
+                    RunNumber = (run ?? "").Trim(),
+                    ProdNumber = (prodNumber ?? "").Trim(),
+                    SkidNumber = skidNumber ?? 0
+                },
                 Records = records ?? new List<HoldTagModel>()
             };
 
-            Console.WriteLine("[HoldTag.Index] Returning view");
             return View(model);
         }
 
 
-       
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -148,6 +134,55 @@ namespace DashboardReportApp.Controllers
                 // 2) Insert (includes FileAddress1 if present)
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
                 record.Id = newId;
+                // 2b) If this hold tag came from pressrun + a skidNumber was provided,
+                // mark that skid as HOLD in pressrun (best-effort; don't break HoldTag submit)
+                try
+                {
+                    // Prefer posted model values, but fall back to querystring (because Place on Hold is a link)
+                    var source = (record.Source ?? Request.Form["Source"].ToString() ?? Request.Query["source"].ToString() ?? "").Trim();
+
+                    // Your pressrun page uses querystring names: run, prodNumber, skidNumber
+                    var run = (record.RunNumber ?? Request.Form["RunNumber"].ToString() ?? Request.Query["run"].ToString() ?? "").Trim();
+                    var prod = (record.ProdNumber ?? Request.Form["ProdNumber"].ToString() ?? Request.Query["prodNumber"].ToString() ?? "").Trim();
+
+                    int skidNum = 0;
+
+                    // If HoldTagModel has SkidNumber as int (not nullable) it will default to 0, so also check querystring
+                    if (record.SkidNumber > 0)
+                        skidNum = record.SkidNumber;
+                    else
+                        int.TryParse(Request.Form["SkidNumber"].ToString(), out skidNum);
+
+                    if (skidNum <= 0)
+                        int.TryParse(Request.Query["skidNumber"].ToString(), out skidNum);
+
+                    Log.Information("[HoldTag.Submit] source={Source} run={Run} prod={Prod} skid={Skid} holdId={HoldId}",
+                        source, run, prod, skidNum, newId);
+
+                    if (source.Equals("pressrun", StringComparison.OrdinalIgnoreCase)
+                        && skidNum > 0
+                        && !string.IsNullOrWhiteSpace(run)
+                        && !string.IsNullOrWhiteSpace(prod))
+                    {
+                        Log.Information("[HoldTag.Submit] source={Source} run={Run} prod={Prod} skid={Skid} holdId={HoldId}",
+    source, run, prod, skidNum, newId);
+
+                        var rows = await _pressRunLogService.MarkSkidOnHoldAsync(run, prod, skidNum, newId);
+                        Log.Information("[HoldTag.Submit] pressrun HOLD update rows={Rows}", rows);
+
+
+                        if (rows == 0)
+                        {
+                            Log.Warning("[HoldTag.Submit] No pressrun row matched for HOLD update. run={Run} prod={Prod} skid={Skid}",
+                                run, prod, skidNum);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Failed to mark pressrun skid HOLD for HoldTagId={HoldTagId}", record.Id);
+                }
+
 
                 // 3) If we had a temp file, rename it to the final pattern and persist the final name
                 if (!string.IsNullOrWhiteSpace(tempName))
@@ -425,7 +460,7 @@ Hold Tag Page: {indexUrl}
             });
         }
         [HttpGet("SourcePrefill")]
-        public async Task<IActionResult> SourcePrefill(string source, string? run, string? prodNumber)
+        public async Task<IActionResult> SourcePrefill(string source, string? run, string? prodNumber, int? skidNumber)
         {
             try
             {
@@ -433,15 +468,13 @@ Hold Tag Page: {indexUrl}
                 if (string.IsNullOrWhiteSpace(source))
                     return Json(new { success = false, message = "Missing source." });
 
-                var result = await _holdTagService.LookupBySourceAsync(source, run?.Trim(), prodNumber?.Trim());
+                var result = await _holdTagService.LookupBySourceAsync(source, run?.Trim(), prodNumber?.Trim(), skidNumber);
+
                 if (result == null)
                     return Json(new { success = false, message = "No matching record found for prefill." });
 
-                // ✅ FIX: log "result" (not "prefill")
-                Log.Information(
-                    "[HoldTag.SourcePrefill] source={Source} run={Run} prod={Prod} pcs={Pcs} unit={Unit}",
-                    source, run, prodNumber, result.Pcs, "pcs"
-                );
+                Log.Information("[HoldTag.SourcePrefill] source={Source} run={Run} prod={Prod} skid={Skid} pcs={Pcs}",
+                    source, run, prodNumber, skidNumber, result.Pcs);
 
                 return Json(new
                 {
@@ -454,16 +487,13 @@ Hold Tag Page: {indexUrl}
                     lotNumber = result.LotNumber,
                     materialCode = result.MaterialCode,
 
-                    // ✅ the fields your modal expects
-                    quantityOnHold = result.Pcs,
-                    unit = "pc",
-
-                    // optional extras (fine)
                     pcs = result.Pcs,
+                    quantityOnHold = result.Pcs,
+                    unit = "pcs",
+
                     durationHours = result.DurationHours,
                     runDate = result.RunDate
                 });
-
             }
             catch (Exception ex)
             {

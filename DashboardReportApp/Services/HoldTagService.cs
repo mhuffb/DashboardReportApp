@@ -504,7 +504,12 @@ WHERE Id = @Id";
             public string? RunNumber { get; set; }
             public string? LotNumber { get; set; }
             public string? MaterialCode { get; set; }
+
+            public int? Pcs { get; set; }
+            public double? DurationHours { get; set; }
+            public DateTime? RunDate { get; set; }
         }
+        
 
         public async Task<HoldScanResult?> LookupByScanAsync(string code)
         {
@@ -756,170 +761,381 @@ LIMIT 1;";
             public DateTime? RunDate { get; set; }
         }
 
-        public async Task<HoldSourcePrefill?> LookupBySourceAsync(string source, string? run, string? prodNumber)
+
+        public async Task<HoldScanResult?> LookupBySourceAsync(string source, string? run, string? prodNumber, int? skidNumber)
         {
-            // priority: run first (if provided), else prodNumber
-            string? keyRun = string.IsNullOrWhiteSpace(run) ? null : run;
-            string? keyProd = string.IsNullOrWhiteSpace(prodNumber) ? null : prodNumber;
+            source = (source ?? "").Trim().ToLowerInvariant();
+
+            // normalize empty strings to null
+            run = string.IsNullOrWhiteSpace(run) ? null : run.Trim();
+            prodNumber = string.IsNullOrWhiteSpace(prodNumber) ? null : prodNumber.Trim();
+
+            if (source is not ("pressrun" or "sinterrun"))
+                return null;
+
+            // If caller didn't provide skidNumber, auto-pick a skid for pressrun/sinterrun
+            if (!skidNumber.HasValue || skidNumber.Value <= 0)
+            {
+                skidNumber = source == "pressrun"
+                    ? await GetDefaultPressRunSkidAsync(run, prodNumber)
+                    : await GetDefaultSinterRunSkidAsync(run, prodNumber);
+
+                if (!skidNumber.HasValue || skidNumber.Value <= 0)
+                    return null;
+            }
+
+            return source == "pressrun"
+                ? await LookupPressRunBySkidAsync(run, prodNumber, skidNumber.Value)
+                : await LookupSinterRunBySkidAsync(run, prodNumber, skidNumber.Value);
+        }
+
+       
+        private async Task<int?> GetDefaultSinterRunSkidAsync(string? run, string? prodNumber)
+        {
+            if (string.IsNullOrWhiteSpace(run) && string.IsNullOrWhiteSpace(prodNumber))
+                return null;
+
+            const string sql = @"
+SELECT skidNumber
+FROM sinterrun
+WHERE skidNumber > 0
+  AND (@run IS NULL OR run = @run)
+  AND (@prod IS NULL OR prodNumber = @prod)
+ORDER BY
+  (endDateTime IS NULL) DESC,
+  startDateTime DESC,
+  id DESC
+LIMIT 1;";
 
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
 
-            if (source == "pressrun" || source == "press")
-            {
-                // priority: run first (if provided), else prodNumber
-                const string sql = @"
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", (object?)run ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@prod", (object?)prodNumber ?? DBNull.Value);
+
+            var obj = await cmd.ExecuteScalarAsync();
+            if (obj == null || obj == DBNull.Value) return null;
+            return Convert.ToInt32(obj);
+        }
+
+        private async Task<HoldScanResult?> LookupPressRunBySkidAsync(string? run, string? prodNumber, int skidNumber)
+        {
+            // We compute PCS as MAX(end) - MIN(start). Fallback to SUM(pcs) if pcsStart/pcsEnd missing.
+            const string sql = @"
 SELECT
-  part,
-  component,
-  prodNumber,
-  run,
-  lotNumber,
-  materialCode,
-  pcs,
-  pcsStart,
-  pcsEnd,
-  durationHours,
-  runDate
+    pr.prodNumber,
+    pr.run,
+    pr.part,
+    pr.component,
+    pr.lotNumber,
+    pr.materialCode,
+    MAX(pr.runDate)        AS runDate,
+    MAX(pr.durationHours)  AS durationHours,
+
+    MIN(pr.pcsStart)       AS minStart,
+    MAX(pr.pcsEnd)         AS maxEnd,
+
+    SUM(COALESCE(pr.pcs, 0)) AS sumPcs
+FROM pressrun pr
+WHERE pr.skidNumber = @skid
+  AND (@run IS NULL OR @run = '' OR pr.run = @run)
+  AND (@prod IS NULL OR @prod = '' OR pr.prodNumber = @prod)
+GROUP BY pr.prodNumber, pr.run, pr.part, pr.component, pr.lotNumber, pr.materialCode
+ORDER BY MAX(pr.timestamp) DESC
+LIMIT 1;";
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@skid", skidNumber);
+            cmd.Parameters.AddWithValue("@run", (object?)run ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@prod", (object?)prodNumber ?? DBNull.Value);
+
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return null;
+
+            int pcs = 0;
+
+            int? minStart = rdr["minStart"] == DBNull.Value ? (int?)null : Convert.ToInt32(rdr["minStart"]);
+            int? maxEnd = rdr["maxEnd"] == DBNull.Value ? (int?)null : Convert.ToInt32(rdr["maxEnd"]);
+
+            if (minStart.HasValue && maxEnd.HasValue)
+            {
+                pcs = maxEnd.Value - minStart.Value;
+                if (pcs < 0) pcs = 0;
+            }
+            else
+            {
+                // fallback for older schema / if start/end not present
+                pcs = rdr["sumPcs"] == DBNull.Value ? 0 : Convert.ToInt32(rdr["sumPcs"]);
+                if (pcs < 0) pcs = 0;
+            }
+
+            return new HoldScanResult
+            {
+                Source = "pressrun",
+                ProdNumber = rdr["prodNumber"]?.ToString(),
+                RunNumber = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
+                LotNumber = rdr["lotNumber"]?.ToString(),
+                MaterialCode = rdr["materialCode"]?.ToString(),
+                Pcs = pcs,
+                DurationHours = rdr["durationHours"] == DBNull.Value ? (double?)null : Convert.ToDouble(rdr["durationHours"]),
+                RunDate = rdr["runDate"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["runDate"])
+            };
+        }
+
+        private async Task<HoldScanResult?> LookupSinterRunBySkidAsync(string? run, string? prodNumber, int skidNumber)
+        {
+            const string sql = @"
+SELECT
+    sr.prodNumber,
+    sr.run,
+    sr.part,
+    sr.component,
+    sr.lotNumber,
+    sr.materialCode,
+    MAX(sr.runDate)       AS runDate,
+    MAX(sr.durationHours) AS durationHours,
+    SUM(COALESCE(sr.pcs, 0)) AS pcs
+FROM sinterrun sr
+WHERE sr.skidNumber = @skid
+  AND (@run IS NULL OR @run = '' OR sr.run = @run)
+  AND (@prod IS NULL OR @prod = '' OR sr.prodNumber = @prod)
+GROUP BY sr.prodNumber, sr.run, sr.part, sr.component, sr.lotNumber, sr.materialCode
+ORDER BY MAX(sr.timestamp) DESC
+LIMIT 1;";
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@skid", skidNumber);
+            cmd.Parameters.AddWithValue("@run", (object?)run ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@prod", (object?)prodNumber ?? DBNull.Value);
+
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return null;
+
+            int pcs = rdr["pcs"] == DBNull.Value ? 0 : Convert.ToInt32(rdr["pcs"]);
+            if (pcs < 0) pcs = 0;
+
+            return new HoldScanResult
+            {
+                Source = "sinterrun",
+                ProdNumber = rdr["prodNumber"]?.ToString(),
+                RunNumber = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
+                LotNumber = rdr["lotNumber"]?.ToString(),
+                MaterialCode = rdr["materialCode"]?.ToString(),
+                Pcs = pcs,
+                DurationHours = rdr["durationHours"] == DBNull.Value ? (double?)null : Convert.ToDouble(rdr["durationHours"]),
+                RunDate = rdr["runDate"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["runDate"])
+            };
+        }
+
+
+
+        private async Task<HoldScanResult?> LookupPressRunBySkidAsync(string? run, string? prodNumber, int? skidNumber)
+        {
+            if (skidNumber == null || skidNumber <= 0) return null;
+
+            const string sql = @"
+SELECT
+    pr.prodNumber,
+    pr.run,
+    pr.part,
+    pr.component,
+    pr.lotNumber,
+    pr.materialCode,
+    MAX(pr.runDate)        AS runDate,
+    MAX(pr.durationHours)  AS durationHours,
+
+    SUM(
+        COALESCE(
+            pr.Pcs,
+            CASE
+                WHEN pr.pcsStart IS NOT NULL AND pr.pcsEnd IS NOT NULL
+                THEN (pr.pcsEnd - pr.pcsStart)
+                ELSE 0
+            END
+        )
+    ) AS pcs
+FROM pressrun pr
+WHERE pr.skidNumber = @skidNumber
+  AND (@run IS NULL OR @run = '' OR pr.run = @run)
+  AND (@prodNumber IS NULL OR @prodNumber = '' OR pr.prodNumber = @prodNumber)
+GROUP BY pr.prodNumber, pr.run, pr.part, pr.component, pr.lotNumber, pr.materialCode
+ORDER BY MAX(pr.timestamp) DESC
+LIMIT 1;";
+
+            using var conn = new MySql.Data.MySqlClient.MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            using var cmd = new MySql.Data.MySqlClient.MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@skidNumber", skidNumber.Value);
+            cmd.Parameters.AddWithValue("@run", (object?)run ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@prodNumber", (object?)prodNumber ?? DBNull.Value);
+
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return null;
+
+            int? pcs = rdr["pcs"] == DBNull.Value ? (int?)null : Convert.ToInt32(rdr["pcs"]);
+
+            return new HoldScanResult
+            {
+                Source = "pressrun",
+                ProdNumber = rdr["prodNumber"]?.ToString(),
+                RunNumber = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
+                LotNumber = rdr["lotNumber"]?.ToString(),
+                MaterialCode = rdr["materialCode"]?.ToString(),
+                Pcs = pcs,
+                DurationHours = rdr["durationHours"] == DBNull.Value ? (double?)null : Convert.ToDouble(rdr["durationHours"]),
+                RunDate = rdr["runDate"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["runDate"]),
+            };
+        }
+        private async Task<HoldScanResult?> LookupSinterRunBySkidAsync(string? run, string? prodNumber, int? skidNumber)
+        {
+            if (skidNumber == null || skidNumber <= 0) return null;
+
+            const string sql = @"
+SELECT
+    sr.prodNumber,
+    sr.run,
+    sr.part,
+    sr.component,
+    sr.lotNumber,
+    sr.materialCode,
+    MAX(sr.runDate)       AS runDate,
+    MAX(sr.durationHours) AS durationHours,
+    SUM(COALESCE(sr.pcs, 0)) AS pcs
+FROM sinterrun sr
+WHERE sr.skidNumber = @skidNumber
+  AND (@run IS NULL OR @run = '' OR sr.run = @run)
+  AND (@prodNumber IS NULL OR @prodNumber = '' OR sr.prodNumber = @prodNumber)
+GROUP BY sr.prodNumber, sr.run, sr.part, sr.component, sr.lotNumber, sr.materialCode
+ORDER BY MAX(sr.timestamp) DESC
+LIMIT 1;";
+
+            using var conn = new MySql.Data.MySqlClient.MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            using var cmd = new MySql.Data.MySqlClient.MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@skidNumber", skidNumber.Value);
+            cmd.Parameters.AddWithValue("@run", (object?)run ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@prodNumber", (object?)prodNumber ?? DBNull.Value);
+
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return null;
+
+            int? pcs = rdr["pcs"] == DBNull.Value ? (int?)null : Convert.ToInt32(rdr["pcs"]);
+
+            return new HoldScanResult
+            {
+                Source = "sinterrun",
+                ProdNumber = rdr["prodNumber"]?.ToString(),
+                RunNumber = rdr["run"]?.ToString(),
+                Part = rdr["part"]?.ToString(),
+                Component = rdr["component"]?.ToString(),
+                LotNumber = rdr["lotNumber"]?.ToString(),
+                MaterialCode = rdr["materialCode"]?.ToString(),
+                Pcs = pcs,
+                DurationHours = rdr["durationHours"] == DBNull.Value ? (double?)null : Convert.ToDouble(rdr["durationHours"]),
+                RunDate = rdr["runDate"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rdr["runDate"]),
+            };
+        }
+        private async Task<int?> GetDefaultPressRunSkidAsync(string run, string prodNumber)
+        {
+            const string sql = @"
+SELECT skidNumber
 FROM pressrun
-WHERE
-    (
-        (@run IS NOT NULL AND run = @run)
-        OR
-        (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
-    )
+WHERE run = @run
+  AND prodNumber = @prod
   AND skidNumber > 0
+ORDER BY
+  (open = 1) DESC,
+  (endDateTime IS NULL) DESC,
+  startDateTime DESC,
+  id DESC
+LIMIT 1;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", run);
+            cmd.Parameters.AddWithValue("@prod", prodNumber);
+
+            var obj = await cmd.ExecuteScalarAsync();
+            if (obj == null || obj == DBNull.Value) return null;
+            return Convert.ToInt32(obj);
+        }
+
+        private async Task<int> ComputePressRunSkidPcsAsync(string run, string prodNumber, int skidNumber)
+        {
+            const string sql = @"
+SELECT MIN(pcsStart) AS minStart,
+       MAX(pcsEnd)   AS maxEnd
+FROM pressrun
+WHERE run = @run
+  AND prodNumber = @prod
+  AND skidNumber = @skid;";
+
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", run);
+            cmd.Parameters.AddWithValue("@prod", prodNumber);
+            cmd.Parameters.AddWithValue("@skid", skidNumber);
+
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return 0;
+
+            var minStart = rdr["minStart"] == DBNull.Value ? 0 : Convert.ToInt32(rdr["minStart"]);
+            var maxEnd = rdr["maxEnd"] == DBNull.Value ? 0 : Convert.ToInt32(rdr["maxEnd"]);
+
+            var pcs = maxEnd - minStart;
+            return pcs < 0 ? 0 : pcs;
+        }
+
+        private async Task<(string? Part, string? Component, string? LotNumber, string? MaterialCode, decimal? DurationHours, DateTime? RunDate)?>
+        GetLatestPressRunRowForSkidAsync(string run, string prodNumber, int skidNumber)
+        {
+            const string sql = @"
+SELECT part, component, lotNumber, materialCode, durationHours, runDate
+FROM pressrun
+WHERE run = @run
+  AND prodNumber = @prod
+  AND skidNumber = @skid
 ORDER BY id DESC
 LIMIT 1;";
 
+            using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
 
-                await using var cmd = new MySqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@run", run);
+            cmd.Parameters.AddWithValue("@prod", prodNumber);
+            cmd.Parameters.AddWithValue("@skid", skidNumber);
 
-                await using var r = await cmd.ExecuteReaderAsync();
-                if (!await r.ReadAsync()) return null;
+            using var rdr = await cmd.ExecuteReaderAsync();
+            if (!await rdr.ReadAsync()) return null;
 
-                int? pcs = r["pcs"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcs"]);
-
-                int? pcsStart = r["pcsStart"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcsStart"]);
-                int? pcsEnd = r["pcsEnd"] == DBNull.Value ? (int?)null : Convert.ToInt32(r["pcsEnd"]);
-
-                // Fallback: if pcs is null but we have both start/end, compute it
-                if (!pcs.HasValue && pcsStart.HasValue && pcsEnd.HasValue)
-                {
-                    var diff = pcsEnd.Value - pcsStart.Value;
-                    pcs = diff >= 0 ? diff : (int?)null;
-                }
-
-                // Optional: if you want it to always show something instead of blank
-                // if (!pcs.HasValue) pcs = 0;
-
-
-                // durationHours in DB might be decimal; store as double? in DTO
-                double? durationHours = null;
-                if (r["durationHours"] != DBNull.Value)
-                {
-                    durationHours = Convert.ToDouble(r["durationHours"]);
-                }
-
-                DateTime? runDate = null;
-                if (r["runDate"] != DBNull.Value)
-                {
-                    runDate = Convert.ToDateTime(r["runDate"]);
-                }
-
-                return new HoldSourcePrefill
-                {
-                    Source = "pressrun",
-                    Part = r["part"] as string,
-                    Component = r["component"] as string,
-                    ProdNumber = r["prodNumber"] as string,
-                    RunNumber = r["run"] as string,
-                    LotNumber = r["lotNumber"] as string,
-                    MaterialCode = r["materialCode"] as string,
-
-                    // ✅ HoldTag should use pcs directly now (no pcsStart/pcsEnd math)
-                    QuantityOnHold = pcs,
-                    Unit = "pcs",
-
-                    // ✅ extra info (optional for UI)
-                    Pcs = pcs,
-                    DurationHours = durationHours,
-                    RunDate = runDate
-                };
-            }
-
-
-            if (source == "sinterrun" || source == "sinter" || source == "sintering")
-            {
-                // qtyOnHold = pcs column
-                const string sql = @"
-SELECT part, component, prodNumber, run, lotNumber, materialCode, pcs
-FROM sinterrun
-WHERE (@run IS NOT NULL AND run = @run)
-   OR (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
-ORDER BY id DESC
-LIMIT 1;";
-
-                await using var cmd = new MySqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
-
-                await using var r = await cmd.ExecuteReaderAsync();
-                if (!await r.ReadAsync()) return null;
-
-                int? pcs = r["pcs"] == DBNull.Value ? null : Convert.ToInt32(r["pcs"]);
-
-                return new HoldSourcePrefill
-                {
-                    Source = "sinterrun",
-                    Part = r["part"] as string,
-                    Component = r["component"] as string,
-                    ProdNumber = r["prodNumber"] as string,
-                    RunNumber = r["run"] as string,
-                    LotNumber = r["lotNumber"] as string,
-                    MaterialCode = r["materialCode"] as string,
-                    QuantityOnHold = pcs,
-                    Unit = "pc"
-                };
-            }
-
-            if (source == "assembly")
-            {
-                // qtyOnHold = pcs column (adjust column names if your assembly schema differs)
-                const string sql = @"
-SELECT part, component, prodNumber, run, lotNumber, materialCode, pcs
-FROM assembly
-WHERE (@run IS NOT NULL AND run = @run)
-   OR (@run IS NULL AND @prod IS NOT NULL AND prodNumber = @prod)
-ORDER BY id DESC
-LIMIT 1;";
-
-                await using var cmd = new MySqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@run", (object?)keyRun ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@prod", (object?)keyProd ?? DBNull.Value);
-
-                await using var r = await cmd.ExecuteReaderAsync();
-                if (!await r.ReadAsync()) return null;
-
-                int? pcs = r["pcs"] == DBNull.Value ? null : Convert.ToInt32(r["pcs"]);
-
-                return new HoldSourcePrefill
-                {
-                    Source = "assembly",
-                    Part = r["part"] as string,
-                    Component = r["component"] as string,
-                    ProdNumber = r["prodNumber"] as string,
-                    RunNumber = r["run"] as string,
-                    LotNumber = r["lotNumber"] as string,
-                    MaterialCode = r["materialCode"] as string,
-                    QuantityOnHold = pcs,
-                    Unit = "pc"
-                };
-            }
-
-            return null;
+            return (
+                rdr["part"] as string,
+                rdr["component"] as string,
+                rdr["lotNumber"] as string,
+                rdr["materialCode"] as string,
+                rdr["durationHours"] == DBNull.Value ? null : Convert.ToDecimal(rdr["durationHours"]),
+                rdr["runDate"] == DBNull.Value ? null : Convert.ToDateTime(rdr["runDate"])
+            );
         }
 
     }

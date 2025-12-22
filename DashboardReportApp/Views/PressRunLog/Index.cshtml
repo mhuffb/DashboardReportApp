@@ -19,10 +19,21 @@
     var mainRuns = openRecords.Where(r => r.SkidNumber == 0).ToList();
     var skids = openRecords.Where(r => r.SkidNumber > 0).ToList();
 
-    // 🔹 All runs for DataTables
-   // var allRuns = ViewData["AllRuns"] as List<DashboardReportApp.Models.PressRunLogModel>
-   //               ?? new List<DashboardReportApp.Models.PressRunLogModel>();
+   
 }
+<style>
+    /* Hard yellow */
+    .table-warning,
+    .table-warning > td,
+    .table-warning > th {
+        background-color: #ffeb3b !important; /* yellow */
+    }
+
+    .hold-banner td {
+        border-bottom: 2px solid #b58900;
+    }
+</style>
+
 
 @if (TempData["Error"] != null)
 {
@@ -32,12 +43,7 @@
 }
 
 <div class="container-fluid px-3">
-    <!-- 🔹 NEW: Machine Count Cards at the top 
-  //  <div class="mb-4">
-   //     <h2 class="text-center mb-3">Machine Counts</h2>
-  //      <div id="pressRunMachineCountsReactRoot"></div>
-    //  </div>-->
-
+   
     <div class="table-responsive">
         <h1 class="text-center mb-4">Press Run Log</h1>
 
@@ -189,7 +195,21 @@
                         <tbody>
                             @foreach (var skid in skids)
                             {
-                                <tr>
+                                // 🔸 adjust this condition if your flag name differs
+                                bool isOnHold =
+                                skid.HoldRecordId.HasValue
+                                || string.Equals(skid.Status, "HOLD", StringComparison.OrdinalIgnoreCase);
+
+                                if (isOnHold)
+                                {
+                                    <tr class="table-warning">
+                                        <td colspan="13" class="fw-bold text-center">
+                                            🚫 ON HOLD
+                                        </td>
+                                    </tr>
+                                }
+
+                                <tr class="@(isOnHold ? "table-warning" : "")">
                                     <td>@skid.Id</td>
                                     <td>@skid.ProdNumber</td>
                                     <td>@skid.Run</td>
@@ -916,48 +936,61 @@
                   { data: 'scrap' },
                   { data: 'notes' },
 
-                  {
-                    data: null,
-                    orderable: false,
-                    searchable: false,
-                    render: function (data, type, row) {
-                      const skidNum = row.skidNumber || 0;
-                      if (skidNum === 0) return '';
-                      const run = row.run || '';
-                      const prod = row.prodNumber || '';
-                      const source = 'pressrun';
-                      const url =
-                        `/HoldTag?source=${encodeURIComponent(source)}` +
-                        `&run=${encodeURIComponent(run)}` +
-                        `&prodNumber=${encodeURIComponent(prod)}`;
-                      return `<a class="btn btn-warning btn-sm" href="${url}">Place on Hold</a>`;
+                                  {
+                  data: null,
+                  orderable: false,
+                  searchable: false,
+                  render: function (data, type, row) {
+
+                    // ✅ Show HOLD badge if on hold
+                    if (row.onHold === true) {
+                      return `
+                        <div class="d-flex flex-column gap-1">
+                          <span class="badge bg-danger fw-bold">🚫 ON HOLD</span>
+                          <a class="btn btn-secondary btn-sm disabled" href="#" tabindex="-1" aria-disabled="true">
+                            Place on Hold
+                          </a>
+                        </div>
+                      `;
                     }
+
+                    const skidNum = row.skidNumber || 0;
+                    if (skidNum === 0) return '';
+
+                    const run = row.run || '';
+                    const prod = row.prodNumber || '';
+                    const source = 'pressrun';
+
+                    const url =
+                      `/HoldTag?source=${encodeURIComponent(source)}` +
+                      `&run=${encodeURIComponent(run)}` +
+                      `&prodNumber=${encodeURIComponent(prod)}` +
+                      `&skidNumber=${encodeURIComponent(skidNum)}`;
+
+                    return `<a class="btn btn-warning btn-sm" href="${url}">Place on Hold</a>`;
                   }
+                }
+
                 
 
 
                 
                              // Notes
-                ]
+                                                                ],  rowCallback: function (row, data) {
+                  $(row).removeClass('table-warning');
+                  if (data.onHold === true) {
+                    $(row).addClass('table-warning');
+                  }
+                }
+
+
             });
         } else {
             console.warn('DataTables not found; table will be plain HTML.');
         }
     });
 </script>
-           // <!-- 🔹 Load the React bundle that contains MachineCountsDashboard and renderMachineCounts -->
-          //<!--  <script src="/js/mydatatable.bundle.js"></script>-->
-            //
-            <!--  <script>
-                document.addEventListener('DOMContentLoaded', function () {
-                    if (window.renderMachineCounts) {
-                        // Use a different root id than the molding dashboard
-                        window.renderMachineCounts("pressRunMachineCountsReactRoot");
-                    } else {
-                        console.error("window.renderMachineCounts is not defined. Check mydatatable.bundle.js is loaded.");
-                    }
-                });
-            </script>-->
+          
 }
 
 

@@ -36,6 +36,9 @@
         public DateTime? RunDate { get; set; }  // store as DateTime? even if DB is DATE
         public decimal? DurationHours { get; set; }
 
+        public string? Status { get; set; }
+        public int? HoldRecordId { get; set; }
+        public DateTime? HoldAt { get; set; }
 
     }
 

@@ -46,12 +46,15 @@ namespace DashboardReportApp.Models
         public int? QuantityOnHold { get; set; }  // total pcs/skids/etc on hold
 
         public string? RunNumber { get; set; }
+        public string? Source { get; set; }
+        public int SkidNumber { get; set; }
 
     }
     public class HoldTagIndexViewModel
     {
         public HoldTagModel FormModel { get; set; }
         public List<HoldTagModel> Records { get; set; }
+
     }
 
 }
