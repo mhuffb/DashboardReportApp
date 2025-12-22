@@ -1045,9 +1045,7 @@ durationHours,
 runDate,
 
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
-       scheduledMaterial, status,
-holdRecordId,
-holdAt
+       scheduledMaterial
 
 FROM pressrun
 WHERE run = @run
@@ -1086,9 +1084,6 @@ LIMIT 1";
             var ovByOrd = TryOrdinal(rdr, "overrideBy");
             var ovAtOrd = TryOrdinal(rdr, "overrideAt");
             var schedOrd = TryOrdinal(rdr, "scheduledMaterial");
-            var statusOrd = TryOrdinal(rdr, "status");
-            var holdIdOrd = TryOrdinal(rdr, "holdRecordId");
-            var holdAtOrd = TryOrdinal(rdr, "holdAt");
 
             var model = new PressRunLogModel
             {
@@ -1130,10 +1125,6 @@ LIMIT 1";
         ? rdr["scheduledMaterial"]?.ToString()
         : null,
            
-
-            Status = statusOrd >= 0 && !rdr.IsDBNull(statusOrd) ? rdr["status"]?.ToString() : null,
-            HoldRecordId = holdIdOrd >= 0 && !rdr.IsDBNull(holdIdOrd) ? Convert.ToInt32(rdr["holdRecordId"]) : (int?)null,
-            HoldAt = holdAtOrd >= 0 && !rdr.IsDBNull(holdAtOrd) ? Convert.ToDateTime(rdr["holdAt"]) : (DateTime?)null,
             };
             return model;
         }
@@ -1310,10 +1301,7 @@ durationHours,
 runDate,
 
        lotNumber, materialCode, isOverride, overrideBy, overrideAt,
-       scheduledMaterial, status,
-holdRecordId,
-holdAt
-
+       scheduledMaterial
 FROM pressrun
 WHERE endDateTime IS NULL";
 
@@ -1396,10 +1384,8 @@ runDate,
         isOverride,
         overrideBy,
         overrideAt,
-       scheduledMaterial,
-status,
-holdRecordId,
-holdAt
+       scheduledMaterial
+
 ";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
@@ -1569,10 +1555,7 @@ runDate,
         isOverride,
         overrideBy,
         overrideAt,
-       scheduledMaterial,
-status,
-holdRecordId,
-holdAt
+       scheduledMaterial
 
     FROM pressrun
     ORDER BY startDateTime DESC;";
@@ -1642,27 +1625,42 @@ holdAt
             return (false, "");
         }
 
-        public async Task<int> MarkSkidOnHoldAsync(string run, string prodNumber, int skidNumber, int holdRecordId)
+       
+        public async Task<HashSet<string>> GetOpenHoldKeysAsync(string? sourceFilter = null)
         {
-            const string sql = @"
-UPDATE pressrun
-SET status = 'HOLD',
-    holdRecordId = @holdId,
-    holdAt = NOW()
-WHERE run = @run
-  AND prodNumber = @prod
-  AND skidNumber = @skid;";
+            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // dateCompleted IS NULL = active hold
+            // skidNumber > 0 = only skids (not main run row)
+            var sql = @"
+SELECT source, ProdNumber, COALESCE(RunNumber,'') AS RunNumber, part, skidNumber
+FROM holdrecords
+WHERE dateCompleted IS NULL
+  AND skidNumber > 0";
+
+            if (!string.IsNullOrWhiteSpace(sourceFilter))
+                sql += " AND source = @src";
 
             await using var conn = new MySqlConnection(_connectionStringMySQL);
             await conn.OpenAsync();
 
             await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@run", run);
-            cmd.Parameters.AddWithValue("@prod", prodNumber);
-            cmd.Parameters.AddWithValue("@skid", skidNumber);
-            cmd.Parameters.AddWithValue("@holdId", holdRecordId);
+            if (!string.IsNullOrWhiteSpace(sourceFilter))
+                cmd.Parameters.AddWithValue("@src", sourceFilter);
 
-            return await cmd.ExecuteNonQueryAsync();
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+            {
+                var source = r["source"]?.ToString() ?? "";
+                var prod = r["ProdNumber"]?.ToString() ?? "";
+                var run = r["RunNumber"]?.ToString() ?? "";
+                var part = r["part"]?.ToString() ?? "";
+                var skid = Convert.ToInt32(r["skidNumber"]);
+
+                keys.Add(HoldKeyHelper.HoldKey(source, prod, run, part, skid));
+            }
+
+            return keys;
         }
 
     }

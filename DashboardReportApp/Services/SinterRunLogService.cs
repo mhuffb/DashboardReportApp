@@ -46,8 +46,9 @@ public class SinterRunLogService
            open,
            skidNumber,
            pcs
-    FROM sintertime
+    FROM sinterrun
     ORDER BY id DESC";
+
 
 
         await using var connection = new MySqlConnection(_connectionStringMySQL);
@@ -88,6 +89,7 @@ public class SinterRunLogService
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = !reader.IsDBNull(reader.GetOrdinal("pcs")) ? reader.GetInt32("pcs") : 0
+
             });
 
         }
@@ -486,8 +488,9 @@ ORDER BY part, skidNumber;
     public async Task<int> GetRunsCountAsync(string? search = null)
     {
         string sql = @"SELECT COUNT(*)
-                   FROM sintertime
+                   FROM sinterrun
                    /**where**/";
+
         var where = new List<string>();
         var parms = new List<MySqlParameter>();
 
@@ -511,7 +514,9 @@ ORDER BY part, skidNumber;
      int page, int pageSize, string? sort = "id", string? dir = "DESC", string? search = null)
     {
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    { "id","timestamp","prodNumber","run","part","oven","startDateTime","endDateTime","operator","skidNumber","pcs" };
+{ "id","timestamp","prodNumber","run","part","oven","startDateTime","endDateTime","operator","skidNumber","pcs" };
+
+
         if (string.IsNullOrWhiteSpace(sort) || !allowed.Contains(sort)) sort = "id";
         dir = string.Equals(dir, "ASC", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
 
@@ -519,24 +524,24 @@ ORDER BY part, skidNumber;
 
         string sql = $@"
     SELECT 
-        st.id,
-        st.timestamp,
-        st.operator,
-        st.prodNumber,
-        COALESCE(st.run, prAgg.runs)          AS run,
-        st.part,
-        COALESCE(st.component,    prAgg.components)    AS component,
-        COALESCE(st.lotNumber,    prAgg.lotNumbers)    AS lotNumber,
-        COALESCE(st.materialCode, prAgg.materialCodes) AS materialCode,
-        st.oven,
-        st.process,
-        st.startDateTime,
-        st.endDateTime,
-        st.notes,
-        st.open,
-        st.skidNumber,
-        st.pcs
-    FROM sintertime st
+        sr.id,
+        sr.timestamp,
+        sr.operator,
+        sr.prodNumber,
+        COALESCE(sr.run, prAgg.runs)                 AS run,
+        sr.part,
+        COALESCE(sr.component,    prAgg.components)  AS component,
+        COALESCE(sr.lotNumber,    prAgg.lotNumbers)  AS lotNumber,
+        COALESCE(sr.materialCode, prAgg.materialCodes) AS materialCode,
+        sr.oven,
+        sr.process,
+        sr.startDateTime,
+        sr.endDateTime,
+        sr.notes,
+        sr.open,
+        sr.skidNumber,
+        sr.pcs
+    FROM sinterrun sr
     LEFT JOIN (
         SELECT 
             prodNumber,
@@ -548,11 +553,12 @@ ORDER BY part, skidNumber;
         FROM pressrun
         GROUP BY prodNumber, part
     ) prAgg
-      ON prAgg.prodNumber = st.prodNumber
-     AND prAgg.part       = st.part
+      ON prAgg.prodNumber = sr.prodNumber
+     AND prAgg.part       = sr.part
     /**where**/
     ORDER BY {sort} {dir}
     LIMIT @take OFFSET @skip";
+
 
         var where = new List<string>();
         var parms = new List<MySqlParameter>
@@ -563,7 +569,8 @@ ORDER BY part, skidNumber;
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            where.Add("(st.prodNumber LIKE @q OR COALESCE(st.run, prAgg.runs) LIKE @q OR st.part LIKE @q OR st.oven LIKE @q OR st.operator LIKE @q)");
+            where.Add("(sr.prodNumber LIKE @q OR COALESCE(sr.run, prAgg.runs) LIKE @q OR sr.part LIKE @q OR sr.oven LIKE @q OR sr.operator LIKE @q)");
+
             parms.Add(new MySqlParameter("@q", $"%{search}%"));
         }
         if (where.Count > 0) sql = sql.Replace("/**where**/", "WHERE " + string.Join(" AND ", where));
@@ -615,40 +622,41 @@ ORDER BY part, skidNumber;
         var list = new List<SinterRunSkid>();
 
         string sql = @"
-    SELECT 
-        st.id,
-        st.timestamp,
-        st.operator,
-        st.prodNumber,
-        COALESCE(st.run, prAgg.runs)          AS run,
-        st.part,
-        COALESCE(st.component, prAgg.components)    AS component,
-        COALESCE(st.lotNumber, prAgg.lotNumbers)    AS lotNumber,
-        COALESCE(st.materialCode, prAgg.materialCodes) AS materialCode,
-        st.oven,
-        st.process,
-        st.startDateTime,
-        st.endDateTime,
-        st.notes,
-        st.open,
-        st.skidNumber,
-        st.pcs
-    FROM sintertime st
-    LEFT JOIN (
-        SELECT 
-            prodNumber,
-            part,
-            GROUP_CONCAT(DISTINCT run)          AS runs,
-            GROUP_CONCAT(DISTINCT component)    AS components,
-            GROUP_CONCAT(DISTINCT lotNumber)    AS lotNumbers,
-            GROUP_CONCAT(DISTINCT materialCode) AS materialCodes
-        FROM pressrun
-        GROUP BY prodNumber, part
-    ) prAgg
-      ON prAgg.prodNumber = st.prodNumber
-     AND prAgg.part       = st.part
-    WHERE st.endDateTime IS NULL
-    ORDER BY st.id DESC";
+SELECT
+    sr.id,
+    sr.timestamp,
+    sr.operator,
+    sr.prodNumber,
+    sr.run,
+    sr.part,
+    sr.component,
+    sr.lotNumber,
+    sr.materialCode,
+    sr.oven,
+    sr.process,
+    sr.startDateTime,
+    sr.endDateTime,
+    sr.notes,
+    sr.open,
+    sr.skidNumber,
+    sr.pcs
+FROM sinterrun sr
+INNER JOIN (
+    SELECT
+        prodNumber,
+        part,
+        skidNumber,
+        COALESCE(run,'') AS runKey,
+        MAX(id) AS maxId
+    FROM sinterrun
+    WHERE endDateTime IS NULL
+      AND skidNumber > 0
+    GROUP BY prodNumber, part, skidNumber, COALESCE(run,'')
+) latest
+  ON latest.maxId = sr.id
+ORDER BY sr.id DESC;";
+
+
 
         await using var conn = new MySqlConnection(_connectionStringMySQL);
         await conn.OpenAsync();
@@ -663,6 +671,7 @@ ORDER BY part, skidNumber;
                 Operator = reader["operator"]?.ToString(),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
                 Run = reader["run"]?.ToString() ?? "N/A",
+
                 Part = reader["part"]?.ToString() ?? "N/A",
                 Component = reader["component"]?.ToString(),
                 LotNumber = reader["lotNumber"]?.ToString(),
@@ -675,11 +684,51 @@ ORDER BY part, skidNumber;
                 Open = reader["open"] != DBNull.Value ? Convert.ToSByte(reader["open"]) : (sbyte)0,
                 SkidNumber = reader["skidNumber"] != DBNull.Value ? reader.GetInt32("skidNumber") : 0,
                 Pcs = !reader.IsDBNull("pcs") ? reader.GetInt32("pcs") : 0
+
             });
         }
 
         return list;
     }
 
+  
+  
+   
+    public async Task<HashSet<string>> GetOpenHoldKeysAsync()
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        const string sql = @"
+SELECT
+    source,
+    ProdNumber,
+    COALESCE(RunNumber,'') AS RunNumber,
+    part,
+    skidNumber
+FROM holdrecords
+WHERE dateCompleted IS NULL
+  AND skidNumber > 0;";
+
+        await using var conn = new MySqlConnection(_connectionStringMySQL);
+        await conn.OpenAsync();
+
+        await using var cmd = new MySqlCommand(sql, conn);
+        await using var r = await cmd.ExecuteReaderAsync();
+
+        while (await r.ReadAsync())
+        {
+            var source = r["source"]?.ToString() ?? "";
+            var prod = r["ProdNumber"]?.ToString() ?? "";
+            var run = r["RunNumber"]?.ToString() ?? "";
+            var part = r["part"]?.ToString() ?? "";
+            var skid = Convert.ToInt32(r["skidNumber"]);
+
+            keys.Add(
+                SinterRunLogViewModel.HoldKey(source, prod, run, part, skid)
+            );
+        }
+
+        return keys;
+    }
 
 }

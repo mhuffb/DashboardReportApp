@@ -56,5 +56,11 @@ namespace DashboardReportApp.Models
         public List<HoldTagModel> Records { get; set; }
 
     }
-
+    public static class HoldKeyHelper
+    {
+        public static string HoldKey(string source, string prod, string? run, string part, int skid)
+        {
+            return $"{source}|{prod?.Trim()}|{(run ?? "").Trim()}|{part?.Trim()}|{skid}";
+        }
+    }
 }

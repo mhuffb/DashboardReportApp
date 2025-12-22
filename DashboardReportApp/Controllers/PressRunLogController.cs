@@ -35,8 +35,9 @@ namespace DashboardReportApp.Controllers
             ViewBag.OpenRuns = await _pressRunLogService.GetLoggedInRunsAsync();
 
             // 🔹 New: all runs for DataTables HTML table
-          //  ViewData["AllRuns"] = await _pressRunLogService.GetAllRunsAsync();
+            //  ViewData["AllRuns"] = await _pressRunLogService.GetAllRunsAsync();
 
+            ViewBag.HoldKeys = await _pressRunLogService.GetOpenHoldKeysAsync("pressrun");
             return View();
         }
 
@@ -315,6 +316,7 @@ namespace DashboardReportApp.Controllers
        DateTime? end = null)
         {
             var result = await _pressRunLogService.GetRunsPagedAsync(page, pageSize, q, machine, start, end);
+            var holdKeys = await _pressRunLogService.GetOpenHoldKeysAsync("pressrun");
 
             // ✅ rows now use DB-stored pcs, durationHours, runDate
             var rows = result.Rows.Select(r =>
@@ -327,9 +329,14 @@ namespace DashboardReportApp.Controllers
                     ? Math.Round(((double)durationHours.Value * 3600.0) / pcs.Value, 2)
                     : (double?)null;
 
-                bool onHold =
-       r.HoldRecordId.HasValue
-       || string.Equals(r.Status, "HOLD", StringComparison.OrdinalIgnoreCase);
+                bool onHold = false;
+                if (r.SkidNumber > 0)
+                {
+                    var key = HoldKeyHelper.HoldKey("pressrun", r.ProdNumber, r.Run, r.Part, r.SkidNumber);
+                    onHold = holdKeys.Contains(key);
+                }
+
+
 
                 return new
                 {
@@ -360,9 +367,6 @@ namespace DashboardReportApp.Controllers
 
                     // optional
                     cycleTime = cycleSec,
-                    status = r.Status,
-                    holdRecordId = r.HoldRecordId,
-                    holdAt = r.HoldAt,
                     onHold = onHold
                 };
             }).ToList();

@@ -10,6 +10,14 @@
    
 
 }
+<style>
+    .table-warning,
+    .table-warning > td,
+    .table-warning > th {
+        background-color: #ffeb3b !important; /* hard yellow */
+    }
+    
+</style>
 
 <div class="container-fluid px-3">
 <div class="table-responsive">
@@ -50,8 +58,13 @@
                                 pr.SkidNumber == skid.SkidNumber);
 
                                 var pcsDiff = matchingPressRun != null ? (matchingPressRun.PcsEnd - matchingPressRun.PcsStart) : 0;
+                                var holdKey = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey(
+                                "sinterrun", skid.ProdNumber ?? "", skid.Run, skid.Part ?? "", skid.SkidNumber
+                                );
+                                bool isOnHold = Model.HoldKeys.Contains(holdKey);
 
-                                <tr>
+
+                                <tr class="@(isOnHold ? "table-warning" : "")">
                                     <td>@skid.Id</td>
                                     <td>@skid.Timestamp</td>
                                     <td>@skid.ProdNumber</td>
@@ -66,6 +79,11 @@
                                     <td>@skid.Process</td>
                                     <td>@skid.Notes</td>
                                     <td>
+                                        @if (isOnHold)
+                                        {
+                                            <span class="badge bg-danger fw-bold mb-1 d-inline-block">🚫 ON HOLD</span>
+                                        }
+
                                         <button class="btn btn-warning btn-sm"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#endSkidModal"
@@ -80,6 +98,7 @@
                                                 data-notes="@skid.Notes">
                                             End Skid
                                         </button>
+
                                         <button class="btn btn-danger btn-sm ms-1"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#logoutSkidModal"
@@ -93,7 +112,22 @@
                                                 data-notes="@skid.Notes">
                                             Logout of Skid Run
                                         </button>
+
+                                        @if (isOnHold)
+                                        {
+                                            <a class="btn btn-secondary btn-sm ms-1 disabled" href="#" tabindex="-1" aria-disabled="true">
+                                                Place on Hold
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn btn-warning btn-sm ms-1"
+                                               href="/HoldTag?source=sinterrun&run=@skid.Run&prodNumber=@skid.ProdNumber&skidNumber=@skid.SkidNumber">
+                                                Place on Hold
+                                            </a>
+                                        }
                                     </td>
+
                                 </tr>
                             }
                         </tbody>
@@ -132,7 +166,14 @@
                         <tbody>
                             @foreach (var pressRun in Model.OpenGreenSkids)
                             {
-                                <tr>
+                                var holdKey = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey(
+                                pressRun.Source ?? "pressrun", pressRun.ProdNumber ?? "", pressRun.Run, pressRun.Part ?? "", pressRun.SkidNumber
+                                );
+                                bool isOnHold = Model.HoldKeys.Contains(holdKey);
+
+
+
+                                <tr class="@(isOnHold ? "table-warning" : "")">
                                     <td>@pressRun.Id</td>
                                     <td>@pressRun.ProdNumber</td>
                                     <td>@pressRun.Run</td>
@@ -147,6 +188,11 @@
                                     <td>@(pressRun.PcsEnd - pressRun.PcsStart)</td>
                                     <td>@pressRun.Notes</td>
                                     <td>
+                                        @if (isOnHold)
+                                        {
+                                            <span class="badge bg-danger fw-bold mb-1 d-inline-block">🚫 ON HOLD</span>
+                                        }
+
                                         <button class="btn btn-primary btn-sm"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#loginSkidModal"
@@ -175,6 +221,20 @@
                                            asp-route-operatorName="@pressRun.Operator">
                                             Test Bake
                                         </a>
+                                        @if (isOnHold)
+                                        {
+                                            <a class="btn btn-secondary btn-sm ms-1 disabled" href="#" tabindex="-1" aria-disabled="true">
+                                                Place on Hold
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn btn-warning btn-sm ms-1"
+                                               href="/HoldTag?source=pressrun&run=@pressRun.Run&prodNumber=@pressRun.ProdNumber&skidNumber=@pressRun.SkidNumber">
+                                                Place on Hold
+                                            </a>
+                                        }
+
                                     </td>
 
                                 </tr>
@@ -211,7 +271,7 @@
    
 
 
-    <!-- Full List of Records (React Table) -->
+    <!-- Full List of Records -->
     <h3 class="text-center mt-4">All Sinter Run Records</h3>
 <div class="card shadow mb-4">
   <div class="card-body">
@@ -238,13 +298,21 @@
                         <th>End</th>
                         <th>Operator</th>
                         <th>Notes</th>
+                        <th>Hold</th>
+
                     </tr>
                 </thead>
 
         <tbody>
                     @foreach (var row in Model.PageItems)
                     {
-                        <tr>
+                        var holdKey = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey(
+                        "sinterrun", row.ProdNumber ?? "", row.Run, row.Part ?? "", row.SkidNumber
+                        );
+                        bool isOnHold = Model.HoldKeys.Contains(holdKey);
+
+
+                        <tr class="@(isOnHold ? "table-warning" : "")">
                             <td>@row.Id</td>
                             <td>@row.ProdNumber</td>
                             <td>@row.Run</td>
@@ -260,6 +328,22 @@
                             <td>@row.EndDateTime</td>
                             <td>@row.Operator</td>
                             <td>@row.Notes</td>
+                            <td>
+                                @if (isOnHold)
+                                {
+                                    <span class="badge bg-danger fw-bold mb-1 d-inline-block">🚫 ON HOLD</span>
+                                    <a class="btn btn-secondary btn-sm ms-1 disabled" href="#" tabindex="-1" aria-disabled="true">
+                                        Place on Hold
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a class="btn btn-warning btn-sm"
+                                       href="/HoldTag?source=sinterrun&run=@row.Run&prodNumber=@row.ProdNumber&skidNumber=@row.SkidNumber">
+                                        Place on Hold
+                                    </a>
+                                }
+                            </td>
                         </tr>
                     }
 

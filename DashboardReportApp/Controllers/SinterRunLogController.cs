@@ -31,14 +31,15 @@ namespace DashboardReportApp.Controllers
             // Paged data for the big table
             var total = await _sinterRunLogService.GetRunsCountAsync(search);
             var items = await _sinterRunLogService.GetRunsPageAsync(page, pageSize, sort, dir, search);
+            var holdKeys = await _sinterRunLogService.GetOpenHoldKeysAsync();
 
             var vm = new SinterRunLogViewModel
             {
-                // ✅ hook it up here
                 Operators = operators ?? new List<string>(),
                 Furnaces = furnaces ?? new List<string>(),
                 OpenGreenSkids = openGreenSkids ?? new List<PressRunLogModel>(),
                 OpenSinterRuns = openSinterRuns ?? new List<SinterRunSkid>(),
+                HoldKeys = holdKeys,  // ✅ NEW
                 PageItems = items,
                 Page = page,
                 PageSize = pageSize,
@@ -47,6 +48,7 @@ namespace DashboardReportApp.Controllers
                 Sort = sort,
                 Dir = dir
             };
+
 
             return View(vm);
         }

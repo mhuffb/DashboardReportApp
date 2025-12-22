@@ -16,22 +16,26 @@ namespace DashboardReportApp.Controllers
         private readonly string _holdTagEmailTo;
         private readonly string _holdTagPrinter;
         private readonly PressRunLogService _pressRunLogService;
+        private readonly SinterRunLogService _sinterRunLogService;
 
         public HoldTagController(
      HoldTagService service,
      SharedService sharedService,
      PressRunLogService pressRunLogService,
+     SinterRunLogService sinterRunLogService,
      IConfiguration cfg)
         {
             _holdTagService = service;
             _sharedService = sharedService;
             _pressRunLogService = pressRunLogService;
+            _sinterRunLogService = sinterRunLogService;
 
             _holdTagEmailTo = cfg["Email:HoldTagTo"]
                          ?? cfg["Email:DevTo"]
                          ?? "holdtag@sintergy.net";
             _holdTagPrinter = cfg["Printers:HoldTag"] ?? "QaholdTags";
         }
+
 
         // GET: HoldTag/Admin  → password-protected admin view of Hold Tags
         [PasswordProtected(Password = "5intergy")] // same attribute you used on AdminHoldTag
@@ -130,59 +134,20 @@ namespace DashboardReportApp.Controllers
                     // Store the TEMP filename so the INSERT includes *a* filename
                     record.FileAddress1 = tempName;
                 }
+                // Ensure skidNumber is captured even when coming from querystring link
+                if (record.SkidNumber <= 0)
+                {
+                    int tmp;
+                    if (int.TryParse(Request.Form["SkidNumber"].ToString(), out tmp) && tmp > 0)
+                        record.SkidNumber = tmp;
+                    else if (int.TryParse(Request.Query["skidNumber"].ToString(), out tmp) && tmp > 0)
+                        record.SkidNumber = tmp;
+                }
 
                 // 2) Insert (includes FileAddress1 if present)
                 int newId = await _holdTagService.AddHoldRecordAsync(record);
                 record.Id = newId;
-                // 2b) If this hold tag came from pressrun + a skidNumber was provided,
-                // mark that skid as HOLD in pressrun (best-effort; don't break HoldTag submit)
-                try
-                {
-                    // Prefer posted model values, but fall back to querystring (because Place on Hold is a link)
-                    var source = (record.Source ?? Request.Form["Source"].ToString() ?? Request.Query["source"].ToString() ?? "").Trim();
-
-                    // Your pressrun page uses querystring names: run, prodNumber, skidNumber
-                    var run = (record.RunNumber ?? Request.Form["RunNumber"].ToString() ?? Request.Query["run"].ToString() ?? "").Trim();
-                    var prod = (record.ProdNumber ?? Request.Form["ProdNumber"].ToString() ?? Request.Query["prodNumber"].ToString() ?? "").Trim();
-
-                    int skidNum = 0;
-
-                    // If HoldTagModel has SkidNumber as int (not nullable) it will default to 0, so also check querystring
-                    if (record.SkidNumber > 0)
-                        skidNum = record.SkidNumber;
-                    else
-                        int.TryParse(Request.Form["SkidNumber"].ToString(), out skidNum);
-
-                    if (skidNum <= 0)
-                        int.TryParse(Request.Query["skidNumber"].ToString(), out skidNum);
-
-                    Log.Information("[HoldTag.Submit] source={Source} run={Run} prod={Prod} skid={Skid} holdId={HoldId}",
-                        source, run, prod, skidNum, newId);
-
-                    if (source.Equals("pressrun", StringComparison.OrdinalIgnoreCase)
-                        && skidNum > 0
-                        && !string.IsNullOrWhiteSpace(run)
-                        && !string.IsNullOrWhiteSpace(prod))
-                    {
-                        Log.Information("[HoldTag.Submit] source={Source} run={Run} prod={Prod} skid={Skid} holdId={HoldId}",
-    source, run, prod, skidNum, newId);
-
-                        var rows = await _pressRunLogService.MarkSkidOnHoldAsync(run, prod, skidNum, newId);
-                        Log.Information("[HoldTag.Submit] pressrun HOLD update rows={Rows}", rows);
-
-
-                        if (rows == 0)
-                        {
-                            Log.Warning("[HoldTag.Submit] No pressrun row matched for HOLD update. run={Run} prod={Prod} skid={Skid}",
-                                run, prod, skidNum);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to mark pressrun skid HOLD for HoldTagId={HoldTagId}", record.Id);
-                }
-
+              
 
                 // 3) If we had a temp file, rename it to the final pattern and persist the final name
                 if (!string.IsNullOrWhiteSpace(tempName))
@@ -481,6 +446,7 @@ Hold Tag Page: {indexUrl}
                     success = true,
                     source = result.Source,
                     part = result.Part,
+
                     component = result.Component,
                     runNumber = result.RunNumber,
                     prodNumber = result.ProdNumber,

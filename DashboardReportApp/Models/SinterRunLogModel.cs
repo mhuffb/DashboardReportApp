@@ -21,6 +21,7 @@
         public string MaterialCode { get; set; }
         public string Source { get; set; }
 
+
     }
 
     public class SinterRunLogViewModel
@@ -38,5 +39,13 @@
         public string? Search { get; set; }
         public string? Sort { get; set; } // column name
         public string? Dir { get; set; }  // "ASC" | "DESC"
+        public HashSet<string> HoldKeys { get; set; }
+      = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public static string HoldKey(string source, string prod, string? run, string part, int skid)
+        {
+            return $"{source}|{prod?.Trim()}|{(run ?? "").Trim()}|{part?.Trim()}|{skid}";
+        }
+
     }
 }

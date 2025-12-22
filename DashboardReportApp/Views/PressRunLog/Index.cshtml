@@ -1,5 +1,11 @@
 ﻿
 @using System.Linq
+@using DashboardReportApp.Models
+
+@{
+    var holdKeys = ViewBag.HoldKeys as HashSet<string>
+        ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+}
 
 @{
     ViewData["Title"] = "Press Run Log - Split Tables, Login, & Start Skid Modal";
@@ -196,9 +202,10 @@
                             @foreach (var skid in skids)
                             {
                                 // 🔸 adjust this condition if your flag name differs
-                                bool isOnHold =
-                                skid.HoldRecordId.HasValue
-                                || string.Equals(skid.Status, "HOLD", StringComparison.OrdinalIgnoreCase);
+                                bool isOnHold = holdKeys.Contains(
+                                HoldKeyHelper.HoldKey("pressrun", skid.ProdNumber, skid.Run, skid.Part, skid.SkidNumber)
+                                );
+
 
                                 if (isOnHold)
                                 {
