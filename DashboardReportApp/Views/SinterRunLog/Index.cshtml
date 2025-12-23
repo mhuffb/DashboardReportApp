@@ -16,7 +16,17 @@
     .table-warning > th {
         background-color: #ffeb3b !important; /* hard yellow */
     }
-    
+    /* HARD OVERRIDE: paint every cell in that row */
+    #allSinterTable tbody tr.hold-row > td,
+    #allSinterTable tbody tr.hold-row > th,
+    #tblSinterAll tbody tr.hold-row > td,
+    #tblSinterAll tbody tr.hold-row > th,
+    table.table tbody tr.hold-row > td,
+    table.table tbody tr.hold-row > th {
+        background-color: #ffeb3b !important;
+        color: #000 !important;
+    }
+
 </style>
 
 <div class="container-fluid px-3">
@@ -58,13 +68,23 @@
                                 pr.SkidNumber == skid.SkidNumber);
 
                                 var pcsDiff = matchingPressRun != null ? (matchingPressRun.PcsEnd - matchingPressRun.PcsStart) : 0;
-                                var holdKey = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey(
-                                "sinterrun", skid.ProdNumber ?? "", skid.Run, skid.Part ?? "", skid.SkidNumber
-                                );
-                                bool isOnHold = Model.HoldKeys.Contains(holdKey);
+                                var prod = skid.ProdNumber ?? "";
+                                var run = skid.Run ?? "";          // IMPORTANT: now blank instead of "N/A"
+                                var part = skid.Part ?? "";
+                                var sn = skid.SkidNumber;
+
+                                var holdKeySinter = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("sinterrun", prod, run, part, sn);
+                                var holdKeyPress = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("pressrun", prod, run, part, sn);
+                                var holdKeyAssembly = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("assembly", prod, run, part, sn);
+
+                                bool isOnHold = Model.HoldKeys.Contains(holdKeySinter)
+                                || Model.HoldKeys.Contains(holdKeyPress)
+                                || Model.HoldKeys.Contains(holdKeyAssembly);
 
 
-                                <tr class="@(isOnHold ? "table-warning" : "")">
+
+                                <tr class="@(isOnHold ? "hold-row" : "")">
+
                                     <td>@skid.Id</td>
                                     <td>@skid.Timestamp</td>
                                     <td>@skid.ProdNumber</td>
@@ -120,6 +140,7 @@
                                             </a>
                                         }
                                         else
+
                                         {
                                             <a class="btn btn-warning btn-sm ms-1"
                                                href="/HoldTag?source=sinterrun&run=@skid.Run&prodNumber=@skid.ProdNumber&skidNumber=@skid.SkidNumber">
@@ -173,7 +194,8 @@
 
 
 
-                                <tr class="@(isOnHold ? "table-warning" : "")">
+                                <tr class="@(isOnHold ? "hold-row" : "")">
+
                                     <td>@pressRun.Id</td>
                                     <td>@pressRun.ProdNumber</td>
                                     <td>@pressRun.Run</td>
@@ -306,13 +328,23 @@
         <tbody>
                     @foreach (var row in Model.PageItems)
                     {
-                        var holdKey = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey(
-                        "sinterrun", row.ProdNumber ?? "", row.Run, row.Part ?? "", row.SkidNumber
-                        );
-                        bool isOnHold = Model.HoldKeys.Contains(holdKey);
+                        var prod = row.ProdNumber ?? "";
+                        var run = row.Run ?? "";          // IMPORTANT: now blank instead of "N/A"
+                        var part = row.Part ?? "";
+                        var sn = row.SkidNumber;
+
+                        var holdKeySinter = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("sinterrun", prod, run, part, sn);
+                        var holdKeyPress = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("pressrun", prod, run, part, sn);
+                        var holdKeyAssembly = DashboardReportApp.Models.SinterRunLogViewModel.HoldKey("assembly", prod, run, part, sn);
+
+                        bool isOnHold = Model.HoldKeys.Contains(holdKeySinter)
+                        || Model.HoldKeys.Contains(holdKeyPress)
+                        || Model.HoldKeys.Contains(holdKeyAssembly);
 
 
-                        <tr class="@(isOnHold ? "table-warning" : "")">
+
+                        <tr class="@(isOnHold ? "hold-row" : "")">
+
                             <td>@row.Id</td>
                             <td>@row.ProdNumber</td>
                             <td>@row.Run</td>

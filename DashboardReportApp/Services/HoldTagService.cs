@@ -410,6 +410,9 @@ LIMIT 10;";
             const string query = @"
 UPDATE HoldRecords
 SET 
+    Source = @Source,
+    SkidNumber = @SkidNumber,
+
     Part = @Part,
     Component = @Component,
     ProdNumber = @ProdNumber,
@@ -430,7 +433,8 @@ SET
     DateCompleted = @DateCompleted,
     FileAddress1 = @FileAddress1,
     FileAddress2 = @FileAddress2
-WHERE Id = @Id";
+WHERE Id = @Id
+";
 
 
             await using var command = new MySqlCommand(query, connection);
@@ -457,6 +461,8 @@ WHERE Id = @Id";
             command.Parameters.AddWithValue("@MaterialCode", (object?)model.MaterialCode ?? DBNull.Value);
             command.Parameters.AddWithValue("@RunNumber", (object?)model.RunNumber ?? DBNull.Value);
             command.Parameters.AddWithValue("@QuantityOnHold", (object?)model.QuantityOnHold ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Source", (object?)model.Source ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SkidNumber", model.SkidNumber > 0 ? model.SkidNumber : (object)DBNull.Value);
 
 
             var rows = await command.ExecuteNonQueryAsync();

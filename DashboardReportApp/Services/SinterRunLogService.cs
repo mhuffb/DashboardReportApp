@@ -76,7 +76,8 @@ public class SinterRunLogService
                 Timestamp = timestamp,
                 Operator = reader["operator"]?.ToString(),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
-                Run = reader["run"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "",
+
                 Part = reader["part"]?.ToString() ?? "N/A",
                 Component = reader["component"]?.ToString(),
                 LotNumber = reader["lotNumber"]?.ToString(),
@@ -591,7 +592,8 @@ ORDER BY part, skidNumber;
                            ? DateTime.MinValue
                            : reader.GetDateTime("timestamp"),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
-                Run = reader["run"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "",
+
                 Part = reader["part"]?.ToString() ?? "N/A",
                 Machine = reader["oven"]?.ToString(),
                 Component = reader["component"]?.ToString(),
@@ -670,7 +672,8 @@ ORDER BY sr.id DESC;";
                 Timestamp = !reader.IsDBNull("timestamp") ? reader.GetDateTime("timestamp") : DateTime.MinValue,
                 Operator = reader["operator"]?.ToString(),
                 ProdNumber = reader["prodNumber"]?.ToString() ?? "N/A",
-                Run = reader["run"]?.ToString() ?? "N/A",
+                Run = reader["run"]?.ToString() ?? "",
+
 
                 Part = reader["part"]?.ToString() ?? "N/A",
                 Component = reader["component"]?.ToString(),

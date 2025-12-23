@@ -175,7 +175,8 @@
                     <th class="sortable" data-label="Component" style="width: 7%;">Component</th>
                     <th class="sortable" data-label="LotNumber" style="width: 7%;">Lot #</th>
                     <th class="sortable" data-label="MaterialCode" style="width: 7%;">Material</th>
-
+                    <th class="sortable" data-label="Source" style="width: 6%;">Source</th>
+                    <th class="sortable" data-label="SkidNumber" style="width: 4%;">Skid #</th>
                     <th class="sortable" data-label="Discrepancy" style="width: 10%;">Discrepancy</th>
                     <th class="sortable" data-label="Date" style="width: 7%;">Date</th>
                     <th class="sortable" data-label="Issued By" style="width: 7%;">Issued By</th>
@@ -206,6 +207,9 @@
                         <td>@record.LotNumber</td>
                         <td>@record.MaterialCode</td>
 
+
+                        <td>@record.Source</td>
+                        <td>@(record.SkidNumber > 0 ? record.SkidNumber.ToString() : "")</td>
                         <td>@record.Discrepancy</td>
                         <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
                         <td>@record.IssuedBy</td>
@@ -282,7 +286,9 @@
                                         data-datecompleted="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")"
                                         data-fileaddress1="@record.FileAddress1"
                                         data-fileaddress2="@record.FileAddress2"
-                                        data-prodnumber="@record.ProdNumber">
+                                        data-prodnumber="@record.ProdNumber"
+                                        data-source="@record.Source"
+                                        data-skidnumber="@record.SkidNumber">
                                     Edit
                                 </button>
                             }
@@ -297,7 +303,6 @@
 </div>
 
 <!-- Modal for "Add Request" -->
-<!-- NEW: Modal for "Add Request" -->
 <div class="modal fade" id="addRequestModal" tabindex="-1" aria-labelledby="addRequestModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-md">
         <div class="modal-content">
@@ -305,114 +310,125 @@
                 <h5 class="modal-title" id="addRequestModalLabel">Add Request</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+
             <form asp-action="Submit" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
+
                 <div class="modal-body">
 
-                    <!-- SOURCE (hidden) -->
-                    <input type="hidden" id="ModalSource" name="Source" />
-                    <input type="hidden" asp-for="FormModel.Source" />
-                    <input type="hidden" asp-for="FormModel.RunNumber" />
-                    <input type="hidden" asp-for="FormModel.ProdNumber" />
-                    <input type="hidden" id="ModalSkidNumber" name="SkidNumber" value="" />
+                    <!-- ✅ Row 1: Run + Prod (TOP) -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalRunNumber" class="form-label">Run Number</label>
+                            <input type="text" id="ModalRunNumber" name="RunNumber" class="form-control" autocomplete="off" />
+                        </div>
 
-
-                    <!-- OPERATOR -->
-                    <div class="mb-3">
-                        <label for="ModalIssuedBy" class="form-label">Issued By (Operator)</label>
-                        <select id="ModalIssuedBy" name="IssuedBy" class="form-control" required>
-                            <option value="">-- Select Operator --</option>
-                            @if (ViewData["Operators"] is List<string> opList1)
-                            {
-                                foreach (var op in opList1)
-                                {
-                                    <option value="@op">@op</option>
-                                }
-                            }
-                        </select>
-                        <span asp-validation-for="FormModel.IssuedBy" class="text-danger"></span>
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalProdNumber" class="form-label">Production Number</label>
+                            <input type="text" id="ModalProdNumber" name="ProdNumber" class="form-control" autocomplete="off" />
+                            <span asp-validation-for="FormModel.ProdNumber" class="text-danger"></span>
+                        </div>
                     </div>
 
-                    <!-- DISCREPANCY -->
+                    <!-- ✅ Row 2: Part + Component -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalPart" class="form-label">Part</label>
+                            <input type="text" id="ModalPart" name="Part" class="form-control" readonly />
+                            <span asp-validation-for="FormModel.Part" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalComponent" class="form-label">Component</label>
+                            <input type="text" id="ModalComponent" name="Component" class="form-control" readonly />
+                        </div>
+                    </div>
+
+                    <!-- ✅ Row 3: Material + Lot -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalMaterialCode" class="form-label">Material Code</label>
+                            <input type="text" id="ModalMaterialCode" name="MaterialCode" class="form-control" readonly />
+                            <span asp-validation-for="FormModel.MaterialCode" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalLotNumber" class="form-label">Lot Number</label>
+                            <input type="text" id="ModalLotNumber" name="LotNumber" class="form-control" readonly />
+                            <span asp-validation-for="FormModel.LotNumber" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- ✅ Row 4: Source + Skid -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalSource" class="form-label">Source</label>
+                            <input type="text" id="ModalSource" name="Source" class="form-control" placeholder="pressrun / sinterrun / presssetup ..." />
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalSkidNumber" class="form-label">Skid Number</label>
+                            <!-- keep min=0; if you want to avoid blank posting issues, set value="0" -->
+                            <input type="number" id="ModalSkidNumber" name="SkidNumber" class="form-control" min="0" value="0" />
+                            <small class="text-muted">Auto-fills from the Place On Hold button. You can change it.</small>
+                        </div>
+                    </div>
+
+                    <!-- ✅ Row 5: Operator + Qty Hold Tags + Qty On Hold -->
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="ModalIssuedBy" class="form-label">Operator</label>
+                            <select id="ModalIssuedBy" name="IssuedBy" class="form-control" required>
+                                <option value="">-- Select --</option>
+                                @if (ViewData["Operators"] is List<string> opList1)
+                                {
+                                    foreach (var op in opList1)
+                                    {
+                                        <option value="@op">@op</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="FormModel.IssuedBy" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            <label for="ModalQuantity" class="form-label">Hold Tags</label>
+                            <input type="number" id="ModalQuantity" name="Quantity" class="form-control" required />
+                            <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            <label for="ModalQuantityOnHold" class="form-label">Qty On Hold</label>
+                            <input type="number" id="ModalQuantityOnHold" name="QuantityOnHold" class="form-control" required />
+                            <span asp-validation-for="FormModel.QuantityOnHold" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <!-- ✅ Row 6: Unit + Attachment -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalUnit" class="form-label">Unit</label>
+                            <select id="ModalUnit" name="Unit" class="form-control">
+                                <option value="skid" data-singular="skid" data-plural="skids">Skid</option>
+                                <option value="tray" data-singular="tray" data-plural="trays">Tray</option>
+                                <option value="tote" data-singular="tote" data-plural="totes">Tote</option>
+                                <option value="barrel" data-singular="barrel" data-plural="barrels">Barrel</option>
+                                <option value="pc" data-singular="pc" data-plural="pcs">Pc</option>
+                            </select>
+                            <span asp-validation-for="FormModel.Unit" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ModalFile" class="form-label">Attachment (Optional)</label>
+                            <input type="file" name="file" id="ModalFile" class="form-control" />
+                        </div>
+                    </div>
+
+                    <!-- Discrepancy stays below (was required) -->
                     <div class="mb-3">
                         <label for="ModalDiscrepancy" class="form-label">Discrepancy</label>
                         <textarea id="ModalDiscrepancy" name="Discrepancy" class="form-control text-area-large" required></textarea>
                         <span asp-validation-for="FormModel.Discrepancy" class="text-danger"></span>
-                    </div>
-
-                    <!-- QUANTITY OF HOLD TAGS -->
-                    <div class="mb-3">
-                        <label for="ModalQuantity" class="form-label">Quantity of Hold Tags</label>
-                        <input type="number" id="ModalQuantity" name="Quantity" class="form-control" required />
-                        <span asp-validation-for="FormModel.Quantity" class="text-danger"></span>
-                    </div>
-
-                    <!-- QUANTITY ON HOLD -->
-                    <div class="mb-3">
-                        <label for="ModalQuantityOnHold" class="form-label">Quantity On Hold</label>
-                        <input type="number" id="ModalQuantityOnHold" name="QuantityOnHold" class="form-control" required />
-                        <span asp-validation-for="FormModel.QuantityOnHold" class="text-danger"></span>
-                    </div>
-
-                    <!-- UNIT (retain ability to change it) -->
-                    <div class="mb-3">
-                        <label for="ModalUnit" class="form-label">Unit</label>
-                        <select id="ModalUnit" name="Unit" class="form-control">
-                            <option value="skid" data-singular="skid" data-plural="skids">Skid</option>
-                            <option value="tray" data-singular="tray" data-plural="trays">Tray</option>
-                            <option value="tote" data-singular="tote" data-plural="totes">Tote</option>
-                            <option value="barrel" data-singular="barrel" data-plural="barrels">Barrel</option>
-                            <option value="pc" data-singular="pc" data-plural="pcs">Pc</option>
-                        </select>
-                        <span asp-validation-for="FormModel.Unit" class="text-danger"></span>
-                    </div>
-
-                    <hr />
-
-                    <!-- RUN -->
-                    <div class="mb-3">
-                        <label for="ModalRunNumber" class="form-label">Run Number</label>
-                        <input type="text" id="ModalRunNumber" name="RunNumber" class="form-control" autocomplete="off" />
-                    </div>
-
-                    <!-- PRODNUMBER -->
-                    <div class="mb-3">
-                        <label for="ModalProdNumber" class="form-label">Production Number</label>
-                        <input type="text" id="ModalProdNumber" name="ProdNumber" class="form-control" autocomplete="off" />
-                        <span asp-validation-for="FormModel.ProdNumber" class="text-danger"></span>
-                    </div>
-
-                    <!-- PART -->
-                    <div class="mb-3">
-                        <label for="ModalPart" class="form-label">Part</label>
-                        <input type="text" id="ModalPart" name="Part" class="form-control" readonly />
-                        <span asp-validation-for="FormModel.Part" class="text-danger"></span>
-                    </div>
-
-                    <!-- COMPONENT -->
-                    <div class="mb-3">
-                        <label for="ModalComponent" class="form-label">Component</label>
-                        <input type="text" id="ModalComponent" name="Component" class="form-control" readonly />
-                    </div>
-
-                    <!-- MATERIAL CODE -->
-                    <div class="mb-3">
-                        <label for="ModalMaterialCode" class="form-label">Material Code</label>
-                        <input type="text" id="ModalMaterialCode" name="MaterialCode" class="form-control" readonly />
-                        <span asp-validation-for="FormModel.MaterialCode" class="text-danger"></span>
-                    </div>
-
-                    <!-- LOT -->
-                    <div class="mb-3">
-                        <label for="ModalLotNumber" class="form-label">Lot Number</label>
-                        <input type="text" id="ModalLotNumber" name="LotNumber" class="form-control" readonly />
-                        <span asp-validation-for="FormModel.LotNumber" class="text-danger"></span>
-                    </div>
-
-                    <!-- File Upload -->
-                    <div class="mb-3">
-                        <label for="ModalFile" class="form-label">Attach File (Optional)</label>
-                        <input type="file" name="file" id="ModalFile" class="form-control" />
                     </div>
 
                 </div>
@@ -439,50 +455,118 @@
                     @Html.AntiForgeryToken()
                     <div class="modal-body">
                         <input type="hidden" name="Id" id="edit-id" />
-                        <div class="mb-3">
-                            <label for="edit-prodnumber" class="form-label">Production Number</label>
-                            <input type="text" name="ProdNumber" id="edit-prodnumber" class="form-control" />
+
+                        <!-- ✅ Row 1: Run + Prod (TOP) -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-runnumber" class="form-label">Run Number</label>
+                                <input type="text" name="RunNumber" id="edit-runnumber" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-prodnumber" class="form-label">Production Number</label>
+                                <input type="text" name="ProdNumber" id="edit-prodnumber" class="form-control" />
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="edit-part" class="form-label">Part</label>
-                            <input type="text" name="Part" id="edit-part" class="form-control" />
+                        <!-- ✅ Row 2: Part + Component -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-part" class="form-label">Part</label>
+                                <input type="text" name="Part" id="edit-part" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-component" class="form-label">Component</label>
+                                <input type="text" name="Component" id="edit-component" class="form-control" />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="edit-component" class="form-label">Component</label>
-                            <input type="text" name="Component" id="edit-component" class="form-control" />
+
+                        <!-- ✅ Row 3: Material + Lot -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-materialcode" class="form-label">Material Code</label>
+                                <input type="text" name="MaterialCode" id="edit-materialcode" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-lotnumber" class="form-label">Lot Number</label>
+                                <input type="text" name="LotNumber" id="edit-lotnumber" class="form-control" />
+                            </div>
                         </div>
+
+                        <!-- ✅ Row 4: Source + Skid -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-source" class="form-label">Source</label>
+                                <input type="text" name="Source" id="edit-source" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-skidnumber" class="form-label">Skid Number</label>
+                                <input type="number" name="SkidNumber" id="edit-skidnumber" class="form-control" min="0" value="0" />
+                            </div>
+                        </div>
+
+                        <!-- ✅ Row 5: Operator + Hold Tags + Qty On Hold -->
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-issuedby" class="form-label">Operator</label>
+                                <select name="IssuedBy" id="edit-issuedby" class="form-control">
+                                    <option value="">-- Select Operator --</option>
+                                    @if (ViewBag.IssuedByOperators != null)
+                                    {
+                                        foreach (var op in (List<string>)ViewBag.IssuedByOperators)
+                                        {
+                                            <option value="@op">@op</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-quantity" class="form-label">Hold Tags</label>
+                                <input type="number" name="Quantity" id="edit-quantity" class="form-control" />
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-quantityonhold" class="form-label">Qty On Hold</label>
+                                <input type="number" name="QuantityOnHold" id="edit-quantityonhold" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- ✅ Row 6: Unit + Pcs Scrapped -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-unit" class="form-label">Unit</label>
+                                <input type="text" name="Unit" id="edit-unit" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-pcsscrapped" class="form-label">Pcs Scrapped</label>
+                                <input type="number" name="PcsScrapped" id="edit-pcsscrapped" class="form-control" />
+                            </div>
+                        </div>
+
+                        <!-- Discrepancy -->
                         <div class="mb-3">
                             <label for="edit-discrepancy" class="form-label">Discrepancy</label>
                             <textarea name="Discrepancy" id="edit-discrepancy" class="form-control"></textarea>
                         </div>
 
+                        <!-- Date -->
                         <div class="mb-3">
                             <label for="edit-date" class="form-label">Date</label>
                             <input type="date" name="Date" id="edit-date" class="form-control" />
                         </div>
 
-                        <!-- Issued By Dropdown -->
-                        <div class="mb-3">
-                            <label for="edit-issuedby" class="form-label">Issued By</label>
-                            <select name="IssuedBy" id="edit-issuedby" class="form-control">
-                                <option value="">-- Select Operator --</option>
-                                @if (ViewBag.IssuedByOperators != null)
-                                {
-                                    foreach (var op in (List<string>)ViewBag.IssuedByOperators)
-                                    {
-                                        <option value="@op">@op</option>
-                                    }
-                                }
-                            </select>
-                        </div>
-
+                        <!-- Disposition -->
                         <div class="mb-3">
                             <label for="edit-disposition" class="form-label">Disposition</label>
                             <textarea name="Disposition" id="edit-disposition" class="form-control"></textarea>
                         </div>
 
-                        <!-- Disposition By Dropdown -->
+                        <!-- Disposition By -->
                         <div class="mb-3">
                             <label for="edit-dispositionby" class="form-label">Disposition By</label>
                             <select name="DispositionBy" id="edit-dispositionby" class="form-control">
@@ -497,12 +581,13 @@
                             </select>
                         </div>
 
+                        <!-- Rework Instructions -->
                         <div class="mb-3">
                             <label for="edit-reworkinstr" class="form-label">Rework Instructions</label>
                             <textarea name="ReworkInstr" id="edit-reworkinstr" class="form-control"></textarea>
                         </div>
 
-                        <!-- Rework Instr By Dropdown -->
+                        <!-- Rework Instr By -->
                         <div class="mb-3">
                             <label for="edit-reworkinstrby" class="form-label">Rework Instr By</label>
                             <select name="ReworkInstrBy" id="edit-reworkinstrby" class="form-control">
@@ -517,42 +602,15 @@
                             </select>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="edit-quantity" class="form-label">Quantity (Hold Tags)</label>
-                            <input type="number" name="Quantity" id="edit-quantity" class="form-control" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="edit-quantityonhold" class="form-label">Quantity On Hold</label>
-                            <input type="number" name="QuantityOnHold" id="edit-quantityonhold" class="form-control" />
-                        </div>
-
-
-                        <div class="mb-3">
-                            <label for="edit-unit" class="form-label">Unit</label>
-                            <input type="text" name="Unit" id="edit-unit" class="form-control" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="edit-pcsscrapped" class="form-label">Pcs Scrapped</label>
-                            <input type="number" name="PcsScrapped" id="edit-pcsscrapped" class="form-control" />
-                        </div>
-
+                        <!-- Date Completed -->
                         <div class="mb-3">
                             <label for="edit-datecompleted" class="form-label">Date Completed</label>
                             <input type="date" name="DateCompleted" id="edit-datecompleted" class="form-control" />
                         </div>
-                        <div class="mb-3">
-                            <label for="edit-lotnumber" class="form-label">Lot Number</label>
-                            <input type="text" name="LotNumber" id="edit-lotnumber" class="form-control" />
-                        </div>
 
-                        <div class="mb-3">
-                            <label for="edit-materialcode" class="form-label">Material Code</label>
-                            <input type="text" name="MaterialCode" id="edit-materialcode" class="form-control" />
-                        </div>
+                        <hr />
 
-                        <!-- File 1 -->
+                        <!-- ✅ Files -->
                         <div class="mb-3">
                             <label class="form-label">File 1</label>
                             <input type="hidden" name="FileAddress1" id="edit-fileaddress1" />
@@ -560,7 +618,6 @@
                             <div id="current-file1" class="mt-2 text-break"></div>
                         </div>
 
-                        <!-- File 2 -->
                         <div class="mb-3">
                             <label class="form-label">File 2</label>
                             <input type="hidden" name="FileAddress2" id="edit-fileaddress2" />
@@ -568,6 +625,7 @@
                             <div id="current-file2" class="mt-2 text-break"></div>
                         </div>
                     </div>
+
 
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -868,6 +926,8 @@
                 const lotNumber      = btn.dataset.lotnumber;
                 const materialCode   = btn.dataset.materialcode;
                 const runNumber      = btn.dataset.runnumber;
+                        const source = btn.dataset.source;
+        const skidNumber = btn.dataset.skidnumber;
 
         document.getElementById("edit-quantityonhold").value = quantityOnHold || "";
         document.getElementById("edit-lotnumber").value      = lotNumber || "";
@@ -878,6 +938,10 @@
         if (runInput) runInput.value = runNumber || "";
 
                 document.getElementById("edit-id").value = id;
+                        document.getElementById("edit-source").value = source || "";
+        document.getElementById("edit-skidnumber").value = (skidNumber ?? 0);
+
+
                         document.getElementById("edit-part").value = part || "";
         document.getElementById("edit-component").value = component || "";
                         document.getElementById("edit-discrepancy").value = discrepancy || "";

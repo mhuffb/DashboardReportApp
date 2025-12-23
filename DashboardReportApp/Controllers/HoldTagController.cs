@@ -107,12 +107,27 @@ namespace DashboardReportApp.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Submit(HoldTagModel record, IFormFile? file)
         {
+            record.SkidNumber ??= 0;
+
+
+            Log.Information("[HoldTag.Submit] Form RunNumber='{FormRun}' | Model RunNumber='{ModelRun}' | AllKeys={Keys}",
+    Request.Form["RunNumber"].ToString(),
+    record.RunNumber,
+    string.Join(",", Request.Form.Keys));
+
             if (!ModelState.IsValid)
             {
+                var errors = ModelState
+                    .Where(kvp => kvp.Value.Errors.Count > 0)
+                    .Select(kvp => $"{kvp.Key}: {string.Join(" | ", kvp.Value.Errors.Select(e => e.ErrorMessage))}");
+
+                Log.Warning("[HoldTag.Submit] ModelState INVALID -> {Errors}", string.Join(" || ", errors));
+
                 TempData["ErrorMessage"] = "Please correct the errors and try again.";
-                ViewData["Operators"] = await _sharedService.GetAllOperators();
-                return View("Index", record);
+                return RedirectToAction("Index");
             }
+
+
 
             try
             {
