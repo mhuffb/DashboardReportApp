@@ -6,6 +6,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
+
 <style>
     #imageModal .modal-dialog {
         max-width: 95% !important;
@@ -15,16 +16,15 @@
         padding: 0;
         background-color: #000;
     }
-</style>
-<style>
-    #imageModal .modal-dialog {
-        max-width: 95% !important;
+
+    /* Open / not completed hold tags (BRIGHTER) */
+    tr.ht-open > td,
+    tr.ht-detail-row.ht-open > td,
+    tr.child.ht-open > td {
+        background-color: #ffeb3b !important; /* brighter yellow */
     }
 
-    #imageModal .modal-body {
-        padding: 0;
-        background-color: #000;
-    }
+
 
     /* NEW: make table more vertical / wrapped */
     #holdTagTable {
@@ -100,6 +100,27 @@
         overflow-x: auto;
     }
 </style>
+<style>
+    /* child/detail row styling */
+    tr.ht-detail-row td {
+        padding: 0.5rem 0.75rem !important;
+        background: rgba(0,0,0,0.03);
+    }
+
+    .ht-detail {
+        font-size: 0.85rem;
+        line-height: 1.2rem;
+    }
+
+        .ht-detail .label {
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .ht-detail .muted {
+            opacity: 0.85;
+        }
+</style>
 
 <h1 class="text-center mb-4">Hold Tag</h1>
 
@@ -168,37 +189,41 @@
         <table id="holdTagTable" class="table table-striped table-bordered shadow-sm custom-table" style="width:100%; border-collapse:collapse;">
             <thead class="table-dark">
                 <tr>
-                    <th class="sortable" data-label="ID" style="width: 3%;">ID</th>
-                    <th class="sortable" data-label="ProdNumber" style="width: 7%;">Production #</th>
-                    <th class="sortable" data-label="RunNumber" style="width: 7%;">Run #</th>
-                    <th class="sortable" data-label="Part" style="width: 7%;">Part</th>
-                    <th class="sortable" data-label="Component" style="width: 7%;">Component</th>
-                    <th class="sortable" data-label="LotNumber" style="width: 7%;">Lot #</th>
-                    <th class="sortable" data-label="MaterialCode" style="width: 7%;">Material</th>
-                    <th class="sortable" data-label="Source" style="width: 6%;">Source</th>
-                    <th class="sortable" data-label="SkidNumber" style="width: 4%;">Skid #</th>
-                    <th class="sortable" data-label="Discrepancy" style="width: 10%;">Discrepancy</th>
-                    <th class="sortable" data-label="Date" style="width: 7%;">Date</th>
-                    <th class="sortable" data-label="Issued By" style="width: 7%;">Issued By</th>
-                    <th class="sortable" data-label="Disposition" style="width: 10%;">Disposition</th>
-                    <th class="sortable" data-label="Disposition By" style="width: 6%;">Disposition By</th>
-                    <th class="sortable" data-label="Rework Instructions" style="width: 10%;">Rework Instructions</th>
-                    <th class="sortable" data-label="Rework Instr By" style="width: 7%;">Rework Instr By</th>
-                    <th class="sortable" data-label="QtyOnHold" style="width: 4%;">Qty On Hold</th>
-                    <th class="sortable" data-label="Unit" style="width: 7%;">Unit</th>
-                    <th class="sortable" data-label="Pcs Scrapped" style="width: 4%;">Pcs Scrapped</th>
-                    <th class="sortable" data-label="Date Completed" style="width: 7%;">Date Completed</th>
-                    <th class="sortable" data-label="File1" style="width: 5%;">File 1</th>
-                    <th class="sortable" data-label="File2" style="width: 5%;">File 2</th>
-                    <th style="width: 6%;">Actions</th>
+                    <th style="width: 3%;">ID</th>
+                    <th style="width: 7%;">Production #</th>
+                    <th style="width: 7%;">Run #</th>
+                    <th style="width: 7%;">Part</th>
+                    <th style="width: 7%;">Component</th>
+                    <th style="width: 7%;">Lot #</th>
+                    <th style="width: 7%;">Material</th>
+                    <th style="width: 6%;">Source</th>
+                    <th style="width: 4%;">Skid #</th>
+                    <th style="width: 6%;">Qty On Hold</th>
+                    <th style="width: 6%;">Unit</th>
+                    <th style="width: 7%;">Date</th>
+                    <th style="width: 8%;">Actions</th>
                 </tr>
             </thead>
+
 
 
             <tbody>
                 @foreach (var record in Model.Records)
                 {
-                    <tr>
+                    <tr class="ht-main"
+                        data-issuedby="@record.IssuedBy"
+                        data-discrepancy="@record.Discrepancy"
+                        data-disposition="@record.Disposition"
+                        data-dispositionby="@record.DispositionBy"
+                        data-reworkinstr="@record.ReworkInstr"
+                        data-reworkinstrby="@record.ReworkInstrBy"
+                        data-qtytags="@(record.Quantity?.ToString() ?? "")"
+                        data-qtyonhold="@(record.QuantityOnHold?.ToString() ?? "")"
+                        data-unit="@record.Unit"
+                        data-pcsscrapped="@(record.PcsScrapped?.ToString() ?? "")"
+                        data-datecompleted="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")"
+                        data-file1="@record.FileAddress1"
+                        data-file2="@record.FileAddress2">
                         <td>@record.Id</td>
                         <td>@record.ProdNumber</td>
                         <td>@record.RunNumber</td>
@@ -206,53 +231,14 @@
                         <td>@record.Component</td>
                         <td>@record.LotNumber</td>
                         <td>@record.MaterialCode</td>
-
-
                         <td>@record.Source</td>
                         <td>@(record.SkidNumber > 0 ? record.SkidNumber.ToString() : "")</td>
-                        <td>@record.Discrepancy</td>
-                        <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
-                        <td>@record.IssuedBy</td>
-                        <td>@record.Disposition</td>
-                        <td>@record.DispositionBy</td>
-                        <td>@record.ReworkInstr</td>
-                        <td>@record.ReworkInstrBy</td>
-
                         <td>@record.QuantityOnHold</td>
                         <td>@(string.IsNullOrWhiteSpace(record.Unit) ? "" : record.Unit + "(s)")</td>
-                        <td>@record.PcsScrapped</td>
-                        <td>@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")</td>
+                        <td>@(record.Date?.ToString("yyyy-MM-dd") ?? "")</td>
 
                         <td>
-                            @if (!string.IsNullOrEmpty(record.FileAddress1))
-                            {
-                                <button type="button"
-                                        class="btn btn-info btn-sm btn-preview"
-                                        data-file="@record.FileAddress1">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                            }
-                            else
-                            {
-                                <span>No File</span>
-                            }
-                        </td>
-                        <td>
-                            @if (!string.IsNullOrEmpty(record.FileAddress2))
-                            {
-                                <button type="button"
-                                        class="btn btn-info btn-sm btn-preview"
-                                        data-file="@record.FileAddress2">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                            }
-                            else
-                            {
-                                <span>No File</span>
-                            }
-                        </td>
-
-                        <td>
+                            @* Keep your existing buttons *@
                             @if (!isAdmin)
                             {
                                 <button type="button"
@@ -265,7 +251,7 @@
                             @if (isAdmin)
                             {
                                 <button type="button"
-                                        class="btn btn-primary btn-sm edit-btn mt-1"
+                                        class="btn btn-primary btn-sm edit-btn"
                                         data-id="@record.Id"
                                         data-part="@record.Part"
                                         data-component="@record.Component"
@@ -296,6 +282,7 @@
                     </tr>
                 }
             </tbody>
+
 
 
         </table>
@@ -710,90 +697,193 @@
     <!-- Table Filtering and Sorting Scripts -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            // Initialize DataTable
-            var table = $('#holdTagTable').DataTable({
-                // default page length and options
-                pageLength: 25,
-                lengthMenu: [10, 25, 50, 100],
-                // order by ID desc by default (column 0)
-                order: [[0, 'desc']],
-                // Bootstrap-friendly layout
-                dom:
-                    '<"row mb-2"' +
-                        '<"col-sm-6"l>' +
-                        '<"col-sm-6"f>' +
-                    '>' +
-                    't' +
-                    '<"row mt-2"' +
-                        '<"col-sm-6"i>' +
-                        '<"col-sm-6"p>' +
-                    '>',
-            });
 
+            function esc(v) {
+                if (v === null || v === undefined) return "";
+                return String(v)
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll('"', "&quot;")
+                    .replaceAll("'", "&#039;");
+            }
+
+            function buildDetailHtml($tr) {
+                const issuedBy      = $tr.attr("data-issuedby") || "";
+                const discrepancy   = $tr.attr("data-discrepancy") || "";
+                const disposition   = $tr.attr("data-disposition") || "";
+                const dispositionBy = $tr.attr("data-dispositionby") || "";
+                const reworkInstr   = $tr.attr("data-reworkinstr") || "";
+                const reworkBy      = $tr.attr("data-reworkinstrby") || "";
+                const qtyTags       = $tr.attr("data-qtytags") || "";
+                const pcsScrapped   = $tr.attr("data-pcsscrapped") || "";
+                const dateCompleted = $tr.attr("data-datecompleted") || "";
+                const file1         = $tr.attr("data-file1") || "";
+                const file2         = $tr.attr("data-file2") || "";
+
+                const fileBtn = (filePath) =>
+                    filePath
+                        ? `<button type="button" class="btn btn-info btn-sm btn-preview ms-2" data-file="${esc(filePath)}">
+                                <i class="bi bi-eye"></i> Preview
+                           </button>`
+                        : `<span class="muted ms-2">No File</span>`;
+
+                return `
+                    <div class="ht-detail">
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <span class="label">Issued By:</span> ${esc(issuedBy)}
+                            </div>
+                            <div class="col-md-4">
+                                <span class="label">Hold Tags:</span> ${esc(qtyTags)}
+                            </div>
+                            <div class="col-md-4">
+                                <span class="label">Pcs Scrapped:</span> ${esc(pcsScrapped)}
+                            </div>
+
+                            <div class="col-md-12">
+                                <span class="label">Discrepancy:</span> ${esc(discrepancy)}
+                            </div>
+
+                            <div class="col-md-12">
+                                <span class="label">Disposition:</span> ${esc(disposition)}
+                                ${dispositionBy ? `<span class="muted ms-2">(By: ${esc(dispositionBy)})</span>` : ``}
+                            </div>
+
+                            <div class="col-md-12">
+                                <span class="label">Rework Instructions:</span> ${esc(reworkInstr)}
+                                ${reworkBy ? `<span class="muted ms-2">(By: ${esc(reworkBy)})</span>` : ``}
+                            </div>
+
+                            <div class="col-md-4">
+                                <span class="label">Date Completed:</span> ${esc(dateCompleted)}
+                            </div>
+
+                            <div class="col-md-4">
+                                <span class="label">File 1:</span> ${fileBtn(file1)}
+                            </div>
+
+                            <div class="col-md-4">
+                                <span class="label">File 2:</span> ${fileBtn(file2)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ✅ DataTables init with drawCallback to show detail line
+                    // ✅ helper: highlight/unhighlight a main row + its child row
+        function setOpenHighlight(api, rowNode, isOpen) {
+            const $tr = $(rowNode);
+            if (!$tr.length) return;
+
+            // main row
+            $tr.toggleClass('ht-open', isOpen);
+
+            // child row (detail)
+            const dtRow = api.row(rowNode);
+            if (dtRow && dtRow.child && dtRow.child.isShown()) {
+                $(dtRow.child()).toggleClass('ht-open', isOpen);
+            }
+        }
+
+        var table = $('#holdTagTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            order: [[0, 'desc']],
+            dom:
+                '<"row mb-2"' +
+                    '<"col-sm-6"l>' +
+                    '<"col-sm-6"f>' +
+                '>' +
+                't' +
+                '<"row mt-2"' +
+                    '<"col-sm-6"i>' +
+                    '<"col-sm-6"p>' +
+                '>',
+
+
+            // ✅ highlight any row where DateCompleted is blank/null
+            rowCallback: function (row, data, index) {
+                const api = this.api();
+
+                // you set this in Razor: data-datecompleted="yyyy-MM-dd" or ""
+                const dateCompleted = ($(row).attr('data-datecompleted') || '').trim();
+
+                const isOpen = !dateCompleted; // blank => open (not completed)
+                setOpenHighlight(api, row, isOpen);
+            },
+
+            // ✅ always build/show the detail child row + apply highlight to it too
+            drawCallback: function () {
+                const api = this.api();
+
+                api.rows({ page: 'current' }).every(function () {
+                    const row = this;
+                    const node = row.node();
+                    if (!node) return;
+
+                    const $tr = $(node);
+
+                    const html = buildDetailHtml($tr);
+
+                    if (!row.child.isShown()) {
+                        row.child(html, 'ht-detail-row').show();
+                    } else {
+                        row.child(html);
+                    }
+
+                    // after child is shown/updated, make sure highlight is applied to child too
+                    const dateCompleted = ($tr.attr('data-datecompleted') || '').trim();
+                    const isOpen = !dateCompleted;
+                    setOpenHighlight(api, node, isOpen);
+                });
+            }
+        });
+
+
+            // --- your existing filters wiring stays, BUT update the Date column index ---
             const searchInput = document.getElementById("recordSearchInput");
             const startDateInput = document.getElementById("recordStartDate");
             const endDateInput = document.getElementById("recordEndDate");
             const clearBtn = document.getElementById("clearFilters");
 
-            // Hook your custom search box to DataTables search
             if (searchInput) {
                 searchInput.addEventListener("keyup", function () {
                     table.search(this.value).draw();
                 });
             }
 
-            // Custom date range filter using DataTables' ext.search
+            // ✅ Date column is now the 12th column (0-based index 11)
             $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-                // Only apply to this table
-                if (settings.nTable.id !== 'holdTagTable') {
-                    return true;
-                }
+                if (settings.nTable.id !== 'holdTagTable') return true;
 
                 var startVal = startDateInput.value;
                 var endVal = endDateInput.value;
 
-                       // Date column index (0-based) -> "Date" is column 8 now
-        var dateStr = data[8] || '';  // yyyy-MM-dd from your Razor output
+                var dateStr = data[11] || '';  // yyyy-MM-dd (NEW index)
 
-
-                if (!startVal && !endVal) {
-                    return true; // no date filters
-                }
-
-                if (!dateStr) {
-                    return false; // row has no date; hide when filtering by date
-                }
+                if (!startVal && !endVal) return true;
+                if (!dateStr) return false;
 
                 var rowDate = new Date(dateStr);
-                if (isNaN(rowDate)) {
-                    return false;
-                }
-
-                var pass = true;
+                if (isNaN(rowDate)) return false;
 
                 if (startVal) {
                     var startDate = new Date(startVal);
-                    if (rowDate < startDate) {
-                        pass = false;
-                    }
+                    if (rowDate < startDate) return false;
                 }
 
                 if (endVal) {
                     var endDate = new Date(endVal);
-                    // Make end date inclusive by adding 1 day at midnight if you want:
-                    endDate.setDate(endDate.getDate() + 1);
-                    if (rowDate >= endDate) {
-                        pass = false;
-                    }
+                    endDate.setDate(endDate.getDate() + 1); // inclusive
+                    if (rowDate >= endDate) return false;
                 }
 
-                return pass;
+                return true;
             });
 
-            function redrawWithDateFilter() {
-                table.draw();
-            }
-
+            function redrawWithDateFilter() { table.draw(); }
             if (startDateInput) startDateInput.addEventListener("change", redrawWithDateFilter);
             if (endDateInput) endDateInput.addEventListener("change", redrawWithDateFilter);
 
@@ -802,11 +892,12 @@
                     if (searchInput) searchInput.value = "";
                     if (startDateInput) startDateInput.value = "";
                     if (endDateInput) endDateInput.value = "";
-                    table.search('').draw(); // clear global search
+                    table.search('').draw();
                 });
             }
         });
     </script>
+
 
     <!-- NEW: Direct file upload script for "Add / Update File1" -->
     <script>
