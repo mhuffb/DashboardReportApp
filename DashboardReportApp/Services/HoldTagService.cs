@@ -116,16 +116,16 @@ namespace DashboardReportApp.Services
         {
             const string query = @"
 INSERT INTO holdrecords 
-(source, skidNumber, part, component, prodNumber, lotNumber, materialCode, runNumber,
+(source, stage, skidNumber, part, component, prodNumber, lotNumber, materialCode, runNumber,
  discrepancy, date, issuedBy, disposition, dispositionBy,
  reworkInstr, reworkInstrBy, quantity, quantityOnHold, unit,
  pcsScrapped, dateCompleted, fileAddress1, fileAddress2)
 VALUES 
-(@source, @skidNumber, @part, @component, @prodNumber, @lotNumber, @materialCode, @runNumber,
+(@source, @stage, @skidNumber, @part, @component, @prodNumber, @lotNumber, @materialCode, @runNumber,
  @discrepancy, @date, @issuedBy, @disposition, @dispositionBy,
  @reworkInstr, @reworkInstrBy, @quantity, @quantityOnHold, @unit,
  @pcsScrapped, @dateCompleted, @fileAddress1, @fileAddress2);
-SELECT LAST_INSERT_ID();";
+";
 
 
 
@@ -135,6 +135,8 @@ SELECT LAST_INSERT_ID();";
             await connection.OpenAsync();
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@source", (object?)record.Source ?? DBNull.Value);
+            command.Parameters.AddWithValue("@stage", (object?)record.Stage ?? DBNull.Value);
+
             command.Parameters.AddWithValue("@skidNumber", record.SkidNumber > 0 ? record.SkidNumber : (object)DBNull.Value);
 
             command.Parameters.AddWithValue("@part", record.Part);
@@ -272,6 +274,8 @@ SELECT LAST_INSERT_ID();";
                 var rec = new HoldTagModel
                 {
                     Source = reader.IsDBNull(reader.GetOrdinal("Source")) ? null : reader.GetString(reader.GetOrdinal("Source")),
+                    Stage = reader.IsDBNull(reader.GetOrdinal("Stage")) ? null : reader.GetString(reader.GetOrdinal("Stage")),
+
                     SkidNumber = reader.IsDBNull(reader.GetOrdinal("SkidNumber")) ? 0 : reader.GetInt32(reader.GetOrdinal("SkidNumber")),
 
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -411,6 +415,7 @@ LIMIT 10;";
 UPDATE HoldRecords
 SET 
     Source = @Source,
+    Stage = @Stage,
     SkidNumber = @SkidNumber,
 
     Part = @Part,
@@ -462,6 +467,8 @@ WHERE Id = @Id
             command.Parameters.AddWithValue("@RunNumber", (object?)model.RunNumber ?? DBNull.Value);
             command.Parameters.AddWithValue("@QuantityOnHold", (object?)model.QuantityOnHold ?? DBNull.Value);
             command.Parameters.AddWithValue("@Source", (object?)model.Source ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Stage", (object?)model.Stage ?? DBNull.Value);
+
             command.Parameters.AddWithValue("@SkidNumber", model.SkidNumber > 0 ? model.SkidNumber : (object)DBNull.Value);
 
 

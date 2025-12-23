@@ -196,7 +196,8 @@
                     <th style="width: 7%;">Component</th>
                     <th style="width: 7%;">Lot #</th>
                     <th style="width: 7%;">Material</th>
-                    <th style="width: 6%;">Source</th>
+                    <th style="width: 6%;">Stage</th>
+
                     <th style="width: 4%;">Skid #</th>
                     <th style="width: 6%;">Qty On Hold</th>
                     <th style="width: 6%;">Unit</th>
@@ -223,7 +224,11 @@
                         data-pcsscrapped="@(record.PcsScrapped?.ToString() ?? "")"
                         data-datecompleted="@(record.DateCompleted?.ToString("yyyy-MM-dd") ?? "")"
                         data-file1="@record.FileAddress1"
-                        data-file2="@record.FileAddress2">
+                        data-file2="@record.FileAddress2"
+                        data-source="@record.Source"
+                        data-stage="@record.Stage">
+
+
                         <td>@record.Id</td>
                         <td>@record.ProdNumber</td>
                         <td>@record.RunNumber</td>
@@ -231,7 +236,35 @@
                         <td>@record.Component</td>
                         <td>@record.LotNumber</td>
                         <td>@record.MaterialCode</td>
-                        <td>@record.Source</td>
+                        <td>
+                            @{
+                                // Prefer Stage (what the user selected). Fallback to Source mapping for old records.
+                                var stg = (record.Stage ?? "").ToLower();
+                                var src = (record.Source ?? "").ToLower();
+
+                                string stageText =
+                                !string.IsNullOrWhiteSpace(stg) ? stg :
+                                (src == "pressrun" ? "green" :
+                                src == "sinterrun" ? "sintered" :
+                                src);
+
+                                // Pretty label
+                                string label =
+                                stageText == "green" ? "Green" :
+                                stageText == "sintered" ? "Sintered" :
+                                stageText == "greenassembly" ? "Green Assembly" :
+                                stageText == "machined" ? "Machined" :
+                                stageText == "plated" ? "Plated" :
+                                stageText == "heattreated" ? "Heat Treated" :
+                                stageText == "annealed" ? "Annealed" :
+                                stageText == "sized" ? "Sized" :
+                                stageText;
+
+                                @label
+                            }
+                        </td>
+
+
                         <td>@(record.SkidNumber > 0 ? record.SkidNumber.ToString() : "")</td>
                         <td>@record.QuantityOnHold</td>
                         <td>@(string.IsNullOrWhiteSpace(record.Unit) ? "" : record.Unit + "(s)")</td>
@@ -274,6 +307,7 @@
                                         data-fileaddress2="@record.FileAddress2"
                                         data-prodnumber="@record.ProdNumber"
                                         data-source="@record.Source"
+                                        data-stage="@record.Stage"
                                         data-skidnumber="@record.SkidNumber">
                                     Edit
                                 </button>
@@ -346,20 +380,36 @@
                         </div>
                     </div>
 
-                    <!-- ✅ Row 4: Source + Skid -->
+                    <!-- ✅ Row 4: Stage + Skid -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="ModalSource" class="form-label">Source</label>
-                            <input type="text" id="ModalSource" name="Source" class="form-control" placeholder="pressrun / sinterrun / presssetup ..." />
+                            <label for="ModalStage" class="form-label">Stage</label>
+                            <select id="ModalStage" name="Stage" class="form-control" required>
+                                <option value="">-- Select Stage --</option>
+                                <option value="green">Green</option>
+                                <option value="sintered">Sintered</option>
+
+                                <!-- Future (no logic yet) -->
+                                <option value="greenassembly">Green Assembly</option>
+                                <option value="machined">Machined</option>
+                                <option value="plated">Plated</option>
+                                <option value="heattreated">Heat Treated</option>
+                                <option value="annealed">Annealed</option>
+                                <option value="sized">Sized</option>
+                            </select>
+                            <small class="text-muted">Green → Press Run. Sintered → Sinter Run.</small>
                         </div>
 
                         <div class="col-md-6 mb-3">
                             <label for="ModalSkidNumber" class="form-label">Skid Number</label>
-                            <!-- keep min=0; if you want to avoid blank posting issues, set value="0" -->
                             <input type="number" id="ModalSkidNumber" name="SkidNumber" class="form-control" min="0" value="0" />
                             <small class="text-muted">Auto-fills from the Place On Hold button. You can change it.</small>
                         </div>
                     </div>
+
+                    <!-- Hidden inferred source -->
+                    <input type="hidden" id="ModalSource" name="Source" value="" />
+
 
                     <!-- ✅ Row 5: Operator + Qty Hold Tags + Qty On Hold -->
                     <div class="row">
@@ -485,9 +535,27 @@
                         <!-- ✅ Row 4: Source + Skid -->
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="edit-source" class="form-label">Source</label>
-                                <input type="text" name="Source" id="edit-source" class="form-control" />
+                                <label for="edit-stage" class="form-label">Stage</label>
+                                <select id="edit-stage" name="Stage" class="form-control" required>
+                                    <option value="">-- Select Stage --</option>
+                                    <option value="green">Green</option>
+                                    <option value="sintered">Sintered</option>
+
+                                    <!-- Future (no logic yet) -->
+                                    <option value="greenassembly">Green Assembly</option>
+                                    <option value="machined">Machined</option>
+                                    <option value="plated">Plated</option>
+                                    <option value="heattreated">Heat Treated</option>
+                                    <option value="annealed">Annealed</option>
+                                    <option value="sized">Sized</option>
+                                </select>
+                                <small class="text-muted">Green → Press Run. Sintered → Sinter Run.</small>
+
+                                <!-- Hidden inferred source that actually posts -->
+                                <input type="hidden" name="Source" id="edit-source" value="" />
                             </div>
+
+
 
                             <div class="col-md-6 mb-3">
                                 <label for="edit-skidnumber" class="form-label">Skid Number</label>
@@ -985,10 +1053,36 @@
 
 
 
-   
+
     <script>
         // Admin edit modal wiring (works with DataTables because of event delegation)
         document.addEventListener("DOMContentLoaded", function () {
+
+                   function stageFromSource(src) {
+            src = (src || "").toLowerCase();
+            if (src === "pressrun") return "green";
+            if (src === "sinterrun") return "sintered";
+            return null;
+        }
+
+                         function sourceFromStage(stage) {
+            stage = (stage || "").toLowerCase();
+            if (stage === "green") return "pressrun";
+            if (stage === "sintered") return "sinterrun";
+            return "manual";
+        }
+
+        // ✅ Keep hidden source in sync when admin changes the Stage dropdown
+        const stageSelectGlobal = document.getElementById("edit-stage");
+        const sourceHiddenGlobal = document.getElementById("edit-source");
+        if (stageSelectGlobal && sourceHiddenGlobal) {
+            stageSelectGlobal.addEventListener("change", function () {
+               sourceHiddenGlobal.value = sourceFromStage(stageSelectGlobal.value);
+
+            });
+        }
+
+
             const tbody = document.querySelector("#holdTagTable tbody");
             if (!tbody) return;
 
@@ -996,9 +1090,13 @@
                 const btn = e.target.closest(".edit-btn");
                 if (!btn) return;
 
+                // ✅ Read source from the button (you already have data-source on it)
+                const source = btn.dataset.source || "";
+
+        const stage  = btn.dataset.stage  || "";
                 const id = btn.dataset.id;
                 const part = btn.dataset.part;
-        const component     = btn.dataset.component;
+                const component = btn.dataset.component;
                 const discrepancy = btn.dataset.discrepancy;
                 const date = btn.dataset.date;
                 const issuedBy = btn.dataset.issuedby;
@@ -1014,28 +1112,15 @@
                 const fileAddress2 = btn.dataset.fileaddress2;
                 const prodNumber = btn.dataset.prodnumber;
                 const quantityOnHold = btn.dataset.quantityonhold;
-                const lotNumber      = btn.dataset.lotnumber;
-                const materialCode   = btn.dataset.materialcode;
-                const runNumber      = btn.dataset.runnumber;
-                        const source = btn.dataset.source;
-        const skidNumber = btn.dataset.skidnumber;
+                const lotNumber = btn.dataset.lotnumber;
+                const materialCode = btn.dataset.materialcode;
+                const runNumber = btn.dataset.runnumber;
+                const skidNumber = btn.dataset.skidnumber;
 
-        document.getElementById("edit-quantityonhold").value = quantityOnHold || "";
-        document.getElementById("edit-lotnumber").value      = lotNumber || "";
-        document.getElementById("edit-materialcode").value   = materialCode || "";
-        document.getElementById("edit-prodnumber").value     = prodNumber || "";
-        // If you add a run field:
-        const runInput = document.getElementById("edit-runnumber");
-        if (runInput) runInput.value = runNumber || "";
-
-                document.getElementById("edit-id").value = id;
-                        document.getElementById("edit-source").value = source || "";
-        document.getElementById("edit-skidnumber").value = (skidNumber ?? 0);
-
-
-                        document.getElementById("edit-part").value = part || "";
-        document.getElementById("edit-component").value = component || "";
-                        document.getElementById("edit-discrepancy").value = discrepancy || "";
+                document.getElementById("edit-id").value = id || "";
+                document.getElementById("edit-part").value = part || "";
+                document.getElementById("edit-component").value = component || "";
+                document.getElementById("edit-discrepancy").value = discrepancy || "";
                 document.getElementById("edit-date").value = date || "";
                 document.getElementById("edit-issuedby").value = issuedBy || "";
                 document.getElementById("edit-disposition").value = disposition || "";
@@ -1043,10 +1128,37 @@
                 document.getElementById("edit-reworkinstr").value = reworkInstr || "";
                 document.getElementById("edit-reworkinstrby").value = reworkInstrBy || "";
                 document.getElementById("edit-quantity").value = quantity || "";
+                document.getElementById("edit-quantityonhold").value = quantityOnHold || "";
+                document.getElementById("edit-lotnumber").value = lotNumber || "";
+                document.getElementById("edit-materialcode").value = materialCode || "";
+                document.getElementById("edit-prodnumber").value = prodNumber || "";
+                document.getElementById("edit-runnumber").value = runNumber || "";
                 document.getElementById("edit-unit").value = unit || "";
                 document.getElementById("edit-pcsscrapped").value = pcsScrapped || "";
                 document.getElementById("edit-datecompleted").value = dateCompleted || "";
+                document.getElementById("edit-skidnumber").value = (skidNumber ?? 0);
 
+                // ✅ Stage + hidden Source mapping (THIS IS #7)
+                const stageSelect = document.getElementById("edit-stage");
+                const sourceHidden = document.getElementById("edit-source");
+
+                               if (stageSelect) {
+            // Prefer the record's Stage (Heat Treated, Machined, etc.)
+            if (stage && stage.trim()) {
+                stageSelect.value = stage.toLowerCase();
+            } else {
+                // Fallback for older records that only had Source
+                const mappedStage = stageFromSource(source);
+                if (mappedStage) stageSelect.value = mappedStage;
+            }
+        }
+
+        if (sourceHidden) {
+            sourceHidden.value = sourceFromStage(stageSelect ? stageSelect.value : "");
+        }
+
+
+                // Files UI
                 document.getElementById("edit-fileaddress1").value = fileAddress1 || "";
                 document.getElementById("current-file1").innerHTML = fileAddress1
                     ? `<a href="/HoldTag/StreamFile?name=${encodeURIComponent(fileAddress1)}" target="_blank">Current File 1</a>`
@@ -1057,14 +1169,12 @@
                     ? `<a href="/HoldTag/StreamFile?name=${encodeURIComponent(fileAddress2)}" target="_blank">Current File 2</a>`
                     : "No file uploaded for File 2";
 
-
-        document.getElementById("edit-prodnumber").value = prodNumber || "";
                 const modalEl = document.getElementById("editModal");
-                const modal = new bootstrap.Modal(modalEl);
-                modal.show();
+                new bootstrap.Modal(modalEl).show();
             });
         });
     </script>
+
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const partInput   = document.getElementById('ModalPart');
@@ -1126,6 +1236,35 @@
                 }
 
                 console.log("Scan source:", data.source);
+                        // If scan lookup returns a source, set stage + inferred hidden source
+        const stageSelect = document.getElementById('ModalStage');
+        const sourceHidden = document.getElementById('ModalSource');
+
+                      function stageFromSource(src) {
+            src = (src || "").toLowerCase();
+            if (src === "pressrun") return "green";
+            if (src === "sinterrun") return "sintered";
+            return null; // ✅ don't change stage if unknown
+        }
+        function sourceFromStage(stage) {
+            stage = (stage || "").toLowerCase();
+            if (stage === "green") return "pressrun";
+            if (stage === "sintered") return "sinterrun";
+            return "manual"; // ✅ future stages save as manual
+        }
+
+
+               // If ScanLookup returns a known source, set Stage from it
+        if (data.source && stageSelect) {
+            const mappedStage = stageFromSource(data.source);
+            if (mappedStage) stageSelect.value = mappedStage;
+        }
+
+        // Always compute Source from the current Stage (green/sintered -> press/sinter, else manual)
+        if (sourceHidden && stageSelect) {
+            sourceHidden.value = sourceFromStage(stageSelect.value);
+        }
+
 
                 // ✅ SUCCESS TOAST
                 await Swal.fire({
@@ -1265,7 +1404,38 @@
                 }
 
                 // Fill fields
-                document.getElementById('ModalSource').value = data.source || source;
+                       // Stage select from source
+        const stageSelect = document.getElementById('ModalStage');
+        const sourceHidden = document.getElementById('ModalSource');
+
+        function stageFromSource(src) {
+            src = (src || "").toLowerCase();
+            if (src === "pressrun") return "green";
+            if (src === "sinterrun") return "sintered";
+            return "";
+        }
+
+                function sourceFromStage(stage) {
+            stage = (stage || "").toLowerCase();
+            if (stage === "green") return "pressrun";
+            if (stage === "sintered") return "sinterrun";
+            return null; // ✅ do NOT blank for other stages
+        }
+
+               const resolvedSource = (data.source || source || "").trim();
+
+        // set Stage only if known from resolvedSource
+        if (stageSelect) {
+            const mappedStage = stageFromSource(resolvedSource);
+            if (mappedStage) stageSelect.value = mappedStage;
+        }
+
+        // always compute Source from the current Stage (else manual)
+        if (sourceHidden) {
+            sourceHidden.value = sourceFromStage(stageSelect ? stageSelect.value : "");
+        }
+
+
 
                 document.getElementById('ModalRunNumber').value  = data.runNumber  || run || '';
                 document.getElementById('ModalProdNumber').value = data.prodNumber || prodNumber || '';
@@ -1316,7 +1486,8 @@
 
                 await Swal.fire({
                     icon: 'success',
-                    title: 'Loaded from ' + (data.source || source),
+                    title: 'Loaded: ' + (stageSelect ? (stageSelect.options[stageSelect.selectedIndex]?.text || 'Stage') : 'Stage'),
+
                     toast: true,
                     position: 'top-end',
                     timer: 2000,
@@ -1345,5 +1516,30 @@
         });
     </script>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const stageSelect = document.getElementById('ModalStage');
+            const sourceHidden = document.getElementById('ModalSource');
+            if (!stageSelect || !sourceHidden) return;
+
+                          function inferSourceFromStage(stage) {
+            stage = (stage || "").toLowerCase();
+            if (stage === "green") return "pressrun";
+            if (stage === "sintered") return "sinterrun";
+            return "manual"; // ✅ future stages save as manual
+        }
+
+        function applyInference() {
+            sourceHidden.value = inferSourceFromStage(stageSelect.value);
+        }
+
+
+
+            stageSelect.addEventListener('change', applyInference);
+
+            // ensure correct on initial load/prefill
+            applyInference();
+        });
+    </script>
 
 }

@@ -48,6 +48,7 @@ namespace DashboardReportApp.Models
         public string? RunNumber { get; set; }
         public string? Source { get; set; }
         public int? SkidNumber { get; set; }
+        public string? Stage { get; set; }
 
     }
     public class HoldTagIndexViewModel
