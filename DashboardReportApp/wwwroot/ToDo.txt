@@ -17,6 +17,11 @@ add reason for override and send email to molding group when override is used.
 in tool inventory when questionable email is sent, add a link that will open tool work order directly from the email and add the attachment 
 in the email to the attachment in the new tool work order modal. 
 
+change picodata so its not polling. 
 
 
+tool letter add to tool work
+make blank and required
+
+make print revision instead of rev
 

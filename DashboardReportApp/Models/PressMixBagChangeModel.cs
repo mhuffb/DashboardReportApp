@@ -20,6 +20,8 @@
         public bool? IsOverride { get; set; }
         public string? OverrideBy { get; set; }
         public DateTime? OverrideAt { get; set; }
+        public string? OverrideReason { get; set; }
+
     }
 
 

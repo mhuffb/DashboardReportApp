@@ -113,27 +113,30 @@
 
 
         public async Task InsertPressMixBagChangeAsync(
-      string part,
-      string component,
-      string prodNumber,
-      string run,
-      string time,
-      string op,
-      string machine,
-      string lot,
-      string materialCode,
-      decimal weight,
-      string bagNumber,
-      string notes,
-      bool isOverride = false,
-      string overrideBy = null,
-      DateTime? overrideAt = null)
+       string part,
+       string component,
+       string prodNumber,
+       string run,
+       string time,
+       string op,
+       string machine,
+       string lot,
+       string materialCode,
+       decimal weight,
+       string bagNumber,
+       string notes,
+       bool isOverride = false,
+       string? overrideBy = null,
+       DateTime? overrideAt = null,
+       string? overrideReason = null)
         {
             const string query = @"
-    INSERT INTO pressmixbagchange 
-    (part, component, prodNumber, run, sentDateTime, operator, machine, lotNumber, materialCode, weightLbs, bagNumber, notes, isOverride, overrideBy, overrideAt) 
-    VALUES 
-    (@part, @component, @prodNumber, @run, @sentDateTime, @operator, @machine, @lotNumber, @materialCode, @weight, @bagNumber, @notes, @isOverride, @overrideBy, @overrideAt)";
+INSERT INTO pressmixbagchange
+(part, component, prodNumber, run, sentDateTime, operator, machine, lotNumber, materialCode, weightLbs, bagNumber, notes,
+ isOverride, overrideBy, overrideAt, overrideReason)
+VALUES
+(@part, @component, @prodNumber, @run, @sentDateTime, @operator, @machine, @lotNumber, @materialCode, @weight, @bagNumber, @notes,
+ @isOverride, @overrideBy, @overrideAt, @overrideReason);";
 
             await using var connection = new MySqlConnection(_connectionStringMySQL);
             await connection.OpenAsync();
@@ -154,6 +157,7 @@
             command.Parameters.AddWithValue("@isOverride", isOverride);
             command.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
             command.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
+            command.Parameters.AddWithValue("@overrideReason", (object?)overrideReason ?? DBNull.Value);
 
             await command.ExecuteNonQueryAsync();
         }
@@ -171,7 +175,7 @@
                operator, machine,
                lotNumber, materialCode, weightLbs, bagNumber,
                sentDateTime, notes,
-               isOverride, overrideBy, overrideAt
+               isOverride, overrideBy, overrideAt, overrideReason
         FROM pressmixbagchange
         ORDER BY id DESC;";
 
@@ -206,7 +210,9 @@
                                     : false,
                     OverrideBy = reader["overrideBy"]?.ToString() ?? "",
                     OverrideAt = reader.IsDBNull(reader.GetOrdinal("overrideAt"))
-                                    ? (DateTime?)null : reader.GetDateTime("overrideAt")
+                                    ? (DateTime?)null : reader.GetDateTime("overrideAt"),
+                                    OverrideReason = reader["overrideReason"]?.ToString() ?? "",
+
                 };
 
                 records.Add(m);
@@ -346,7 +352,7 @@
                operator, machine,
                lotNumber, materialCode, weightLbs, bagNumber,
                sentDateTime, notes,
-               isOverride, overrideBy, overrideAt
+               isOverride, overrideBy, overrideAt, overrideReason
         FROM pressmixbagchange
         ORDER BY id DESC
         LIMIT @offset, @take;";
@@ -388,7 +394,9 @@
                         Notes = reader["notes"]?.ToString() ?? "",
                         IsOverride = !reader.IsDBNull(reader.GetOrdinal("isOverride")) && Convert.ToBoolean(reader["isOverride"]),
                         OverrideBy = reader["overrideBy"]?.ToString() ?? "",
-                        OverrideAt = reader.IsDBNull(reader.GetOrdinal("overrideAt")) ? (DateTime?)null : reader.GetDateTime("overrideAt")
+                        OverrideAt = reader.IsDBNull(reader.GetOrdinal("overrideAt")) ? (DateTime?)null : reader.GetDateTime("overrideAt"),
+                        OverrideReason = reader["overrideReason"]?.ToString() ?? "",
+
                     };
                     result.Items.Add(m);
                 }

@@ -54,7 +54,6 @@
                             <div class="d-flex justify-content-around">
                                 <img src="/img/advantage.jpg" class="label-img" data-type="advantage" style="height:200px;cursor:pointer;">
                                 <img src="/img/hoganas.jpg" class="label-img" data-type="hoganas" style="height:200px;cursor:pointer;">
-                                <img src="/img/hoeganaes.jpg" class="label-img" data-type="hoeganaes" style="height:200px;cursor:pointer;">
                                 <img src="/img/sintergy.jpg" class="label-img" data-type="sintergy" style="height:200px;cursor:pointer;">
                             </div>
                         </div>
@@ -69,8 +68,6 @@
                             <!-- Single-scan input (Advantage & Hoganas) -->
                             <input type="text" id="barcodeInput1" class="form-control mt-3" placeholder="Scan barcode here..." />
 
-                            <!-- Second input only visible for Hoeganaes -->
-                            <input type="text" id="barcodeInput2" class="form-control mt-2 d-none" placeholder="Scan second barcode..." />
                         </div>
 
 
@@ -211,93 +208,19 @@
 </div>
 <script src="/js/mydatatable.bundle.js" defer></script>
 
-<script>
-      function updateFields() {
-      const partNumber   = document.getElementById('partNumber');
-      const RunNumber    = document.getElementById('RunNumber');
-      const Component    = document.getElementById('Component');
-      const ProdNumber   = document.getElementById('ProdNumber');
-      const operatorName = document.getElementById('operatorName');
-      const machine      = document.getElementById('machine');
 
-      const opt = partNumber.options[partNumber.selectedIndex];
-      if (!opt) return;
-
-      RunNumber.value  = opt.dataset.run        || "";
-      Component.value  = opt.dataset.component  || "";
-      ProdNumber.value = opt.dataset.prodnumber || "";
-
-      fetch(`/PressMixBagChange/GetRunInfo?part=${opt.value}&prod=${ProdNumber.value}&run=${RunNumber.value}`)
-        .then(r => r.json())
-        .then(data => {
-          operatorName.value = data.op || "";
-          machine.value      = data.mach || "";
-        });
-    }
-
-
-
-   
-          const raw = document.getElementById('mixBagChangeTableRoot').dataset.records || "[]";
-    const data = JSON.parse(raw);
-
-    // Map booleans/ints to a friendly string + optional badge
-    data.forEach(r => {
-      const v = r.IsOverride;
-      const isTrue = v === true || v === 1 || v === "1";
-      const isFalse = v === false || v === 0 || v === "0";
-
-      // Choose one of these display styles:
-
-      // 1) Simple Yes/No:
-      r.IsOverrideDisplay = isTrue ? "Yes" : (isFalse ? "No" : "");
-
-
-      // Make dates pretty
-      if (r.SentDateTime)  r.SentDateTime  = new Date(r.SentDateTime).toLocaleString();
-      if (r.OverrideAt)    r.OverrideAt    = new Date(r.OverrideAt).toLocaleString();
-    });
-
-    const cols = [
-      {key:'Id',label:'ID'},
-      {key:'Part',label:'Part'},
-      {key:'Component',label:'Component'},
-      {key:'ProdNumber',label:'Production Number'},
-      {key:'Run',label:'Run'},
-      {key:'Operator',label:'Operator'},
-      {key:'Machine',label:'Machine'},
-      {key:'LotNumber',label:'Lot Number'},
-      {key:'MaterialCode',label:'Material Code'},
-      {key:'WeightLbs', label:'Weight (lbs)'},
-      {key:'BagNumber',label:'Bag #'},
-      {key:'SentDateTime',label:'Sent Time'},
-      {key:'Notes',label:'Notes'},
-
-      // Use the display field instead of the raw boolean:
-      {key:'IsOverrideDisplay', label:'Override?'},
-      {key:'OverrideBy', label:'Supervisor'},
-      {key:'OverrideAt', label:'Override Time'}
-    ];
-
-    window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
-    });
-
-  
-</script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
       // 1) SHARED CONSTANTS
       const previewByType = {
         advantage: "/img/advantage-highlight.jpg",
         hoganas:   "/img/hoganas-highlight.jpg",
-        hoeganaes: "/img/hoeganaes-highlight.jpg",
         sintergy:  "/img/sintergy-highlight.jpg"
       };
       const advantageLike = new Set(["advantage","sintergy"]);
 
       // 2) STATE
       let selectedType = "";
-      let tempScan1 = "";
 
       // 3) ELEMENTS
       const labelStep   = document.getElementById('labelStep');
@@ -306,7 +229,6 @@
       const submitBtn   = document.getElementById('submitBtn');
       const labelPrev   = document.getElementById('labelPreview');
       const in1         = document.getElementById('barcodeInput1');
-      const in2         = document.getElementById('barcodeInput2');
 
       const lot = document.getElementById('LotNumber');
       const mat = document.getElementById('MaterialCode');
@@ -321,14 +243,10 @@
           labelStep.classList.add('d-none');
           scanStep.classList.remove('d-none');
 
-          in1.value = ""; in2.value = "";
-          in2.classList.add('d-none');
+          in1.value = ""; 
 
           labelPrev.src = previewByType[selectedType] || "";
 
-          if (selectedType === "hoeganaes") {
-            in2.classList.remove('d-none');
-          }
 
           in1.focus();
         });
@@ -394,61 +312,16 @@
     }
 
 
-        // Hoeganaes (needs second scan)
-        if (selectedType === "hoeganaes") {
-          tempScan1 = val;
-          in2.focus();
-        }
       });
 
-        // 6) SCAN #2 (Hoeganaes)
-    in2.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const val = in2.value.trim();
-
-      if (selectedType === "hoeganaes") {
-        const lt = tempScan1.slice(0, 10);   // lot
-        const bg = tempScan1.slice(10, 14);  // bag
-        lot.value = lt;
-        bag.value = bg;
-        wgt.value = parseFloat(val.replace(/[^0-9.]/g, "")).toFixed(2);
-
-        fetch(`/PressMixBagChange/GetMaterialCodeByLot?lot=${encodeURIComponent(lt)}`)
-          .then(r => r.text())
-          .then(code => {
-            console.log("Hoeganaes lot lookup", lt, "=>", code);
-            if (!code) {
-              Swal.fire({
-                icon: 'error',
-                title: 'No Material Code Found',
-                text: `No materialCode found in powdermix for lot ${lt}.`
-              });
-              return;
-            }
-
-            mat.value = code;
-            gotoForm();
-          })
-          .catch(err => {
-            console.error("Error fetching material code for Hoeganaes", err);
-            Swal.fire({
-              icon: 'error',
-              title: 'Lookup Error',
-              text: 'Could not look up material code for this lot.'
-            });
-          });
-      }
-    });
+  
 
 
       // 7) NAV + FORM
       document.getElementById('backToLabelsBtn').addEventListener('click', () => {
         scanStep.classList.add('d-none');
         labelStep.classList.remove('d-none');
-        in1.value = ""; in2.value = "";
-        in2.classList.add('d-none');
-        tempScan1 = "";
+        in1.value = ""; 
       });
 
       function gotoForm() {
@@ -480,7 +353,10 @@
         {key:'WeightLbs',label:'Weight (lbs)'}, {key:'BagNumber',label:'Bag #'},
         {key:'SentDateTime',label:'Sent Time'}, {key:'Notes',label:'Notes'},
         {key:'IsOverrideDisplay',label:'Override?'}, {key:'OverrideBy',label:'Supervisor'},
-        {key:'OverrideAt',label:'Override Time'}
+            { key:'OverrideAt', label:'Override Time' },
+    { key:'OverrideReason', label:'Override Reason' },
+
+
       ];
 
       window.renderMyDataTable?.("mixBagChangeTableRoot", data, cols, true);
@@ -552,6 +428,45 @@
             return result.value;
           }
 
+                 // 🔹 Shared reason prompt (REQUIRED)
+    async function promptOverrideReason() {
+      const r = await Swal.fire({
+        icon: 'question',
+        title: 'Override Reason',
+        input: 'text',
+        inputLabel: 'Why is this override needed?',
+        inputPlaceholder: 'Enter reason (required)',
+        inputAttributes: {
+          maxlength: 255,
+          autocapitalize: 'off',
+          autocorrect: 'off',
+          autocomplete: 'off'
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Continue',
+        cancelButtonText: 'Cancel',
+        allowOutsideClick: false,
+
+        // ✅ This prevents "OK" from closing when blank
+        preConfirm: (value) => {
+          const v = (value || '').trim();
+          if (!v) {
+            Swal.showValidationMessage('Please enter a reason (required).');
+            return false;
+          }
+          return v;
+        }
+      });
+
+      // Cancel pressed
+      if (!r.isConfirmed) return null;
+
+      // preConfirm returns the trimmed string here
+      return r.value;
+    }
+
+
+
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -576,6 +491,12 @@
             try { payload = await res.json(); }
             catch { payload = { code: 'UNKNOWN', message: 'Error' }; }
 
+                if (payload.code === 'OVERRIDE_REASON_REQUIRED') {
+      await Swal.fire({ icon:'error', title:'Reason Required', text: payload.message });
+      return;
+    }
+
+
             if (payload.code === 'MATERIAL_MISMATCH') {
               // Offer override
               const { value: doOverride } = await Swal.fire({
@@ -594,11 +515,16 @@
 
               if (!doOverride) return;
 
-              const pin = await promptOverridePin();
-              if (!pin) return;
+                  const pin = await promptOverridePin();
+    if (!pin) return;
 
-              const fd2 = new FormData(form);
-              fd2.append('overridePin', pin);
+    const reason = await promptOverrideReason();
+    if (!reason) return;
+
+    const fd2 = new FormData(form);
+    fd2.append('overridePin', pin);
+    fd2.append('overrideReason', reason);
+
 
               const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
               if (res2.ok) {
@@ -642,11 +568,16 @@
               });
               if (!doOverride) return;
 
-              const pin = await promptOverridePin();
-              if (!pin) return;
+                  const pin = await promptOverridePin();
+    if (!pin) return;
 
-              const fd2 = new FormData(form);
-              fd2.append('overridePin', pin);
+    const reason = await promptOverrideReason();
+    if (!reason) return;
+
+    const fd2 = new FormData(form);
+    fd2.append('overridePin', pin);
+    fd2.append('overrideReason', reason);
+
               const res2 = await fetch('/PressMixBagChange/SubmitAjax', { method: 'POST', body: fd2 });
               if (res2.ok) {
                 const okPayload = await res2.json().catch(() => ({}));

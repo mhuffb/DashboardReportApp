@@ -9,9 +9,14 @@ public class PressMixBagChangeController : Controller
 {
     private readonly PressMixBagChangeService _pressMixBagChangeService;
 
-    public PressMixBagChangeController(PressMixBagChangeService databaseService)
+    private readonly IConfiguration _config;
+    private readonly SharedService _sharedService;
+
+    public PressMixBagChangeController(PressMixBagChangeService databaseService, SharedService sharedService, IConfiguration config)
     {
         _pressMixBagChangeService = databaseService;
+        _sharedService = sharedService;
+        _config = config;
     }
 
     [HttpGet]
@@ -40,7 +45,11 @@ public class PressMixBagChangeController : Controller
 
     // PressMixBagChangeController.cs
     [HttpPost]
-    public async Task<IActionResult> SubmitAjax(PressMixBagChangeModel model, string? overridePin = null)
+    public async Task<IActionResult> SubmitAjax(
+    PressMixBagChangeModel model,
+    string? overridePin = null,
+    string? overrideReason = null)
+
     {
         string Normalize(string? s)
         {
@@ -174,6 +183,15 @@ public class PressMixBagChangeController : Controller
             allowInsert = true;
         }
 
+        var overrideUsed = !string.IsNullOrWhiteSpace(supervisorName);
+        if (overrideUsed && string.IsNullOrWhiteSpace(overrideReason))
+        {
+            return BadRequest(new
+            {
+                code = "OVERRIDE_REASON_REQUIRED",
+                message = "Override reason is required."
+            });
+        }
 
         if (allowInsert)
         {
@@ -192,8 +210,49 @@ public class PressMixBagChangeController : Controller
                 model.Notes,
                 isOverride: !string.IsNullOrEmpty(supervisorName),
                 overrideBy: supervisorName,
-                overrideAt: !string.IsNullOrEmpty(supervisorName) ? DateTime.Now : (DateTime?)null
+                overrideAt: !string.IsNullOrEmpty(supervisorName) ? DateTime.Now : (DateTime?)null,
+    overrideReason: overrideUsed ? overrideReason : null
             );
+
+            if (overrideUsed)
+            {
+                var to = _config["Email:PressMixBagChangeOverrideTo"];
+
+                if (!string.IsNullOrWhiteSpace(to))
+                {
+                    var subj = $"PressMixBagChange OVERRIDE - {model.Part} (Prod {model.ProdNumber}, Run {model.Run})";
+                    var body =
+            $@"Override used in Press Mix Bag Change
+
+Part: {model.Part}
+Component: {model.Component}
+Prod/Run: {model.ProdNumber} / {model.Run}
+Machine: {model.Machine}
+Operator: {model.Operator}
+
+Scheduled: {scheduledCode}
+Scanned:   {model.MaterialCode}
+
+Lot: {model.LotNumber}
+Bag: {model.BagNumber}
+Weight: {model.WeightLbs}
+
+Supervisor: {supervisorName}
+Reason: {overrideReason}
+Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}
+
+Notes: {model.Notes}";
+
+                    _sharedService.SendEmailWithAttachment(
+                        receiverEmail: to,
+                        attachmentPath: null,
+                        attachmentPath2: null,
+                        subject: subj,
+                        body: body
+                    );
+                }
+            }
+
 
             return Ok(new { ok = true, overrideUsed = !string.IsNullOrEmpty(supervisorName), supervisor = supervisorName });
         }
