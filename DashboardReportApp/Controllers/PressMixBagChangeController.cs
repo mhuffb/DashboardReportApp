@@ -222,7 +222,7 @@ public class PressMixBagChangeController : Controller
                 {
                     var subj = $"PressMixBagChange OVERRIDE - {model.Part} (Prod {model.ProdNumber}, Run {model.Run})";
                     var body =
-            $@"Override used in Press Mix Bag Change
+            $@"Material Override used in Press Mix Bag Change
 
 Part: {model.Part}
 Component: {model.Component}
