@@ -733,11 +733,48 @@
                         }
                     });
                 }
+                                // 🔹 Shared reason prompt (required)
+                async function promptOverrideReason() {
+                  const r = await Swal.fire({
+                    icon: 'question',
+                    title: 'Override Reason',
+                    input: 'text',
+                    inputLabel: 'Why is this override needed?',
+                    inputPlaceholder: 'Enter reason (required)',
+                    inputAttributes: {
+                      maxlength: 255,
+                      autocapitalize: 'off',
+                      autocorrect: 'off',
+                      autocomplete: 'off'
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Continue',
+                    cancelButtonText: 'Cancel',
+                    allowOutsideClick: false,
 
-                async function doOverrideFlow(url, formData, actionLabel, modalId, overridePin) {
+                    // ✅ THIS makes it NOT close when blank
+                    preConfirm: (value) => {
+                      const v = (value || '').trim();
+                      if (!v) {
+                        Swal.showValidationMessage('Please enter a reason (required).');
+                        return false;
+                      }
+                      return v;
+                    }
+                  });
+
+                  if (!r.isConfirmed) return null;
+                  return r.value; // trimmed by preConfirm
+                }
+
+                async function doOverrideFlow(url, formData, actionLabel, modalId, overridePin, overrideReason) {
+
                     if (overridePin) {
                         formData.set('overridePin', overridePin);
                     }
+                                    if (overrideReason) {
+                  formData.set('overrideReason', overrideReason);
+                }
 
                     const res = await fetch(url, {
                         method: 'POST',
@@ -833,10 +870,15 @@
                         return; // user cancelled
                     }
 
-                    const pin = result.value;
+                                   const pin = result.value;
 
-                    // 🔁 Retry with overridePin
-                    return await doOverrideFlow(url, formData, actionLabel, modalId, pin);
+                // ✅ NEW: prompt for reason (required)
+                const reason = await promptOverrideReason();
+                if (!reason) return;
+
+                // 🔁 Retry with overridePin + overrideReason
+                return await doOverrideFlow(url, formData, actionLabel, modalId, pin, reason);
+
                 }
 
 
@@ -844,6 +886,16 @@
                     const rawCode = payload.code || payload.errorCode || payload.status || payload.error || '';
                     const code = rawCode.toString().toUpperCase();
                     const message = payload.message || 'An error occurred.';
+
+                                    if (code === 'OVERRIDE_REASON_REQUIRED') {
+                  await Swal.fire({
+                    icon: 'error',
+                    title: 'Reason Required',
+                    text: message || 'Override reason is required.'
+                  });
+                  return;
+                }
+
 
                     if (code === 'BAD_PIN') {
                         await Swal.fire({

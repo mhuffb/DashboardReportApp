@@ -56,6 +56,8 @@ namespace DashboardReportApp.Services
             public string Code { get; set; } = "OK";        // "OK", "MATERIAL_MISMATCH", "BAD_PIN"
             public string? ScheduledMaterial { get; set; }  // scheduled materialCode
             public string? ScannedMaterial { get; set; }    // current mix materialCode
+            public string? OverrideReason { get; set; }
+
         }
 
         public class StartSkidResult
@@ -70,6 +72,8 @@ namespace DashboardReportApp.Services
             public string Code { get; set; } = "OK";        // "OK", "MATERIAL_MISMATCH", "BAD_PIN"
             public string? ScheduledMaterial { get; set; }
             public string? ScannedMaterial { get; set; }
+            public string? OverrideReason { get; set; }
+
         }
 
 
@@ -108,7 +112,8 @@ namespace DashboardReportApp.Services
 
         // ========== START SKID ==========
         // ======================= START SKID (unchanged logic) ==================
-        public async Task<StartSkidResult> HandleStartSkidAsync(PressRunLogModel model, int pcsStart, string? overridePin = null)
+        public async Task<StartSkidResult> HandleStartSkidAsync(PressRunLogModel model, int pcsStart, string? overridePin = null, string? overrideReason = null)
+
         {
             var result = new StartSkidResult();
 
@@ -161,6 +166,13 @@ namespace DashboardReportApp.Services
                         result.RequiresOverride = true;
                         result.Code = "MATERIAL_MISMATCH";
                         result.Message = $"Material {mixCode ?? "(none)"} does not match scheduled {scheduledCode}. Supervisor override required.";
+                        return result;
+                    }
+                    if (string.IsNullOrWhiteSpace(overrideReason))
+                    {
+                        result.RequiresOverride = true;
+                        result.Code = "OVERRIDE_REASON_REQUIRED";
+                        result.Message = "Override reason is required.";
                         return result;
                     }
 
@@ -222,10 +234,10 @@ LIMIT 1;
         INSERT INTO pressrun
               (run, part, component, startDateTime, operator,
                machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode,
-               isOverride, overrideBy, overrideAt)
+               isOverride, overrideBy, overrideAt, overrideReason)
         VALUES (@run, @part, @component, NOW(), @operator,
                 @machine, @prod, @skid, @pcsStart, @lotNumber, @materialCode,
-                @isOverride, @overrideBy, @overrideAt);";
+                @isOverride, @overrideBy, @overrideAt, @overrideReason);";
 
             using (var ins = new MySqlCommand(insertSql, conn))
             {
@@ -242,6 +254,8 @@ LIMIT 1;
                 ins.Parameters.AddWithValue("@isOverride", isOverride);
                 ins.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
                 ins.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
+                ins.Parameters.AddWithValue("@overrideReason", (object?)overrideReason ?? DBNull.Value);
+
                 await ins.ExecuteNonQueryAsync();
             }
 
@@ -265,7 +279,8 @@ LIMIT 1;
 
 
         // =======================  LOGIN  =======================
-        public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m, string? overridePin = null)
+        public async Task<LoginResult> HandleLoginAsync(PressRunLogModel m, string? overridePin = null, string? overrideReason = null)
+
         {
             var result = new LoginResult();
 
@@ -324,6 +339,14 @@ LIMIT 1;
                         result.Message = $"Material {mixCode ?? "(none)"} does not match scheduled {scheduledCode}. Supervisor override required.";
                         return result;
                     }
+                    if (string.IsNullOrWhiteSpace(overrideReason))
+                    {
+                        await tx.RollbackAsync();
+                        result.RequiresOverride = true;
+                        result.Code = "OVERRIDE_REASON_REQUIRED";
+                        result.Message = "Override reason is required.";
+                        return result;
+                    }
 
                     var (okPin, supName) = await VerifySupervisorPinAsync(overridePin);
                     if (!okPin)
@@ -354,10 +377,10 @@ LIMIT 1;
         INSERT INTO pressrun
               (operator, part, component, machine, prodNumber, run,
                startDateTime, skidNumber, lotNumber, materialCode,
-               isOverride, overrideBy, overrideAt, scheduledMaterial)
+               isOverride, overrideBy, overrideAt, scheduledMaterial, overrideReason)
         VALUES (@operator, @part, @component, @machine, @prod, @run,
                 @start, 0, @lotNumber, @materialCode,
-                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial);";
+                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial, @overrideReason);";
 
             using (var cmd = new MySqlCommand(insertMain, conn, (MySqlTransaction)tx))
             {
@@ -375,6 +398,8 @@ LIMIT 1;
                 cmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
 
                 cmd.Parameters.AddWithValue("@scheduledMaterial", (object?)scheduledCode ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@overrideReason", (object?)overrideReason ?? DBNull.Value);
+
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -406,10 +431,10 @@ LIMIT 1;
         INSERT INTO pressrun
               (run, part, component, startDateTime, operator,
                machine, prodNumber, skidNumber, pcsStart, lotNumber, materialCode,
-               isOverride, overrideBy, overrideAt, scheduledMaterial)
+               isOverride, overrideBy, overrideAt, scheduledMaterial, overrideReason)
         VALUES (@run, @part, @component, NOW(), @operator,
                 @machine, @prodNumber, @skid, @pcsStart, @lotNumber, @materialCode,
-                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial);";
+                @isOverride, @overrideBy, @overrideAt, @scheduledMaterial, @overrideReason);";
 
             if (allClosed)
             {
@@ -433,6 +458,8 @@ LIMIT 1;
                 newSkidCmd.Parameters.AddWithValue("@overrideBy", (object?)overrideBy ?? DBNull.Value);
                 newSkidCmd.Parameters.AddWithValue("@overrideAt", (object?)overrideAt ?? DBNull.Value);
                 newSkidCmd.Parameters.AddWithValue("@scheduledMaterial", (object?)scheduledCode ?? DBNull.Value);
+                newSkidCmd.Parameters.AddWithValue("@overrideReason", (object?)overrideReason ?? DBNull.Value);
+
                 await newSkidCmd.ExecuteNonQueryAsync();
             }
             else

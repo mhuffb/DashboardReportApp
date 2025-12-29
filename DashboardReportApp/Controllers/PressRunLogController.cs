@@ -20,13 +20,21 @@ namespace DashboardReportApp.Controllers
         private readonly PressRunLogService _pressRunLogService;
         private readonly SharedService _sharedService;
         private readonly MoldingService _moldingService;
+        private readonly IConfiguration _config;
 
-        public PressRunLogController(PressRunLogService servicePressRun, SharedService serviceShared, MoldingService serviceMolding)
+
+        public PressRunLogController(
+    PressRunLogService servicePressRun,
+    SharedService serviceShared,
+    MoldingService serviceMolding,
+    IConfiguration config) 
         {
             _pressRunLogService = servicePressRun;
             _sharedService = serviceShared;
             _moldingService = serviceMolding;
+            _config = config; 
         }
+
         [HttpGet]
         public async Task<IActionResult> Index()
         {
@@ -55,7 +63,8 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart, string? overridePin = null)
+        public async Task<IActionResult> ConfirmLogin(PressRunLogModel model, int pcsStart, string? overridePin = null, string? overrideReason = null)
+
         {
             // Detect whether this is the Ajax flow (our hookOverrideForm) or a normal post
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
@@ -66,7 +75,56 @@ namespace DashboardReportApp.Controllers
                 model.PcsStart = pcsStart;
                 model.StartDateTime = DateTime.Now;
 
-                LoginResult res = await _pressRunLogService.HandleLoginAsync(model, overridePin);
+                LoginResult res = await _pressRunLogService.HandleLoginAsync(model, overridePin, overrideReason);
+
+                // ===================== EMAIL: OVERRIDE USED (LOGIN) =====================
+                try
+                {
+                    // only send when a PIN was actually supplied (i.e., a new supervisor override)
+                    if (!string.IsNullOrWhiteSpace(overridePin))
+                    {
+                        var to = _config["Email:PressRunOverrideNotifyTo"] ?? "";
+                        
+
+                        if (!string.IsNullOrWhiteSpace(to))
+                        {
+                            var subj = "Override used in Press Run Log";
+
+                            var body =
+                            $@"Material Override used in Press Run Log
+
+Action: LOGIN
+
+Part: {model.Part}
+Component: {model.Component}
+
+Prod/Run: {model.ProdNumber} / {model.Run}
+Machine: {model.Machine}
+Operator: {model.Operator}
+
+Scheduled: {res.ScheduledMaterial}
+Scanned:   {res.ScannedMaterial}
+
+Lot: {model.LotNumber}
+Bag: 
+Weight: 
+
+Supervisor: {res.Supervisor}
+Reason: {overrideReason}
+Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+
+
+                            // NOTE: your method signature:
+                            // SendEmailWithAttachment(receiverEmail, attachmentPath, attachmentPath2, subject, body)
+                            _sharedService.SendEmailWithAttachment(to, "", "", subj, body);
+
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Override email failed (LOGIN): " + ex.Message);
+                }
 
                 // 🔸 Supervisor override / material mismatch case
                 if (res.RequiresOverride)
@@ -125,7 +183,8 @@ namespace DashboardReportApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart, string? overridePin = null)
+        public async Task<IActionResult> StartSkid(PressRunLogModel model, int pcsStart, string? overridePin = null, string? overrideReason = null)
+
         {
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
                           Request.Headers["Accept"].ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase);
@@ -134,7 +193,56 @@ namespace DashboardReportApp.Controllers
             {
                 model.PcsStart = pcsStart;
 
-                StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart, overridePin);
+                StartSkidResult res = await _pressRunLogService.HandleStartSkidAsync(model, pcsStart, overridePin, overrideReason);
+
+                // ===================== EMAIL: OVERRIDE USED (START SKID) =====================
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(overridePin))
+                    {
+                        var to = _config["Email:PressRunOverrideTo"] ?? "";
+                        var overrideAll = _config["Email:OverrideAllTo"] ?? "";
+                        if (!string.IsNullOrWhiteSpace(overrideAll))
+                            to = overrideAll;
+
+                        if (!string.IsNullOrWhiteSpace(to))
+                        {
+                            var subj = "Override used in Press Run Log";
+
+                            var body =
+                            $@"Material Override used in Press Run Log
+
+Action: START SKID
+
+Part: {model.Part}
+Component: {model.Component}
+
+Prod/Run: {model.ProdNumber} / {model.Run}
+Machine: {model.Machine}
+Operator: {model.Operator}
+PcsStart: {pcsStart}
+
+Scheduled: {res.ScheduledMaterial}
+Scanned:   {res.ScannedMaterial}
+
+Lot: {model.LotNumber}
+Bag: 
+Weight: 
+
+Supervisor: {res.Supervisor}
+Reason: {overrideReason}
+Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+
+
+                            _sharedService.SendEmailWithAttachment(to, "", "", subj, body);
+
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Override email failed (START SKID): " + ex.Message);
+                }
 
                 // 🔸 Supervisor override / material mismatch case
                 if (res.RequiresOverride)
