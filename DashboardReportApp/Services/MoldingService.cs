@@ -52,6 +52,21 @@ namespace DashboardReportApp.Services
         {
             return QueryTable<PressMixBagChangeModel>("pressmixbagchange");
         }
+        private static object ConvertForProperty(object dbValue, Type propertyType)
+        {
+            if (dbValue == null || dbValue == DBNull.Value)
+                return null;
+
+            // If Nullable<T>, unwrap it
+            var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+            // Already correct type
+            if (targetType.IsInstanceOfType(dbValue))
+                return dbValue;
+
+            // Convert (handles Int64 -> Int32?, decimal?, etc.)
+            return Convert.ChangeType(dbValue, targetType, CultureInfo.InvariantCulture);
+        }
 
         private List<T> QueryTable<T>(string tableName) where T : new()
         {
@@ -84,12 +99,12 @@ namespace DashboardReportApp.Services
                                     int ordinal = reader.GetOrdinal(matchingColumn);
                                     if (!reader.IsDBNull(ordinal))
                                     {
-                                        object value = reader[ordinal];
-                                        if (value is long && prop.PropertyType == typeof(int))
-                                        {
-                                            value = Convert.ToInt32(value);
-                                        }
-                                        prop.SetValue(obj, value);
+                                        object value = reader.GetValue(ordinal);
+
+                                        var convertedValue = ConvertForProperty(value, prop.PropertyType);
+
+                                        prop.SetValue(obj, convertedValue);
+
                                     }
                                 }
                             }
